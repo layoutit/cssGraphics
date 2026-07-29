@@ -12,22 +12,18 @@ without a WebGL or canvas renderer. Powered by the
 
 ## Run locally
 
-Requires Node.js 22.12+ and pnpm 10.33.
-
 ```sh
-pnpm install --frozen-lockfile
+pnpm install
 pnpm dev
 ```
 
-Choose an asset, drag to rotate it, or press `/` to search.
+To prepare Mario, place a user-owned US `.z64` ROM under `.local/`:
 
 ```sh
-pnpm typecheck
-pnpm build
+pnpm prepare:super-mario-64 -- --rom .local/baserom.us.z64
 ```
 
-The repository also includes optional local Super Mario 64 preparation. It
-requires a user-supplied ROM and does not distribute Nintendo game data.
+Nintendo game data is not included.
 
 ## License
 

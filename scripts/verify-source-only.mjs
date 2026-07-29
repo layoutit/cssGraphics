@@ -124,9 +124,14 @@ export function inspectCandidatePath(candidatePath, bytes = null) {
     if (buffer.includes(0) && !readmeMedia) {
       issues.push("unexpected binary content");
     }
-    if (buffer.length > 1024 * 1024
+    const sourceByteLimit = (readmeMedia ? 2 : 1) * 1024 * 1024;
+    if (buffer.length > sourceByteLimit
       && !path.endsWith("pnpm-lock.yaml")) {
-      issues.push("unexpected source-only file larger than 1 MiB");
+      issues.push(
+        `unexpected source-only file larger than ${
+          readmeMedia ? 2 : 1
+        } MiB`,
+      );
     }
   }
 

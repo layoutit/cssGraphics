@@ -10,10 +10,10 @@ The current catalog includes Animated Morph Sphere, WebGL Morph Targets, and
 Morph Stress Test. Every preview is generated from the same DOM/CSS model that
 runs in the viewer.
 
-<p>
-  <img width="168" height="168" alt="Animated Morph Sphere" src="site/public/previews/animated-morph-sphere.webp" />
-  <img width="168" height="168" alt="WebGL Morph Targets" src="site/public/previews/webgl-morphtargets.webp" />
-  <img width="168" height="168" alt="Morph Stress Test" src="site/public/previews/morph-stress-test.webp" />
+<p align="center">
+  <img width="256" height="256" alt="The locally prepared interactive Mario head" src="site/readme/mario.webp" />
+  <img width="256" height="256" alt="A red cube morphing into a sphere and back" src="site/readme/cube-to-sphere.gif" />
+  <img width="256" height="256" alt="An animated prepared sphere deforming and returning to its original shape" src="site/readme/animated-morph-sphere.gif" />
 </p>
 
 ## How to Use
@@ -83,18 +83,18 @@ const graphics = await mountCssGraphics(host, {
 graphics.destroy();
 ```
 
-The package library reads a consumer-local `/cssgraphics/catalog.json`; it does
-not reinterpret the public css.graphics catalog. `pnpm dev:app` runs that local
-prepared-package consumer, and `pnpm build:app` builds it without preparing
-source data.
+The package library reads a consumer-provided `/cssgraphics/catalog.json`; it
+does not reinterpret the public css.graphics catalog.
 
 Super Mario 64 support is local and source-only. The CLI reads a user-supplied
-ROM, writes the prepared package under ignored generated roots, and never adds
-Nintendo data to the site, npm tarball, or repository.
+ROM and writes the prepared package under ignored generated roots. No ROM,
+model source, texture source, animation data, or prepared package enters the
+site, npm tarball, or repository. The Mario image above is an illustrative
+documentation screenshot.
 
 ## License
 
 cssGraphics code is [MIT licensed](LICENSE). Public distribution assets retain
 the source attribution, modification notice, and license declared in
 [`site/public/catalog.json`](site/public/catalog.json). Nintendo ROMs and
-Nintendo-derived assets are not included. See [NOTICE.md](NOTICE.md).
+prepared Nintendo model packages are not included or distributed.

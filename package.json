@@ -27,7 +27,6 @@
     "dist/runtime/",
     "dist/cli/",
     "LICENSE",
-    "NOTICE.md",
     "README.md"
   ],
   "engines": {
@@ -35,14 +34,11 @@
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "dev:app": "vite --mode app --host 127.0.0.1",
     "build": "pnpm build:site && pnpm build:lib",
     "build:site": "vite build",
-    "build:app": "vite build --mode app",
     "build:lib": "vite build --mode library && node scripts/build-cli.mjs",
     "prepack": "pnpm build:lib",
     "preview": "vite preview --host 127.0.0.1",
-    "preview:app": "vite preview --mode app --host 127.0.0.1",
     "prepare:super-mario-64": "pnpm build:lib && node scripts/prepare/super-mario-64.mjs",
     "prepare:catalog": "pnpm build:lib && node scripts/prepare/catalog.mjs",
     "prepare:site-models": "node scripts/prepare/site-models.mjs",

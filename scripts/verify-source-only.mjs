@@ -34,6 +34,11 @@ const DISTRIBUTION_PREFIXES = Object.freeze([
   "site/public/models/",
   "site/public/previews/",
 ]);
+const README_MEDIA_PATHS = new Set([
+  "site/readme/animated-morph-sphere.gif",
+  "site/readme/cube-to-sphere.gif",
+  "site/readme/mario.webp",
+]);
 const SHA256 = /^[a-f0-9]{64}$/u;
 
 const GENERATED_PREFIXES = Object.freeze([
@@ -98,7 +103,9 @@ export function inspectCandidatePath(candidatePath, bytes = null) {
 
   const basename = path.slice(path.lastIndexOf("/") + 1).toLowerCase();
   const extension = extname(basename);
-  if (basename.startsWith("baserom.") || DATA_EXTENSIONS.has(extension)) {
+  const readmeMedia = README_MEDIA_PATHS.has(path);
+  if (basename.startsWith("baserom.")
+    || (DATA_EXTENSIONS.has(extension) && !readmeMedia)) {
     issues.push(`Nintendo/game-data-capable extension or name is denied: ${extension || basename}`);
   }
   if (!path.startsWith("internal/")
@@ -114,10 +121,11 @@ export function inspectCandidatePath(candidatePath, bytes = null) {
     if (ROM_HEADERS.some((header) => buffer.subarray(0, 4).equals(header))) {
       issues.push("Nintendo 64 ROM byte-order header detected");
     }
-    if (buffer.includes(0)) {
+    if (buffer.includes(0) && !readmeMedia) {
       issues.push("unexpected binary content");
     }
-    if (buffer.length > 1024 * 1024 && !path.endsWith("pnpm-lock.yaml")) {
+    if (buffer.length > 1024 * 1024
+      && !path.endsWith("pnpm-lock.yaml")) {
       issues.push("unexpected source-only file larger than 1 MiB");
     }
   }
@@ -314,9 +322,6 @@ export function verifyIgnoreContract(root = process.cwd()) {
     ".env",
   ];
   const mustRemainVisible = [
-    ".env.example",
-    "AGENTS.md",
-    "app/main.ts",
     DISTRIBUTION_CATALOG_PATH,
     "site/public/previews/box.webp",
     "src/index.ts",
@@ -349,7 +354,7 @@ function strictContentIssues(root, candidate, bytes) {
     issues.push("machine-specific absolute path is denied");
   }
   const productContractCandidate = candidate.startsWith("src/")
-    || ["README.md", "NOTICE.md", "package.json"].includes(candidate);
+    || ["README.md", "package.json"].includes(candidate);
   if (productContractCandidate
     && /castle-grounds-area-1-first-control|CASTLE_GROUNDS_SCENE|cssgraphics-castle-grounds/iu.test(source)) {
     issues.push("stale Castle Grounds product contract is denied");

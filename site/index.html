@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Interactive 3D assets rendered entirely with HTML and CSS."
+    />
+    <meta name="theme-color" content="#0d0d0d" />
+    <link rel="icon" href="data:," />
+    <title>css.graphics</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <a href="/" aria-label="Load another random asset">css.graphics</a>
+    </header>
+
+    <section class="code-panel" aria-label="Copy-paste code">
+      <pre tabindex="0"><code id="code-source" class="language-markup"></code></pre>
+    </section>
+
+    <aside class="assets-sidebar" id="panel" aria-label="Assets">
+      <button class="panel-close" type="button" aria-label="Close assets">×</button>
+
+      <label class="search">
+        <span class="visually-hidden">Search assets</span>
+        <input id="filter" type="search" placeholder="Search assets" autocomplete="off" />
+        <kbd aria-hidden="true">/</kbd>
+      </label>
+
+      <nav aria-label="Assets">
+        <div id="asset-list"></div>
+        <p class="no-results" role="status" hidden>No matches.</p>
+      </nav>
+    </aside>
+
+    <button class="scrim" type="button" aria-label="Close assets" tabindex="-1"></button>
+
+    <main id="viewer">
+      <header class="viewer-header">
+        <button
+          class="panel-open"
+          type="button"
+          aria-label="Open assets"
+          aria-controls="panel"
+          aria-expanded="false"
+        >
+          ☰
+        </button>
+        <div class="asset-heading">
+          <span id="asset-name">Asset</span>
+          <p class="asset-info" aria-label="Asset details">
+            <a id="asset-source" href="">Source</a>
+            <a id="asset-license" href="">MIT</a>
+            <span><span id="asset-polygons">0</span> polygons</span>
+          </p>
+        </div>
+      </header>
+
+      <div class="asset-stage" id="asset-stage" aria-label="Interactive asset viewer">
+        <div class="prepared-asset-host" id="asset-scene"></div>
+      </div>
+    </main>
+
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>

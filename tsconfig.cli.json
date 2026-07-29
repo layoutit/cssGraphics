@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "allowJs": true,
+    "checkJs": false,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": false,
+    "noEmitOnError": true,
+    "declaration": false,
+    "sourceMap": false,
+    "rootDir": ".",
+    "outDir": "dist/cli"
+  },
+  "files": [
+    "src/cli/executable.mjs",
+    "src/adapters/super-mario-64/audit/client.ts",
+    "src/adapters/super-mario-64/audit/scene.ts",
+    "src/adapters/super-mario-64/source-model/animator.ts",
+    "src/adapters/super-mario-64/source-model/appearanceFit.ts",
+    "src/adapters/super-mario-64/source-model/deformationRuntime.ts",
+    "src/adapters/super-mario-64/source-model/drawRuntime.ts",
+    "src/adapters/super-mario-64/source-model/eyeFollow.ts",
+    "src/adapters/super-mario-64/source-model/grabRuntime.ts",
+    "src/adapters/super-mario-64/source-model/math.ts",
+    "src/adapters/super-mario-64/source-model/picking.ts",
+    "src/adapters/super-mario-64/runtime/polycssRoot.ts"
+  ]
+}

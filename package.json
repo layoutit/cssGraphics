@@ -1,0 +1,74 @@
+{
+  "name": "cssgraphics",
+  "version": "0.0.1",
+  "packageManager": "pnpm@10.33.0",
+  "type": "module",
+  "description": "Asset distribution and prepared-model runtime tooling for PolyCSS.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/layoutit/cssGraphics.git"
+  },
+  "homepage": "https://css.graphics/",
+  "bugs": {
+    "url": "https://github.com/layoutit/cssGraphics/issues"
+  },
+  "bin": {
+    "cssgraphics": "./bin/cssgraphics.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/runtime/index.d.ts",
+      "import": "./dist/runtime/cssgraphics.js"
+    },
+    "./style.css": "./dist/runtime/cssgraphics.css"
+  },
+  "files": [
+    "bin/cssgraphics.mjs",
+    "dist/runtime/",
+    "dist/cli/",
+    "LICENSE",
+    "NOTICE.md",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "dev:app": "vite --config vite.app.config.ts --host 127.0.0.1",
+    "build": "pnpm build:site && pnpm build:lib",
+    "build:site": "vite build",
+    "build:app": "vite build --config vite.app.config.ts",
+    "build:lib": "vite build --config vite.cssgraphics.config.ts && node scripts/build/cli.mjs",
+    "prepack": "pnpm build:lib",
+    "preview": "vite preview --host 127.0.0.1",
+    "preview:app": "vite preview --config vite.app.config.ts --host 127.0.0.1",
+    "prepare:super-mario-64": "pnpm build:lib && node scripts/prepare/super-mario-64.mjs",
+    "prepare:catalog": "pnpm build:lib && node scripts/prepare/catalog.mjs",
+    "prepare:site-models": "node scripts/prepare/site-models.mjs",
+    "prepare:site-previews": "pnpm prepare:site-models && node scripts/prepare/site-previews.mjs",
+    "verify:source-only": "node internal/verification/source-only.mjs --strict",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@layoutit/polycss": "0.2.10",
+    "@layoutit/polycss-morph": "0.2.10",
+    "prismjs": "1.30.0"
+  },
+  "devDependencies": {
+    "@fontsource/bowlby-one-sc": "5.3.0",
+    "@types/node": "^24.10.0",
+    "@types/prismjs": "1.26.5",
+    "playwright": "1.60.0",
+    "sharp": "0.35.3",
+    "typescript": "5.9.3",
+    "vite": "7.3.1"
+  },
+  "cssgraphicsPrepareDependencies": {
+    "playwright": "1.60.0",
+    "sharp": "0.35.3",
+    "typescript": "5.9.3",
+    "vite": "7.3.1"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "camera": {
+    "projection": "perspective",
+    "distance": 1000,
+    "fovDegrees": 45,
+    "rotXDegrees": 0,
+    "rotYDegrees": 0,
+    "target": [0, 0, 0],
+    "zoom": 50
+  },
+  "controls": {
+    "initialAzimuthRadians": 0,
+    "initialPolarRadians": 1.5707963267948966,
+    "minPolarRadians": 0,
+    "maxPolarRadians": 3.141592653589793,
+    "rotateSpeed": 1
+  }
+}

@@ -1,0 +1,268 @@
+@import "@fontsource/bowlby-one-sc/latin-400.css";
+
+/* Canonical app-shell styling; prepared model presentation stays package-owned. */
+
+html,
+html * {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+html {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  isolation: isolate;
+  color: #fff;
+  background-color: #000;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  touch-action: none;
+  user-select: none;
+  contain: strict;
+  cursor: default;
+}
+
+html:has(#cssgraphics-experience-interaction:checked) {
+  cursor: grab;
+}
+
+.cssgraphics-experience-control {
+  position: fixed;
+  z-index: 2147483646;
+  top: 18px;
+  left: 18px;
+  display: grid;
+  gap: 10px;
+  color: #fff;
+  font: 600 14px/1.1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.01em;
+  pointer-events: auto;
+  cursor: default;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 80%);
+}
+
+.cssgraphics-wordmark {
+  display: flex;
+  align-items: baseline;
+  width: max-content;
+  color: rgb(255 255 255 / 96%);
+  font-family: "Bowlby One SC", sans-serif;
+  font-size: 29px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: normal;
+  white-space: nowrap;
+  text-rendering: geometricprecision;
+  -webkit-text-stroke: 1.2px #120e1f;
+  paint-order: stroke fill;
+  text-shadow: 1.4px 1.8px 0 rgb(0 0 0 / 78%);
+}
+
+.cssgraphics-wordmark-css {
+  color: rgb(255 255 255 / 96%);
+}
+
+.cssgraphics-wordmark-graphics {
+  color: #ffc928;
+}
+
+.cssgraphics-experience-modes {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.cssgraphics-experience-mode {
+  display: grid;
+  grid-template-columns: 14px auto;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  cursor: pointer;
+}
+
+.cssgraphics-experience-mode input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: #fff;
+  cursor: pointer;
+}
+
+.cssgraphics-experience-mode:has(input:checked) {
+  color: #fff;
+}
+
+.cssgraphics-experience-mode:has(input:not(:checked)) {
+  color: rgb(255 255 255 / 62%);
+}
+
+.cssgraphics-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+body {
+  background-color: transparent;
+}
+
+.title-head-cursor {
+  display: none;
+  position: fixed;
+  inset: 0 auto auto 0;
+  z-index: 2147483647;
+  width: 32px;
+  height: 32px;
+  pointer-events: none;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.title-head-hand {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 32px;
+  height: 32px;
+  max-width: none;
+  border: 0;
+  pointer-events: none;
+  image-rendering: auto;
+}
+
+.head-model-screen,
+.head-model-model-host {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.head-model-screen {
+  overflow: hidden;
+  background-color: transparent;
+  isolation: isolate;
+  touch-action: none;
+  user-select: none;
+}
+
+.head-model-model-host,
+.head-model-model,
+.head-model-visible-shape,
+.head-model-visible-face,
+.polycss-scene,
+div[data-shape],
+div[data-shape] > :is(s, u, i),
+div[data-star-effects],
+div[data-star-effects] > div,
+div[data-star-effects] s {
+  backface-visibility: visible;
+  -webkit-backface-visibility: visible;
+  transform-style: preserve-3d;
+}
+
+div[data-shape] > :is(s, u, i) {
+  box-sizing: border-box;
+  border: 0;
+  opacity: 1;
+  background-color: transparent;
+  background-repeat: no-repeat;
+}
+
+div[data-shape] {
+  visibility: visible;
+}
+
+.head-model-camera.polycss-camera {
+  position: absolute;
+  transform-origin: 0 0;
+  transform-style: preserve-3d;
+}
+
+div[data-shape] > u {
+  border-top-left-radius: 50% 100%;
+  border-top-right-radius: 50% 100%;
+  corner-top-left-shape: bevel;
+  corner-top-right-shape: bevel;
+}
+
+div[data-shape] > i {
+  border-shape: polygon(50% 0, 100% 100%, 0 100%) circle(0);
+  background-clip: border-area;
+}
+
+div[data-star-effects],
+div[data-star-effects] > div,
+div[data-star-effects] s {
+  position: absolute;
+  inset: 0 auto auto 0;
+  pointer-events: none;
+}
+
+div[data-star-effects],
+div[data-star-effects] > div {
+  width: 0;
+  height: 0;
+}
+
+div[data-star-effects] s {
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background-repeat: no-repeat;
+  transform-origin: 0 0;
+}
+
+div[data-star-effects] > s {
+  width: 128px;
+  height: 128px;
+  opacity: 1;
+  visibility: visible;
+  background-size: 1088px 544px;
+}
+
+div[data-star-effects] > div > s {
+  width: 64px;
+  height: 64px;
+  background-size: 544px 272px;
+}
+
+.prepare-error {
+  width: min(34rem, calc(100vw - 2rem));
+  color: #fff;
+  font: 16px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.prepare-error h1 {
+  margin: 0 0 0.75rem;
+  font: inherit;
+  font-weight: 700;
+}
+
+.prepare-error p {
+  margin: 0 0 0.75rem;
+}
+
+.prepare-error code {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #ffd75f;
+}

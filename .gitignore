@@ -1,0 +1,45 @@
+# Dependencies and local agent state
+node_modules/
+.agents/
+.playwright-cli/
+
+# User-owned inputs and ignored upstream/reference checkouts
+.local/
+.env
+.env.*
+!.env.example
+baserom.*
+*.rom
+*.z64
+*.n64
+*.v64
+sm64_save_file.bin
+sm64config.txt
+
+# Deterministic local prepare/build output
+build/generated/
+build/package-inputs/
+build/reports/
+dist/
+coverage/
+
+# Local public-asset preparation inputs; only catalog-bound resources ship
+site/public/models/*/manifest.json
+site/public/models/*/model.json
+
+# Captures, traces, native builds, and benchmark evidence
+bench/results/
+debug/
+captures/
+traces/
+output/
+chrome-trace*.json
+*.trace.json
+
+# Platform/editor debris
+.DS_Store
+**/.DS_Store
+**/__pycache__/
+
+# Local source snapshot retained outside the product/source package
+src.zip

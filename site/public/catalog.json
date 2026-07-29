@@ -1,0 +1,201 @@
+{
+  "schema": "cssgraphics.distribution@1",
+  "runtime": {
+    "package": "@layoutit/polycss-morph",
+    "version": "0.2.10",
+    "license": "MIT"
+  },
+  "assets": [
+    {
+      "id": "animated-morph-sphere",
+      "name": "Animated Morph Sphere",
+      "root": "models/animated-morph-sphere",
+      "mode": "animated-clips",
+      "kind": "Prepared morph",
+      "polygons": 960,
+      "previewTimeMs": 0,
+      "previewZoom": 1,
+      "source": {
+        "authors": [
+          "Howard Wolosky"
+        ],
+        "url": "https://github.com/mrdoob/three.js/tree/7763535f6f944a32105af7d9d57d83a92f310d51/examples/models/gltf/AnimatedMorphSphere",
+        "sha256": "ef50770c0cc025870409d33bfa4ee46adf8c0dff20a9c565645619015a92c025",
+        "changes": "Converted to prepared PolyCSS DOM/CSS resources.",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+      },
+      "preview": {
+        "path": "previews/animated-morph-sphere.webp",
+        "mediaType": "image/webp",
+        "bytes": 2104,
+        "sha256": "b06bbf4facf804091047b014fffb1999d88e117f43cae81893fdf36840d1eebc"
+      },
+      "resources": [
+        {
+          "role": "runtime",
+          "path": "runtime.json",
+          "mediaType": "application/json",
+          "bytes": 1318674,
+          "sha256": "b762af5aba8bc434e8a4da6a158b73c057e06691e0cba993949e16706f4868ac"
+        },
+        {
+          "role": "presentation",
+          "path": "presentation.json",
+          "mediaType": "application/json",
+          "bytes": 476,
+          "sha256": "20a787410dd9049bd8a68f81c273b93de46d4f6fbb9244a8c867e365628854e6"
+        },
+        {
+          "role": "stylesheet",
+          "path": "model.css",
+          "mediaType": "text/css",
+          "bytes": 130793,
+          "sha256": "d23aab49a8c80b8918ac85ffcc2443382308e2eb9388fbea896258ae19f787c2"
+        },
+        {
+          "role": "image",
+          "path": "assets/lighting-state-000.webp",
+          "mediaType": "image/webp",
+          "bytes": 77658,
+          "sha256": "c734df98d5417a6c4a4c0a60206d9704bfde0e11d2389be6022917abe8e26a72"
+        },
+        {
+          "role": "image",
+          "path": "assets/solid-triangles-000.webp",
+          "mediaType": "image/webp",
+          "bytes": 23530,
+          "sha256": "d8919eee54bfeba3a518e2c9950505ed91b610ae6057694992ef8ff392320cf1"
+        }
+      ]
+    },
+    {
+      "id": "webgl-morphtargets",
+      "name": "WebGL Morph Targets",
+      "root": "models/webgl-morphtargets",
+      "mode": "morph-targets",
+      "kind": "Prepared morph",
+      "polygons": 768,
+      "previewTimeMs": 0,
+      "previewZoom": 1,
+      "source": {
+        "authors": [
+          "three.js authors",
+          "Discover three.js"
+        ],
+        "url": "https://github.com/mrdoob/three.js/blob/7763535f6f944a32105af7d9d57d83a92f310d51/examples/webgl_morphtargets.html",
+        "sha256": "81d437494770e6f46c76c6886ac50999369d325db7fd7ff3f8a809bd7a7cdd99",
+        "changes": "Converted to prepared PolyCSS DOM/CSS resources.",
+        "license": "MIT",
+        "licenseUrl": "https://github.com/mrdoob/three.js/blob/7763535f6f944a32105af7d9d57d83a92f310d51/LICENSE"
+      },
+      "preview": {
+        "path": "previews/webgl-morphtargets.webp",
+        "mediaType": "image/webp",
+        "bytes": 1514,
+        "sha256": "6cfede1e5fa342de612b9fc4e623544223670496963811675ec4183125af4f73"
+      },
+      "resources": [
+        {
+          "role": "runtime",
+          "path": "runtime.json",
+          "mediaType": "application/json",
+          "bytes": 555550,
+          "sha256": "a86376f72da0d6fcc6bc77524a7685c2175bcfbba973782b569b92b5d5b61a43"
+        },
+        {
+          "role": "presentation",
+          "path": "presentation.json",
+          "mediaType": "application/json",
+          "bytes": 372,
+          "sha256": "365241c176476b3714c0115c19a5c8dc29ad5f3a084ff54f33a443be6fd5af3b"
+        },
+        {
+          "role": "stylesheet",
+          "path": "model.css",
+          "mediaType": "text/css",
+          "bytes": 145837,
+          "sha256": "ce24f92efe0f1f1d2a35b9517a6785ee4674eb6b61fe1626a9d815b810080857"
+        },
+        {
+          "role": "image",
+          "path": "assets/lighting-state-000.webp",
+          "mediaType": "image/webp",
+          "bytes": 31080,
+          "sha256": "67f72845628ef5dfad51e14a694bd1658c509e6bdc581329b027bbd0fdec596f"
+        },
+        {
+          "role": "image",
+          "path": "assets/solid-triangles-000.webp",
+          "mediaType": "image/webp",
+          "bytes": 4190,
+          "sha256": "c8c495e1d7ddc7a73ae06c7310d8e3e515f0b716cbd6499143688e6c1c79c389"
+        }
+      ]
+    },
+    {
+      "id": "morph-stress-test",
+      "name": "Morph Stress Test",
+      "root": "models/morph-stress-test",
+      "mode": "animation-clip",
+      "clipId": "the-wave",
+      "kind": "Prepared morph",
+      "polygons": 1974,
+      "previewTimeMs": 650,
+      "previewZoom": 0.42,
+      "source": {
+        "authors": [
+          "Ed Mackey"
+        ],
+        "url": "https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/MorphStressTest",
+        "sha256": "b6aa379593ace7d18d690757cc96768afe24317e98f09942204f2ca18b2927fb",
+        "changes": "Converted to prepared PolyCSS DOM/CSS resources.",
+        "license": "CC-BY-4.0",
+        "licenseUrl": "https://github.com/KhronosGroup/glTF-Sample-Assets/blob/main/Models/MorphStressTest/LICENSE.md"
+      },
+      "preview": {
+        "path": "previews/morph-stress-test.webp",
+        "mediaType": "image/webp",
+        "bytes": 740,
+        "sha256": "507862ba36b40e08093d8ac2926cef922f388377d76604d7d333627ee1123e74"
+      },
+      "resources": [
+        {
+          "role": "runtime",
+          "path": "runtime.json",
+          "mediaType": "application/json",
+          "bytes": 1731259,
+          "sha256": "49c8754924146ea2df149f85827f4452e3d8591b0d2a7f4908671a647119cf92"
+        },
+        {
+          "role": "presentation",
+          "path": "presentation.json",
+          "mediaType": "application/json",
+          "bytes": 497,
+          "sha256": "22e10ac32f7fbca8e3664be1fe6e9a98d4b2521ccbd52e314e336b81d50bf713"
+        },
+        {
+          "role": "stylesheet",
+          "path": "model.css",
+          "mediaType": "text/css",
+          "bytes": 98,
+          "sha256": "67e4e1a58f00a937316e686325afe0c8ba9de8db20e5d903e553dafdeaf77d8e"
+        },
+        {
+          "role": "animation-plan",
+          "path": "animation-plan.json",
+          "mediaType": "application/json",
+          "bytes": 5366671,
+          "sha256": "b337d2157fb948b8cf728560e757a455e9133a5c6ec7bb75deecec26fa006726"
+        },
+        {
+          "role": "image",
+          "path": "assets/solid-triangles-000.png",
+          "mediaType": "image/png",
+          "bytes": 14881,
+          "sha256": "ff602a7609cef6589f29c69d96216ddbe5a6a6156b31807ff0f0170934fb2e72"
+        }
+      ]
+    }
+  ]
+}

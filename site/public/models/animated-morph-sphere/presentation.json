@@ -1,0 +1,22 @@
+{
+  "animation": {
+    "morphClipId": "example-blob",
+    "shapeClipId": "example-spin"
+  },
+  "camera": {
+    "projection": "perspective",
+    "distance": 707.1067811865476,
+    "fovDegrees": 45,
+    "rotXDegrees": 0,
+    "rotYDegrees": 0,
+    "target": [0, 0, 0],
+    "zoom": 50
+  },
+  "controls": {
+    "initialAzimuthRadians": 0,
+    "initialPolarRadians": 0.7853981633974483,
+    "minPolarRadians": 0,
+    "maxPolarRadians": 3.141592653589793,
+    "rotateSpeed": 1
+  }
+}

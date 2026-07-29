@@ -1,0 +1,45 @@
+:root {
+  background: #0d0d0d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: #0d0d0d;
+}
+
+#previews {
+  display: grid;
+  grid-template-columns: 180px;
+  gap: 4px;
+  width: 180px;
+}
+
+.prepared-preview {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  overflow: hidden;
+  background: #0d0d0d;
+}
+
+.prepared-preview > .polycss-morph-camera {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.polycss-camera,
+.polycss-scene,
+.polycss-morph-model,
+.polycss-morph-shape,
+.polycss-morph-leaf {
+  transform-style: preserve-3d;
+  backface-visibility: visible;
+}

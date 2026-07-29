@@ -14,7 +14,7 @@
     "url": "https://github.com/layoutit/cssGraphics/issues"
   },
   "bin": {
-    "cssgraphics": "./bin/cssgraphics.mjs"
+    "cssgraphics": "./dist/cli/src/cli/cssgraphics.mjs"
   },
   "exports": {
     ".": {
@@ -24,7 +24,6 @@
     "./style.css": "./dist/runtime/cssgraphics.css"
   },
   "files": [
-    "bin/cssgraphics.mjs",
     "dist/runtime/",
     "dist/cli/",
     "LICENSE",
@@ -36,19 +35,19 @@
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "dev:app": "vite --config vite.app.config.ts --host 127.0.0.1",
+    "dev:app": "vite --mode app --host 127.0.0.1",
     "build": "pnpm build:site && pnpm build:lib",
     "build:site": "vite build",
-    "build:app": "vite build --config vite.app.config.ts",
-    "build:lib": "vite build --config vite.cssgraphics.config.ts && node scripts/build/cli.mjs",
+    "build:app": "vite build --mode app",
+    "build:lib": "vite build --mode library && node scripts/build-cli.mjs",
     "prepack": "pnpm build:lib",
     "preview": "vite preview --host 127.0.0.1",
-    "preview:app": "vite preview --config vite.app.config.ts --host 127.0.0.1",
+    "preview:app": "vite preview --mode app --host 127.0.0.1",
     "prepare:super-mario-64": "pnpm build:lib && node scripts/prepare/super-mario-64.mjs",
     "prepare:catalog": "pnpm build:lib && node scripts/prepare/catalog.mjs",
     "prepare:site-models": "node scripts/prepare/site-models.mjs",
     "prepare:site-previews": "pnpm prepare:site-models && node scripts/prepare/site-previews.mjs",
-    "verify:source-only": "node internal/verification/source-only.mjs --strict",
+    "verify:source-only": "node scripts/verify-source-only.mjs --strict",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

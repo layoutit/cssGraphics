@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, type Plugin, type UserConfig } from "vite";
 
 import {
   DISTRIBUTION_CATALOG,
@@ -84,21 +84,70 @@ function distributionPlugin(): Plugin {
   };
 }
 
-export default defineConfig({
-  root: resolve(repoRoot, "site"),
-  publicDir: false,
-  plugins: [distributionPlugin()],
-  server: {
-    host: "127.0.0.1",
-  },
-  preview: {
-    host: "127.0.0.1",
-  },
-  build: {
-    outDir: resolve(repoRoot, "dist/site"),
-    emptyOutDir: true,
-    rollupOptions: {
-      input: resolve(repoRoot, "site/index.html"),
+function siteConfig(): UserConfig {
+  return {
+    root: resolve(repoRoot, "site"),
+    publicDir: false,
+    plugins: [distributionPlugin()],
+    server: {
+      host: "127.0.0.1",
     },
-  },
+    preview: {
+      host: "127.0.0.1",
+    },
+    build: {
+      outDir: resolve(repoRoot, "dist/site"),
+      emptyOutDir: true,
+      rollupOptions: {
+        input: resolve(repoRoot, "site/index.html"),
+      },
+    },
+  };
+}
+
+function appConfig(): UserConfig {
+  return {
+    root: resolve(repoRoot, "app"),
+    publicDir: resolve(
+      repoRoot,
+      process.env.CSSGRAPHICS_PREPARED_PUBLIC_DIR ?? "build/generated/public",
+    ),
+    server: {
+      host: "127.0.0.1",
+    },
+    preview: {
+      host: "127.0.0.1",
+    },
+    build: {
+      outDir: resolve(repoRoot, "dist/app"),
+      emptyOutDir: true,
+      rollupOptions: {
+        input: resolve(repoRoot, "app/index.html"),
+      },
+    },
+  };
+}
+
+function libraryConfig(): UserConfig {
+  return {
+    build: {
+      outDir: resolve(repoRoot, "dist/runtime"),
+      emptyOutDir: true,
+      lib: {
+        entry: resolve(repoRoot, "src/bundle.ts"),
+        formats: ["es"],
+        fileName: "cssgraphics",
+        cssFileName: "cssgraphics",
+      },
+      rollupOptions: {
+        external: ["@layoutit/polycss", "@layoutit/polycss-morph"],
+      },
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => {
+  if (mode === "app") return appConfig();
+  if (mode === "library") return libraryConfig();
+  return siteConfig();
 });

@@ -17,6 +17,7 @@
     "outDir": "dist/cli"
   },
   "files": [
+    "src/cli/cssgraphics.mjs",
     "src/cli/executable.mjs",
     "src/adapters/super-mario-64/audit/client.ts",
     "src/adapters/super-mario-64/audit/scene.ts",

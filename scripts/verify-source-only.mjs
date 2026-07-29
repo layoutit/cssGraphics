@@ -17,7 +17,7 @@ const STRICT_SOURCE_RENDERER_PATTERNS = Object.freeze([
 ]);
 const STRICT_AUDITOR_PATHS = new Set();
 const STRICT_PATH_GUARD_PATHS = new Set([
-  "internal/verification/source-only.mjs",
+  "scripts/verify-source-only.mjs",
 ]);
 const MACHINE_PATH_METADATA_PREFIXES = Object.freeze([
   "notes/burnlists/",

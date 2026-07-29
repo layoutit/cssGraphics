@@ -2,6 +2,7 @@
 
 import { execFileSync } from "node:child_process";
 import {
+  chmodSync,
   copyFileSync,
   mkdirSync,
   readFileSync,
@@ -11,7 +12,7 @@ import {
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = resolve(import.meta.dirname, "../..");
+const repoRoot = resolve(import.meta.dirname, "..");
 const outputRoot = resolve(repoRoot, "dist/cli");
 rmSync(outputRoot, { recursive: true, force: true });
 execFileSync(process.execPath, [
@@ -22,6 +23,7 @@ execFileSync(process.execPath, [
   cwd: repoRoot,
   stdio: "inherit",
 });
+chmodSync(resolve(outputRoot, "src/cli/cssgraphics.mjs"), 0o755);
 execFileSync(process.execPath, [
   fileURLToPath(import.meta.resolve("typescript/bin/tsc")),
   resolve(repoRoot, "src/index.ts"),

@@ -20,8 +20,6 @@
     "app",
     "site",
     "src",
-    "vite.config.ts",
-    "vite.app.config.ts",
-    "vite.cssgraphics.config.ts"
+    "vite.config.ts"
   ]
 }

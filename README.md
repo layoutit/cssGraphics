@@ -27,5 +27,6 @@ Nintendo game data is not included.
 
 ## License
 
-cssGraphics is [MIT licensed](LICENSE). Distributed assets retain the source and
-license declared in [`site/public/catalog.json`](site/public/catalog.json).
+cssGraphics source code is [MIT licensed](LICENSE). Third-party models retain
+their original licenses and attribution, listed in
+[`site/public/catalog.json`](site/public/catalog.json).

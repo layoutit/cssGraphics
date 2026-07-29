@@ -37,7 +37,7 @@ const DISTRIBUTION_PREFIXES = Object.freeze([
 const README_MEDIA_PATHS = new Set([
   "site/readme/animated-morph-sphere.gif",
   "site/readme/cube-to-sphere.gif",
-  "site/readme/mario.webp",
+  "site/readme/mario-grab.gif",
 ]);
 const SHA256 = /^[a-f0-9]{64}$/u;
 

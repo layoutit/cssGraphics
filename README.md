@@ -17,7 +17,7 @@ pnpm install
 pnpm dev
 ```
 
-To prepare Mario, place a user-owned US `.z64` ROM under `.local/`:
+To prepare Mario, place your own US `.z64` ROM under `.local/`:
 
 ```sh
 pnpm prepare:super-mario-64 -- --rom .local/baserom.us.z64

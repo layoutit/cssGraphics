@@ -36,23 +36,12 @@ function applySpaceTexels(element, lighting, fallbackMaterialIndices) {
   for (const face of element.querySelectorAll("[data-csspipes-face]")) {
     const pipe = Number(face.getAttribute("data-csspipes-pipe"));
     const materialIndex = fallbackMaterialIndices?.[pipe];
-    const color = lighting.materialColors?.[materialIndex];
     const materialOrigin = lighting.faces?.[
       materialIndex * lighting.materialFieldStride
     ];
-    if (!Number.isInteger(materialIndex) || typeof color !== "string" ||
+    if (!Number.isInteger(materialIndex) ||
         materialOrigin?.materialIndex !== materialIndex || materialOrigin?.side !== 0) {
       throw new Error(`Prepared fallback material is missing for pipe ${pipe}`);
-    }
-    if (face.getAttribute("data-csspipes-surface") === "end-cap") {
-      Object.assign(face.style, {
-        color: `var(--csspipes-material-color, ${color})`,
-        backfaceVisibility: "visible",
-        transition: "none",
-      });
-      face.dataset.csspipesCapColor = color;
-      face.dataset.csspipesMaterialBinding = "prepared-clip";
-      continue;
     }
     const side = Number(face.getAttribute("data-csspipes-cylinder-side"));
     const field = lighting.faces[
@@ -67,19 +56,16 @@ function applySpaceTexels(element, lighting, fallbackMaterialIndices) {
       backgroundImage: `url("${lighting.assetUrl}")`,
       backgroundColor: "transparent",
       backgroundRepeat: "no-repeat",
-      backgroundPositionX:
-        `calc(var(--csspipes-material-offset, ${materialOrigin.backgroundPositionX}) - ` +
-        `${side * lighting.leafWidth}px)`,
+      backgroundPositionX: field.backgroundPositionX,
       backgroundPositionY: "0px",
       backgroundSize: lighting.backgroundSize,
       backfaceVisibility: "visible",
       transition: "none",
     });
-    face.dataset.csspipesMaterialBinding = "prepared-clip";
   }
 }
 
-function createPreparedScene(hostElement, camera, strategies) {
+function createPreparedScene(hostElement, camera) {
   return createPolyScene(hostElement, {
     camera,
     ambientLight: { color: "#ffffff", intensity: Math.PI },
@@ -91,7 +77,6 @@ function createPreparedScene(hostElement, camera, strategies) {
     textureProjection: "affine",
     seamBleed: 0,
     autoCenter: false,
-    strategies,
   });
 }
 
@@ -106,55 +91,7 @@ function preparedCamera(sceneData) {
   });
 }
 
-function capFallbackLeaf(source) {
-  const fallback = source.cloneNode(true);
-  const atlas = fallback.style.backgroundImage;
-  if (!(fallback instanceof HTMLElement) || !atlas.startsWith("url(")) {
-    throw new Error("Prepared PolyCSS <s> cap fallback is missing its atlas");
-  }
-  fallback.removeAttribute("data-csspipes-face");
-  fallback.removeAttribute("data-poly-index");
-  fallback.dataset.csspipesCapFallback = "true";
-  fallback.style.setProperty("--csspipes-cap-fallback-mask", atlas);
-  fallback.style.backgroundImage = "none";
-  fallback.style.backgroundColor = "var(--csspipes-material-color)";
-  fallback.style.maskImage = "var(--csspipes-cap-fallback-mask)";
-  fallback.style.maskPosition = fallback.style.backgroundPosition;
-  fallback.style.maskRepeat = "no-repeat";
-  fallback.style.maskSize = fallback.style.backgroundSize;
-  fallback.style.webkitMaskImage = "var(--csspipes-cap-fallback-mask)";
-  fallback.style.webkitMaskPosition = fallback.style.backgroundPosition;
-  fallback.style.webkitMaskRepeat = "no-repeat";
-  fallback.style.webkitMaskSize = fallback.style.backgroundSize;
-  fallback.style.backfaceVisibility = "visible";
-  return fallback;
-}
-
-function attachCapFallbacks(playbackRoot, fallbackRoot) {
-  const fallbackFaces = new Map([
-    ...fallbackRoot.querySelectorAll('s[data-csspipes-surface="end-cap"]'),
-  ].map((face) => [
-    `${face.getAttribute("data-csspipes-pipe")}:${face.getAttribute("data-csspipes-cap")}`,
-    face,
-  ]));
-  let fallbackCount = 0;
-  for (const capRoot of playbackRoot.querySelectorAll("[data-csspipes-cap-root]")) {
-    const primary = capRoot.querySelector(':scope > i[data-csspipes-surface="end-cap"]');
-    if (!(primary instanceof HTMLElement)) continue;
-    const key = `${capRoot.getAttribute("data-csspipes-pipe")}:` +
-      `${capRoot.getAttribute("data-csspipes-cap-root")}`;
-    const source = fallbackFaces.get(key);
-    if (!(source instanceof HTMLElement)) {
-      throw new Error(`Prepared PolyCSS <s> cap fallback is missing for ${key}`);
-    }
-    primary.dataset.csspipesCapPrimary = "true";
-    capRoot.append(capFallbackLeaf(source));
-    fallbackCount += 1;
-  }
-  return fallbackCount;
-}
-
-function preparePlaybackLeaves(pipeRoot, pipe, bank, playback) {
+function preparePlaybackLeaves(pipeRoot, pipe, playback) {
   const bandSlotsPerPipe = playback.bandSlotsByPipe?.[pipe];
   const radialSegments = playback.radialSegmentsByPipe?.[pipe];
   const wallLeavesPerPipe = bandSlotsPerPipe * radialSegments;
@@ -163,9 +100,9 @@ function preparePlaybackLeaves(pipeRoot, pipe, bank, playback) {
   if (!Number.isInteger(bandSlotsPerPipe) || bandSlotsPerPipe < 1 ||
       !Number.isInteger(wallLeavesPerPipe) ||
       !Number.isInteger(radialSegments) || radialSegments < 3 ||
-      expected !== wallLeavesPerPipe + 2 ||
+      expected !== wallLeavesPerPipe ||
       !Number.isInteger(leafIndexOffset) || leafIndexOffset < 0) {
-    throw new Error("Prepared continuous tube cap-target census drifted");
+    throw new Error("Prepared continuous tube leaf census drifted");
   }
   const wallLeaves = [
     ...pipeRoot.querySelectorAll('[data-csspipes-surface="wall"]'),
@@ -173,29 +110,7 @@ function preparePlaybackLeaves(pipeRoot, pipe, bank, playback) {
   if (wallLeaves.length !== wallLeavesPerPipe) {
     throw new Error("Prepared continuous tube wall-leaf count drifted");
   }
-  const capRoots = ["start", "tip"].map((cap, capIndex) => {
-    const faces = [
-      ...pipeRoot.querySelectorAll(`[data-csspipes-surface="end-cap"][data-csspipes-cap="${cap}"]`),
-    ];
-    if (faces.length !== playback.endCapLeavesPerEnd) {
-      throw new Error(`Prepared continuous tube ${cap} cap census drifted`);
-    }
-    const capRoot = document.createElement("div");
-    capRoot.dataset.csspipesCapRoot = cap;
-    capRoot.dataset.csspipesPipe = String(pipe);
-    capRoot.dataset.csspipesBankIndex = String(bank);
-    capRoot.dataset.csspipesLeafSlot = String(wallLeavesPerPipe + capIndex);
-    capRoot.dataset.csspipesTopology = "shared-ring-end-cap";
-    capRoot.dataset.csspipesVisible = "false";
-    rootStyle(capRoot, false);
-    for (const face of faces) {
-      face.dataset.csspipesVisible = "true";
-      capRoot.append(face);
-    }
-    pipeRoot.append(capRoot);
-    return capRoot;
-  });
-  const leaves = [...wallLeaves, ...capRoots].sort((left, right) =>
+  const leaves = wallLeaves.sort((left, right) =>
     Number(left.getAttribute("data-csspipes-leaf-slot")) -
     Number(right.getAttribute("data-csspipes-leaf-slot")));
   if (leaves.length !== expected) throw new Error("Prepared continuous tube leaf count drifted");
@@ -204,14 +119,52 @@ function preparePlaybackLeaves(pipeRoot, pipe, bank, playback) {
     if (Number(leaf.getAttribute("data-csspipes-leaf-slot")) !== localIndex) {
       throw new Error("Prepared continuous tube leaf slots are not contiguous");
     }
-    leaf.dataset.csspipesLeafIndex = String(leafIndexOffset + localIndex);
-    leaf.dataset.csspipesBankIndex = String(bank);
-    leaf.dataset.csspipesMorph = "prepared-continuous-tube-retraction";
-    if (leaf.getAttribute("data-csspipes-surface") === "wall") {
-      leaf.dataset.csspipesSeamBleed = "0";
+    const side = Number(leaf.getAttribute("data-csspipes-cylinder-side"));
+    if (!Number.isInteger(side) || side < 0 || side >= radialSegments) {
+      throw new Error("Prepared continuous tube facet is invalid");
     }
-    leaf.dataset.csspipesVisible = "false";
+    leaf.className = String.fromCharCode(97 + side);
     leaf.style.visibility = "hidden";
+  }
+  pipeRoot.append(...leaves);
+}
+
+function stripPreparedDomMetadata(root) {
+  for (const element of root.querySelectorAll("*")) {
+    for (const attribute of [...element.attributes]) {
+      if (attribute.name.startsWith("data-")) {
+        element.removeAttribute(attribute.name);
+      }
+    }
+  }
+}
+
+function consolidatePreparedStyles(html) {
+  const pattern = /<style>([\s\S]*?)<\/style>/gu;
+  const blocks = [...html.matchAll(pattern)];
+  if (blocks.length < 1) throw new Error("Prepared snapshot has no stylesheet");
+  const combined = `<style>${blocks.map((match) => match[1].trim()).join("\n")}</style>`;
+  let first = true;
+  return html.replace(pattern, () => {
+    if (!first) return "";
+    first = false;
+    return combined;
+  });
+}
+
+function moveStaticStylesToStylesheet(root) {
+  root.querySelector(".polycss-camera")?.style.removeProperty("perspective");
+  for (const element of root.querySelectorAll(".polycss-scene > div")) {
+    for (const property of [
+      "position", "left", "top", "width", "height", "transform-origin",
+      "transform-style",
+    ]) element.style.removeProperty(property);
+  }
+  for (const leaf of root.querySelectorAll(".polycss-scene > div > b")) {
+    for (const property of [
+      "color", "background-color", "background-repeat", "background-position-x",
+      "background-position-y", "background-size", "backface-visibility", "transition",
+    ]) leaf.style.removeProperty(property);
   }
 }
 
@@ -230,14 +183,6 @@ async function main() {
   const lightingResponse = await fetch(sceneData.lighting.assetUrl, { cache: "no-store" });
   if (!lightingResponse.ok) throw new Error("Prepared cssPipes space-texel atlas is unavailable");
   const scene = createPreparedScene(host, preparedCamera(sceneData));
-  const fallbackHost = document.createElement("div");
-  rootStyle(fallbackHost, false);
-  document.body.append(fallbackHost);
-  const fallbackScene = createPreparedScene(
-    fallbackHost,
-    preparedCamera(sceneData),
-    { disable: ["i"] },
-  );
   try {
     const handles = Array.from(
       { length: sceneData.playback.retainedBankCount },
@@ -258,88 +203,61 @@ async function main() {
     ).flat();
     const sceneRoot = host.querySelector(".polycss-scene");
     if (!(sceneRoot instanceof HTMLElement)) throw new Error("PolyCSS scene root was not mounted");
-    for (const pipe of sceneData.pipeMeshes) {
-      if (pipe.radialSegments <= 4) continue;
-      fallbackScene.add({
-        polygons: pipe.polygons
-          .filter((face) => face.polygon.data?.["csspipes-surface"] === "end-cap")
-          .map((face) => face.polygon),
-        objectUrls: [], warnings: [], dispose() {},
-      }, {
-        id: `${pipe.id}-cap-fallback`,
-        merge: false,
-        meshResolution: "lossless",
-        stableDom: true,
-        excludeFromAutoCenter: true,
-      });
-    }
-    const playbackRoot = document.createElement("div");
-    playbackRoot.dataset.csspipesPlaybackRoot = "true";
-    rootStyle(playbackRoot);
-    playbackRoot.style.opacity = "1";
-    sceneRoot.append(playbackRoot);
-
     for (const { bank, pipe, mesh } of handles) {
       const pipeRoot = document.createElement("div");
-      pipeRoot.dataset.csspipesPipeRoot = String(pipe.pipe);
-      pipeRoot.dataset.csspipesPipe = String(pipe.pipe);
-      pipeRoot.dataset.csspipesBankIndex = String(bank);
-      pipeRoot.dataset.csspipesShapeIndex = String(pipe.pipe);
-      pipeRoot.dataset.csspipesVisible = "false";
-      pipeRoot.dataset.csspipesTopology = "continuous-shared-ring-tube";
+      const materialIndex = sceneData.playback.clips[0].materialIndicesByPipe[pipe.pipe];
+      pipeRoot.className = `m${materialIndex}`;
       rootStyle(pipeRoot, false);
-      pipeRoot.append(mesh.element);
+      pipeRoot.append(...mesh.element.children);
+      mesh.element.remove();
       applySpaceTexels(
         pipeRoot,
         sceneData.lighting,
         sceneData.playback.clips[0].materialIndicesByPipe,
       );
-      preparePlaybackLeaves(pipeRoot, pipe.pipe, bank, sceneData.playback);
-      playbackRoot.append(pipeRoot);
+      preparePlaybackLeaves(pipeRoot, pipe.pipe, sceneData.playback);
+      sceneRoot.append(pipeRoot);
     }
 
     scene.applyCamera();
-    fallbackScene.applyCamera();
-    await Promise.all([scene.whenTexturesReady(), fallbackScene.whenTexturesReady()]);
-    const fallbackCount = attachCapFallbacks(playbackRoot, fallbackHost);
-    const expectedFallbackCount = sceneData.playback.retainedBankCount *
-      sceneData.pipeMeshes.filter((pipe) => pipe.radialSegments > 4).length * 2;
-    if (fallbackCount !== expectedFallbackCount) {
-      throw new Error("Prepared PolyCSS <s> cap fallback census drifted");
-    }
+    await scene.whenTexturesReady();
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const stats = collectPolyRenderStats(host, sceneData.metrics.preparedLeafCount);
-    const mountedLeaves = host.querySelectorAll("[data-csspipes-face]").length;
-    const shapeTargetCount = host.querySelectorAll("[data-csspipes-shape-index]").length;
-    const leafTargetCount = host.querySelectorAll("[data-csspipes-leaf-index]").length;
-    const pipeRootCount = host.querySelectorAll("[data-csspipes-pipe-root]").length;
+    const mountedLeaves = sceneRoot.querySelectorAll(":scope > div > b").length;
+    const shapeTargetCount = sceneRoot.children.length;
+    const leafTargetCount = sceneRoot.querySelectorAll(":scope > div > b").length;
+    const pipeRootCount = sceneRoot.children.length;
     if (mountedLeaves !== sceneData.metrics.preparedLeafCount ||
         shapeTargetCount !== sceneData.playback.totalRetainedRootCount ||
         leafTargetCount !== sceneData.playback.totalLeafTargetCount ||
         pipeRootCount !== sceneData.playback.totalRetainedRootCount) {
       throw new Error("Prepared continuous tube retained graph drifted");
     }
+    moveStaticStylesToStylesheet(host);
+    stripPreparedDomMetadata(host);
     const exportedHtml = await exportPolySceneSnapshot(host, {
       title: "cssPipes - prepared continuous PolyCSS tubes",
     });
     const sharedAtlasHtml = hoistPreparedSnapshotAtlas(
       exportedHtml,
       sceneData.metrics.preparedWallLeafCount,
+      sceneData.lighting.backgroundSize,
     );
     const materialBindings = buildPreparedMaterialBindings(sceneData);
     const materialStyle =
-      `<style data-csspipes-prepared-material-bindings="${materialBindings.bindingCount}">` +
+      `<style>` +
+      `.polycss-camera { perspective: ${sceneData.camera.perspective}px; ` +
+      `width: ${sceneData.camera.sourceViewport.width}px; ` +
+      `height: ${sceneData.camera.sourceViewport.height}px; ` +
+      `transform-origin: 0 0; }` +
+      `.polycss-scene > div { ` +
+      `position: absolute; left: 0; top: 0; width: 0; height: 0; ` +
+      `transform-origin: 0 0 0; transform-style: preserve-3d; }` +
       `${materialBindings.css}</style>`;
-    const fallbackStyle = `<style data-csspipes-cap-fallback="true">` +
-      `[data-csspipes-cap-fallback] { display: none !important; }` +
-      `@supports not (border-shape: polygon(0 0, 100% 0, 0 100%) circle(0)) {` +
-      `[data-csspipes-cap-primary] { display: none !important; }` +
-      `[data-csspipes-cap-fallback] { display: block !important; }` +
-      `}</style>`;
-    const html = sharedAtlasHtml.replace(
+    const html = consolidatePreparedStyles(sharedAtlasHtml.replace(
       "</head>",
-      `${materialStyle}${fallbackStyle}</head>`,
-    );
+      `${materialStyle}</head>`,
+    ));
     if (!html.includes("polycss-scene") || /<script\b/i.test(html)) {
       throw new Error("Prepared PolyCSS snapshot failed script/scene sanitization");
     }
@@ -358,8 +276,6 @@ async function main() {
       sceneId: sceneData.id,
     };
   } finally {
-    fallbackScene.destroy?.();
-    fallbackHost.remove();
     scene.destroy?.();
   }
 }

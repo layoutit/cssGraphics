@@ -235,7 +235,7 @@ if (CSSPIPES_PREBAKE_CONFIG.clipCount !==
   throw new Error("cssPipes clip count must split evenly across viewport seed profiles");
 }
 
-const CYLINDER_SURFACES = new Map(
+const CYLINDER_SIDES = new Map(
   [...new Set(CSSPIPES_PREBAKE_CONFIG.radialSegmentsByPipe)].map((radialSegments) => {
     const polygons = createPolyCylinder({
       radius: CSSPIPES_PREBAKE_CONFIG.tubeRadius,
@@ -245,36 +245,12 @@ const CYLINDER_SURFACES = new Map(
     const sides = Object.freeze(
       polygons.filter((polygon) => polygon.vertices.length === 4),
     );
-    const caps = polygons.filter((polygon) => polygon.vertices.length === 3);
-    const capPolygons = Object.freeze(["start", "tip"].map((cap) => {
-      const isStart = cap === "start";
-      const triangles = caps.slice(
-        isStart ? 0 : radialSegments,
-        isStart ? radialSegments : radialSegments * 2,
-      );
-      const vertices = triangles.map(
-        (polygon) => polygon.vertices[isStart ? 2 : 1],
-      );
-      if (isStart) vertices.reverse();
-      return Object.freeze({
-        vertices: Object.freeze(vertices.map((vertex) => Object.freeze([...vertex]))),
-        color: "#cccccc",
-      });
-    }));
-    if (sides.length !== radialSegments || caps.length !== radialSegments * 2 ||
-        capPolygons.some((polygon) => polygon.vertices.length !== radialSegments)) {
-      throw new Error(`PolyCSS ${radialSegments}-facet cylinder surface contract drifted`);
+    if (sides.length !== radialSegments) {
+      throw new Error(`PolyCSS ${radialSegments}-facet cylinder wall contract drifted`);
     }
-    return [radialSegments, Object.freeze({ sides, capPolygons })];
+    return [radialSegments, sides];
   }),
 );
-
-export const CSSPIPES_END_CAP_VERTICES_PER_END =
-  CSSPIPES_PREBAKE_CONFIG.radialSegments;
-export const CSSPIPES_END_CAP_LEAVES_PER_END = 1;
-export const CSSPIPES_END_CAP_LEAVES_PER_PIPE =
-  CSSPIPES_END_CAP_LEAVES_PER_END * 2;
-export const CSSPIPES_END_CAP_TARGETS_PER_PIPE = 2;
 
 export function preparedPipeLeafCount(
   bandSlotsPerPipe,
@@ -283,8 +259,7 @@ export function preparedPipeLeafCount(
   if (!Number.isInteger(bandSlotsPerPipe) || bandSlotsPerPipe < 1) {
     throw new TypeError("cssPipes bandSlotsPerPipe must be a positive integer");
   }
-  return bandSlotsPerPipe * radialSegments +
-    CSSPIPES_END_CAP_TARGETS_PER_PIPE;
+  return bandSlotsPerPipe * radialSegments;
 }
 
 function canonicalBandFace(pipe, band, side, radialSegments, color, polygon) {
@@ -310,29 +285,6 @@ function canonicalBandFace(pipe, band, side, radialSegments, color, polygon) {
   });
 }
 
-function canonicalCapFace(pipe, cap, color, polygon) {
-  const id = `csspipes-pipe-${String(pipe).padStart(2, "0")}-${cap}-cap`;
-  const isStart = cap === "start";
-  const zOffset = isStart ? 0.5 : -0.5;
-  return Object.freeze({
-    id,
-    polygon: Object.freeze({
-      vertices: Object.freeze(polygon.vertices.map(([x, y, z]) =>
-        Object.freeze([x, y, z + zOffset]))),
-      color,
-      data: Object.freeze({
-        "csspipes-face": id,
-        "csspipes-family": "tube",
-        "csspipes-pipe": pipe,
-        "csspipes-cap": cap,
-        "csspipes-cap-polygon": 0,
-        "csspipes-surface": "end-cap",
-        "csspipes-seam-bleed": 0,
-      }),
-    }),
-  });
-}
-
 export function buildPreparedPipeMeshes(bandSlotsByPipe, pipeColors) {
   if (!Array.isArray(bandSlotsByPipe) ||
       bandSlotsByPipe.length !== CSSPIPES_PREBAKE_CONFIG.pipeCount ||
@@ -350,29 +302,26 @@ export function buildPreparedPipeMeshes(bandSlotsByPipe, pipeColors) {
       const color = pipeColors[pipe];
       const bandSlotsPerPipe = bandSlotsByPipe[pipe];
       const radialSegments = CSSPIPES_PREBAKE_CONFIG.radialSegmentsByPipe[pipe];
-      const cylinder = CYLINDER_SURFACES.get(radialSegments);
+      const cylinderSides = CYLINDER_SIDES.get(radialSegments);
       const polygons = [];
       for (let band = 0; band < bandSlotsPerPipe; band += 1) {
-        for (let side = 0; side < cylinder.sides.length; side += 1) {
+        for (let side = 0; side < cylinderSides.length; side += 1) {
           polygons.push(canonicalBandFace(
             pipe,
             band,
             side,
             radialSegments,
             color,
-            cylinder.sides[side],
+            cylinderSides[side],
           ));
         }
       }
-      polygons.push(canonicalCapFace(pipe, "start", color, cylinder.capPolygons[0]));
-      polygons.push(canonicalCapFace(pipe, "tip", color, cylinder.capPolygons[1]));
       return Object.freeze({
         id: `csspipes-pipe-${String(pipe).padStart(2, "0")}`,
         pipe,
         color,
         bandCount: bandSlotsPerPipe,
         radialSegments,
-        endCapLeafCount: CSSPIPES_END_CAP_LEAVES_PER_PIPE,
         polygons: Object.freeze(polygons),
       });
     },

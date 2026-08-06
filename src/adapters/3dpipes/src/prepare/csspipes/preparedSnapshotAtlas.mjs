@@ -1,8 +1,8 @@
 const INLINE_ATLAS = /background-image:\s*url\(&quot;(data:image\/png;base64,[A-Za-z0-9+/=]+)&quot;\);\s*/gu;
 
-export function hoistPreparedSnapshotAtlas(html, expectedWallLeafCount) {
+export function hoistPreparedSnapshotAtlas(html, expectedWallLeafCount, backgroundSize) {
   if (typeof html !== "string" || !Number.isInteger(expectedWallLeafCount) ||
-      expectedWallLeafCount < 1) {
+      expectedWallLeafCount < 1 || typeof backgroundSize !== "string") {
     throw new TypeError("Prepared snapshot atlas input is invalid");
   }
   const matches = [...html.matchAll(INLINE_ATLAS)];
@@ -14,8 +14,14 @@ export function hoistPreparedSnapshotAtlas(html, expectedWallLeafCount) {
   }
   const [atlas] = atlases;
   const sharedStyle =
-    `<style data-csspipes-prepared-shared-atlas="true">` +
-    `[data-csspipes-surface="wall"][data-csspipes-material-binding="prepared-clip"] { ` +
-    `background-image: url("${atlas}"); }</style>`;
-  return html.replace(INLINE_ATLAS, "").replace("</head>", `${sharedStyle}</head>`);
+    `<style>` +
+    `.polycss-scene > div > b { ` +
+    `background-image: url("${atlas}"); ` +
+    `background-color: transparent; background-repeat: no-repeat; ` +
+    `background-position-y: 0; background-size: ${backgroundSize}; ` +
+    `backface-visibility: visible; transition: none; }</style>`;
+  return html
+    .replace(INLINE_ATLAS, "")
+    .replace(/\s*color:\s*rgb\(0, 0, 0\);/gu, "")
+    .replace("</head>", `${sharedStyle}</head>`);
 }

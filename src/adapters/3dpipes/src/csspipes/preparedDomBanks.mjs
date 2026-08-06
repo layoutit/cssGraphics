@@ -1,48 +1,25 @@
 import { createPolyMorphPreparedDomTarget } from "@layoutit/polycss-morph";
 
-function integerAttribute(node, name, label) {
-  const value = Number(node.getAttribute(name));
-  if (!Number.isInteger(value)) throw new Error(`${label} must be an integer`);
-  return value;
-}
-
-function sortedTargets(nodes, attribute, label) {
-  return [...nodes].sort((left, right) =>
-    integerAttribute(left, attribute, label) - integerAttribute(right, attribute, label));
-}
-
-function bankedTargets(nodes, attribute, label, bankCount, targetCount) {
-  const banks = Array.from({ length: bankCount }, () => []);
-  for (const node of nodes) {
-    const bank = integerAttribute(node, "data-csspipes-bank-index", "Prepared bank index");
-    if (bank < 0 || bank >= bankCount) {
-      throw new Error(`Prepared ${label} bank ${bank} is out of range`);
-    }
-    banks[bank].push(node);
+function orderedBanks(nodes, label, bankCount, targetCount) {
+  const targets = [...nodes];
+  if (targets.length !== bankCount * targetCount) {
+    throw new Error(`Prepared ${label} targets are incomplete`);
   }
-  for (let bank = 0; bank < bankCount; bank += 1) {
-    banks[bank] = sortedTargets(banks[bank], attribute, label);
-    if (banks[bank].length !== targetCount || !banks[bank].every((node, index) =>
-      integerAttribute(node, attribute, label) === index)) {
-      throw new Error(`Prepared ${label} bank ${bank} is incomplete`);
-    }
-  }
-  return Object.freeze(banks.map((bank) => Object.freeze(bank)));
+  return Object.freeze(Array.from({ length: bankCount }, (_, bank) =>
+    Object.freeze(targets.slice(bank * targetCount, (bank + 1) * targetCount))));
 }
 
 export function createPreparedDomBanks(options) {
-  const { playback, playbackRoot, sceneRoot } = options;
-  const shapeRootsByBank = bankedTargets(
+  const { playback, sceneRoot } = options;
+  const shapeRootsByBank = orderedBanks(
     options.shapeRoots,
-    "data-csspipes-shape-index",
-    "Prepared shape index",
+    "shape",
     playback.retainedBankCount,
     playback.retainedRootCount,
   );
-  const leafRootsByBank = bankedTargets(
+  const leafRootsByBank = orderedBanks(
     options.leafRoots,
-    "data-csspipes-leaf-index",
-    "Prepared leaf index",
+    "leaf",
     playback.retainedBankCount,
     playback.leafTargetCount,
   );
@@ -50,6 +27,21 @@ export function createPreparedDomBanks(options) {
   const leafRoots = leafRootsByBank.flat();
   const shapeVisibility = new Uint8Array(playback.totalRetainedRootCount);
   const leafVisibility = new Uint8Array(playback.totalLeafTargetCount);
+  const pipeMaterials = new Int16Array(playback.totalRetainedRootCount).fill(-1);
+  const initialMaterials = playback.clips[0]?.materialIndicesByPipe;
+  if (!Array.isArray(initialMaterials) || initialMaterials.length !== playback.pipeCount) {
+    throw new Error("Prepared initial materials are incomplete");
+  }
+  for (let bank = 0; bank < playback.retainedBankCount; bank += 1) {
+    for (let pipe = 0; pipe < playback.pipeCount; pipe += 1) {
+      const targetIndex = bank * playback.retainedRootCount + pipe;
+      const materialIndex = initialMaterials[pipe];
+      if (!shapeRoots[targetIndex]?.classList.contains(`m${materialIndex}`)) {
+        throw new Error(`Prepared initial material ${bank}:${pipe} is missing`);
+      }
+      pipeMaterials[targetIndex] = materialIndex;
+    }
+  }
   const morphTarget = createPolyMorphPreparedDomTarget({
     model: {
       element: sceneRoot,
@@ -120,23 +112,18 @@ export function createPreparedDomBanks(options) {
     }
   }
 
-  function writePlaybackRoot(transforms, transformIndex, opacity) {
-    if (transformIndex >= 0) {
-      const transform = preparedTransform(transforms, transformIndex);
-      if (playbackRoot.style.transform !== transform) {
-        playbackRoot.style.transform = transform;
-      }
-    }
-    if (opacity >= 0 && playbackRoot.style.opacity !== String(opacity)) {
-      playbackRoot.style.opacity = String(opacity);
-    }
-  }
-
   function writePipeMaterial(bank, pipe, clipIndex) {
     const root = shapeRootsByBank[bank][pipe];
-    const value = String(clipIndex);
-    if (root.getAttribute("data-csspipes-material-clip") === value) return;
-    root.setAttribute("data-csspipes-material-clip", value);
+    const targetIndex = bank * playback.retainedRootCount + pipe;
+    const materialIndex = playback.clips[clipIndex]?.materialIndicesByPipe?.[pipe];
+    if (!root || !Number.isInteger(materialIndex)) {
+      throw new Error(`Prepared material assignment ${clipIndex}:${pipe} is invalid`);
+    }
+    const previous = pipeMaterials[targetIndex];
+    if (previous === materialIndex) return;
+    if (previous >= 0) root.classList.remove(`m${previous}`);
+    root.classList.add(`m${materialIndex}`);
+    pipeMaterials[targetIndex] = materialIndex;
   }
 
   return Object.freeze({
@@ -150,7 +137,6 @@ export function createPreparedDomBanks(options) {
     hideAllBanks() {
       for (let bank = 0; bank < playback.retainedBankCount; bank += 1) hideBank(bank);
     },
-    writePlaybackRoot,
     writePipeMaterial,
     writeBankMaterial(bank, clipIndex) {
       for (let pipe = 0; pipe < playback.pipeCount; pipe += 1) {

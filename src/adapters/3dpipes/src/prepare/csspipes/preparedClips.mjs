@@ -4,10 +4,6 @@ import {
 } from "@layoutit/polycss";
 import {
   CSSPIPES_CAMERA_CONTRACT,
-  CSSPIPES_END_CAP_LEAVES_PER_PIPE,
-  CSSPIPES_END_CAP_LEAVES_PER_END,
-  CSSPIPES_END_CAP_TARGETS_PER_PIPE,
-  CSSPIPES_END_CAP_VERTICES_PER_END,
   CSSPIPES_PALETTE,
   CSSPIPES_PREBAKE_CONFIG,
   CSSPIPES_PRODUCT_PALETTE,
@@ -18,8 +14,6 @@ import {
 import {
   buildPreparedBandIntervalLeafTransforms,
   buildPreparedBandLeafTransforms,
-  buildPreparedStartCapRootTransform,
-  buildPreparedTipCapRootTransform,
   buildPreparedTransportedFrames,
   buildWeldedPipeMesh,
 } from "./weldedTubeMesh.mjs";
@@ -653,26 +647,26 @@ function stateDigest(state) {
 
 const preparedTransformScalar = (value) => Number(value.toFixed(12));
 
-function preparedPipeRing(mesh, cap) {
-  const ring = mesh.caps.find((entry) => entry.cap === cap)?.ring;
-  if (!ring) throw new Error(`Prepared cssPipes ${cap} ring is missing`);
+function preparedPipeEndpointRing(mesh, endpoint) {
+  const ring = endpoint === "start" ? mesh.startRing : mesh.endRing;
+  if (!ring) throw new Error(`Prepared cssPipes ${endpoint} ring is missing`);
   return ring;
 }
 
-function preparedPipeCapPoint(entry, sourcePipe, cap) {
+function preparedPipeEndpointPoint(entry, sourcePipe, endpoint) {
   const slot = entry.sourcePipeBySlot.indexOf(sourcePipe);
   if (slot < 0) throw new Error(`Prepared cssPipes source pipe ${sourcePipe} is missing`);
   const mesh = entry.weldedMeshesByPipe[slot];
-  const ring = preparedPipeRing(mesh, cap);
+  const ring = preparedPipeEndpointRing(mesh, endpoint);
   return Object.freeze(mesh.rootPosition.map((value, axis) =>
     preparedTransformScalar(value + ring.center[axis])));
 }
 
-function preparedPipeCapRingPoints(entry, sourcePipe, cap) {
+function preparedPipeEndpointRingPoints(entry, sourcePipe, endpoint) {
   const slot = entry.sourcePipeBySlot.indexOf(sourcePipe);
   if (slot < 0) throw new Error(`Prepared cssPipes source pipe ${sourcePipe} is missing`);
   const mesh = entry.weldedMeshesByPipe[slot];
-  const ring = preparedPipeRing(mesh, cap);
+  const ring = preparedPipeEndpointRing(mesh, endpoint);
   return Object.freeze(ring.vertices.map((vertex) => Object.freeze(
     vertex.map((value, axis) => preparedTransformScalar(
       value + mesh.rootPosition[axis],
@@ -863,7 +857,7 @@ function buildPreparedZSeedLoopTrack({
     recycleMode: "prepare-hidden-pipe-when-outgoing-pipe-empties",
     tailDirection: "start-to-tip",
     headDirection: "start-to-tip",
-    visibleHandoffState: "one-moving-tail-cap-and-one-moving-head-cap",
+    visibleHandoffState: "simultaneous-open-tail-and-open-head",
     cameraMode: "prepared-static-profile-camera",
     cameraTravelPixels: 0,
     cameraDuringPlayback: "hold-static-profile-camera",
@@ -915,14 +909,14 @@ function buildPreparedZSeedLoopTracks({
         for (let sourcePipe = 0;
           sourcePipe < CSSPIPES_PREBAKE_CONFIG.pipeCount;
           sourcePipe += 1) {
-          const tip = preparedPipeCapPoint(accepted[clipIndex], sourcePipe, "tip");
-          const start = preparedPipeCapPoint(accepted[nextClipIndex], sourcePipe, "start");
-          const tipRing = preparedPipeCapRingPoints(
+          const tip = preparedPipeEndpointPoint(accepted[clipIndex], sourcePipe, "tip");
+          const start = preparedPipeEndpointPoint(accepted[nextClipIndex], sourcePipe, "start");
+          const tipRing = preparedPipeEndpointRingPoints(
             accepted[clipIndex],
             sourcePipe,
             "tip",
           );
-          const startRing = preparedPipeCapRingPoints(
+          const startRing = preparedPipeEndpointRingPoints(
             accepted[nextClipIndex],
             sourcePipe,
             "start",
@@ -1100,17 +1094,7 @@ function buildPreparedTube(entry, bandSlotsByPipe, internTransform) {
       sourceBandDurationsByPipe[pipe],
       synchronizedPipeFrameCount,
     );
-    const wallLeavesPerPipe = bandSlotsByPipe[pipe] * radialSegments;
     const pipeLeafOffset = pipeLeafOffsets[pipe];
-    const startCapLeafOffset = pipeLeafOffset + wallLeavesPerPipe;
-    const tipCapLeafOffset = startCapLeafOffset + 1;
-    const startCapTransform = internTransform(buildPreparedStartCapRootTransform(mesh));
-    finalLeafTransforms[startCapLeafOffset] = startCapTransform;
-    finalLeafVisibility[startCapLeafOffset] = 1;
-    seedLeafTransforms[startCapLeafOffset] = startCapTransform;
-    seedLeafVisibility[startCapLeafOffset] = 1;
-    handoffStartLeafTransforms[startCapLeafOffset] = startCapTransform;
-    handoffStartLeafVisibility[startCapLeafOffset] = 1;
     const units = [];
     for (let band = 0; band < mesh.bands.length; band += 1) {
       const durationFrames = bandDurations[band];
@@ -1122,14 +1106,6 @@ function buildPreparedTube(entry, bandSlotsByPipe, internTransform) {
           return Object.freeze(
             buildPreparedBandLeafTransforms(mesh, band, progress).map(internTransform),
           );
-        },
-      ));
-      const tipCapStates = Object.freeze(Array.from(
-        { length: durationFrames + 1 },
-        (_, step) => {
-          const progress = CSSPIPES_PREBAKE_CONFIG.tubeEntryProgress +
-            (1 - CSSPIPES_PREBAKE_CONFIG.tubeEntryProgress) * step / durationFrames;
-          return internTransform(buildPreparedTipCapRootTransform(mesh, band, progress));
         },
       ));
       const tailStates = Object.freeze(Array.from(
@@ -1144,21 +1120,6 @@ function buildPreparedTube(entry, bandSlotsByPipe, internTransform) {
           ).map(internTransform));
         },
       ));
-      const tailCapStates = Object.freeze(Array.from(
-        { length: durationFrames + 1 },
-        (_, step) => {
-          if (step === 0) {
-            return band === 0
-              ? startCapTransform
-              : units.at(-1).tipCapStates.at(-1);
-          }
-          return internTransform(buildPreparedTipCapRootTransform(
-            mesh,
-            band,
-            step / durationFrames,
-          ));
-        },
-      ));
       const leafOffset = pipeLeafOffset + band * radialSegments;
       for (let side = 0; side < radialSegments; side += 1) {
         finalLeafTransforms[leafOffset + side] = states.at(-1)[side];
@@ -1168,28 +1129,14 @@ function buildPreparedTube(entry, bandSlotsByPipe, internTransform) {
         connectedSeedLeafTransforms[leafOffset + side] = states[0][side];
         connectedSeedLeafVisibility[leafOffset + side] = band === 0 ? 1 : 0;
       }
-      if (band === 0) {
-        seedLeafTransforms[tipCapLeafOffset] = tipCapStates[0];
-        seedLeafVisibility[tipCapLeafOffset] = 1;
-        connectedSeedLeafTransforms[tipCapLeafOffset] = tipCapStates[0];
-        connectedSeedLeafVisibility[tipCapLeafOffset] = 1;
-      }
-      if (band === mesh.bands.length - 1) {
-        finalLeafTransforms[tipCapLeafOffset] = tipCapStates.at(-1);
-        finalLeafVisibility[tipCapLeafOffset] = 1;
-      }
       units.push(Object.freeze({
         pipe,
         band,
         radialSegments,
         leafOffset,
-        startCapLeafOffset,
-        tipCapLeafOffset,
         durationFrames,
         states,
-        tipCapStates,
         tailStates,
-        tailCapStates,
       }));
     }
     unitsByPipe.push(Object.freeze(units));
@@ -1200,12 +1147,8 @@ function buildPreparedTube(entry, bandSlotsByPipe, internTransform) {
     initialVisibleBandCount: CSSPIPES_PREBAKE_CONFIG.pipeCount,
     initialVisibleLeafCount: CSSPIPES_PREBAKE_CONFIG.radialSegmentsByPipe.reduce(
       (total, count) => total + count,
-      CSSPIPES_PREBAKE_CONFIG.pipeCount * CSSPIPES_END_CAP_TARGETS_PER_PIPE,
+      0,
     ),
-    retainedEndCapLeafCount: CSSPIPES_PREBAKE_CONFIG.pipeCount *
-      CSSPIPES_END_CAP_LEAVES_PER_PIPE,
-    retainedEndCapTargetCount: CSSPIPES_PREBAKE_CONFIG.pipeCount *
-      CSSPIPES_END_CAP_TARGETS_PER_PIPE,
     finalState: Object.freeze({
       rootTransform: none,
       rootOpacity: 1,
@@ -1288,7 +1231,7 @@ function buildPreparedGrowEntry(prepared) {
     );
   }
   return Object.freeze({
-    schema: "csspipes-prepared-cap-to-growth-entry@1",
+    schema: "csspipes-prepared-empty-to-growth-entry@1",
     row: Object.freeze([0, leafTransitions.length / 5]),
     leafTransitions: Object.freeze(leafTransitions),
   });
@@ -1305,8 +1248,8 @@ function buildPreparedExperimentRecording(prepared, modelTransform) {
     ),
     growEntry,
     proof: Object.freeze({
-      initialState: "start-caps-only",
-      connectedInitialState: "first-bands-and-moving-tips-without-internal-caps",
+      initialState: "empty-open-tubes",
+      connectedInitialState: "first-open-bands",
       connectedSeedStatePrepared: true,
       growEntryPrepared: true,
       runtimeGeometrySemantics: false,
@@ -1326,12 +1269,6 @@ function buildPreparedSnakeTailRecording(prepared) {
     ]));
   };
 
-  for (const units of prepared.unitsByPipe) {
-    const first = units[0];
-    addLeaf(0, first.startCapLeafOffset, first.tailCapStates[0], 1);
-    addLeaf(0, first.tipCapLeafOffset, first.tipCapStates.at(-1), 0);
-  }
-
   for (let pipe = 0; pipe < prepared.unitsByPipe.length; pipe += 1) {
     const units = prepared.unitsByPipe[pipe];
     let cursor = pipe * CSSPIPES_PREBAKE_CONFIG.pipeStaggerFrames;
@@ -1348,12 +1285,6 @@ function buildPreparedSnakeTailRecording(prepared) {
             1,
           );
         }
-        addLeaf(
-          startFrame + step,
-          unit.startCapLeafOffset,
-          unit.tailCapStates[step],
-          1,
-        );
       }
       const endFrame = startFrame + unit.durationFrames;
       for (let side = 0; side < radialSegments; side += 1) {
@@ -1364,12 +1295,6 @@ function buildPreparedSnakeTailRecording(prepared) {
           0,
         );
       }
-      addLeaf(
-        endFrame,
-        unit.startCapLeafOffset,
-        unit.tailCapStates.at(-1),
-        unitIndex === units.length - 1 ? 0 : 1,
-      );
       bandRows.push(Object.freeze([pipe, unit.band, startFrame, endFrame]));
       cursor = endFrame;
       lastFrame = Math.max(lastFrame, endFrame);
@@ -1406,7 +1331,6 @@ function buildPreparedSnakeTailRecording(prepared) {
       direction: "start-to-tip",
       reachesEmpty: true,
       noBandBoundaryIdleFrames: true,
-      movingTailCapUsesPreparedRows: true,
       runtimeGeometrySemantics: false,
     }),
   });
@@ -1429,7 +1353,6 @@ function buildRetractionRecording(prepared, entry, modelTransform) {
       const radialSegments = unit.radialSegments;
       const startFrame = cursor;
       if (unitIndex > 0) {
-        const previousUnit = units[unitIndex - 1];
         for (let side = 0; side < radialSegments; side += 1) {
           addLeaf(startFrame, Object.freeze([
             unit.leafOffset + side,
@@ -1439,13 +1362,6 @@ function buildRetractionRecording(prepared, entry, modelTransform) {
             0,
           ]));
         }
-        addLeaf(startFrame, Object.freeze([
-          unit.tipCapLeafOffset,
-          unit.tipCapStates[0],
-          1,
-          previousUnit.tipCapStates.at(-1),
-          1,
-        ]));
       }
       for (let step = 1; step <= unit.durationFrames; step += 1) {
         for (let side = 0; side < radialSegments; side += 1) {
@@ -1457,13 +1373,6 @@ function buildRetractionRecording(prepared, entry, modelTransform) {
             1,
           ]));
         }
-        addLeaf(startFrame + step, Object.freeze([
-          unit.tipCapLeafOffset,
-          unit.tipCapStates[step],
-          1,
-          unit.tipCapStates[step - 1],
-          1,
-        ]));
       }
       const endFrame = startFrame + unit.durationFrames;
       bandRows.push(Object.freeze([pipe, unit.band, startFrame, endFrame]));
@@ -1475,7 +1384,6 @@ function buildRetractionRecording(prepared, entry, modelTransform) {
           sharedFrame: startFrame,
           leftLeaf: units[unitIndex - 1].leafOffset,
           rightLeaf: unit.leafOffset,
-          tipCapLeaf: unit.tipCapLeafOffset,
         });
       }
       cursor = endFrame;
@@ -1545,9 +1453,6 @@ function buildRetractionRecording(prepared, entry, modelTransform) {
       constantPreparedWorldSpeed: true,
       timingSource: "prepared-cumulative-centerline-distance",
       growthWorldUnitsPerSecond: CSSPIPES_PREBAKE_CONFIG.growthWorldUnitsPerSecond,
-      retainedEndCapLeafCount: prepared.retainedEndCapLeafCount,
-      retainedEndCapTargetCount: prepared.retainedEndCapTargetCount,
-      movingTipCapUsesPreparedRows: true,
       weldedSharedRingCount: weldCount,
       firstBoundary,
     }),
@@ -1781,7 +1686,7 @@ function buildAcceptedPreparedEntries() {
       const forwardFrames = fullForwardRoute.walkers.map((walker, sourcePipe) =>
         buildPreparedTransportedFrames(
           walker.segments,
-          preparedPipeRing(fullForwardMeshes[sourcePipe], "start").frame,
+          preparedPipeEndpointRing(fullForwardMeshes[sourcePipe], "start").frame,
         ));
       const forwardSlices = sliceGeneratedRouteBackwards(
         fullForwardRoute,
@@ -1848,10 +1753,6 @@ function buildPreparedClip(entry, clipIndex, bandSlotsByPipe, internTransform) {
       count * CSSPIPES_PREBAKE_CONFIG.radialSegmentsByPipe[pipe],
     0,
   );
-  const retainedEndCapLeafCount = CSSPIPES_PREBAKE_CONFIG.pipeCount *
-    CSSPIPES_END_CAP_LEAVES_PER_PIPE;
-  const retainedEndCapTargetCount = CSSPIPES_PREBAKE_CONFIG.pipeCount *
-    CSSPIPES_END_CAP_TARGETS_PER_PIPE;
   const weldedMesh = Object.freeze({
     schema: "csspipes-final-continuous-tubes@3",
     preparationDirection: "complete-tubes-to-seed-retraction",
@@ -1866,13 +1767,6 @@ function buildPreparedClip(entry, clipIndex, bandSlotsByPipe, internTransform) {
       0,
     ),
     bandCount,
-    endCapPolygonCount: entry.weldedMeshesByPipe.reduce(
-      (total, mesh) => total + mesh.caps.reduce(
-        (capTotal, cap) => capTotal + cap.polygons.length,
-        0,
-      ),
-      0,
-    ),
     weldCount: entry.weldedMeshesByPipe.reduce(
       (total, mesh) => total + mesh.welds.length,
       0,
@@ -1888,13 +1782,13 @@ function buildPreparedClip(entry, clipIndex, bandSlotsByPipe, internTransform) {
     recording,
     initialVisibleBandCount: prepared.initialVisibleBandCount,
     initialVisibleLeafCount: prepared.initialVisibleLeafCount,
-    finalVisibleLeafCount: wallLeafCount + retainedEndCapTargetCount,
+    finalVisibleLeafCount: wallLeafCount,
     initialVisibleSurfaceLeafCount:
       CSSPIPES_PREBAKE_CONFIG.radialSegmentsByPipe.reduce(
         (total, count) => total + count,
-        CSSPIPES_PREBAKE_CONFIG.pipeCount * CSSPIPES_END_CAP_LEAVES_PER_PIPE,
+        0,
       ),
-    finalVisibleSurfaceLeafCount: wallLeafCount + retainedEndCapLeafCount,
+    finalVisibleSurfaceLeafCount: wallLeafCount,
     bandCount,
     bandCountsByPipe: Object.freeze(bandCountsByPipe),
     sourcePipeBySlot: entry.sourcePipeBySlot,
@@ -1940,10 +1834,6 @@ export function buildPreparedClipLibrary() {
       count * CSSPIPES_PREBAKE_CONFIG.radialSegmentsByPipe[pipe],
     0,
   );
-  const retainedEndCapLeafCount = CSSPIPES_PREBAKE_CONFIG.pipeCount *
-    CSSPIPES_END_CAP_LEAVES_PER_PIPE;
-  const retainedEndCapTargetCount = CSSPIPES_PREBAKE_CONFIG.pipeCount *
-    CSSPIPES_END_CAP_TARGETS_PER_PIPE;
   const leavesPerPipeByPipe = Object.freeze(bandSlotsByPipe.map((count, pipe) =>
     preparedPipeLeafCount(
       count,
@@ -2029,15 +1919,10 @@ export function buildPreparedClipLibrary() {
     leavesPerPipeByPipe,
     pipeLeafOffsets,
     wallLeafTargetCount,
-    retainedEndCapLeafCount,
-    retainedEndCapTargetCount,
     radialSegments: CSSPIPES_PREBAKE_CONFIG.radialSegments,
     radialSegmentsByPipe: CSSPIPES_PREBAKE_CONFIG.radialSegmentsByPipe,
     radialSegmentsBySourcePipe:
       CSSPIPES_PREBAKE_CONFIG.radialSegmentsBySourcePipe,
-    endCapLeavesPerEnd: CSSPIPES_END_CAP_LEAVES_PER_END,
-    endCapVerticesPerEnd: CSSPIPES_END_CAP_VERTICES_PER_END,
-    endCapVerticesByPipe: CSSPIPES_PREBAKE_CONFIG.radialSegmentsByPipe,
     retainedPipeRootCount: CSSPIPES_PREBAKE_CONFIG.pipeCount,
     retainedRootCount: CSSPIPES_PREBAKE_CONFIG.pipeCount,
     leafTargetCount,
@@ -2063,7 +1948,7 @@ export function buildPreparedClipLibrary() {
       easing: CSSPIPES_PREBAKE_CONFIG.morphEasing,
       growthWorldUnitsPerSecond: CSSPIPES_PREBAKE_CONFIG.growthWorldUnitsPerSecond,
       bandTimingSource: "prepared-cumulative-centerline-distance",
-      leafTransformSource: "prepared-zero-bleed-quad-and-cap-root-matrices",
+      leafTransformSource: "prepared-zero-bleed-quad-matrices",
     }),
     materials: Object.freeze({
       paletteSchema: CSSPIPES_PRODUCT_PALETTE.schema,
@@ -2158,10 +2043,6 @@ export function buildPreparedClipLibrary() {
         (total, clip) => total + clip.weldedMesh.weldCount,
         0,
       ),
-      preparedEndCapPolygons: clips.reduce(
-        (total, clip) => total + clip.weldedMesh.endCapPolygonCount,
-        0,
-      ),
       uniformBandSlotCount: bandSlotsPerPipe * CSSPIPES_PREBAKE_CONFIG.pipeCount,
       packedBandSlotSavings:
         bandSlotsPerPipe * CSSPIPES_PREBAKE_CONFIG.pipeCount - bandSlotCount,
@@ -2170,20 +2051,11 @@ export function buildPreparedClipLibrary() {
           (total, count) => total + count,
           0,
         ) - wallLeafTargetCount,
-      mergedEndCapLeafSavings: 2 *
-        CSSPIPES_PREBAKE_CONFIG.radialSegmentsByPipe.reduce(
-          (total, count) => total + count - CSSPIPES_END_CAP_LEAVES_PER_END,
-          0,
-        ),
       totalSurfaceLeafSavings:
         bandSlotsPerPipe * CSSPIPES_PREBAKE_CONFIG.radialSegmentsByPipe.reduce(
           (total, count) => total + count,
           0,
-        ) - wallLeafTargetCount + 2 *
-        CSSPIPES_PREBAKE_CONFIG.radialSegmentsByPipe.reduce(
-          (total, count) => total + count - CSSPIPES_END_CAP_LEAVES_PER_END,
-          0,
-        ),
+        ) - wallLeafTargetCount,
       minBandsPerClip: Math.min(...bandCounts),
       maxBandsPerClip: Math.max(...bandCounts),
       averageBandsPerClip: Number((bandCounts.reduce((total, count) => total + count, 0) /

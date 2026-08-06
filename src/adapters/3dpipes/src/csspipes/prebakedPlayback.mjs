@@ -45,9 +45,8 @@ function trackShapeTransforms(playback, prepared) {
 
 export async function createCssPipesPrebakedPlayer(options) {
   const playback = options.playback;
-  const playbackRoot = options.playbackRoot;
   const sceneRoot = options.sceneRoot;
-  if (!playbackRoot?.style || !sceneRoot?.style) {
+  if (!sceneRoot?.style) {
     throw new Error("Prepared cssPipes retained roots are missing");
   }
   const dom = createPreparedDomBanks(options);
@@ -78,7 +77,6 @@ export async function createCssPipesPrebakedPlayer(options) {
     writeLeaf,
     writeModelTransform,
     writePipeMaterial,
-    writePlaybackRoot,
     writeShape,
   } = dom;
 
@@ -120,7 +118,6 @@ export async function createCssPipesPrebakedPlayer(options) {
         initial.leaves[offset + 2],
       );
     }
-    writePlaybackRoot(transforms, prepared.placement.seedOriginTransform, initial.rootOpacity);
   }
 
   function publishInitial(bank, prepared) {

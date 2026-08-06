@@ -1,4 +1,3 @@
-import { applyCssPipesAttributes } from "./devtoolsAttrs.mjs";
 import { CssPipesContractError } from "./types.mjs";
 import { readPreparedText } from "./preparedResponse.mjs";
 
@@ -58,15 +57,10 @@ export async function mountPreparedPolyCssSnapshot(host, sceneContract, fetchImp
   const snapshot = importedSnapshot(parsed);
   const fragment = document.createDocumentFragment();
   for (const style of snapshot.styles) fragment.append(document.importNode(style, true));
-  const viewport = document.createElement("div");
-  viewport.dataset.csspipesViewport = "true";
   const camera = document.importNode(snapshot.camera, true);
-  viewport.append(camera);
-  fragment.append(viewport);
+  fragment.append(camera);
   host.replaceChildren(fragment);
-  applyCssPipesAttributes(host, { scene: sceneContract.id, snapshot: "prepared" });
   return Object.freeze({
-    viewport,
     camera,
     scene: camera.querySelector(".polycss-scene"),
   });

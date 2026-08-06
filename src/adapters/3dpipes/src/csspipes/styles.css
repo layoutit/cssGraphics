@@ -24,6 +24,7 @@ body {
   position: relative;
   display: grid;
   place-items: center;
+  overflow: hidden;
   background: linear-gradient(180deg, #0b1119 0%, #000 100%);
 }
 
@@ -139,25 +140,24 @@ body {
   outline-offset: -5px;
 }
 
-#csspipes-root[data-csspipes-ready="error"] {
+#csspipes-root.csspipes-error {
   padding: 2rem;
   white-space: pre-wrap;
   color: #ffb5a7;
 }
 
-[data-csspipes-viewport] > .polycss-camera {
+#csspipes-root > .polycss-camera {
   position: absolute;
 }
 
-[data-csspipes-pipe-root],
-[data-csspipes-face],
-[data-csspipes-playback-root] {
+.polycss-scene > div,
+.polycss-scene > div > b {
   pointer-events: none;
   transform-style: preserve-3d;
   transition: none;
 }
 
-.polycss-scene [data-csspipes-face] {
+.polycss-scene > div > b {
   backface-visibility: visible;
 }
 

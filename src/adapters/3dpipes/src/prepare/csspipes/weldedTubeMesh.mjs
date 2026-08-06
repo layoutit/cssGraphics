@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import {
   buildPolyMeshTransform,
   computeTextureAtlasPlanPublic,
-  DEFAULT_TILE,
   formatMatrix3d,
 } from "@layoutit/polycss";
 import { CSSPIPES_PREBAKE_CONFIG } from "./endlessTubes.mjs";
@@ -136,20 +135,6 @@ function bandPolygons(band, pipeIndex, radialSegments) {
   ));
 }
 
-function capPolygons(ring, pipeIndex, cap) {
-  const vertexIndices = cap === "tip"
-    ? [...ring.vertexIndices]
-    : [...ring.vertexIndices].reverse();
-  return Object.freeze([Object.freeze({
-    id: `pipe-${pipeIndex}-${cap}-cap`,
-    pipe: pipeIndex,
-    cap,
-    polygon: 0,
-    ring,
-    vertexIndices: Object.freeze(vertexIndices),
-  })]);
-}
-
 export function buildWeldedPipeMesh(
   runs,
   preparedCenter,
@@ -262,42 +247,21 @@ export function buildWeldedPipeMesh(
     frame = nextFrame;
   }
 
-  const finalRing = startRing;
-  const caps = Object.freeze([
-    Object.freeze({
-      id: `pipe-${pipeIndex}-start-cap`,
-      cap: "start",
-      ring: firstRing,
-      polygons: capPolygons(firstRing, pipeIndex, "start"),
-    }),
-    Object.freeze({
-      id: `pipe-${pipeIndex}-tip-cap`,
-      cap: "tip",
-      ring: finalRing,
-      polygons: capPolygons(finalRing, pipeIndex, "tip"),
-    }),
-  ]);
   const wallPolygons = bands.flatMap((band) => band.polygons);
-  const endCapPolygons = caps.flatMap((cap) => cap.polygons);
-  const polygons = [...wallPolygons, ...endCapPolygons];
   const reverseRetractionBandIds = Object.freeze(bands.map((band) => band.id).reverse());
   if (bands.length !== runs.length * 2 - 1 || welds.length !== bands.length - 1 ||
-      wallPolygons.length !== bands.length * radialSegments ||
-      endCapPolygons.length !== 2 ||
-      endCapPolygons.some((polygon) =>
-        polygon.vertexIndices.length !== radialSegments)) {
+      wallPolygons.length !== bands.length * radialSegments) {
     throw new Error("Prepared cssPipes welded tube census drifted");
   }
   const hash = createHash("sha256").update(JSON.stringify({
     rootPosition,
     vertices,
-    polygons: polygons.map((polygon) => polygon.vertexIndices),
+    polygons: wallPolygons.map((polygon) => polygon.vertexIndices),
     bands: bands.map((band) => [
       band.startRing.id,
       band.endRing.id,
       band.centerlineLength,
     ]),
-    caps: caps.map((cap) => cap.polygons.map((polygon) => polygon.vertexIndices)),
     reverseRetractionBandIds,
   })).digest("hex");
   return Object.freeze({
@@ -309,9 +273,10 @@ export function buildWeldedPipeMesh(
     rootPosition,
     rootTransform,
     vertices: Object.freeze(vertices),
-    polygons: Object.freeze(polygons),
+    polygons: Object.freeze(wallPolygons),
     bands: Object.freeze(bands),
-    caps,
+    startRing: firstRing,
+    endRing: startRing,
     welds: Object.freeze(welds),
     reverseRetractionBandIds,
     hash,
@@ -349,58 +314,6 @@ function bandPolygonAtInterval(
     color: "#ffffff",
     vertices: Object.freeze(textureVertices),
   });
-}
-
-function ringAtProgress(band, progress) {
-  const u = vector(band.endRing.frame.u.map((value, axis) =>
-    band.startRing.frame.u[axis] + (value - band.startRing.frame.u[axis]) * progress));
-  const v = vector(band.endRing.frame.v.map((value, axis) =>
-    band.startRing.frame.v[axis] + (value - band.startRing.frame.v[axis]) * progress));
-  const directionValue = cross(u, v);
-  const directionLength = Math.hypot(...directionValue);
-  if (!(directionLength > 0)) {
-    throw new Error("Prepared cssPipes cap frame became singular");
-  }
-  return Object.freeze({
-    center: vector(band.endRing.center.map((value, axis) =>
-      band.startRing.center[axis] + (value - band.startRing.center[axis]) * progress)),
-    frame: Object.freeze({
-      u,
-      v,
-      direction: scale(directionValue, 1 / directionLength),
-    }),
-    vertices: Object.freeze(band.endRing.vertices.map((vertexValue, vertexIndex) =>
-      vector(vertexValue.map((value, axis) =>
-        band.startRing.vertices[vertexIndex][axis] +
-        (value - band.startRing.vertices[vertexIndex][axis]) * progress)))),
-  });
-}
-
-function preparedCapRootTransform(ring) {
-  const { u, v, direction } = ring.frame;
-  return formatMatrix3d([
-    v[1], v[0], v[2], 0,
-    u[1], u[0], u[2], 0,
-    direction[1], direction[0], direction[2], 0,
-    ring.center[1] * DEFAULT_TILE,
-    ring.center[0] * DEFAULT_TILE,
-    ring.center[2] * DEFAULT_TILE,
-    1,
-  ].join(","), 8);
-}
-
-export function buildPreparedStartCapRootTransform(mesh) {
-  const ring = mesh?.caps?.find((cap) => cap.cap === "start")?.ring;
-  if (!ring) throw new TypeError("Prepared cssPipes start cap ring is missing");
-  return preparedCapRootTransform(ring);
-}
-
-export function buildPreparedTipCapRootTransform(mesh, bandIndex, progress) {
-  const band = mesh?.bands?.[bandIndex];
-  if (!band || !Number.isFinite(progress) || progress <= 0 || progress > 1) {
-    throw new RangeError("Prepared cssPipes tip-cap progress must be within (0, 1]");
-  }
-  return preparedCapRootTransform(ringAtProgress(band, progress));
 }
 
 function assertPlanarBandPolygon(polygon, bandIndex, side) {

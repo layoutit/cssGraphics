@@ -100,7 +100,6 @@ function calculateCssPipesPresentation(
 
 export function mountCssPipesPresentation({
   host,
-  viewport,
   camera,
   sourceViewport,
   responsivePresentation,
@@ -108,15 +107,6 @@ export function mountCssPipesPresentation({
   ResizeObserverImpl = globalThis.ResizeObserver,
   windowImpl = host?.ownerDocument?.defaultView ?? globalThis.window,
 }) {
-  Object.assign(viewport.style, {
-    position: "absolute",
-    left: "0",
-    right: "0",
-    top: `${topGap}px`,
-    bottom: "0",
-    overflow: "hidden",
-  });
-  viewport.dataset.csspipesTopGap = String(topGap);
   let current;
   const listeners = new Set();
   const refresh = () => {
@@ -128,21 +118,13 @@ export function mountCssPipesPresentation({
       responsivePresentation,
     );
     Object.assign(camera.style, {
-      width: `${current.sourceWidth}px`,
-      height: `${current.sourceHeight}px`,
       left: `${current.left}px`,
       top: `${current.top}px`,
-      transformOrigin: "0 0",
       transform: [
         current.rotationDegrees && `rotate(${current.rotationDegrees}deg)`,
         current.scale !== 1 && `scale(${current.scale})`,
       ].filter(Boolean).join(" "),
     });
-    camera.dataset.csspipesPresentation = "responsive-cover-full-viewport";
-    camera.dataset.csspipesViewportProfile = current.viewportProfile;
-    camera.dataset.csspipesPresentationRotation = String(current.rotationDegrees);
-    camera.dataset.csspipesPresentationScale = String(current.scale);
-    camera.dataset.csspipesPresentationVerticalOffset = String(current.verticalOffset);
     for (const listener of listeners) listener(current);
     return current;
   };

@@ -29,10 +29,8 @@ export async function buildCssPipesScene({
     fallbackMaterialIndices,
     fallbackPipeColors,
     clipBindings: Object.freeze({
-      schema: "csspipes-prepared-material-bindings@2",
-      selectorAttribute: "data-csspipes-material-clip",
-      bindingCount:
-        playback.clipCount * playback.pipeCount * playback.retainedBankCount,
+      schema: "csspipes-prepared-material-classes@1",
+      bindingCount: lightingBundle.contract.materialColors.length * playback.radialSegments,
       runtimeRandomness: false,
       runtimePerLeafColorWrites: 0,
     }),
@@ -42,8 +40,7 @@ export async function buildCssPipesScene({
     0,
   );
   const preparedLeafCount = preparedLeafCountPerBank * playback.retainedBankCount;
-  if (preparedLeafCountPerBank !== playback.wallLeafTargetCount +
-      playback.retainedEndCapLeafCount) {
+  if (preparedLeafCountPerBank !== playback.wallLeafTargetCount) {
     throw new Error("cssPipes retained tube leaf bank drifted from its prepared playback");
   }
   return Object.freeze({
@@ -113,15 +110,8 @@ export async function buildCssPipesScene({
       preparedLeafCount,
       preparedLeafCountPerBank,
       preparedWallLeafCount: playback.wallLeafTargetCount * playback.retainedBankCount,
-      preparedEndCapLeafCount:
-        playback.retainedEndCapLeafCount * playback.retainedBankCount,
-      triangleEquivalentCount: playback.retainedBankCount * (
-        playback.wallLeafTargetCount * 2 +
-        2 * playback.endCapVerticesByPipe.reduce(
-          (total, count) => total + count - 2,
-          0,
-        )
-      ),
+      triangleEquivalentCount:
+        playback.retainedBankCount * playback.wallLeafTargetCount * 2,
       preparedTransformStates: playback.metrics.preparedTransformStates,
       preparedRecordingFrames: playback.metrics.preparedRecordingFrames,
       preparedLeafTransitions: playback.metrics.preparedLeafTransitions,
@@ -134,11 +124,9 @@ export async function buildCssPipesScene({
       preparedWeldedMeshVertices: playback.metrics.preparedWeldedMeshVertices,
       preparedWeldedMeshPolygons: playback.metrics.preparedWeldedMeshPolygons,
       preparedWeldedJoints: playback.metrics.preparedWeldedJoints,
-      preparedEndCapPolygons: playback.metrics.preparedEndCapPolygons,
       uniformBandSlotCount: playback.metrics.uniformBandSlotCount,
       packedBandSlotSavings: playback.metrics.packedBandSlotSavings,
       packedWallLeafSavings: playback.metrics.packedWallLeafSavings,
-      mergedEndCapLeafSavings: playback.metrics.mergedEndCapLeafSavings,
       totalSurfaceLeafSavings: playback.metrics.totalSurfaceLeafSavings,
       minBandsPerClip: playback.metrics.minBandsPerClip,
       maxBandsPerClip: playback.metrics.maxBandsPerClip,
@@ -163,8 +151,7 @@ export async function buildCssPipesScene({
       "the browser replays those retained-leaf rows in reverse and has no straight, turn, or elbow operation",
       "every adjacent tube band shares the same prepared four-, five-, six-, or seven-vertex ring and every leaf matrix uses seamBleed 0",
       "projective tube quads explicitly zero both seamBleed and the projective guard bleed fallback",
-      "each PolyCSS cylinder cap fan is merged during preparation into one solid matching-facet leaf with the existing polygon fallback",
-      "each pipe retains one fixed start-cap leaf and one prepared moving tip-cap leaf",
+      "the retained tubes are deliberately open-ended and contain no end-cap leaves or cap playback branches",
       "every clip uses the same fixed seven-color product palette, including authored amber, cool slate, and vivid purple, bound by source-pipe identity through static prepared CSS",
     ]),
   });

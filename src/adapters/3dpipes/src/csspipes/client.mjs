@@ -19,21 +19,18 @@ export async function startCssPipesClient(host, route) {
     const snapshot = await mountPreparedPolyCssSnapshot(host, scene);
     presentation = mountCssPipesPresentation({
       host,
-      viewport: snapshot.viewport,
       camera: snapshot.camera,
       sourceViewport: scene.camera.sourceViewport,
       responsivePresentation: scene.camera.responsivePresentation,
     });
-    const playbackRoot = host.querySelector("[data-csspipes-playback-root]");
-    const shapeRoots = host.querySelectorAll("[data-csspipes-shape-index]");
-    const leafRoots = host.querySelectorAll("[data-csspipes-leaf-index]");
-    if (!(playbackRoot instanceof HTMLElement) || shapeRoots.length === 0 || leafRoots.length === 0) {
+    const shapeRoots = snapshot.scene.children;
+    const leafRoots = snapshot.scene.querySelectorAll(":scope > div > b");
+    if (shapeRoots.length === 0 || leafRoots.length === 0) {
       throw new Error("Prepared cssPipes playback targets are missing");
     }
     player = await createCssPipesPrebakedPlayer({
       playback: scene.playback,
       sceneRoot: snapshot.scene,
-      playbackRoot,
       shapeRoots,
       leafRoots,
       initialViewportProfile: presentation.viewportProfile,
@@ -51,14 +48,13 @@ export async function startCssPipesClient(host, route) {
         player.destroy();
       },
     });
-    host.dataset.csspipesReady = "true";
     globalThis.requestAnimationFrame(() => player.resume());
     return mounted;
   } catch (error) {
     unsubscribePresentation?.();
     player?.destroy();
     presentation?.destroy();
-    host.dataset.csspipesReady = "error";
+    host.classList.add("csspipes-error");
     host.textContent = `${PREPARE_FAILURE} ${error instanceof Error ? error.message : String(error)}`;
     return null;
   }

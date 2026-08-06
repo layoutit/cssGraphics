@@ -69,7 +69,6 @@ export async function createCssPipesPrebakedPlayer(options) {
   let paused = true;
   let request = null, nextFrameAt = null;
   let horizonRequest = 0;
-  let selectionRequest = 0;
   const {
     hideAllBanks,
     hideBank,
@@ -315,21 +314,6 @@ export async function createCssPipesPrebakedPlayer(options) {
     return frameIndex;
   }
 
-  function stopPlaybackLoop() {
-    const wasPaused = paused;
-    paused = true;
-    nextFrameAt = null;
-    if (request !== null) cancelFrame(request);
-    request = null;
-    return wasPaused;
-  }
-
-  function restorePlaybackLoop(wasPaused) {
-    if (wasPaused) return;
-    paused = false;
-    request = requestFrame(loop);
-  }
-
   function loop(timestamp) {
     request = null;
     if (paused) return;
@@ -359,29 +343,11 @@ export async function createCssPipesPrebakedPlayer(options) {
     return frameIndex;
   }
 
-  async function setViewportProfile(value) {
-    const nextProfile = viewportProfile(value);
-    if (nextProfile === selectedViewportProfile) return selectedViewportProfile;
-    const requestId = ++selectionRequest;
-    const wasPaused = stopPlaybackLoop();
-    selectedViewportProfile = nextProfile;
-    activePlaylist = playback.viewportPlaylists[selectedViewportProfile];
-    playlistCursor = clipCycle % activePlaylist.length;
-    clipIndex = activePlaylist[playlistCursor];
-    await prepareHorizon(clipIndex);
-    if (requestId !== selectionRequest) return selectedViewportProfile;
-    clipData = loadedClip(clipStore, clipIndex);
-    beginOpening();
-    restorePlaybackLoop(wasPaused);
-    return selectedViewportProfile;
-  }
-
   await prepareHorizon(clipIndex);
   clipData = loadedClip(clipStore, clipIndex);
   beginOpening();
   return Object.freeze({
     resume,
-    setViewportProfile,
     destroy() {
       pause();
       dom.destroy();

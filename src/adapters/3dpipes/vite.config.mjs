@@ -14,7 +14,7 @@ const deployBuild = process.env.CSSPIPES_DEPLOY_BUILD === "1";
 export default defineConfig({
   base: deployBuild ? "/pipes/" : "/",
   root: adapterRoot,
-  publicDir: deployBuild ? false : generatedPublicDir,
+  publicDir: deployBuild ? resolve(adapterRoot, "public") : generatedPublicDir,
   plugins: deployBuild ? [{
     name: "csspipes-netlify-assets",
     async closeBundle() {

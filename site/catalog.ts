@@ -1,10 +1,12 @@
 import catalogData from "./public/catalog.json";
 
 export type DistributionMediaType =
+  | "application/xml"
   | "application/json"
   | "image/png"
   | "image/webp"
-  | "text/css";
+  | "text/css"
+  | "text/plain";
 
 export type DistributionResourceRole =
   | "animation-plan"

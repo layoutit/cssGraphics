@@ -11,7 +11,6 @@ const PREPARE_FAILURE = "cssPipes prepared clip scene unavailable. Run pnpm prep
 export async function startCssPipesClient(host, route) {
   let presentation = null;
   let player = null;
-  let unsubscribePresentation = null;
   try {
     const manifest = await loadCssPipesManifest(route.manifestUrl);
     const descriptor = selectDefaultScene(manifest);
@@ -35,23 +34,19 @@ export async function startCssPipesClient(host, route) {
       leafRoots,
       initialViewportProfile: presentation.viewportProfile,
     });
-    unsubscribePresentation = presentation.subscribe((layout) => {
-      void player.setViewportProfile(layout.viewportProfile);
-    });
     const mounted = Object.freeze({
       ...snapshot,
       presentation,
       player,
       destroy() {
-        unsubscribePresentation();
         presentation.destroy();
         player.destroy();
       },
     });
+    host.classList.add("csspipes-ready");
     globalThis.requestAnimationFrame(() => player.resume());
     return mounted;
   } catch (error) {
-    unsubscribePresentation?.();
     player?.destroy();
     presentation?.destroy();
     host.classList.add("csspipes-error");

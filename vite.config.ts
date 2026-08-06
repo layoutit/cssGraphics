@@ -17,10 +17,11 @@ interface DistributionFile {
 }
 
 function distributionFiles(): readonly DistributionFile[] {
-  const files: DistributionFile[] = [{
-    path: "catalog.json",
-    mediaType: "application/json",
-  }];
+  const files: DistributionFile[] = [
+    { path: "catalog.json", mediaType: "application/json" },
+    { path: "robots.txt", mediaType: "text/plain" },
+    { path: "sitemap.xml", mediaType: "application/xml" },
+  ];
   for (const asset of DISTRIBUTION_CATALOG.assets) {
     files.push(asset.preview);
     files.push(...asset.resources.map((resource) => ({

@@ -108,7 +108,6 @@ export function mountCssPipesPresentation({
   windowImpl = host?.ownerDocument?.defaultView ?? globalThis.window,
 }) {
   let current;
-  const listeners = new Set();
   const refresh = () => {
     current = calculateCssPipesPresentation(
       host.clientWidth,
@@ -125,7 +124,6 @@ export function mountCssPipesPresentation({
         current.scale !== 1 && `scale(${current.scale})`,
       ].filter(Boolean).join(" "),
     });
-    for (const listener of listeners) listener(current);
     return current;
   };
   refresh();
@@ -137,15 +135,9 @@ export function mountCssPipesPresentation({
   return {
     refresh,
     get viewportProfile() { return current.viewportProfile; },
-    subscribe(listener) {
-      listeners.add(listener);
-      listener(current);
-      return () => listeners.delete(listener);
-    },
     destroy() {
       observer?.disconnect();
       if (!observer) windowImpl?.removeEventListener?.("resize", refresh);
-      listeners.clear();
     },
   };
 }

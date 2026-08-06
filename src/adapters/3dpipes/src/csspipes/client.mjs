@@ -55,7 +55,10 @@ export async function startCssPipesClient(host, route) {
     player?.destroy();
     presentation?.destroy();
     host.classList.add("csspipes-error");
-    host.textContent = `${PREPARE_FAILURE} ${error instanceof Error ? error.message : String(error)}`;
+    const message = document.createElement("p");
+    message.className = "csspipes-error-message";
+    message.textContent = `${PREPARE_FAILURE} ${error instanceof Error ? error.message : String(error)}`;
+    host.append(message);
     return null;
   }
 }

@@ -17,14 +17,11 @@ body {
   overflow: hidden;
 }
 
-#csspipes-root {
+body {
   width: 100vw;
   height: 100vh;
   height: 100dvh;
   position: relative;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
   background: linear-gradient(180deg, #0b1119 0%, #000 100%);
 }
 
@@ -140,13 +137,19 @@ body {
   outline-offset: -5px;
 }
 
-#csspipes-root.csspipes-error {
+.csspipes-error-message {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  margin: 0;
   padding: 2rem;
   white-space: pre-wrap;
   color: #ffb5a7;
 }
 
-#csspipes-root > .polycss-camera {
+body > .polycss-camera {
   position: absolute;
 }
 

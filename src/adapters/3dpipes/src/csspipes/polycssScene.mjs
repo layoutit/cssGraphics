@@ -59,7 +59,10 @@ export async function mountPreparedPolyCssSnapshot(host, sceneContract, fetchImp
   for (const style of snapshot.styles) fragment.append(document.importNode(style, true));
   const camera = document.importNode(snapshot.camera, true);
   fragment.append(camera);
-  host.replaceChildren(fragment);
+  for (const mounted of host.querySelectorAll(":scope > style, :scope > .polycss-camera")) {
+    mounted.remove();
+  }
+  host.append(fragment);
   return Object.freeze({
     camera,
     scene: camera.querySelector(".polycss-scene"),

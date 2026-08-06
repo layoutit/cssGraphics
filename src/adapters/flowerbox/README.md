@@ -4,10 +4,13 @@ An independently authored PolyCSS reconstruction of the classic 1995 Flower
 Box. The complete default-cube bloom and rotation cycle is rendered through
 1,200 stable retained HTML triangle leaves and one retained rotation root.
 
-The browser loads one prepared snapshot and selects hash-bound prepared AVIF
-pages, source-order leaf windows, and root transforms. It does not construct
+The browser loads one prepared snapshot and streams 37 hash-bound visual packs
+aligned to the prepared 64-page layout blocks. It slices the original AVIF
+bytes from those packs, decodes only the active and next pages, and selects
+prepared source-order leaf windows and root transforms. It does not construct
 geometry, project vertices, calculate normals or lighting, rasterize, or grow
-the DOM at runtime.
+the DOM at runtime. Playback presents every prepared state in order; a delayed
+pack pauses the clock instead of dropping states to catch up.
 
 From the repository root:
 

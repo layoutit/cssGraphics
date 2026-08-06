@@ -36,12 +36,22 @@ const productCss = sources.get("src/cssflower/styles.css");
 reject("src/cssflower/styles.css", productCss, "paint-heavy product CSS", /(?:clip-path|mask(?:-image)?|filter|box-shadow|text-shadow|linear-gradient|radial-gradient|mix-blend-mode)\s*:/iu);
 const playback = sources.get("src/cssflower/preparedPlayback.mjs");
 if (!playback.includes("createPolyMorphPreparedDomTarget({")) failures.push("PolyCSS Morph prepared target is missing");
+if (!playback.includes("runtimeSchedulerSkippedPreparedStateCount: 0") || playback.includes("elapsedSteps")) {
+  failures.push("Prepared playback does not retain sequential no-skip scheduling");
+}
 if (/\b(?:document|DOMParser|MutationObserver)\b|createElement|appendChild|replaceChildren/u.test(playback)) {
   failures.push("Prepared playback constructs DOM");
+}
+const manifestClient = sources.get("src/cssflower/manifestClient.mjs");
+if (!manifestClient.includes("cssflower-prepared-visual-pack-transport@1")) {
+  failures.push("Prepared visual-pack transport is missing");
 }
 
 const bank = await inspectFlowerboxProductBank(join(repositoryRoot, "build", "generated", "public", "cssflower"));
 if (bank.closureBytes >= 31_000_000) failures.push(`Product bank is too large: ${bank.closureBytes}`);
+if (bank.projectedVisualPackCount !== 37 || bank.projectedVisualPackAssetCount !== 37) {
+  failures.push("Product bank does not contain the 37 block-aligned visual packs");
+}
 const report = {
   schema: "cssgraphics-flowerbox-runtime-audit@1",
   status: failures.length === 0 ? "pass" : "fail",

@@ -113,15 +113,28 @@ export async function loadPreparedScene(manifest, routeState) {
 }
 
 function createPreparedProjectedPageLoader(projected) {
+  const transport = projected.transport;
+  const cycleStartPageIndex = projected.pages.findIndex((page) =>
+    projected.cycleStartState >= page.startStateIndex &&
+    projected.cycleStartState < page.startStateIndex + page.usedFrameCount);
+  if (cycleStartPageIndex < 0) throw new Error("Prepared cssFlower cycle-start page is missing");
   const records = new Map();
-  const layoutBlocks = new Map();
+  const packRecords = new Map();
   const errors = [];
   let currentPageIndex = 0;
   let pageLoadCount = 0;
   let pageReleaseCount = 0;
+  let packLoadCount = 0;
+  let packReleaseCount = 0;
+  let earlyPackPrefetchCount = 0;
   let residentDecodedBytes = 0;
   let peakResidentDecodedBytes = 0;
+  let residentEncodedPackBytes = 0;
+  let peakResidentEncodedPackBytes = 0;
+  let peakResidentPackCount = 0;
   let desiredPageIndices = new Set();
+  let desiredPackIndices = new Set();
+  let earlyPrefetchPackIndex = null;
   let destroyed = false;
 
   async function ensure(pageIndex) {
@@ -132,17 +145,17 @@ function createPreparedProjectedPageLoader(projected) {
     if (existing?.url) return existing;
     if (existing?.promise) return existing.promise;
     const promise = (async () => {
-      const block = projected.layoutBlocks[page.layout.blockIndex];
-      const [atlasBytes, layoutBlock] = await Promise.all([
-        fetchBytes(page.atlas.assetUrl, {
-          notFoundMessage: `Missing prepared Flower Box projected atlas ${pageIndex}. Run pnpm prepare:flowerbox:artifact first.`,
-        }),
-        ensureLayoutBlock(block),
-      ]);
-      if (atlasBytes.byteLength !== page.atlas.byteLength) {
+      const pack = transport.packs[page.layout.blockIndex];
+      const packRecord = await ensurePack(pack.index);
+      const atlasSlice = pack.atlasSlices[pageIndex - pack.startPageIndex];
+      const atlasBytes = packRecord.bytes.subarray(
+        atlasSlice.byteOffset,
+        atlasSlice.byteOffset + atlasSlice.byteLength,
+      );
+      if (atlasBytes.byteLength !== page.atlas.byteLength || atlasSlice.sha256 !== page.atlas.sha256) {
         throw new Error(`Generated cssFlower projected atlas ${pageIndex} byte length is invalid.`);
       }
-      const layoutBytes = layoutBlock.bytes.subarray(
+      const layoutBytes = packRecord.layoutBytes.subarray(
         page.layout.blockByteOffset,
         page.layout.blockByteOffset + page.layout.byteLength,
       );
@@ -165,7 +178,7 @@ function createPreparedProjectedPageLoader(projected) {
         pageIndex,
         url,
         image,
-        layoutBlockIndex: block.index,
+        layoutBlockIndex: pack.index,
         layoutValues: new Int16Array(
           layoutBytes.buffer,
           layoutBytes.byteOffset,
@@ -190,41 +203,113 @@ function createPreparedProjectedPageLoader(projected) {
     }
   }
 
-  async function ensureLayoutBlock(block) {
-    if (!block || projected.layoutBlocks[block.index] !== block) {
-      throw new Error("Prepared cssFlower shared layout block is missing");
-    }
-    const existing = layoutBlocks.get(block.index);
+  async function ensurePack(packIndex) {
+    const pack = transport.packs[packIndex];
+    if (!pack || pack.index !== packIndex) throw new Error("Prepared cssFlower visual pack is missing");
+    const existing = packRecords.get(packIndex);
     if (existing?.bytes) return existing;
     if (existing?.promise) return existing.promise;
+    const controller = new AbortController();
     const promise = (async () => {
-      const compressed = await fetchBytes(block.assetUrl, {
-        notFoundMessage: `Missing prepared Flower Box shared layout block ${block.index}. Run pnpm prepare:flowerbox:artifact first.`,
-      });
-      if (compressed.byteLength !== block.byteLength) {
-        throw new Error(`Generated cssFlower shared layout block ${block.index} byte length is invalid.`);
+      const bytes = new Uint8Array(await fetchBytes(pack.assetUrl, {
+        notFoundMessage: `Missing prepared Flower Box visual pack ${packIndex}. Run pnpm prepare:flowerbox:artifact first.`,
+        signal: controller.signal,
+      }));
+      if (bytes.byteLength !== pack.byteLength) {
+        throw new Error(`Generated cssFlower visual pack ${packIndex} byte length is invalid.`);
       }
-      await assertSha256(compressed, block.sha256, `shared layout block ${block.index}`);
-      const bytes = await decompressGzip(compressed);
-      if (bytes.byteLength !== block.decodedByteLength) {
-        throw new Error(`Generated cssFlower shared layout block ${block.index} decoded byte length is invalid.`);
+      await assertSha256(bytes, pack.sha256, `visual pack ${packIndex}`);
+      const compressedLayout = bytes.subarray(
+        pack.layout.byteOffset,
+        pack.layout.byteOffset + pack.layout.byteLength,
+      );
+      if (compressedLayout.byteLength !== pack.layout.byteLength) {
+        throw new Error(`Generated cssFlower visual pack ${packIndex} layout slice is invalid.`);
       }
-      await assertSha256(bytes, block.decodedSha256, `decoded shared layout block ${block.index}`);
-      const record = Object.freeze({ index: block.index, bytes });
-      layoutBlocks.set(block.index, record);
-      const desiredBlocks = new Set([...desiredPageIndices].map((pageIndex) => (
-        projected.pages[pageIndex].layout.blockIndex
-      )));
-      if (destroyed || !desiredBlocks.has(block.index)) layoutBlocks.delete(block.index);
+      await assertSha256(compressedLayout, pack.layout.sha256, `visual pack ${packIndex} layout`);
+      const layoutBytes = await decompressGzip(compressedLayout);
+      if (layoutBytes.byteLength !== pack.layout.decodedByteLength) {
+        throw new Error(`Generated cssFlower visual pack ${packIndex} decoded layout byte length is invalid.`);
+      }
+      await assertSha256(
+        layoutBytes,
+        pack.layout.decodedSha256,
+        `decoded visual pack ${packIndex} layout`,
+      );
+      const record = Object.freeze({ index: packIndex, bytes, layoutBytes });
+      packRecords.set(packIndex, record);
+      packLoadCount += 1;
+      residentEncodedPackBytes += bytes.byteLength;
+      peakResidentEncodedPackBytes = Math.max(peakResidentEncodedPackBytes, residentEncodedPackBytes);
+      peakResidentPackCount = Math.max(peakResidentPackCount, residentPackCount());
+      if (destroyed || !desiredPackIndices.has(packIndex)) releasePack(packIndex, record);
       return record;
     })();
-    layoutBlocks.set(block.index, { promise });
+    packRecords.set(packIndex, { promise, controller });
     try {
       return await promise;
     } catch (error) {
-      if (layoutBlocks.get(block.index)?.promise === promise) layoutBlocks.delete(block.index);
+      if (packRecords.get(packIndex)?.promise === promise) packRecords.delete(packIndex);
+      if (error?.name !== "AbortError") errors.push(String(error?.message || error));
       throw error;
     }
+  }
+
+  function releasePack(packIndex, record) {
+    if (!record?.bytes || packRecords.get(packIndex) !== record) return;
+    packRecords.delete(packIndex);
+    packReleaseCount += 1;
+    residentEncodedPackBytes -= record.bytes.byteLength;
+  }
+
+  function reconcilePackResidency() {
+    const keepPacks = new Set([...desiredPageIndices].map(packIndexForPage));
+    if (earlyPrefetchPackIndex !== null) keepPacks.add(earlyPrefetchPackIndex);
+    if (keepPacks.size > transport.compressedResidentPackBudget) {
+      throw new Error("Prepared cssFlower visual pack residency exceeds its bound");
+    }
+    desiredPackIndices = keepPacks;
+    for (const [packIndex, record] of packRecords) {
+      if (keepPacks.has(packIndex)) continue;
+      if (record?.bytes) releasePack(packIndex, record);
+      else if (record?.controller) {
+        record.controller.abort();
+        packRecords.delete(packIndex);
+      }
+    }
+  }
+
+  function residentPackCount() {
+    return [...packRecords.values()].filter((record) => record?.bytes).length;
+  }
+
+  function packIndexForPage(pageIndex) {
+    const page = projected.pages[pageIndex];
+    if (!page) throw new RangeError(`Prepared cssFlower projected page ${pageIndex} is missing`);
+    return page.layout.blockIndex;
+  }
+
+  function nextPackIndex(packIndex) {
+    if (packIndex + 1 < transport.packCount) return packIndex + 1;
+    return packIndexForPage(cycleStartPageIndex);
+  }
+
+  function pageAfter(pageIndex) {
+    if (pageIndex + 1 < projected.pageCount) return pageIndex + 1;
+    return cycleStartPageIndex;
+  }
+
+  function maybePrefetchPack(pageIndex) {
+    const packIndex = packIndexForPage(pageIndex);
+    const pack = transport.packs[packIndex];
+    const offset = pageIndex - pack.startPageIndex;
+    earlyPrefetchPackIndex = offset >= transport.earlyPrefetchPageOffset
+      ? nextPackIndex(packIndex)
+      : null;
+    reconcilePackResidency();
+    if (earlyPrefetchPackIndex === null) return;
+    if (!packRecords.has(earlyPrefetchPackIndex)) earlyPackPrefetchCount += 1;
+    void ensurePack(earlyPrefetchPackIndex).catch(() => undefined);
   }
 
   function releaseRecord(pageIndex, record) {
@@ -242,11 +327,7 @@ function createPreparedProjectedPageLoader(projected) {
       if (keep.has(pageIndex) || !record?.url) continue;
       releaseRecord(pageIndex, record);
     }
-    const keepBlocks = new Set([...keep].map((pageIndex) => projected.pages[pageIndex].layout.blockIndex));
-    for (const [blockIndex, record] of layoutBlocks) {
-      if (keepBlocks.has(blockIndex) || !record?.bytes) continue;
-      layoutBlocks.delete(blockIndex);
-    }
+    reconcilePackResidency();
   }
 
   function prefetch(pageIndex) {
@@ -257,6 +338,7 @@ function createPreparedProjectedPageLoader(projected) {
   return Object.freeze({
     async prime(pageIndex, nextPageIndex) {
       currentPageIndex = pageIndex;
+      earlyPrefetchPackIndex = null;
       releaseExcept(new Set([pageIndex, nextPageIndex]));
       await Promise.all([ensure(pageIndex), ensure(nextPageIndex)]);
     },
@@ -273,6 +355,7 @@ function createPreparedProjectedPageLoader(projected) {
       return record.layoutValues;
     },
     async activate(pageIndex, nextPageIndex) {
+      if (pageIndex !== pageAfter(currentPageIndex)) earlyPrefetchPackIndex = null;
       releaseExcept(new Set([currentPageIndex, pageIndex]));
       const record = await ensure(pageIndex);
       currentPageIndex = pageIndex;
@@ -284,10 +367,11 @@ function createPreparedProjectedPageLoader(projected) {
       }
       releaseExcept(new Set([pageIndex, nextPageIndex]));
       prefetch(nextPageIndex);
+      maybePrefetchPack(pageIndex);
     },
     stats() {
       return Object.freeze({
-        schema: "cssflower-prepared-projected-page-loader@1",
+        schema: "cssflower-prepared-projected-page-loader@2",
         currentPageIndex,
         pageLoadCount,
         pageReleaseCount,
@@ -297,9 +381,19 @@ function createPreparedProjectedPageLoader(projected) {
         residentPageBudget: projected.decodedResidentPageBudget,
         peakPageBudget: projected.decodedPeakPageBudget,
         desiredPageIndices: Object.freeze([...desiredPageIndices].sort((left, right) => left - right)),
-        residentLayoutBlockCount: [...layoutBlocks.values()].filter((record) => record?.bytes).length,
-        residentDecodedLayoutBytes: [...layoutBlocks.values()].reduce(
-          (sum, record) => sum + (record?.bytes?.byteLength ?? 0),
+        packLoadCount,
+        packReleaseCount,
+        earlyPackPrefetchCount,
+        residentPackCount: residentPackCount(),
+        residentEncodedPackBytes,
+        peakResidentEncodedPackBytes,
+        peakResidentPackCount,
+        residentPackBudget: transport.compressedResidentPackBudget,
+        desiredPackIndices: Object.freeze([...desiredPackIndices].sort((left, right) => left - right)),
+        earlyPrefetchPackIndex,
+        residentLayoutBlockCount: residentPackCount(),
+        residentDecodedLayoutBytes: [...packRecords.values()].reduce(
+          (sum, record) => sum + (record?.layoutBytes?.byteLength ?? 0),
           0,
         ),
         errors: Object.freeze([...errors]),
@@ -307,6 +401,7 @@ function createPreparedProjectedPageLoader(projected) {
     },
     destroy() {
       destroyed = true;
+      earlyPrefetchPackIndex = null;
       releaseExcept(new Set());
     },
   });
@@ -342,6 +437,7 @@ function validateProjectedPixels(playback) {
       projected.runtimeLightingCalculation !== false || projected.runtimeDomGrowth !== false) {
     throw new Error("Complete prepared cssFlower projected-pixel playback is required");
   }
+  validateProjectedTransport(projected);
   let layoutBlockDecodedBytes = 0;
   for (let blockIndex = 0; blockIndex < projected.layoutBlocks.length; blockIndex += 1) {
     const block = projected.layoutBlocks[blockIndex];
@@ -417,6 +513,59 @@ function validateProjectedPixels(playback) {
   }
 }
 
+function validateProjectedTransport(projected) {
+  const transport = projected.transport;
+  if (transport?.schema !== "cssflower-prepared-visual-pack-transport@1" ||
+      transport.representation !== "layout-block-aligned-exact-byte-slices" ||
+      transport.packCount !== projected.layoutBlocks.length || transport.packCount !== 37 ||
+      transport.blockPageCount !== projected.layoutBlockPageCount ||
+      transport.compressedResidentPackBudget !== 2 || transport.earlyPrefetchPageOffset !== 16 ||
+      transport.logicalContentAddressedAtlasBytes !== projected.contentAddressedAtlasBytes ||
+      transport.logicalCompressedLayoutBytes !== projected.compressedLayoutBytes ||
+      transport.runtimeGeometryConstruction !== false || transport.runtimeProjection !== false ||
+      transport.runtimeRasterization !== false || transport.runtimeLightingCalculation !== false ||
+      transport.packs?.length !== transport.packCount) {
+    throw new Error("Complete prepared cssFlower visual-pack transport is required");
+  }
+  let totalPackBytes = 0;
+  let maximumPackBytes = 0;
+  for (let packIndex = 0; packIndex < transport.packs.length; packIndex += 1) {
+    const pack = transport.packs[packIndex];
+    const block = projected.layoutBlocks[packIndex];
+    if (pack?.schema !== "cssflower-prepared-visual-pack@1" || pack.index !== packIndex ||
+        pack.startPageIndex !== block.startPageIndex || pack.pageCount !== block.pageCount ||
+        !Number.isSafeInteger(pack.byteLength) || pack.byteLength < 1 ||
+        !/^[a-f0-9]{64}$/.test(pack.sha256 ?? "") ||
+        pack.assetUrl !== `/cssflower/assets/projected/visual-pack-${pack.sha256}.bin` ||
+        pack.layout?.byteOffset !== 0 || pack.layout.byteLength !== block.byteLength ||
+        pack.layout.sha256 !== block.sha256 || pack.layout.decodedByteLength !== block.decodedByteLength ||
+        pack.layout.decodedSha256 !== block.decodedSha256 ||
+        pack.atlasSlices?.length !== pack.pageCount) {
+      throw new Error(`Prepared cssFlower visual pack ${packIndex} is invalid`);
+    }
+    let expectedOffset = pack.layout.byteLength;
+    for (let localPageIndex = 0; localPageIndex < pack.pageCount; localPageIndex += 1) {
+      const pageIndex = pack.startPageIndex + localPageIndex;
+      const page = projected.pages[pageIndex];
+      const slice = pack.atlasSlices[localPageIndex];
+      if (slice?.pageIndex !== pageIndex || slice.byteOffset !== expectedOffset ||
+          slice.byteLength !== page.atlas.byteLength || slice.sha256 !== page.atlas.sha256 ||
+          slice.mimeType !== page.atlas.mimeType) {
+        throw new Error(`Prepared cssFlower visual pack ${packIndex} atlas slice ${pageIndex} is invalid`);
+      }
+      expectedOffset += slice.byteLength;
+    }
+    if (expectedOffset !== pack.byteLength) {
+      throw new Error(`Prepared cssFlower visual pack ${packIndex} byte coverage is incomplete`);
+    }
+    totalPackBytes += pack.byteLength;
+    maximumPackBytes = Math.max(maximumPackBytes, pack.byteLength);
+  }
+  if (totalPackBytes !== transport.totalPackBytes || maximumPackBytes !== transport.maximumPackBytes) {
+    throw new Error("Prepared cssFlower visual-pack aggregate bytes are invalid");
+  }
+}
+
 function arraysEqual(actual, expected) {
   return Array.isArray(actual) && actual.length === expected.length &&
     actual.every((value, index) => value === expected[index]);
@@ -455,8 +604,8 @@ async function fetchText(url, { notFoundMessage = "" } = {}) {
   return response.text();
 }
 
-async function fetchBytes(url, { notFoundMessage = "" } = {}) {
-  const response = await fetch(url);
+async function fetchBytes(url, { notFoundMessage = "", signal } = {}) {
+  const response = await fetch(url, { signal });
   if (!response.ok) {
     if (response.status === 404 && notFoundMessage) throw new Error(notFoundMessage);
     throw new Error("Failed to load " + url + ": " + response.status);

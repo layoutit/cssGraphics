@@ -12,6 +12,10 @@ const lock = JSON.parse(await readFile(
   join(repositoryRoot, "src/adapters/flowerbox/prepared-bank.lock.json"),
   "utf8",
 ));
+if (lock.schema !== "cssflower-prepared-bank-lock@2" || lock.projectedVisualPackCount !== 37 ||
+    lock.projectedVisualPackAssetCount !== 37) {
+  throw new Error("Flower Box prepared-bank lock does not bind the visual-pack transport");
+}
 const generatedRoot = resolve(
   process.env.CSSFLOWER_GENERATED_ROOT ?? join(repositoryRoot, "build", "generated"),
 );

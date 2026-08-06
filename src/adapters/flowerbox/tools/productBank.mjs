@@ -3,7 +3,7 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { gunzipSync } from "node:zlib";
 
-export const FLOWERBOX_PRODUCT_BANK_SCHEMA = "cssflower-product-bank@1";
+export const FLOWERBOX_PRODUCT_BANK_SCHEMA = "cssflower-product-bank@2";
 
 export async function inspectFlowerboxProductBank(root, { verifyDescriptor = true } = {}) {
   const manifestBytes = await readFile(join(root, "manifest.json"));
@@ -50,22 +50,16 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
   assert(count(snapshot, /<(?:script|canvas|svg)\b/giu) === 0, "snapshot forbidden elements");
   assert(sha256(snapshotDecoded) === entry.snapshot.sha256, "snapshot decoded identity");
 
-  const expectedAssets = new Map();
-  for (const page of projected.pages) {
-    addExpected(expectedAssets, page.atlas.assetUrl, page.atlas.byteLength, page.atlas.sha256);
-  }
-  for (const block of projected.layoutBlocks) {
-    addExpected(expectedAssets, block.assetUrl, block.byteLength, block.sha256);
-  }
-  await parallel([...expectedAssets.entries()], 24, async ([url, expected]) => {
-    const bytes = await readFile(publicPath(root, url));
-    assert(bytes.length === expected.byteLength && sha256(bytes) === expected.sha256, `asset ${url}`);
-  });
+  const visualPacks = await inspectVisualPacks(root, projected);
 
   const files = (await walk(root))
     .map((path) => relative(root, path).split(sep).join("/"))
     .filter((path) => path !== "product-bank.json")
     .sort();
+  const projectedAssetFiles = files.filter((path) => path.startsWith("assets/projected/"));
+  assert(projectedAssetFiles.length === visualPacks.assetCount && projectedAssetFiles.every((path) =>
+    /^assets\/projected\/visual-pack-[a-f0-9]{64}\.bin$/u.test(path)),
+  "pack-only projected transport");
   const closure = createHash("sha256");
   let closureBytes = 0;
   for (const path of files) {
@@ -84,7 +78,10 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
     projectedPageCount: projected.pageCount,
     projectedAtlasAssetCount: new Set(projected.pages.map((page) => page.atlas.assetUrl)).size,
     projectedLayoutBlockCount: projected.layoutBlocks.length,
-    projectedVisualBankBytes: projected.contentAddressedAtlasBytes + projected.compressedLayoutBytes,
+    projectedVisualPackCount: visualPacks.packCount,
+    projectedVisualPackAssetCount: visualPacks.assetCount,
+    projectedVisualPackBytes: visualPacks.totalPackBytes,
+    projectedLogicalVisualBankBytes: projected.contentAddressedAtlasBytes + projected.compressedLayoutBytes,
     sceneEncodedSha256: sha256(sceneEncoded),
     sceneDecodedSha256: sha256(sceneDecoded),
     snapshotEncodedSha256: sha256(snapshotEncoded),
@@ -97,6 +94,84 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
     }
   }
   return summary;
+}
+
+async function inspectVisualPacks(root, projected) {
+  const transport = projected.transport;
+  assert(transport?.schema === "cssflower-prepared-visual-pack-transport@1" &&
+    transport.representation === "layout-block-aligned-exact-byte-slices" &&
+    transport.packCount === projected.layoutBlocks.length && transport.packCount === 37 &&
+    transport.blockPageCount === projected.layoutBlockPageCount &&
+    transport.compressedResidentPackBudget === 2 && transport.earlyPrefetchPageOffset === 16 &&
+    transport.logicalContentAddressedAtlasBytes === projected.contentAddressedAtlasBytes &&
+    transport.logicalCompressedLayoutBytes === projected.compressedLayoutBytes &&
+    transport.runtimeGeometryConstruction === false && transport.runtimeProjection === false &&
+    transport.runtimeRasterization === false && transport.runtimeLightingCalculation === false &&
+    transport.packs?.length === transport.packCount,
+  "visual pack transport");
+
+  const expectedAssets = new Map();
+  let totalPackBytes = 0;
+  let maximumPackBytes = 0;
+  for (let packIndex = 0; packIndex < transport.packs.length; packIndex += 1) {
+    const pack = transport.packs[packIndex];
+    const block = projected.layoutBlocks[packIndex];
+    assert(pack?.schema === "cssflower-prepared-visual-pack@1" && pack.index === packIndex &&
+      pack.startPageIndex === block.startPageIndex && pack.pageCount === block.pageCount &&
+      Number.isSafeInteger(pack.byteLength) && pack.byteLength > 0 &&
+      /^[a-f0-9]{64}$/u.test(pack.sha256 ?? "") &&
+      pack.layout?.byteOffset === 0 && pack.layout.byteLength === block.byteLength &&
+      pack.layout.sha256 === block.sha256 && pack.layout.decodedByteLength === block.decodedByteLength &&
+      pack.layout.decodedSha256 === block.decodedSha256 &&
+      pack.atlasSlices?.length === pack.pageCount,
+    `visual pack ${packIndex} descriptor`);
+    addExpected(expectedAssets, pack.assetUrl, pack.byteLength, pack.sha256);
+    let expectedOffset = pack.layout.byteLength;
+    for (let localPageIndex = 0; localPageIndex < pack.pageCount; localPageIndex += 1) {
+      const pageIndex = pack.startPageIndex + localPageIndex;
+      const page = projected.pages[pageIndex];
+      const slice = pack.atlasSlices[localPageIndex];
+      assert(slice?.pageIndex === pageIndex && slice.byteOffset === expectedOffset &&
+        slice.byteLength === page.atlas.byteLength && slice.sha256 === page.atlas.sha256 &&
+        slice.mimeType === page.atlas.mimeType,
+      `visual pack ${packIndex} page ${pageIndex} descriptor`);
+      expectedOffset += slice.byteLength;
+    }
+    assert(expectedOffset === pack.byteLength, `visual pack ${packIndex} byte coverage`);
+    totalPackBytes += pack.byteLength;
+    maximumPackBytes = Math.max(maximumPackBytes, pack.byteLength);
+  }
+  assert(totalPackBytes === transport.totalPackBytes && maximumPackBytes === transport.maximumPackBytes,
+    "visual pack aggregate bytes");
+
+  await parallel(transport.packs, 8, async (pack) => {
+    const bytes = await readFile(publicPath(root, pack.assetUrl));
+    assert(bytes.length === pack.byteLength && sha256(bytes) === pack.sha256,
+      `visual pack ${pack.index} identity`);
+    const block = projected.layoutBlocks[pack.index];
+    const layoutCompressed = bytes.subarray(
+      pack.layout.byteOffset,
+      pack.layout.byteOffset + pack.layout.byteLength,
+    );
+    assert(layoutCompressed.length === block.byteLength && sha256(layoutCompressed) === block.sha256,
+      `visual pack ${pack.index} layout slice`);
+    const layoutDecoded = gunzipSync(layoutCompressed);
+    assert(layoutDecoded.length === block.decodedByteLength && sha256(layoutDecoded) === block.decodedSha256,
+      `visual pack ${pack.index} decoded layout`);
+    for (const slice of pack.atlasSlices) {
+      const page = projected.pages[slice.pageIndex];
+      const atlasBytes = bytes.subarray(slice.byteOffset, slice.byteOffset + slice.byteLength);
+      assert(atlasBytes.length === page.atlas.byteLength && sha256(atlasBytes) === page.atlas.sha256,
+        `visual pack ${pack.index} atlas slice ${slice.pageIndex}`);
+    }
+  });
+
+  return Object.freeze({
+    packCount: transport.packCount,
+    assetCount: expectedAssets.size,
+    totalPackBytes,
+    maximumPackBytes,
+  });
 }
 
 export async function writeFlowerboxProductBankDescriptor(root, summary, source) {

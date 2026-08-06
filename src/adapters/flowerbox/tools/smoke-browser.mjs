@@ -58,6 +58,13 @@ try {
           stats: debug.stats(),
         });
       }
+      await debug.setTick(0);
+      const schedulerBefore = debug.stats();
+      debug.resume();
+      await new Promise((resolveWait) => setTimeout(resolveWait, 3_200));
+      debug.pause();
+      await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
+      const schedulerAfter = debug.stats();
       debug.assertStableDomIdentity();
       return {
         portStatus: document.body.dataset.portStatus,
@@ -68,7 +75,19 @@ try {
         svgCount: document.querySelectorAll("svg").length,
         oraclePaneCount: document.querySelectorAll("#native-pane, #diff-pane").length,
         rows,
-        finalStats: debug.stats(),
+        schedulerProof: {
+          startTick: schedulerBefore.globalTick,
+          endTick: schedulerAfter.globalTick,
+          tickDelta: schedulerAfter.globalTick - schedulerBefore.globalTick,
+          transitionDelta: schedulerAfter.runtimeSchedulerStateTransitions -
+            schedulerBefore.runtimeSchedulerStateTransitions,
+          skippedPreparedStateCount: schedulerAfter.runtimeSchedulerSkippedPreparedStateCount,
+          visualPackLoadDelta: schedulerAfter.projectedPageLoader.packLoadCount -
+            schedulerBefore.projectedPageLoader.packLoadCount,
+          visualPackReleaseDelta: schedulerAfter.projectedPageLoader.packReleaseCount -
+            schedulerBefore.projectedPageLoader.packReleaseCount,
+        },
+        finalStats: schedulerAfter,
       };
     });
     await page.screenshot({ path: screenshotPath });
@@ -93,7 +112,14 @@ function assertProof(report) {
       stats.runtimeGeometryConstructionCount !== 0 || stats.runtimeProjectionCalculationCount !== 0 ||
       stats.runtimeRasterizationCount !== 0 || stats.runtimeNormalCalculationCount !== 0 ||
       stats.runtimeLightingCalculationCount !== 0 || stats.runtimeDomGrowth !== false ||
-      stats.projectedPageLoader?.residentPageCount > 2 || stats.projectedPageLoader?.errors?.length) {
+      stats.runtimeSchedulerSkippedPreparedStateCount !== 0 ||
+      report.schedulerProof?.startTick !== 0 || report.schedulerProof.tickDelta < 75 ||
+      report.schedulerProof.tickDelta !== report.schedulerProof.transitionDelta ||
+      report.schedulerProof.visualPackLoadDelta !== 1 || report.schedulerProof.visualPackReleaseDelta > 1 ||
+      stats.projectedPageLoader?.residentPageCount > 2 ||
+      stats.projectedPageLoader?.residentPackCount > 2 ||
+      stats.projectedPageLoader?.peakResidentPackCount > 2 ||
+      stats.projectedPageLoader?.errors?.length) {
     throw new Error(`Flower Box browser smoke failed:\n${JSON.stringify(report, null, 2)}`);
   }
 }

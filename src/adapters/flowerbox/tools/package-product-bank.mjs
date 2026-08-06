@@ -47,6 +47,11 @@ scene.warnings = [
   "Independent source-informed PolyCSS experiment; Microsoft source, binaries, captures, and oracle packets are not packaged.",
 ];
 
+const visualPackSummary = await packageProjectedVisualPacks(
+  stagingRoot,
+  scene.playback.projectedPixels,
+);
+
 const sceneDecoded = Buffer.from(`${JSON.stringify(scene)}\n`);
 const sceneEncoded = gzipSync(sceneDecoded, { level: 9, mtime: 0 });
 await writeFile(join(stagingRoot, "scenes", "default-cube.json.gz"), sceneEncoded);
@@ -60,6 +65,8 @@ manifest.assets = {
     pageCount: scene.playback.projectedPixels.pageCount,
     atlasAssetCount: scene.metrics.preparedProjectedPixelAtlasAssetCount,
     layoutBlockCount: scene.playback.projectedPixels.layoutBlocks.length,
+    visualPackCount: visualPackSummary.packCount,
+    visualPackBytes: visualPackSummary.totalPackBytes,
     visualEncoding: scene.playback.projectedPixels.visualEncoding,
   },
 };
@@ -92,6 +99,7 @@ await writeFlowerboxProductBankDescriptor(stagingRoot, summary, {
     "oracle metadata and state evidence",
     "prepare-only mesh geometry",
     "ignored transform-asset descriptor",
+    "individual projected atlas and layout transport files",
   ],
 });
 await inspectFlowerboxProductBank(stagingRoot);
@@ -109,6 +117,116 @@ function transportAsset(id, url, decoded, encoded) {
     encodedByteLength: encoded.length,
     encodedSha256: sha256(encoded),
   };
+}
+
+async function packageProjectedVisualPacks(root, projected) {
+  const pageCount = projected?.pageCount;
+  const blockPageCount = projected?.layoutBlockPageCount;
+  if (!Number.isSafeInteger(pageCount) || pageCount < 1 || blockPageCount !== 64 ||
+      projected.pages?.length !== pageCount || !Array.isArray(projected.layoutBlocks) ||
+      projected.layoutBlocks.length !== Math.ceil(pageCount / blockPageCount)) {
+    throw new Error("Source Flower Box projected bank cannot be packed");
+  }
+
+  const sourceAssets = new Set();
+  const assetCache = new Map();
+  const packs = [];
+  let totalPackBytes = 0;
+  let maximumPackBytes = 0;
+  for (const block of projected.layoutBlocks) {
+    if (block.index !== packs.length || block.startPageIndex !== block.index * blockPageCount) {
+      throw new Error(`Source Flower Box layout block ${block.index} is out of order`);
+    }
+    const layoutBytes = await readSourceAsset(block.assetUrl, block.byteLength, block.sha256);
+    const chunks = [layoutBytes];
+    const layout = {
+      byteOffset: 0,
+      byteLength: layoutBytes.length,
+      sha256: block.sha256,
+      decodedByteLength: block.decodedByteLength,
+      decodedSha256: block.decodedSha256,
+    };
+    const atlasSlices = [];
+    let byteOffset = layoutBytes.length;
+    for (let localPageIndex = 0; localPageIndex < block.pageCount; localPageIndex += 1) {
+      const pageIndex = block.startPageIndex + localPageIndex;
+      const page = projected.pages[pageIndex];
+      if (page?.index !== pageIndex || page.layout?.blockIndex !== block.index) {
+        throw new Error(`Source Flower Box projected page ${pageIndex} is not aligned to its layout block`);
+      }
+      const atlasBytes = await readSourceAsset(
+        page.atlas.assetUrl,
+        page.atlas.byteLength,
+        page.atlas.sha256,
+      );
+      chunks.push(atlasBytes);
+      atlasSlices.push({
+        pageIndex,
+        byteOffset,
+        byteLength: atlasBytes.length,
+        sha256: page.atlas.sha256,
+        mimeType: page.atlas.mimeType,
+      });
+      byteOffset += atlasBytes.length;
+    }
+    const packBytes = Buffer.concat(chunks);
+    const packSha256 = sha256(packBytes);
+    const assetUrl = `/cssflower/assets/projected/visual-pack-${packSha256}.bin`;
+    await writeFile(publicAssetPath(root, assetUrl), packBytes);
+    packs.push({
+      schema: "cssflower-prepared-visual-pack@1",
+      index: block.index,
+      startPageIndex: block.startPageIndex,
+      pageCount: block.pageCount,
+      assetUrl,
+      byteLength: packBytes.length,
+      sha256: packSha256,
+      layout,
+      atlasSlices,
+    });
+    totalPackBytes += packBytes.length;
+    maximumPackBytes = Math.max(maximumPackBytes, packBytes.length);
+  }
+
+  for (const url of sourceAssets) await rm(publicAssetPath(root, url), { force: true });
+  projected.transport = {
+    schema: "cssflower-prepared-visual-pack-transport@1",
+    representation: "layout-block-aligned-exact-byte-slices",
+    packCount: packs.length,
+    blockPageCount,
+    compressedResidentPackBudget: 2,
+    earlyPrefetchPageOffset: 16,
+    totalPackBytes,
+    maximumPackBytes,
+    logicalContentAddressedAtlasBytes: projected.contentAddressedAtlasBytes,
+    logicalCompressedLayoutBytes: projected.compressedLayoutBytes,
+    runtimeGeometryConstruction: false,
+    runtimeProjection: false,
+    runtimeRasterization: false,
+    runtimeLightingCalculation: false,
+    packs,
+  };
+  return { packCount: packs.length, totalPackBytes, maximumPackBytes };
+
+  async function readSourceAsset(url, expectedByteLength, expectedSha256) {
+    sourceAssets.add(url);
+    let bytes = assetCache.get(url);
+    if (!bytes) {
+      bytes = await readFile(publicAssetPath(root, url));
+      assetCache.set(url, bytes);
+    }
+    if (bytes.length !== expectedByteLength || sha256(bytes) !== expectedSha256) {
+      throw new Error(`Source Flower Box projected asset identity mismatch: ${url}`);
+    }
+    return bytes;
+  }
+}
+
+function publicAssetPath(root, url) {
+  if (typeof url !== "string" || !url.startsWith("/cssflower/") || url.includes("..")) {
+    throw new Error(`Unsafe Flower Box projected asset URL: ${url}`);
+  }
+  return join(root, url.slice("/cssflower/".length));
 }
 
 function parseArgs(argv) {

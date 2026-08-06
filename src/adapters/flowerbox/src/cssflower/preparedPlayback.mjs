@@ -14,6 +14,7 @@ export async function createCssflowerPreparedPlayer(options) {
   const projected = playback.projectedPixels;
   const requestFrame = options.requestFrame ?? globalThis.requestAnimationFrame.bind(globalThis);
   const cancelFrame = options.cancelFrame ?? globalThis.cancelAnimationFrame.bind(globalThis);
+  const now = options.now ?? (() => globalThis.performance.now());
   const frameMilliseconds = 1000 / playback.sourceTicksPerSecond;
   let paused = true;
   let request = null;
@@ -32,6 +33,9 @@ export async function createCssflowerPreparedPlayer(options) {
   let preparedPageLayoutAdoptions = 0;
   let preparedPageBoundaryLeafStyleWrites = 0;
   let runtimeSchedulerCallbacks = 0;
+  let runtimeSchedulerStateTransitions = 0;
+  let runtimeSchedulerLateResetCount = 0;
+  let runtimeSchedulerMaximumLatenessMs = 0;
 
   const morphTarget = createPolyMorphPreparedDomTarget({
     model: {
@@ -110,9 +114,17 @@ export async function createCssflowerPreparedPlayer(options) {
     if (nextFrameAt === null) {
       nextFrameAt = timestamp + frameMilliseconds;
     } else if (timestamp >= nextFrameAt - 0.5) {
-      const elapsedSteps = Math.max(1, Math.floor((timestamp - nextFrameAt) / frameMilliseconds) + 1);
-      await applyTick(globalTick + elapsedSteps);
-      nextFrameAt += elapsedSteps * frameMilliseconds;
+      const scheduledAt = nextFrameAt;
+      await applyTick(globalTick + 1);
+      runtimeSchedulerStateTransitions += 1;
+      nextFrameAt = scheduledAt + frameMilliseconds;
+      const completedAt = now();
+      if (completedAt > nextFrameAt) {
+        const lateness = completedAt - nextFrameAt;
+        runtimeSchedulerLateResetCount += 1;
+        runtimeSchedulerMaximumLatenessMs = Math.max(runtimeSchedulerMaximumLatenessMs, lateness);
+        nextFrameAt = completedAt + frameMilliseconds;
+      }
     }
     if (!paused) request = requestFrame(loop);
   }
@@ -189,6 +201,10 @@ export async function createCssflowerPreparedPlayer(options) {
         runtimePreparedPageBoundaryLeafStyleWrites: preparedPageBoundaryLeafStyleWrites,
         projectedPageLoader: projectedPages.stats(),
         runtimeSchedulerCallbacks,
+        runtimeSchedulerStateTransitions,
+        runtimeSchedulerSkippedPreparedStateCount: 0,
+        runtimeSchedulerLateResetCount,
+        runtimeSchedulerMaximumLatenessMs,
         runtimePolygonConstructionCount: 0,
         runtimeGeometryConstructionCount: 0,
         runtimeRadialProjectionCount: 0,

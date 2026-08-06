@@ -42,3 +42,6 @@ chrome-trace*.json
 
 # Local source snapshot retained outside the product/source package
 src.zip
+
+# Local Netlify folder
+.netlify

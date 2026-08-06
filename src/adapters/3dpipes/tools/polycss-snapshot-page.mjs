@@ -79,6 +79,81 @@ function applySpaceTexels(element, lighting, fallbackMaterialIndices) {
   }
 }
 
+function createPreparedScene(hostElement, camera, strategies) {
+  return createPolyScene(hostElement, {
+    camera,
+    ambientLight: { color: "#ffffff", intensity: Math.PI },
+    directionalLight: { direction: [0, -1, 1], color: "#ffffff", intensity: 0 },
+    textureLighting: "baked",
+    textureQuality: 1,
+    textureLeafSizing: "canonical",
+    textureBackend: "atlas",
+    textureProjection: "affine",
+    seamBleed: 0,
+    autoCenter: false,
+    strategies,
+  });
+}
+
+function preparedCamera(sceneData) {
+  return createPolyPerspectiveCamera({
+    perspective: sceneData.camera.perspective,
+    zoom: sceneData.camera.zoom,
+    rotX: sceneData.camera.rotX,
+    rotY: sceneData.camera.rotY,
+    target: sceneData.camera.target,
+    distance: sceneData.camera.distance,
+  });
+}
+
+function capFallbackLeaf(source) {
+  const fallback = source.cloneNode(true);
+  const atlas = fallback.style.backgroundImage;
+  if (!(fallback instanceof HTMLElement) || !atlas.startsWith("url(")) {
+    throw new Error("Prepared PolyCSS <s> cap fallback is missing its atlas");
+  }
+  fallback.removeAttribute("data-csspipes-face");
+  fallback.removeAttribute("data-poly-index");
+  fallback.dataset.csspipesCapFallback = "true";
+  fallback.style.setProperty("--csspipes-cap-fallback-mask", atlas);
+  fallback.style.backgroundImage = "none";
+  fallback.style.backgroundColor = "var(--csspipes-material-color)";
+  fallback.style.maskImage = "var(--csspipes-cap-fallback-mask)";
+  fallback.style.maskPosition = fallback.style.backgroundPosition;
+  fallback.style.maskRepeat = "no-repeat";
+  fallback.style.maskSize = fallback.style.backgroundSize;
+  fallback.style.webkitMaskImage = "var(--csspipes-cap-fallback-mask)";
+  fallback.style.webkitMaskPosition = fallback.style.backgroundPosition;
+  fallback.style.webkitMaskRepeat = "no-repeat";
+  fallback.style.webkitMaskSize = fallback.style.backgroundSize;
+  fallback.style.backfaceVisibility = "visible";
+  return fallback;
+}
+
+function attachCapFallbacks(playbackRoot, fallbackRoot) {
+  const fallbackFaces = new Map([
+    ...fallbackRoot.querySelectorAll('s[data-csspipes-surface="end-cap"]'),
+  ].map((face) => [
+    `${face.getAttribute("data-csspipes-pipe")}:${face.getAttribute("data-csspipes-cap")}`,
+    face,
+  ]));
+  let fallbackCount = 0;
+  for (const capRoot of playbackRoot.querySelectorAll("[data-csspipes-cap-root]")) {
+    const primary = capRoot.querySelector(':scope > i[data-csspipes-surface="end-cap"]');
+    if (!(primary instanceof HTMLElement)) continue;
+    const key = `${capRoot.getAttribute("data-csspipes-pipe")}:` +
+      `${capRoot.getAttribute("data-csspipes-cap-root")}`;
+    const source = fallbackFaces.get(key);
+    if (!(source instanceof HTMLElement)) {
+      throw new Error(`Prepared PolyCSS <s> cap fallback is missing for ${key}`);
+    }
+    primary.dataset.csspipesCapPrimary = "true";
+    capRoot.append(capFallbackLeaf(source));
+    fallbackCount += 1;
+  }
+  return fallbackCount;
+}
+
 function preparePlaybackLeaves(pipeRoot, pipe, bank, playback) {
   const bandSlotsPerPipe = playback.bandSlotsByPipe?.[pipe];
   const radialSegments = playback.radialSegmentsByPipe?.[pipe];
@@ -154,26 +229,15 @@ async function main() {
   }
   const lightingResponse = await fetch(sceneData.lighting.assetUrl, { cache: "no-store" });
   if (!lightingResponse.ok) throw new Error("Prepared cssPipes space-texel atlas is unavailable");
-  const camera = createPolyPerspectiveCamera({
-    perspective: sceneData.camera.perspective,
-    zoom: sceneData.camera.zoom,
-    rotX: sceneData.camera.rotX,
-    rotY: sceneData.camera.rotY,
-    target: sceneData.camera.target,
-    distance: sceneData.camera.distance,
-  });
-  const scene = createPolyScene(host, {
-    camera,
-    ambientLight: { color: "#ffffff", intensity: Math.PI },
-    directionalLight: { direction: [0, -1, 1], color: "#ffffff", intensity: 0 },
-    textureLighting: "baked",
-    textureQuality: 1,
-    textureLeafSizing: "canonical",
-    textureBackend: "atlas",
-    textureProjection: "affine",
-    seamBleed: 0,
-    autoCenter: false,
-  });
+  const scene = createPreparedScene(host, preparedCamera(sceneData));
+  const fallbackHost = document.createElement("div");
+  rootStyle(fallbackHost, false);
+  document.body.append(fallbackHost);
+  const fallbackScene = createPreparedScene(
+    fallbackHost,
+    preparedCamera(sceneData),
+    { disable: ["i"] },
+  );
   try {
     const handles = Array.from(
       { length: sceneData.playback.retainedBankCount },
@@ -194,6 +258,21 @@ async function main() {
     ).flat();
     const sceneRoot = host.querySelector(".polycss-scene");
     if (!(sceneRoot instanceof HTMLElement)) throw new Error("PolyCSS scene root was not mounted");
+    for (const pipe of sceneData.pipeMeshes) {
+      if (pipe.radialSegments <= 4) continue;
+      fallbackScene.add({
+        polygons: pipe.polygons
+          .filter((face) => face.polygon.data?.["csspipes-surface"] === "end-cap")
+          .map((face) => face.polygon),
+        objectUrls: [], warnings: [], dispose() {},
+      }, {
+        id: `${pipe.id}-cap-fallback`,
+        merge: false,
+        meshResolution: "lossless",
+        stableDom: true,
+        excludeFromAutoCenter: true,
+      });
+    }
     const playbackRoot = document.createElement("div");
     playbackRoot.dataset.csspipesPlaybackRoot = "true";
     rootStyle(playbackRoot);
@@ -220,7 +299,14 @@ async function main() {
     }
 
     scene.applyCamera();
-    await scene.whenTexturesReady();
+    fallbackScene.applyCamera();
+    await Promise.all([scene.whenTexturesReady(), fallbackScene.whenTexturesReady()]);
+    const fallbackCount = attachCapFallbacks(playbackRoot, fallbackHost);
+    const expectedFallbackCount = sceneData.playback.retainedBankCount *
+      sceneData.pipeMeshes.filter((pipe) => pipe.radialSegments > 4).length * 2;
+    if (fallbackCount !== expectedFallbackCount) {
+      throw new Error("Prepared PolyCSS <s> cap fallback census drifted");
+    }
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const stats = collectPolyRenderStats(host, sceneData.metrics.preparedLeafCount);
     const mountedLeaves = host.querySelectorAll("[data-csspipes-face]").length;
@@ -244,7 +330,16 @@ async function main() {
     const materialStyle =
       `<style data-csspipes-prepared-material-bindings="${materialBindings.bindingCount}">` +
       `${materialBindings.css}</style>`;
-    const html = sharedAtlasHtml.replace("</head>", `${materialStyle}</head>`);
+    const fallbackStyle = `<style data-csspipes-cap-fallback="true">` +
+      `[data-csspipes-cap-fallback] { display: none !important; }` +
+      `@supports not (border-shape: polygon(0 0, 100% 0, 0 100%) circle(0)) {` +
+      `[data-csspipes-cap-primary] { display: none !important; }` +
+      `[data-csspipes-cap-fallback] { display: block !important; }` +
+      `}</style>`;
+    const html = sharedAtlasHtml.replace(
+      "</head>",
+      `${materialStyle}${fallbackStyle}</head>`,
+    );
     if (!html.includes("polycss-scene") || /<script\b/i.test(html)) {
       throw new Error("Prepared PolyCSS snapshot failed script/scene sanitization");
     }
@@ -263,6 +358,8 @@ async function main() {
       sceneId: sceneData.id,
     };
   } finally {
+    fallbackScene.destroy?.();
+    fallbackHost.remove();
     scene.destroy?.();
   }
 }

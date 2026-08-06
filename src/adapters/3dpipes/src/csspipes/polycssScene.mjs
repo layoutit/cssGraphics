@@ -3,7 +3,7 @@ import { CssPipesContractError } from "./types.mjs";
 import { readPreparedText } from "./preparedResponse.mjs";
 
 const ALLOWED_SNAPSHOT_TAGS = new Set([
-  "html", "head", "meta", "title", "style", "body", "div", "b", "i",
+  "html", "head", "meta", "title", "style", "body", "div", "b", "i", "s",
 ]);
 const FORBIDDEN_SNAPSHOT_ATTRIBUTES = new Set([
   "action", "formaction", "href", "src", "srcdoc",

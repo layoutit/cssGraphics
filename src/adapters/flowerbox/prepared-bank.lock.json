@@ -1,0 +1,29 @@
+{
+  "schema": "cssflower-prepared-bank-lock@1",
+  "tag": "cssflower-product-q40-v1",
+  "asset": "cssflower-product-q40-v1.tar.gz",
+  "url": "https://github.com/layoutit/cssGraphics/releases/download/cssflower-product-q40-v1/cssflower-product-q40-v1.tar.gz",
+  "archiveByteLength": 29334538,
+  "archiveSha256": "3e623ef672e3a2754e3ba58d53f87e48b45d625875d57c4110669c64c21867ff",
+  "productClosureBytes": 29579964,
+  "productClosureSha256": "8d91b0370d3ee16a6ddeff6d0f5b95f26b628ac6d961f31d11290a549f803b31",
+  "productDescriptorByteLength": 1606,
+  "productDescriptorSha256": "2be1268273cadb07eb0460386efa15a6262617d33bca8cb479ea01ddd07b1d1b",
+  "retainedTriangleLeafCount": 1200,
+  "retainedRotationRootCount": 1,
+  "timelineStateCount": 9331,
+  "projectedPageCount": 2333,
+  "projectedAtlasAssetCount": 2273,
+  "projectedLayoutBlockCount": 37,
+  "visualEncoding": {
+    "codec": "AVIF",
+    "quality": 40,
+    "chromaSubsampling": "4:4:4"
+  },
+  "publicBoundary": {
+    "microsoftSourceIncluded": false,
+    "microsoftBinaryIncluded": false,
+    "nativeCaptureIncluded": false,
+    "oraclePacketIncluded": false
+  }
+}

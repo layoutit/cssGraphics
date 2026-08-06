@@ -1,0 +1,88 @@
+:root {
+  color-scheme: dark;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: #000;
+  color: #d8d8d8;
+}
+
+html,
+body,
+#app,
+#scene {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+#app,
+#scene {
+  position: fixed;
+  inset: 0;
+}
+
+#scene {
+  contain: layout paint size style;
+}
+
+#scene > .polycss-camera {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: 720px !important;
+  height: 720px !important;
+  translate: -50% -50%;
+  scale: var(--cssflower-presentation-scale, 1);
+  transform-origin: 50% 50%;
+}
+
+#status,
+#credit {
+  position: fixed;
+  z-index: 2;
+  margin: 0;
+  padding: 8px 10px;
+  background: rgb(0 0 0 / 72%);
+  color: #b9c1bc;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+#status {
+  left: 50%;
+  bottom: 12px;
+  max-width: min(640px, calc(100vw - 24px));
+  translate: -50% 0;
+  transition: opacity 180ms ease;
+}
+
+#credit {
+  right: 8px;
+  bottom: 8px;
+  opacity: 0.42;
+}
+
+#credit a {
+  color: inherit;
+}
+
+body[data-port-status="ready"] #status {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body[data-port-status="error"] #status {
+  color: #ffd5cf;
+  opacity: 1;
+}
+
+.cssflower-mesh {
+  pointer-events: none;
+}
+
+@media (max-width: 600px) {
+  #credit {
+    font-size: 9px;
+  }
+}

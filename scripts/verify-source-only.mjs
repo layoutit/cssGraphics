@@ -15,7 +15,9 @@ const STRICT_SOURCE_RENDERER_PATTERNS = Object.freeze([
   ["wasm-runtime", /WebAssembly\.(?:compile|instantiate)|instantiateStreaming\(|\.wasm(?:\b|["'])/iu],
   ["emulator-runtime", /(?:from|import\s*)[\s\S]{0,80}["'][^"']*(?:dosbox|mupen64|retroarch|emulator)[^"']*["']/iu],
 ]);
-const STRICT_AUDITOR_PATHS = new Set();
+const STRICT_AUDITOR_PATHS = new Set([
+  "src/adapters/flowerbox/tools/audit-runtime-surface.mjs",
+]);
 const STRICT_PATH_GUARD_PATHS = new Set([
   "scripts/verify-source-only.mjs",
 ]);
@@ -34,9 +36,12 @@ const DISTRIBUTION_PREFIXES = Object.freeze([
   "site/public/previews/",
 ]);
 const README_MEDIA_PATHS = new Set([
+  "site/public/favicon.ico",
   "site/readme/animated-morph-sphere.gif",
   "site/readme/cube-to-sphere.gif",
   "site/readme/pipes.gif",
+  "src/adapters/3dpipes/public/pipes-social.png",
+  "src/adapters/flowerbox/public/flower-social.png",
 ]);
 const SHA256 = /^[a-f0-9]{64}$/u;
 

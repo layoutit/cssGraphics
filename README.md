@@ -40,6 +40,20 @@ pnpm build:3dpipes:full
 pnpm dev:3dpipes
 ```
 
+### Flower Box
+
+[`src/adapters/flowerbox`](src/adapters/flowerbox) is an independent PolyCSS
+reconstruction of the classic Flower Box. Its complete prepared cycle uses
+1,200 stable retained triangle leaves and streams a hash-bound q40 visual bank.
+
+```sh
+pnpm prepare:flowerbox:artifact
+pnpm build:flowerbox
+pnpm dev:flowerbox
+```
+
+Microsoft source, binaries, captures, and oracle packets are not included.
+
 ## License
 
 cssGraphics source code is [MIT licensed](LICENSE). Third-party models retain

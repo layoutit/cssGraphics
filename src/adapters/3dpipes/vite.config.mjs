@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import { cp } from "node:fs/promises";
+import { cp, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -17,12 +17,21 @@ export default defineConfig({
   publicDir: deployBuild ? resolve(adapterRoot, "public") : generatedPublicDir,
   plugins: deployBuild ? [{
     name: "csspipes-netlify-assets",
+    async buildStart() {
+      await rm(resolve(repositoryRoot, "dist/site"), { recursive: true, force: true });
+    },
     async closeBundle() {
       await cp(
         resolve(generatedPublicDir, "csspipes"),
         resolve(repositoryRoot, "dist/site/csspipes"),
         { recursive: true, force: true },
       );
+      for (const file of ["favicon.ico", "robots.txt", "sitemap.xml"]) {
+        await cp(
+          resolve(repositoryRoot, "site/public", file),
+          resolve(repositoryRoot, "dist/site", file),
+        );
+      }
     },
   }] : [],
   server: { host: "127.0.0.1" },

@@ -19,6 +19,7 @@ interface DistributionFile {
 function distributionFiles(): readonly DistributionFile[] {
   const files: DistributionFile[] = [
     { path: "catalog.json", mediaType: "application/json" },
+    { path: "favicon.ico", mediaType: "image/x-icon" },
     { path: "robots.txt", mediaType: "text/plain" },
     { path: "sitemap.xml", mediaType: "application/xml" },
   ];

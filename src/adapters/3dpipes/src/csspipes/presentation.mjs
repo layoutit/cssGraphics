@@ -2,6 +2,7 @@ import { CssPipesContractError } from "./types.mjs";
 
 const CSSPIPES_TOP_GAP = 0;
 const CSSPIPES_VERTICAL_BIAS_RATIO = -0.06;
+const CSSPIPES_DESKTOP_VERTICAL_BIAS_RATIO = -0.1;
 
 const dimension = (value, label) => {
   if (!(value > 0) || !Number.isFinite(value)) {
@@ -64,17 +65,22 @@ function calculateCssPipesPresentation(
     throw new CssPipesContractError("presentation top gap must leave a positive scene viewport");
   }
   const viewportHeight = height - topGap;
-  const verticalOffset = viewportHeight * CSSPIPES_VERTICAL_BIAS_RATIO;
+  const profileOffset = viewportHeight * CSSPIPES_VERTICAL_BIAS_RATIO;
   const profile = chooseProfile(
     width,
-    viewportHeight + 2 * Math.abs(verticalOffset),
+    viewportHeight + 2 * Math.abs(profileOffset),
     sourceWidth,
     sourceHeight,
     responsivePresentation,
   );
+  const verticalOffset = viewportHeight * (
+    profile.id === "desktop"
+      ? CSSPIPES_DESKTOP_VERTICAL_BIAS_RATIO
+      : CSSPIPES_VERTICAL_BIAS_RATIO
+  );
   const scale = Math.max(
     width / profile.projectedWidth,
-    (viewportHeight + 2 * Math.abs(verticalOffset)) / profile.projectedHeight,
+    (viewportHeight + 2 * Math.abs(profileOffset)) / profile.projectedHeight,
   );
   const visualLeft = (width - profile.projectedWidth * scale) / 2;
   const visualTop = (viewportHeight - profile.projectedHeight * scale) / 2 + verticalOffset;

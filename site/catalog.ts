@@ -4,6 +4,7 @@ export type DistributionMediaType =
   | "application/xml"
   | "application/json"
   | "image/png"
+  | "image/x-icon"
   | "image/webp"
   | "text/css"
   | "text/plain";

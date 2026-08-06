@@ -1,6 +1,7 @@
 import { CssPipesContractError } from "./types.mjs";
 
 const CSSPIPES_TOP_GAP = 0;
+const CSSPIPES_MOBILE_BREAKPOINT = 600;
 const CSSPIPES_VERTICAL_BIAS_RATIO = -0.06;
 const CSSPIPES_DESKTOP_VERTICAL_BIAS_RATIO = -0.1;
 
@@ -28,9 +29,8 @@ function profiles(width, height, contract) {
   };
 }
 
-function chooseProfile(width, height, sourceWidth, sourceHeight, contract) {
-  const id = Math.max(width / sourceHeight, height / sourceWidth) <
-    Math.max(width / sourceWidth, height / sourceHeight) ? "mobile" : "desktop";
+function chooseProfile(width, sourceWidth, sourceHeight, contract) {
+  const id = width < CSSPIPES_MOBILE_BREAKPOINT ? "mobile" : "desktop";
   const profile = profiles(sourceWidth, sourceHeight, contract)[id];
   const quarterTurns = profile.quarterTurns;
   const bounds = [
@@ -68,7 +68,6 @@ function calculateCssPipesPresentation(
   const profileOffset = viewportHeight * CSSPIPES_VERTICAL_BIAS_RATIO;
   const profile = chooseProfile(
     width,
-    viewportHeight + 2 * Math.abs(profileOffset),
     sourceWidth,
     sourceHeight,
     responsivePresentation,

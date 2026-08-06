@@ -431,35 +431,18 @@ function rotateX([x, y, z], degrees) {
   return [x, cosine * y - sine * z, sine * y + cosine * z];
 }
 
-function preparedCssPoint(point, target, zoom) {
+function projectPreparedPoint(point, target, zoom) {
   const relative = point.map((value, axis) => value - target[axis]);
   let css = [relative[1] * 50, relative[0] * 50, relative[2] * 50];
   css = rotateZ(css, CSSPIPES_CAMERA_CONTRACT.rotY);
   css = rotateX(css, CSSPIPES_CAMERA_CONTRACT.rotX);
-  return css.map((value) => value * zoom / 50);
-}
-
-function projectPreparedPoint(point, target, zoom) {
-  const css = preparedCssPoint(point, target, zoom);
+  css = css.map((value) => value * zoom / 50);
   const perspectiveScale = CSSPIPES_CAMERA_CONTRACT.perspective /
     (CSSPIPES_CAMERA_CONTRACT.perspective - css[2]);
   return [
     CSSPIPES_SOURCE_VIEWPORT.width / 2 + css[0] * perspectiveScale,
     CSSPIPES_SOURCE_VIEWPORT.height / 2 + css[1] * perspectiveScale,
   ];
-}
-
-function expandedPreparedPoints(points) {
-  const radius = CSSPIPES_PREBAKE_CONFIG.tubeRadius * 1.35;
-  return points.flatMap((point) => [
-    point,
-    [point[0] + radius, point[1], point[2]],
-    [point[0] - radius, point[1], point[2]],
-    [point[0], point[1] + radius, point[2]],
-    [point[0], point[1] - radius, point[2]],
-    [point[0], point[1], point[2] + radius],
-    [point[0], point[1], point[2] - radius],
-  ]);
 }
 
 function projectedBounds(points, target, zoom) {
@@ -472,7 +455,18 @@ function projectedBounds(points, target, zoom) {
 }
 
 function fitCamera(points) {
-  const expanded = expandedPreparedPoints(points);
+  const expanded = points.flatMap((point) => {
+    const radius = CSSPIPES_PREBAKE_CONFIG.tubeRadius * 1.35;
+    return [
+      point,
+      [point[0] + radius, point[1], point[2]],
+      [point[0] - radius, point[1], point[2]],
+      [point[0], point[1] + radius, point[2]],
+      [point[0], point[1] - radius, point[2]],
+      [point[0], point[1], point[2] + radius],
+      [point[0], point[1], point[2] - radius],
+    ];
+  });
   const target = [0, 0, 0];
   let zoom = 27;
   const targetWidth = CSSPIPES_SOURCE_VIEWPORT.width;
@@ -518,38 +512,6 @@ function fitCamera(points) {
       Object.entries(bounds).map(([key, value]) => [key, Number(value.toFixed(3))]),
     )),
   });
-}
-
-function preparedPerspectiveQualification(points, camera) {
-  const maximumDepth = Math.max(...expandedPreparedPoints(points).map((point) =>
-    preparedCssPoint(point, camera.state.target, camera.state.zoom)[2]));
-  const perspectiveScale = CSSPIPES_CAMERA_CONTRACT.perspective /
-    (CSSPIPES_CAMERA_CONTRACT.perspective - maximumDepth);
-  const qualified = Number.isFinite(perspectiveScale) &&
-    maximumDepth < CSSPIPES_CAMERA_CONTRACT.perspective &&
-    perspectiveScale <= CSSPIPES_PREBAKE_CONFIG.preparedPerspectiveScaleMaximum;
-  return Object.freeze({
-    qualified,
-    maximumDepth: Number(maximumDepth.toFixed(6)),
-    perspectiveScale: Number(perspectiveScale.toFixed(6)),
-  });
-}
-
-function limitPreparedPerspective(points, camera) {
-  const qualification = preparedPerspectiveQualification(points, camera);
-  if (qualification.qualified) return { camera, qualification };
-  const maximumDepth = CSSPIPES_CAMERA_CONTRACT.perspective *
-    (1 - 1 / CSSPIPES_PREBAKE_CONFIG.preparedPerspectiveScaleMaximum);
-  const scale = maximumDepth / qualification.maximumDepth;
-  if (!(scale > 0 && scale < 1)) {
-    throw new Error("Prepared camera perspective clearance cannot be fitted");
-  }
-  const limitedCamera = scaledPreparedCamera(camera, scale);
-  const limitedQualification = preparedPerspectiveQualification(points, limitedCamera);
-  if (!limitedQualification.qualified) {
-    throw new Error("Prepared camera perspective clearance did not converge");
-  }
-  return { camera: limitedCamera, qualification: limitedQualification };
 }
 
 function preparedCameraQualification(camera) {
@@ -623,7 +585,7 @@ function scaledPreparedCamera(camera, scale) {
   });
 }
 
-function applyPreparedPresentationCameras(entries) {
+function applyDesktopPresentationZoom(entries) {
   const desktop = entries.filter((entry) => entry.viewportProfile === "desktop");
   const meanZoom = desktop.reduce(
     (total, entry) => total + entry.camera.state.zoom,
@@ -631,23 +593,16 @@ function applyPreparedPresentationCameras(entries) {
   ) / desktop.length;
   const scale = CSSPIPES_DESKTOP_MEAN_ZOOM / meanZoom;
   return entries.map((entry) => {
-    const presentationScale = entry.viewportProfile === "desktop" ? scale : 1;
-    const presentationCamera = scaledPreparedCamera(entry.camera, presentationScale);
-    const presentationChainCamera = scaledPreparedCamera(
-      entry.chainCamera,
-      presentationScale,
-    );
+    if (entry.viewportProfile !== "desktop") return entry;
+    const camera = scaledPreparedCamera(entry.camera, scale);
+    const chainCamera = scaledPreparedCamera(entry.chainCamera, scale);
     const localPoints = entry.generated.points.map((point) =>
       preparedCellPoint(point, entry.preparedCenter));
-    const limited = limitPreparedPerspective(localPoints, presentationCamera);
-    const cameraScale = limited.camera.state.zoom / presentationCamera.state.zoom;
-    const chainCamera = scaledPreparedCamera(presentationChainCamera, cameraScale);
     return Object.freeze({
       ...entry,
-      camera: limited.camera,
-      cameraQualification: preparedCameraQualification(limited.camera),
-      perspectiveQualification: limited.qualification,
-      screenOccupancy: preparedScreenOccupancy(localPoints, limited.camera),
+      camera,
+      cameraQualification: preparedCameraQualification(camera),
+      screenOccupancy: preparedScreenOccupancy(localPoints, camera),
       chainCamera,
       chainScreenOccupancy: preparedScreenOccupancy(localPoints, chainCamera),
     });
@@ -1774,7 +1729,7 @@ function buildAcceptedPreparedEntries() {
     }
   }
   return Object.freeze({
-    accepted: Object.freeze(applyPreparedPresentationCameras(accepted)),
+    accepted: Object.freeze(applyDesktopPresentationZoom(accepted)),
     candidateSeedsExamined: candidate,
   });
 }
@@ -2049,9 +2004,6 @@ export function buildPreparedClipLibrary() {
       )),
       maximumPreparedCameraOverscanRatio: Math.max(
         ...clips.map((clip) => clip.cameraQualification.overscanRatio),
-      ),
-      maximumPreparedPerspectiveScale: Math.max(
-        ...accepted.map((entry) => entry.perspectiveQualification.perspectiveScale),
       ),
       minimumPreparedScreenOccupiedCellCount: Math.min(
         ...clips.map((clip) => clip.screenOccupancy.occupiedCellCount),

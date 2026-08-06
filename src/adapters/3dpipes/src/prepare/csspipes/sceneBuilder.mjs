@@ -138,8 +138,6 @@ export async function buildCssPipesScene({
         playback.metrics.minimumPreparedMaterialOklabDistance,
       minimumPreparedScreenOccupiedCellCount:
         playback.metrics.minimumPreparedScreenOccupiedCellCount,
-      maximumPreparedPerspectiveScale:
-        playback.metrics.maximumPreparedPerspectiveScale,
       runtimePolygonConstructionCount: 0,
       runtimePathGeneration: false,
       runtimeGeometrySemantics: false,

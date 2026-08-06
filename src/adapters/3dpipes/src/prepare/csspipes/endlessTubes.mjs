@@ -195,7 +195,6 @@ export const CSSPIPES_PREBAKE_CONFIG = Object.freeze({
   preparedCameraAspectRatioMinimum: 1.1,
   preparedCameraAspectRatioMaximum: 2.5,
   preparedCameraOverscanMaximum: 1.8,
-  preparedPerspectiveScaleMaximum: 3,
   preparedScreenGridColumns: 4,
   preparedScreenGridRows: 3,
   preparedScreenMinimumOccupiedCells: 10,

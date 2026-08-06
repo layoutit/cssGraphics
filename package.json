@@ -40,6 +40,7 @@
     "build:lib": "vite build --mode library && node scripts/build-cli.mjs",
     "build:3dpipes": "vite build --config src/adapters/3dpipes/vite.config.mjs",
     "build:3dpipes:full": "pnpm prepare:3dpipes && pnpm build:3dpipes",
+    "build:deploy": "pnpm exec playwright install chromium && pnpm prepare:3dpipes && pnpm build:site && CSSPIPES_DEPLOY_BUILD=1 pnpm build:3dpipes",
     "prepack": "pnpm build:lib",
     "preview": "vite preview --host 127.0.0.1",
     "prepare:super-mario-64": "pnpm build:lib && node scripts/prepare/super-mario-64.mjs",

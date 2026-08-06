@@ -17,14 +17,6 @@ pnpm install
 pnpm dev
 ```
 
-To prepare Mario, place your own US `.z64` ROM under `.local/`:
-
-```sh
-pnpm prepare:super-mario-64 -- --rom .local/baserom.us.z64
-```
-
-Nintendo game data is not included.
-
 ## Adapters
 
 ### 3D Pipes

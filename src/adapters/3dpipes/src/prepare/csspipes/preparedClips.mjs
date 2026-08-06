@@ -42,6 +42,7 @@ const STARTS = Object.freeze([
   Object.freeze([-6, 0, 3]),
   Object.freeze([6, 0, -3]),
 ]);
+const CSSPIPES_DESKTOP_MEAN_ZOOM = 30;
 
 if (STARTS.length !== CSSPIPES_PREBAKE_CONFIG.pipeCount) {
   throw new Error("cssPipes prepared start count must match pipeCount");
@@ -564,6 +565,53 @@ function preparedScreenOccupancy(points, camera) {
     occupiedRatio: Number((occupiedCellCount / totalCellCount).toFixed(6)),
     qualified: occupiedCellCount >=
       CSSPIPES_PREBAKE_CONFIG.preparedScreenMinimumOccupiedCells,
+  });
+}
+
+function scaledPreparedCamera(camera, scale) {
+  const state = Object.freeze({
+    ...camera.state,
+    zoom: Number((camera.state.zoom * scale).toFixed(6)),
+  });
+  const centerX = CSSPIPES_SOURCE_VIEWPORT.width / 2;
+  const centerY = CSSPIPES_SOURCE_VIEWPORT.height / 2;
+  const scaled = (value, center) => center + (value - center) * scale;
+  const projectedBounds = Object.freeze({
+    minX: Number(scaled(camera.projectedBounds.minX, centerX).toFixed(3)),
+    maxX: Number(scaled(camera.projectedBounds.maxX, centerX).toFixed(3)),
+    minY: Number(scaled(camera.projectedBounds.minY, centerY).toFixed(3)),
+    maxY: Number(scaled(camera.projectedBounds.maxY, centerY).toFixed(3)),
+    width: Number((camera.projectedBounds.width * scale).toFixed(3)),
+    height: Number((camera.projectedBounds.height * scale).toFixed(3)),
+  });
+  return Object.freeze({
+    state,
+    transform: buildPolySceneTransform(state),
+    projectedBounds,
+  });
+}
+
+function applyDesktopPresentationZoom(entries) {
+  const desktop = entries.filter((entry) => entry.viewportProfile === "desktop");
+  const meanZoom = desktop.reduce(
+    (total, entry) => total + entry.camera.state.zoom,
+    0,
+  ) / desktop.length;
+  const scale = CSSPIPES_DESKTOP_MEAN_ZOOM / meanZoom;
+  return entries.map((entry) => {
+    if (entry.viewportProfile !== "desktop") return entry;
+    const camera = scaledPreparedCamera(entry.camera, scale);
+    const chainCamera = scaledPreparedCamera(entry.chainCamera, scale);
+    const localPoints = entry.generated.points.map((point) =>
+      preparedCellPoint(point, entry.preparedCenter));
+    return Object.freeze({
+      ...entry,
+      camera,
+      cameraQualification: preparedCameraQualification(camera),
+      screenOccupancy: preparedScreenOccupancy(localPoints, camera),
+      chainCamera,
+      chainScreenOccupancy: preparedScreenOccupancy(localPoints, chainCamera),
+    });
   });
 }
 
@@ -1776,7 +1824,7 @@ function buildAcceptedPreparedEntries() {
     }
   }
   return Object.freeze({
-    accepted: Object.freeze(accepted),
+    accepted: Object.freeze(applyDesktopPresentationZoom(accepted)),
     candidateSeedsExamined: candidate,
   });
 }

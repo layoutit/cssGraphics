@@ -24,7 +24,6 @@ const MACHINE_PATH_METADATA_PREFIXES = Object.freeze([
 ]);
 const HOSTING_FILES = new Set([
   ".openai/hosting.json",
-  "netlify.toml",
   "vercel.json",
   "firebase.json",
 ]);

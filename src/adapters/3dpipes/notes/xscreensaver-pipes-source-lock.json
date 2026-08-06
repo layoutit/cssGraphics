@@ -1,0 +1,26 @@
+{
+  "schema": "csspipes-xscreensaver-source-lock@1",
+  "classification": "named visual and procedural inspiration only",
+  "target": {
+    "title": "XScreenSaver Pipes",
+    "sourcePath": "hacks/glx/pipes.c",
+    "sourceSha256": "b1a2c82eae0257cd8a73596a51c9bcd7e034b56b3d54ccf35bc064684c4fc084",
+    "suppliedFileSha256": "b1a2c82eae0257cd8a73596a51c9bcd7e034b56b3d54ccf35bc064684c4fc084"
+  },
+  "upstream": {
+    "officialProjectUrl": "https://www.jwz.org/xscreensaver/",
+    "githubMirrorUrl": "https://github.com/Zygo/xscreensaver.git",
+    "githubMirrorRole": "read-only mirror of the official non-GitHub upstream",
+    "release": "XScreenSaver 6.15",
+    "commit": "906693799e4fb7581436590cf84ecb2d3c9186ba",
+    "commitDate": "2026-03-30T22:29:40-04:00",
+    "commitSubject": "From https://www.jwz.org/xscreensaver/xscreensaver-6.15.tar.gz"
+  },
+  "boundary": {
+    "bundledUpstreamSource": false,
+    "bundledUpstreamAssets": false,
+    "bundledUpstreamBinaries": false,
+    "geometryAuthority": "authored 3D Pipes preparation pipeline",
+    "parityClaim": false
+  }
+}

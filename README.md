@@ -25,6 +25,21 @@ pnpm prepare:super-mario-64 -- --rom .local/baserom.us.z64
 
 Nintendo game data is not included.
 
+## Adapters
+
+### 3D Pipes
+
+[`src/adapters/3dpipes`](src/adapters/3dpipes) is an original generative
+PolyCSS scene inspired by XScreenSaver `pipes.c` and Windows 3D Pipes. It uses
+prepared connected tube meshes, lighting, and playback with stable retained
+DOM.
+
+```sh
+pnpm install
+pnpm build:3dpipes:full
+pnpm dev:3dpipes
+```
+
 ## License
 
 cssGraphics source code is [MIT licensed](LICENSE). Third-party models retain

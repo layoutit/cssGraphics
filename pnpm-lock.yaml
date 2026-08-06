@@ -9,11 +9,11 @@ importers:
   .:
     dependencies:
       '@layoutit/polycss':
-        specifier: 0.2.10
-        version: 0.2.10
+        specifier: 0.2.11
+        version: 0.2.11
       '@layoutit/polycss-morph':
-        specifier: 0.2.10
-        version: 0.2.10
+        specifier: 0.2.11
+        version: 0.2.11
       prismjs:
         specifier: 1.30.0
         version: 1.30.0
@@ -30,6 +30,9 @@ importers:
       playwright:
         specifier: 1.60.0
         version: 1.60.0
+      pngjs:
+        specifier: 7.0.0
+        version: 7.0.0
       sharp:
         specifier: 0.35.3
         version: 0.35.3(@types/node@24.13.3)
@@ -366,14 +369,14 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@layoutit/polycss-core@0.2.10':
-    resolution: {integrity: sha512-17ClTkF13jRtG/4tyx+6BcmcH8pscuZUSUz7k60dyo56DXi8e/Km3ZFZ7s9vXXE1XQYfGCQSc5xZ069UXn3wCQ==}
+  '@layoutit/polycss-core@0.2.11':
+    resolution: {integrity: sha512-JC2amXB5k1xooOBZevkKq6KW4SZwJa7wkzH1onarFsppzE1hxPhXmRLE+AoC2AfnOfBdt6Uz2d9Vdr38J4ITnA==}
 
-  '@layoutit/polycss-morph@0.2.10':
-    resolution: {integrity: sha512-mdnvrFyl+kIc2JZR9erpAvBoZEDqbQb7+WUo6jK1pya4vNLusfgA+fM1G0dSYkBOP8nn0+WNd6vnQHTn2qpy/g==}
+  '@layoutit/polycss-morph@0.2.11':
+    resolution: {integrity: sha512-V9BOU5C+daIPD+AlarieqIkNWXboPRgiqMqmQG/PA0p+ZKV1jKX0edfvVnvj8pTztXZX3aQ7T9CnvAvlVj98Pw==}
 
-  '@layoutit/polycss@0.2.10':
-    resolution: {integrity: sha512-kEyrBY0iRb0dpukmy2FL3cFfs6ZlNbJ2L0JN8UlL3rCgvPZU+TgC2UrtyVcDY8zcnwPrL0a2W0ouQyqRc4YFQg==}
+  '@layoutit/polycss@0.2.11':
+    resolution: {integrity: sha512-5SBf8yY8TVcyKdwXvzVhJEWezd35QYme3eeIO6I6kvRZyAFLCRa2xL6oMfAjx8Pj87XXGSnph2h5YTfjp9P8YA==}
 
   '@rollup/rollup-android-arm-eabi@4.62.2':
     resolution: {integrity: sha512-6o7ZLZK+BeenkZCFNDXqpbjw9bD6nuWonvS/lwQJp7NoVVxm6p3qE7qQ5jGuBjiFsgvqjD8mZAU5oWxTmbOeOg==}
@@ -571,6 +574,10 @@ packages:
     resolution: {integrity: sha512-hheHdokM8cdqCb0lcE3s+zT4t4W+vvjpGxsZlDnikarzx8tSzMebh3UiFtgqwFwnTnjYQcsyMF8ei2mCO/tpeA==}
     engines: {node: '>=18'}
     hasBin: true
+
+  pngjs@7.0.0:
+    resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
+    engines: {node: '>=14.19.0'}
 
   postcss@8.5.20:
     resolution: {integrity: sha512-lW616l85ucIQL+FocMmL7pQFPqBmwejrCMg+iPxyImlrANNJG9NHq/RkyCZopDhd8C3LA03PHRJDjkbGu8vvug==}
@@ -851,15 +858,15 @@ snapshots:
   '@img/sharp-win32-x64@0.35.3':
     optional: true
 
-  '@layoutit/polycss-core@0.2.10': {}
+  '@layoutit/polycss-core@0.2.11': {}
 
-  '@layoutit/polycss-morph@0.2.10':
+  '@layoutit/polycss-morph@0.2.11':
     dependencies:
-      '@layoutit/polycss': 0.2.10
+      '@layoutit/polycss': 0.2.11
 
-  '@layoutit/polycss@0.2.10':
+  '@layoutit/polycss@0.2.11':
     dependencies:
-      '@layoutit/polycss-core': 0.2.10
+      '@layoutit/polycss-core': 0.2.11
 
   '@rollup/rollup-android-arm-eabi@4.62.2':
     optional: true
@@ -998,6 +1005,8 @@ snapshots:
       playwright-core: 1.60.0
     optionalDependencies:
       fsevents: 2.3.2
+
+  pngjs@7.0.0: {}
 
   postcss@8.5.20:
     dependencies:

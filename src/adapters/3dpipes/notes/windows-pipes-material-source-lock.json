@@ -1,0 +1,54 @@
+{
+  "schema": "csspipes-windows-3d-pipes-material-source-lock@1",
+  "target": {
+    "title": "Microsoft Win95 SDK OpenGL 3D Pipes screen-saver sample",
+    "module": "material.c",
+    "scope": "goodMaterials selection bank and its OpenGL material tuples"
+  },
+  "upstream": {
+    "repositoryUrl": "https://github.com/joncampbell123/windows_sdk_collection",
+    "repositoryRole": "historical mirror of the publicly distributed July 1995 Win32 SDK sample tree",
+    "commit": "e707dd87e84171c8e061c7ed6268eb3edaf85b49",
+    "tree": "b358359c185b9ebca3cb9e06b025c90cd75c03c4",
+    "commitDate": "2026-07-13T06:59:17Z"
+  },
+  "file": {
+    "path": "win/win95/sdk-1995-07-win32/win32sdk/mstools/samples/opengl/pipes/material.c",
+    "bytes": 5113,
+    "gitBlob": "d9992adedafa93fd9a88e9b3abb65ba945f4d0d4",
+    "sha256": "e8b7559efd580cdf166ef2482877bd98dbd5bbdf808ee0a9fa45e5b92048148c",
+    "copyrightNotice": "Copyright (c) 1994-1995 Microsoft Corporation"
+  },
+  "authority": {
+    "goodMaterialsLines": "31-34",
+    "materialTableLines": "45-94",
+    "selectionLines": "135-144",
+    "goodMaterialSourceIndices": [0, 1, 3, 4, 5, 6, 7, 9, 10, 11, 13, 16, 17, 19, 20, 22],
+    "goodMaterialSymbols": [
+      "EMERALD",
+      "JADE",
+      "PEARL",
+      "RUBY",
+      "TURQUOISE",
+      "BRASS",
+      "BRONZE",
+      "COPPER",
+      "GOLD",
+      "SILVER",
+      "CYAN_PLASTIC",
+      "WHITE_PLASTIC",
+      "YELLOW_PLASTIC",
+      "CYAN_RUBBER",
+      "GREEN_RUBBER",
+      "WHITE_RUBBER"
+    ],
+    "selectionExpression": "teaMaterial[goodMaterials[mfRand(16)]]",
+    "selectionWithReplacement": true
+  },
+  "boundary": {
+    "transcribedData": "the sixteen selected ambient, diffuse, specular, and shininess tuples",
+    "bundledUpstreamSource": false,
+    "bundledMicrosoftBinaryOrAsset": false,
+    "runtimeSourceDependency": false
+  }
+}

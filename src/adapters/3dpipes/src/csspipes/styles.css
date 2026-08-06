@@ -1,0 +1,169 @@
+:root {
+  color-scheme: dark;
+  background: linear-gradient(180deg, #0b1119 0%, #000 100%);
+  color: #dfe9f3;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+#csspipes-root {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  position: relative;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, #0b1119 0%, #000 100%);
+}
+
+.site-header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 21;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 50px;
+  padding: 0 12px 0 16px;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+}
+
+.site-wordmark {
+  display: inline-flex;
+  align-items: center;
+  color: #f0f0f0;
+  opacity: 0.72;
+  text-decoration: none;
+}
+
+.site-wordmark-svg {
+  display: block;
+  width: 190px;
+  height: 30px;
+  overflow: visible;
+}
+
+.site-wordmark-svg text {
+  fill: currentColor;
+  font-family: inherit;
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: 0.1px;
+}
+
+.site-wordmark-css {
+  font-weight: 500;
+}
+
+.site-wordmark-graphics {
+  font-weight: 200;
+}
+
+.site-wordmark-path {
+  font-weight: 100;
+}
+
+.site-wordmark:hover,
+.site-wordmark:focus-visible {
+  opacity: 1;
+}
+
+.site-wordmark:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 4px;
+}
+
+.site-actions {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 100%;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+}
+
+.site-actions a {
+  display: inline-flex;
+  min-width: 72px;
+  height: 50px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 4px;
+  margin: 0;
+  color: #f0f0f0;
+  background: transparent;
+  border: 0;
+  font: 400 13px/1 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  opacity: 0.72;
+}
+
+.site-actions .site-action-icon-only {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+}
+
+.site-action-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.site-actions a:hover,
+.site-actions a:focus-visible {
+  opacity: 1;
+}
+
+.site-actions a:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: -5px;
+}
+
+#csspipes-root[data-csspipes-ready="error"] {
+  padding: 2rem;
+  white-space: pre-wrap;
+  color: #ffb5a7;
+}
+
+[data-csspipes-viewport] > .polycss-camera {
+  position: absolute;
+}
+
+[data-csspipes-pipe-root],
+[data-csspipes-face],
+[data-csspipes-playback-root] {
+  pointer-events: none;
+  transform-style: preserve-3d;
+  transition: none;
+}
+
+.polycss-scene [data-csspipes-face] {
+  backface-visibility: visible;
+}
+
+@media (max-width: 360px) {
+  .site-header {
+    padding-inline: 12px;
+  }
+
+}

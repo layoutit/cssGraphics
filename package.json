@@ -34,12 +34,16 @@
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "dev:3dpipes": "vite --config src/adapters/3dpipes/vite.config.mjs --host 127.0.0.1",
     "build": "pnpm build:site && pnpm build:lib",
     "build:site": "vite build",
     "build:lib": "vite build --mode library && node scripts/build-cli.mjs",
+    "build:3dpipes": "vite build --config src/adapters/3dpipes/vite.config.mjs",
+    "build:3dpipes:full": "pnpm prepare:3dpipes && pnpm build:3dpipes",
     "prepack": "pnpm build:lib",
     "preview": "vite preview --host 127.0.0.1",
     "prepare:super-mario-64": "pnpm build:lib && node scripts/prepare/super-mario-64.mjs",
+    "prepare:3dpipes": "node src/adapters/3dpipes/tools/prepare-csspipes.mjs",
     "prepare:catalog": "pnpm build:lib && node scripts/prepare/catalog.mjs",
     "prepare:site-models": "node scripts/prepare/site-models.mjs",
     "prepare:site-previews": "pnpm prepare:site-models && node scripts/prepare/site-previews.mjs",
@@ -47,8 +51,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@layoutit/polycss": "0.2.10",
-    "@layoutit/polycss-morph": "0.2.10",
+    "@layoutit/polycss": "0.2.11",
+    "@layoutit/polycss-morph": "0.2.11",
     "prismjs": "1.30.0"
   },
   "devDependencies": {
@@ -56,6 +60,7 @@
     "@types/node": "^24.10.0",
     "@types/prismjs": "1.26.5",
     "playwright": "1.60.0",
+    "pngjs": "7.0.0",
     "sharp": "0.35.3",
     "typescript": "5.9.3",
     "vite": "7.3.1"

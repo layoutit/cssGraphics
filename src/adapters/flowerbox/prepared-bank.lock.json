@@ -1,0 +1,30 @@
+{
+  "schema": "cssflower-prepared-bank-lock@3",
+  "tag": "cssflower-product-rounded-q60-v1",
+  "asset": "cssflower-product-rounded-q60-v1.tar.gz",
+  "url": "https://github.com/layoutit/cssGraphics/releases/download/cssflower-product-rounded-q60-v1/cssflower-product-rounded-q60-v1.tar.gz",
+  "archiveByteLength": 5312404,
+  "archiveSha256": "8ad850187c297ab8f1671a29f656f4eb098d8370219183e4b37f9e6c4b1fe9e5",
+  "productClosureBytes": 5324102,
+  "productClosureSha256": "f7e8f9144b859fc34ccbc74a980e07180154ece23eb0783f85f92d6470655b83",
+  "productFileCount": 7,
+  "productDescriptorByteLength": 1886,
+  "productDescriptorSha256": "2418737362c5c50f2f245dabef45571b002fc279ca165863e352d2f91d517758",
+  "retainedTriangleLeafCount": 1200,
+  "retainedRotationRootCount": 1,
+  "timelineStateCount": 360,
+  "geometryStateCount": 46,
+  "retainedSourceOracleTimelineStateCount": 9331,
+  "transformBlockCount": 3,
+  "transformAssetBytes": 1347149,
+  "lightingAssetCount": 1,
+  "lightingAssetBytes": 3848891,
+  "lightingQuality": 60,
+  "visibilityMinimumOwnedPixels": 8,
+  "publicBoundary": {
+    "microsoftSourceIncluded": false,
+    "microsoftBinaryIncluded": false,
+    "nativeCaptureIncluded": false,
+    "oraclePacketIncluded": false
+  }
+}

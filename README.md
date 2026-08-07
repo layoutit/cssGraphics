@@ -32,6 +32,21 @@ pnpm build:3dpipes:full
 pnpm dev:3dpipes
 ```
 
+### Flower Box
+
+[`src/adapters/flowerbox`](src/adapters/flowerbox) is an independent PolyCSS
+reconstruction of the classic Flower Box. Its rounded prepared cycle uses
+1,200 stable retained triangle leaves, prepared Morph transforms, and a
+hash-bound q60 space-texel lighting atlas.
+
+```sh
+pnpm prepare:flowerbox:artifact
+pnpm build:flowerbox
+pnpm dev:flowerbox
+```
+
+Microsoft source, binaries, captures, and oracle packets are not included.
+
 ### Gears
 
 [`src/adapters/gears`](src/adapters/gears) is a source-backed PolyCSS port of

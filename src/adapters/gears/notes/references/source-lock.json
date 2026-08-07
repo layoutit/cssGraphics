@@ -1,0 +1,155 @@
+{
+  "schema": "polycss-reference-lock@1",
+  "project": "cssGears",
+  "target": {
+    "family": "XScreenSaver",
+    "hack": "gears",
+    "description": "Interlocking involute gear systems"
+  },
+  "repository": {
+    "url": "https://github.com/Zygo/xscreensaver",
+    "role": "read-only mirror",
+    "commit": "906693799e4fb7581436590cf84ecb2d3c9186ba"
+  },
+  "references": [
+    {
+      "path": "hacks/glx/gears.c",
+      "sha256": "4e8b8b1c14e99e81a517ffa2f1f3b1d7cec81d030bd0d90da9310f809af892ea",
+      "role": "assembly placement phase camera lighting and animation authority",
+      "firstSlice": "formula authority"
+    },
+    {
+      "path": "hacks/glx/involute.c",
+      "sha256": "e222834bb9f8d39f798431f7fdae78f0d8b5518c68ec829aea23381f6f077681",
+      "role": "involute geometry call authority",
+      "firstSlice": "compiled into ignored headless prepare helper"
+    },
+    {
+      "path": "hacks/glx/involute.h",
+      "sha256": "05887f7a056bb826f8ec5b556f7aad8c0a385beb3327fe6eee722e53617a71a8",
+      "role": "gear structure and geometry API",
+      "firstSlice": "compiled into ignored headless prepare helper"
+    },
+    {
+      "path": "hacks/glx/normals.c",
+      "sha256": "41eed1f27325f188c59a495d2205ac71ccccd3d9c0202ad5b22b73319348c5ee",
+      "role": "involute normal helper",
+      "firstSlice": "compiled into ignored headless prepare helper"
+    },
+    {
+      "path": "hacks/glx/normals.h",
+      "sha256": "97c977957733602936627fcf9a22407b40d5a45b239fe469ce03439d1f88d1a6",
+      "role": "normal helper API",
+      "firstSlice": "compiled into ignored headless prepare helper"
+    },
+    {
+      "path": "hacks/glx/rotator.c",
+      "sha256": "0e63d9a6fedcdef751c07c081dfe1141600fff1631c3fcf1eac45d2b52084abc",
+      "role": "initial scene rotation authority",
+      "firstSlice": "compiled into ignored seeded native capture helper"
+    },
+    {
+      "path": "hacks/glx/rotator.h",
+      "sha256": "0df63fa719e76abfd73fb314012edde19a0ec92700b7f83b6ffef547d89f8006",
+      "role": "rotator API",
+      "firstSlice": "compiled into ignored seeded native capture helper"
+    },
+    {
+      "path": "utils/yarandom.c",
+      "sha256": "32967bcf84b46a60968723d6d3d86d1d69d9f30a52b36dddfdedaa3ee3e4c931",
+      "role": "XScreenSaver deterministic random sequence authority",
+      "firstSlice": "compiled and initialized with seed 26080601"
+    },
+    {
+      "path": "utils/yarandom.h",
+      "sha256": "958707f757cd273579290830a0546215b61db5e11110cf46656333c51002269b",
+      "role": "XScreenSaver random and frand API",
+      "firstSlice": "compiled into ignored seeded native capture helper"
+    },
+    {
+      "path": "hacks/glx/tube.h",
+      "sha256": "dd70f0b9669d75890595255a64bd51e97fc264d1c1af5f099c18eb0733eb0317",
+      "role": "planetary armature declaration closure",
+      "firstSlice": "compiled declaration only; selected seed rejects the planetary path"
+    },
+    {
+      "path": "hacks/glx/gltrackball.h",
+      "sha256": "6d74d4e6d5eb831de0a7531b87aeaf2e2d052b819ef782b99cd201751514dc4b",
+      "role": "trackball declaration closure",
+      "firstSlice": "identity no-input implementation in the headless harness"
+    },
+    {
+      "path": "hacks/glx/quaternion.h",
+      "sha256": "bcd01e64dbc58a47bfc3214e55b095a5915fe249a8d71ffde5e09bbf52647522",
+      "role": "trackball quaternion declaration closure",
+      "firstSlice": "identity no-input implementation in the headless harness"
+    },
+    {
+      "path": "hacks/config/gears.xml",
+      "sha256": "c228764d64b0b60ed05e6130bf40536518d885d141233cc3283fe65ed569291a",
+      "role": "configuration surface",
+      "firstSlice": "identity reference only"
+    },
+    {
+      "path": "hacks/glx/gears.man",
+      "sha256": "185559ae61f81623787bd6acdfc709bc22e194dad01e9cd5fbcc7a7d836d0b75",
+      "role": "manual and behavior description",
+      "firstSlice": "identity reference only"
+    }
+  ],
+  "dependencyClosure": {
+    "status": "seeded-nonplanetary-native-capture-qualified",
+    "firstSliceFiles": [
+      "hacks/glx/gears.c",
+      "hacks/glx/involute.c",
+      "hacks/glx/involute.h",
+      "hacks/glx/normals.c",
+      "hacks/glx/normals.h",
+      "hacks/glx/rotator.c",
+      "hacks/glx/rotator.h",
+      "utils/yarandom.c",
+      "utils/yarandom.h",
+      "hacks/glx/tube.h",
+      "hacks/glx/gltrackball.h",
+      "hacks/glx/quaternion.h"
+    ],
+    "remainingFullHackClosure": {
+      "status": "pending",
+      "files": [
+        "hacks/glx/xlockmore.h",
+        "hacks/glx/tube.c",
+        "hacks/glx/gltrackball.c"
+      ],
+      "reason": "The exact seeded non-planetary no-spin/no-wander frame is qualified through the source-native CGL harness. Planetary rendering, live rotator motion, trackball events, and the full XScreenSaver executable remain outside this slice."
+    }
+  },
+  "rights": {
+    "status": "qualified-for-seeded-native-first-slice",
+    "evidence": "Each pinned source file compiled or declaration-referenced by the seeded native first slice contains a permission-to-use-copy-modify-distribute notice and warranty disclaimer.",
+    "redistribution": "No upstream source file or native binary is bundled; browser-safe generated results remain ignored locally.",
+    "limit": "The full XScreenSaver executable closure, planetary path, and interactive trackball path are not yet qualified."
+  },
+  "nativeOracle": {
+    "schema": "cssgears-native-reference-capture@1",
+    "seed": 26080601,
+    "configuration": {
+      "count": 0,
+      "speed": 1,
+      "spin": false,
+      "wander": false,
+      "wireframe": false,
+      "trackball": "identity-no-input"
+    },
+    "viewport": {
+      "width": 720,
+      "height": 720
+    },
+    "gearCount": 3,
+    "polygonCount": 2130,
+    "stateSha256": "0a07f320ac51c30d2ad234cde426abf4eec2c3eb70f59f1433d4148b0d1e7a02",
+    "frameSha256": "9334bae56221a49cb48d008a3fa129e64d45163b112b1463474aa7dc21f77057",
+    "frameHashScope": "macOS CGL legacy fixed-function OpenGL on the verified workstation",
+    "qualification": "seeded non-planetary source-native state and frame; browser visual comparison remains INVALID"
+  },
+  "verifiedAt": "2026-08-06"
+}

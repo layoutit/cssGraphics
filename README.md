@@ -40,7 +40,8 @@ distinct non-crossing viewport edges, lock, rotate for 15 seconds, and leave
 before a shuffled, non-repeating prepared assembly takes over. The browser
 retains three gear roots and does not build geometry, lighting, ratios, phase,
 camera state, or DOM at runtime. A prepared portrait profile is selected below
-600px.
+600px. Gzip-prepared scene and snapshot files load selected-first, then fill a
+four-request cached background queue for seamless later transitions.
 
 ```sh
 pnpm prepare:gears:artifact

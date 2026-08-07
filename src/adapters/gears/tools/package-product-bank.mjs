@@ -2,6 +2,7 @@
 
 import { copyFile, mkdir, readFile, rm, rename } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { gunzipSync } from "node:zlib";
 import {
   inspectCssgearsProductBank,
   writeCssgearsProductBankDescriptor,
@@ -38,7 +39,9 @@ async function copyProductClosure(source, target) {
   for (const scene of manifest.scenes ?? []) {
     paths.add(productPath(scene.sceneUrl));
     paths.add(productPath(scene.snapshotUrl));
-    const payload = JSON.parse(await readFile(join(source, productPath(scene.sceneUrl)), "utf8"));
+    const payload = JSON.parse(gunzipSync(
+      await readFile(join(source, productPath(scene.sceneUrl))),
+    ).toString("utf8"));
     paths.add(productPath(payload.lighting?.assetUrl));
   }
   for (const path of paths) {

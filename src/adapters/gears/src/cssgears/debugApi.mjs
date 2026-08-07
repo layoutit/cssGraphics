@@ -1,6 +1,7 @@
 export function installCssgearsDebugApi(state) {
   const api = {
     get ready() { return state.ready; },
+    get bankLoading() { return state.bankLoading; },
     get manifest() { return state.manifest; },
     get scene() { return state.sceneData; },
     get route() { return state.route; },

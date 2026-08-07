@@ -37,7 +37,11 @@ try {
       if (message.type() === "error") pageErrors.push(message.text());
     });
     await page.goto("http://127.0.0.1:" + port + "/", { waitUntil: "networkidle" });
-    await page.waitForFunction(() => document.body.matches(".ready,.error"), null, { timeout: 20_000 });
+    await page.waitForFunction(
+      () => document.body.classList.contains("error") || window.__cssGearsDebug?.ready,
+      null,
+      { timeout: 30_000 },
+    );
     const segment = await page.evaluate(() => {
       const api = window.__cssGearsDebug;
       if (!api?.ready) return null;
@@ -121,7 +125,8 @@ try {
     }, null, 2) + "\n");
     if (!state.debugReady) throw new Error("Missing window.__cssGearsDebug.");
     if (state.status === "ready" && (
-      state.stats?.schema !== "cssgears-prepared-player-stats@14" ||
+      state.stats?.schema !== "cssgears-prepared-player-stats@15" ||
+      state.stats?.loadedPreparedBankCount !== 24 ||
       state.stats?.runtimeSchedulerTransport !== "deadline-setTimeout-requestAnimationFrame-prepared-publication" ||
       state.stats?.runtimeSchedulerNoopCallbackCount !== 0 ||
       state.stats?.runtimeSchedulerCallbackCount !== state.stats?.runtimeSchedulerStateTransitions ||

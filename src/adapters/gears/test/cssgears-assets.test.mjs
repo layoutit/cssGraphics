@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
+import { gunzipSync } from "node:zlib";
 import { PNG } from "pngjs";
 import { CSSGEARS_PREPARED_BANK } from "../src/prepare/cssgears/prepare.mjs";
 
@@ -16,7 +17,7 @@ if (!existsSync(manifestPath)) {
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
     const expectedIds = CSSGEARS_PREPARED_BANK.map((entry) => entry.id);
     const expectedSeeds = CSSGEARS_PREPARED_BANK.map((entry) => entry.seed);
-    assert.equal(manifest.schema, "cssgears-manifest@3");
+    assert.equal(manifest.schema, "cssgears-manifest@4");
     assert.equal(manifest.status, "ready");
     assert.match(manifest.generatedAssetRoot, /^\/cssgears\//u);
     assert.deepEqual(manifest.scenes.map((scene) => scene.id), expectedIds);
@@ -61,6 +62,13 @@ if (!existsSync(manifestPath)) {
     assert.equal(manifest.metrics.runtimeGeometryConstructionCount, 0);
     assert.equal(manifest.metrics.runtimeCameraCalculationCount, 0);
     assert.equal(manifest.metrics.runtimeDomGrowth, false);
+    assert.deepEqual(manifest.transport, {
+      schema: "cssgears-prepared-transport@1",
+      encoding: "gzip",
+      startup: "selected-scene-and-snapshot-first",
+      bankPreload: "four-request-background-cache",
+      runtimeArchiveDownload: false,
+    });
     assert.doesNotMatch(JSON.stringify(manifest), /\/Users\/|\\\\Users\\\\|file:\/\//u);
 
     for (const scene of manifest.scenes) assertPreparedScene(scene);
@@ -76,8 +84,11 @@ if (!existsSync(manifestPath)) {
 }
 
 function assertPreparedScene(entry) {
-  assert.match(entry.sceneUrl, /^\/cssgears\/scenes\/.+\.json$/u);
-  assert.match(entry.snapshotUrl, /^\/cssgears\/scenes\/.+\.polycss\.html$/u);
+  assert.match(entry.sceneUrl, /^\/cssgears\/scenes\/.+\.json\.gz$/u);
+  assert.match(entry.snapshotUrl, /^\/cssgears\/scenes\/.+\.polycss\.html\.gz$/u);
+  assert.equal(entry.sceneEncoding, "gzip");
+  assert.equal(entry.snapshotEncoding, "gzip");
+  assert.equal(entry.lighting.schema, "cssgears-prepared-lighting-descriptor@1");
   assert.equal(entry.sourceProfileId, `xscreensaver-gears-native-seed-${entry.nativeSeed}-v1`);
   assert.equal(entry.metrics.sourceGearCount, 3);
   assert.equal(entry.metrics.preparedGearRootCount, 3);
@@ -90,7 +101,7 @@ function assertPreparedScene(entry) {
 
   const snapshotPath = join(generatedRoot, entry.snapshotUrl.replace(/^\/cssgears\//u, ""));
   assert.ok(existsSync(snapshotPath), "missing prepared snapshot " + snapshotPath);
-  const snapshot = readFileSync(snapshotPath, "utf8");
+  const snapshot = gunzipSync(readFileSync(snapshotPath)).toString("utf8");
   assert.match(snapshot, /polycss-scene/u);
   assert.equal((snapshot.match(/class="g"/gu) ?? []).length, 3);
   assert.equal((snapshot.match(/class="d"/gu) ?? []).length, 0);
@@ -105,7 +116,7 @@ function assertPreparedScene(entry) {
   assert.doesNotMatch(snapshot, /backface-visibility:visible/u);
 
   const scenePath = join(generatedRoot, entry.sceneUrl.replace(/^\/cssgears\//u, ""));
-  const sceneData = JSON.parse(readFileSync(scenePath, "utf8"));
+  const sceneData = JSON.parse(gunzipSync(readFileSync(scenePath)).toString("utf8"));
   assert.equal(sceneData.id, entry.id);
   assert.equal(sceneData.sourceProfile.seed, entry.nativeSeed);
   assert.equal(sceneData.sourceProfile.schema, "cssgears-source-profile@3");
@@ -236,10 +247,11 @@ function assertPreparedScene(entry) {
 }
 
 function assertPreparedShowreelBank(manifest) {
-  assert.equal(manifest.showreel.snapshotUrl, "/cssgears/scenes/bank.showreel.polycss.html");
+  assert.equal(manifest.showreel.snapshotUrl, "/cssgears/scenes/bank.showreel.polycss.html.gz");
+  assert.equal(manifest.showreel.snapshotEncoding, "gzip");
   const snapshotPath = join(generatedRoot, manifest.showreel.snapshotUrl.replace(/^\/cssgears\//u, ""));
   assert.ok(existsSync(snapshotPath), "missing prepared showreel snapshot " + snapshotPath);
-  const snapshot = readFileSync(snapshotPath, "utf8");
+  const snapshot = gunzipSync(readFileSync(snapshotPath)).toString("utf8");
   assert.equal((snapshot.match(/class="g a"/gu) ?? []).length, 3);
   for (let index = 0; index < manifest.scenes.length; index += 1) {
     const token = manifest.showreel.sceneTokens[index].token;

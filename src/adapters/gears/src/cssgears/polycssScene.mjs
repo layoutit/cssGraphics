@@ -24,8 +24,9 @@ export function mountPreparedPolycssSnapshot({
   }
   if (sceneBank.length !== lightingAssets.length || sceneBank.length !== bankTokens.length ||
       sceneBank.length < 1 || sceneBank.length > 24 ||
-      lightingAssets.some((asset, index) =>
-        asset?.sha256 !== sceneBank[index].lighting?.assetSha256 || typeof asset.url !== "string") ||
+      lightingAssets.some((asset, index) => asset &&
+        (asset.sha256 !== sceneBank[index].lighting?.assetSha256 || typeof asset.url !== "string")) ||
+      sceneBank.some((entry) => entry?.lighting?.schema !== "cssgears-prepared-lighting-descriptor@1") ||
       (sceneBank.length > 1 && bankTokens.some((token) =>
         !/^[a-z]$/u.test(token) || token === "d" || token === "g"))) {
     throw new Error("Prepared cssGears lighting asset is missing or unverified");
@@ -111,8 +112,11 @@ export function mountPreparedPolycssSnapshot({
         preparedMergedSourceFaceCount: sceneData.metrics.mergedSourceFaceCount,
         preparedSourceFaceCoverageExact: sceneData.metrics.sourceFaceCoverageExact,
         preparedLightingAtlasUniqueUrlCount: lightingAssets.length,
-        preparedLightingAssetSha256: lightingAssets.map((asset) => asset.sha256).join(","),
-        preparedLightingAssetBytes: lightingAssets.reduce((total, asset) => total + asset.byteLength, 0),
+        preparedLightingAssetSha256: sceneBank.map((entry) => entry.lighting.assetSha256).join(","),
+        preparedLightingAssetBytes: sceneBank.reduce(
+          (total, entry) => total + entry.lighting.assetByteLength,
+          0,
+        ),
         runtimeDomCreationCount,
         runtimeDomRemovalCount,
         runtimeDomMutationCount: runtimeDomCreationCount + runtimeDomRemovalCount,

@@ -11,6 +11,11 @@ immediate repeat. Runtime publishes prepared gear-root transforms and three
 short bank classes over stable DOM. Geometry, ratios, phase, camera, lighting,
 edge selection, interpolation, and DOM growth remain prepare-time work.
 
+Prepared scenes and snapshots are gzip-bound files. Startup fetches the chosen
+scene and retained snapshot first, begins playback, then fills the remaining
+bank through a four-request cached background queue. A static loading mark is
+shown during the initial fetch; the model path still uses no CSS keyframes.
+
 Below 600px the runtime selects each scene's prepared portrait orientation and
 uses the cssPipes cover presentation. It does not calculate an orientation.
 

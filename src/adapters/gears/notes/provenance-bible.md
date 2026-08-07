@@ -23,6 +23,11 @@ paths before the product bank is written. One snapshot retains 35,710 leaves,
 three stable gear roots, and one active scene at a time. Hidden scene leaves
 are not painted; bank switches write only the three short root classes.
 
+The browser fetches a gzip-prepared selected scene and snapshot first, then
+preloads the remaining bank through a four-request cache. If an unusually slow
+connection reaches a bank boundary before its entry is ready, playback waits
+at that boundary; it does not generate a fallback scene or add per-frame work.
+
 Preparation also maps every scene into a right-facing product envelope with
 source-derived pitch from 16–32 degrees and yaw from 22–38 degrees, then bakes
 lighting for that exact view. Below 600px, runtime selects the scene's prepared
@@ -56,7 +61,8 @@ authored code output and browser-safe prepared results only.
 The product archive is published separately and bound by byte length, SHA-256,
 unpacked closure hash, descriptor hash, scene counts, retained-root counts, and
 timeline counts. Deployment downloads and verifies it before unpacking static
-files; the browser never downloads the archive.
+files; the browser never downloads the archive. The static scene/snapshot
+closure is 7,923,741 bytes, down from 40,352,823 uncompressed transport bytes.
 
 ## Proven and pending
 

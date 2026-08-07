@@ -1,13 +1,16 @@
 import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
+import { gunzipSync } from "node:zlib";
 
-export const CSSGEARS_PRODUCT_BANK_SCHEMA = "cssgears-product-bank@2";
+export const CSSGEARS_PRODUCT_BANK_SCHEMA = "cssgears-product-bank@3";
 
 export async function inspectCssgearsProductBank(root, { verifyDescriptor = true } = {}) {
   const manifestBytes = await readFile(join(root, "manifest.json"));
   const manifest = JSON.parse(manifestBytes.toString("utf8"));
-  assert(manifest.schema === "cssgears-manifest@3" && manifest.status === "ready", "manifest contract");
+  assert(manifest.schema === "cssgears-manifest@4" && manifest.status === "ready" &&
+    manifest.transport?.schema === "cssgears-prepared-transport@1" &&
+    manifest.transport?.encoding === "gzip", "manifest contract");
   assert(manifest.scenes?.length === 24 && manifest.showreel?.retainedSceneBankCount === 24,
     "prepared bank size");
   assert(manifest.preparedBank?.runtimeGeometryConstruction === false &&
@@ -29,7 +32,8 @@ export async function inspectCssgearsProductBank(root, { verifyDescriptor = true
     expectedFiles.add(scenePath);
     expectedFiles.add(snapshotPath);
 
-    const sceneBytes = await readFile(join(root, scenePath));
+    const storedSceneBytes = await readFile(join(root, scenePath));
+    const sceneBytes = gunzipSync(storedSceneBytes);
     const scene = JSON.parse(sceneBytes.toString("utf8"));
     assert(scene.id === entry.id && scene.sourceProfile?.seed === entry.nativeSeed, `scene ${entry.id} identity`);
     assert(scene.meshes === undefined && scene.meshDescriptors?.length === 3, `scene ${entry.id} product payload`);
@@ -67,7 +71,7 @@ export async function inspectCssgearsProductBank(root, { verifyDescriptor = true
     const lightingBytes = await readFile(join(root, lightingPath));
     assert(sha256(lightingBytes) === scene.lighting.assetSha256, `scene ${entry.id} lighting identity`);
 
-    const snapshot = await readFile(join(root, snapshotPath), "utf8");
+    const snapshot = gunzipSync(await readFile(join(root, snapshotPath))).toString("utf8");
     assert(count(snapshot, /class="g"/gu) === 3 &&
       count(snapshot, /<b\b/gu) === scene.metrics.preparedLeafCount &&
       count(snapshot, /<div\b/gu) === 5,
@@ -82,7 +86,7 @@ export async function inspectCssgearsProductBank(root, { verifyDescriptor = true
 
   const bankSnapshotPath = productPath(manifest.showreel.snapshotUrl);
   expectedFiles.add(bankSnapshotPath);
-  const bankSnapshot = await readFile(join(root, bankSnapshotPath), "utf8");
+  const bankSnapshot = gunzipSync(await readFile(join(root, bankSnapshotPath))).toString("utf8");
   assert(count(bankSnapshot, /class="g a"/gu) === 3 &&
     count(bankSnapshot, /<b\b/gu) === manifest.showreel.retainedLeafCount &&
     count(bankSnapshot, /<div\b/gu) === 5,
@@ -151,6 +155,9 @@ export async function writeCssgearsProductBankDescriptor(root, summary) {
       archiveFormat: "tar+gzip",
       runtimeDownloadsArchive: false,
       deployUnpacksStaticFiles: true,
+      preparedAssetEncoding: "gzip",
+      startupFetch: "selected-scene-and-snapshot-first",
+      backgroundBankPreloadConcurrency: 4,
     },
     publicBoundary: {
       xscreensaverSourceIncluded: false,

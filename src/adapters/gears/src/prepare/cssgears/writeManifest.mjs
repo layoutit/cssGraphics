@@ -3,7 +3,6 @@ import { dirname, join } from "node:path";
 import {
   generatedPublicRoot,
   generatedScenePath,
-  generatedSceneUrl,
   manifestPath,
 } from "./paths.mjs";
 import { assertNoBrowserPathLeaks } from "./provenance.mjs";
@@ -25,7 +24,7 @@ export async function writeCssgearsPreparedOutput({
   await mkdir(generatedPublicRoot, { recursive: true });
   const manifestScenes = [];
   for (const scene of scenes) {
-    await writePreparedLightingAsset(scene.lighting);
+    const lighting = await writePreparedLightingAsset(scene.lighting);
     await writeJsonAtomic(generatedScenePath(scene.id), scene);
     const snapshot = snapshotEntryForScene(scene);
     manifestScenes.push({
@@ -33,8 +32,10 @@ export async function writeCssgearsPreparedOutput({
       label: scene.label,
       nativeSeed: scene.sourceProfile?.seed,
       sourceProfileId: scene.sourceProfile?.id,
-      sceneUrl: generatedSceneUrl(scene.id),
+      sceneUrl: `/cssgears/scenes/${scene.id}.json.gz`,
+      sceneEncoding: "gzip",
       ...snapshot,
+      lighting,
       metrics: scene.metrics ?? {},
       oracle: scene.oracle ?? {},
       warnings: scene.warnings ?? [],
@@ -59,7 +60,7 @@ export async function writeCssgearsPreparedOutput({
   const retainedLeafCount = leafCounts.reduce((total, count) => total + count, 0);
   const showreelEnabled = scenes.length > 1;
   const manifest = {
-    schema: "cssgears-manifest@3",
+    schema: "cssgears-manifest@4",
     status: "ready",
     title,
     artifactMode: "prepared-polycss-snapshot",
@@ -73,7 +74,8 @@ export async function writeCssgearsPreparedOutput({
       enabledOnRootRoute: showreelEnabled,
       endless: showreelEnabled,
       selection: "crypto-random-shuffled-bag-no-immediate-repeat",
-      snapshotUrl: showreelEnabled ? "/cssgears/scenes/bank.showreel.polycss.html" : null,
+      snapshotUrl: showreelEnabled ? "/cssgears/scenes/bank.showreel.polycss.html.gz" : null,
+      snapshotEncoding: showreelEnabled ? "gzip" : null,
       sceneTokens: bankTokens,
       retainedLeafCount,
       retainedSceneBankCount: scenes.length,
@@ -112,6 +114,13 @@ export async function writeCssgearsPreparedOutput({
       defaultScene: scenes[0].oracle,
     },
     warnings,
+    transport: {
+      schema: "cssgears-prepared-transport@1",
+      encoding: "gzip",
+      startup: "selected-scene-and-snapshot-first",
+      bankPreload: "four-request-background-cache",
+      runtimeArchiveDownload: false,
+    },
     runtime: {
       debugApi,
       routeContract: "/ starts one random prepared scene and shuffles the full retained bank; ?scene=<scene-id> pins one source segment",
@@ -137,19 +146,33 @@ async function writePreparedLightingAsset(lighting) {
   const temporary = `${assetPath}.tmp`;
   await writeFile(temporary, bytes);
   await rename(temporary, assetPath);
+  return Object.freeze({
+    schema: "cssgears-prepared-lighting-descriptor@1",
+    assetUrl: lighting.assetUrl,
+    assetSha256: lighting.assetSha256,
+    assetByteLength: bytes.length,
+    width: lighting.width,
+    height: lighting.height,
+    atlasStateCount: lighting.atlasStateCount,
+    sourceStateCount: lighting.sourceStateCount,
+    faceCount: lighting.faceCount,
+    decodedBytes: lighting.decodedBytes,
+  });
 }
 
 function snapshotEntryForScene(scene) {
   if (scene.snapshotUrl) {
     return {
       snapshotUrl: scene.snapshotUrl,
+      snapshotEncoding: "gzip",
       snapshotKind: scene.snapshotKind ?? "polycss-exported-html",
       artifactKind: "prepared-polycss-snapshot",
     };
   }
   if ("prepared-polycss-snapshot" !== "prepared-polycss-snapshot") return {};
   return {
-    snapshotUrl: "/cssgears/scenes/" + scene.id + ".polycss.html",
+    snapshotUrl: "/cssgears/scenes/" + scene.id + ".polycss.html.gz",
+    snapshotEncoding: "gzip",
     snapshotKind: "polycss-exported-html",
     artifactKind: "prepared-polycss-snapshot",
   };

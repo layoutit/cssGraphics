@@ -13,27 +13,33 @@ export async function createCssgearsPreparedPlayer(options) {
   const playbacks = [...(options.playbacks ?? [options.playback])];
   const lightings = [...(options.lightings ?? [options.lighting])];
   const bankTokens = [...(options.bankTokens ?? playbacks.map(() => null))];
+  const lightingContracts = [...(options.lightingContracts ?? lightings)];
   const gearRoots = [...options.gearRoots];
   if (playbacks.length !== lightings.length || playbacks.length !== bankTokens.length ||
+      playbacks.length !== lightingContracts.length ||
       playbacks.length < 1 || playbacks.length > 24 ||
       (playbacks.length > 1 && bankTokens.some((token) =>
         !/^[a-z]$/u.test(token) || token === "d" || token === "g"))) {
     throw new Error("Prepared cssGears player requires one source segment or one retained showreel bank");
   }
   for (let index = 0; index < playbacks.length; index += 1) {
-    validatePlayback(playbacks[index], lightings[index], modelRoot, gearRoots);
+    if (Boolean(playbacks[index]) !== Boolean(lightings[index])) {
+      throw new Error(`Prepared cssGears bank ${index} is only partially loaded`);
+    }
+    if (playbacks[index]) validatePlayback(playbacks[index], lightings[index], modelRoot, gearRoots);
   }
   const requestFrame = options.requestFrame ?? globalThis.requestAnimationFrame.bind(globalThis);
   const cancelFrame = options.cancelFrame ?? globalThis.cancelAnimationFrame.bind(globalThis);
   const requestDelay = options.requestDelay ?? globalThis.setTimeout.bind(globalThis);
   const cancelDelay = options.cancelDelay ?? globalThis.clearTimeout.bind(globalThis);
   const readNow = options.readNow ?? globalThis.performance.now.bind(globalThis.performance);
-  const frameMilliseconds = playbacks[0].sourceFrameDelayMilliseconds;
-  const schedulerLeadMilliseconds = Math.min(4, frameMilliseconds / 4);
   const initialBankIndex = Number(options.initialBankIndex ?? 0);
-  if (!Number.isSafeInteger(initialBankIndex) || initialBankIndex < 0 || initialBankIndex >= playbacks.length) {
+  if (!Number.isSafeInteger(initialBankIndex) || initialBankIndex < 0 || initialBankIndex >= playbacks.length ||
+      !playbacks[initialBankIndex]) {
     throw new RangeError("Prepared cssGears initial bank index is invalid");
   }
+  const frameMilliseconds = playbacks[initialBankIndex].sourceFrameDelayMilliseconds;
+  const schedulerLeadMilliseconds = Math.min(4, frameMilliseconds / 4);
   const randomUint32 = options.randomUint32 ?? cryptoRandomUint32;
   let activeBankIndex = initialBankIndex;
   let playback = playbacks[activeBankIndex];
@@ -67,6 +73,10 @@ export async function createCssgearsPreparedPlayer(options) {
   let startupRootClassWrites = 0;
   let randomSelectionCount = 0;
   let shuffleBag = [];
+  let loadedBankCount = playbacks.filter(Boolean).length;
+  let pendingBankIndex = null;
+  let pendingBankPromise = null;
+  let runtimeBankWaitCount = 0;
 
   const target = createPolyMorphPreparedDomTarget({
     model: {
@@ -103,6 +113,17 @@ export async function createCssgearsPreparedPlayer(options) {
     publishShapes();
     bankSwitchCount += 1;
     options.onBankChange?.(activeBankIndex);
+  }
+
+  function installBank(nextBankIndex, nextPlayback, nextLighting) {
+    if (!Number.isSafeInteger(nextBankIndex) || nextBankIndex < 0 || nextBankIndex >= playbacks.length) {
+      throw new RangeError("Prepared cssGears install bank index is invalid");
+    }
+    validatePlayback(nextPlayback, nextLighting, modelRoot, gearRoots);
+    if (!playbacks[nextBankIndex]) loadedBankCount += 1;
+    playbacks[nextBankIndex] = nextPlayback;
+    lightings[nextBankIndex] = nextLighting;
+    return loadedBankCount;
   }
 
   function nextBankIndex() {
@@ -148,12 +169,43 @@ export async function createCssgearsPreparedPlayer(options) {
   function advanceOne(publish) {
     if (globalTick >= playback.segmentEndState) {
       if (playbacks.length === 1) return globalTick;
-      activateBank(nextBankIndex());
+      const nextIndex = nextBankIndex();
+      if (!playbacks[nextIndex]) {
+        beginPendingBankSwitch(nextIndex);
+        return false;
+      }
+      activateBank(nextIndex);
       return globalTick;
     }
     applyLogicalRow(globalTick + 1);
     if (publish) publishShapes();
     return globalTick;
+  }
+
+  function beginPendingBankSwitch(nextIndex) {
+    if (pendingBankPromise) return pendingBankPromise;
+    const resumeAfterLoad = !paused;
+    paused = true;
+    nextFrameAt = null;
+    pendingBankIndex = nextIndex;
+    runtimeBankWaitCount += 1;
+    pendingBankPromise = Promise.resolve(options.loadBank?.(nextIndex)).then((entry) => {
+      if (!playbacks[nextIndex]) {
+        if (!entry?.playback || !entry?.lighting) {
+          throw new Error(`Prepared cssGears bank ${nextIndex} was not available at its transition`);
+        }
+        installBank(nextIndex, entry.playback, entry.lighting);
+      }
+      activateBank(nextIndex);
+      pendingBankIndex = null;
+      pendingBankPromise = null;
+      if (resumeAfterLoad) resumePlayback();
+    }).catch((error) => {
+      pendingBankIndex = null;
+      pendingBankPromise = null;
+      options.onError?.(error);
+    });
+    return pendingBankPromise;
   }
 
   function seek(targetTick) {
@@ -200,7 +252,7 @@ export async function createCssgearsPreparedPlayer(options) {
       schedulerNoopCallbackCount += 1;
       return;
     }
-    advanceOne(true);
+    if (advanceOne(true) === false) return;
     schedulerTransitions += 1;
     if (playbacks.length === 1 && globalTick >= playback.segmentEndState) {
       paused = true;
@@ -225,6 +277,14 @@ export async function createCssgearsPreparedPlayer(options) {
     }
   }
   publishShapes();
+  function resumePlayback() {
+    if (!paused || pendingBankPromise ||
+        (playbacks.length === 1 && globalTick >= playback.segmentEndState)) return globalTick;
+    paused = false;
+    nextFrameAt = readNow() + frameMilliseconds;
+    scheduleNextDraw();
+    return globalTick;
+  }
   return Object.freeze({
     get tick() { return globalTick; },
     get activeBankIndex() { return activeBankIndex; },
@@ -245,11 +305,7 @@ export async function createCssgearsPreparedPlayer(options) {
       return globalTick;
     },
     resume() {
-      if (!paused || (playbacks.length === 1 && globalTick >= playback.segmentEndState)) return globalTick;
-      paused = false;
-      nextFrameAt = readNow() + frameMilliseconds;
-      scheduleNextDraw();
-      return globalTick;
+      return resumePlayback();
     },
     step(count = 1) {
       this.pause();
@@ -266,10 +322,13 @@ export async function createCssgearsPreparedPlayer(options) {
       target.assertStableDomIdentity();
       return true;
     },
+    installBank(index, entry) {
+      return installBank(index, entry?.playback, entry?.lighting);
+    },
     stats() {
       target.assertStableDomIdentity();
       return Object.freeze({
-        schema: "cssgears-prepared-player-stats@14",
+        schema: "cssgears-prepared-player-stats@15",
         morphTarget: "@layoutit/polycss-morph#createPolyMorphPreparedDomTarget",
         morphAdopted: true,
         morphStableDomIdentity: true,
@@ -287,6 +346,9 @@ export async function createCssgearsPreparedPlayer(options) {
         preparedTimelineCloses: playback.closes,
         activeBankIndex,
         retainedSceneBankCount: playbacks.length,
+        loadedPreparedBankCount: loadedBankCount,
+        pendingPreparedBankIndex: pendingBankIndex,
+        runtimePreparedBankWaitCount: runtimeBankWaitCount,
         runtimePreparedBankSwitchCount: bankSwitchCount,
         runtimeRootClassWrites: rootClassWrites,
         startupRootClassWrites,
@@ -311,10 +373,10 @@ export async function createCssgearsPreparedPlayer(options) {
         runtimeLightingRowComparisons: 0,
         runtimeLightingRowWrites: 0,
         runtimeLightingPublicationCount: 0,
-        preparedLightingAtlasStateCount: lightings.reduce((total, entry) => total + entry.atlasStateCount, 0),
+        preparedLightingAtlasStateCount: lightingContracts.reduce((total, entry) => total + entry.atlasStateCount, 0),
         preparedLightingSourceStateCount: lighting.sourceStateCount,
-        preparedLightingAtlasFaceCount: lightings.reduce((total, entry) => total + entry.faceCount, 0),
-        preparedLightingAtlasDecodedBytes: lightings.reduce((total, entry) => total + entry.decodedBytes, 0),
+        preparedLightingAtlasFaceCount: lightingContracts.reduce((total, entry) => total + entry.faceCount, 0),
+        preparedLightingAtlasDecodedBytes: lightingContracts.reduce((total, entry) => total + entry.decodedBytes, 0),
         runtimeDatasetAttributeWrites: 0,
         mountStableDomIdentityChecks: 1,
         runtimeApplyStableDomIdentityChecks: 0,

@@ -114,7 +114,11 @@ try {
     if (response.status() >= 400) failedResponses.push({ status: response.status(), url: response.url() });
   });
   await page.goto(target.url, { waitUntil: "networkidle" });
-  await page.waitForFunction(() => document.body.matches(".ready,.error"), null, { timeout: 20_000 });
+  await page.waitForFunction(
+    () => document.body.classList.contains("error") || globalThis.__cssGearsDebug?.ready,
+    null,
+    { timeout: 30_000 },
+  );
   const initial = await page.evaluate(() => {
     const api = globalThis.__cssGearsDebug;
     if (!api?.ready) throw new Error(document.getElementById("status")?.textContent || "cssGears did not become ready");

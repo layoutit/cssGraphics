@@ -17,10 +17,12 @@ export function mountCssgearsClient() {
     manifest: null,
     sceneData: null,
     mount: null,
+    bankLoading: true,
     errors: [],
   };
 
   installCssgearsDebugApi(state);
+  setBodyState("loading");
 
   window.addEventListener("error", (event) => {
     recordError(state, event.message || String(event.error || "error"));
@@ -40,7 +42,7 @@ export function mountCssgearsClient() {
     const manifest = await loadPreparedManifest(route);
     state.manifest = manifest;
 
-    const { entry, entries, sceneData, scenes, bankTokens, snapshotHtml, selection } = await loadPreparedScene(manifest, route);
+    const { entry, entries, sceneData, sceneStore, bankTokens, snapshotHtml, selection } = await loadPreparedScene(manifest, route);
     state.route = Object.freeze({
       ...route,
       selectedScene: entry.id,
@@ -53,13 +55,16 @@ export function mountCssgearsClient() {
     });
     state.sceneData = sceneData;
 
-    const lightingAssets = await Promise.all(scenes.map((scene) => loadPreparedLightingAsset(scene.lighting)));
+    const scenes = Array(entries.length).fill(null);
+    const lightingAssets = Array(entries.length).fill(null);
+    scenes[selection.bankIndex] = sceneData;
+    lightingAssets[selection.bankIndex] = await loadPreparedLightingAsset(sceneData.lighting);
     const snapshot = mountPreparedPolycssSnapshot({
       host,
       sceneData,
-      sceneBank: scenes,
+      sceneBank: entries,
       snapshotHtml,
-      lightingAsset: lightingAssets[0],
+      lightingAsset: lightingAssets[selection.bankIndex],
       lightingAssets,
       bankTokens,
     });
@@ -69,13 +74,42 @@ export function mountCssgearsClient() {
       sceneData.camera.sourceViewport,
       sceneData.showreel.responsivePresentation,
     );
-    const player = await createCssgearsPreparedPlayer({
-      playbacks: route.scene ? [sceneData.playback] : scenes.map((scene) => scene.showreel),
-      lightings: scenes.map((scene) => scene.lighting),
+    let player;
+    const bankRequests = new Map();
+    const loadBank = (bankIndex) => {
+      let request = bankRequests.get(bankIndex);
+      if (!request) {
+        request = sceneStore.load(bankIndex).then(async (scene) => {
+          scenes[bankIndex] = scene;
+          if (!lightingAssets[bankIndex]) {
+            lightingAssets[bankIndex] = await loadPreparedLightingAsset(scene.lighting);
+          }
+          return Object.freeze({
+            scene,
+            playback: route.scene ? scene.playback : scene.showreel,
+            lighting: scene.lighting,
+          });
+        });
+        bankRequests.set(bankIndex, request);
+      }
+      return request;
+    };
+    const playbacks = entries.map((_, index) =>
+      index === selection.bankIndex ? (route.scene ? sceneData.playback : sceneData.showreel) : null);
+    const lightings = entries.map((_, index) =>
+      index === selection.bankIndex ? sceneData.lighting : null);
+    player = await createCssgearsPreparedPlayer({
+      playbacks,
+      lightings,
+      lightingContracts: entries.map((candidate) => candidate.lighting),
       bankTokens,
       initialBankIndex: selection.bankIndex,
       modelRoot: snapshot.modelRoot,
       gearRoots: snapshot.gearRoots,
+      loadBank,
+      onError(error) {
+        recordError(state, error instanceof Error ? error.stack || error.message : String(error));
+      },
       onBankChange(bankIndex) {
         state.sceneData = scenes[bankIndex];
         presentation.setScene(state.sceneData);
@@ -105,12 +139,30 @@ export function mountCssgearsClient() {
         presentation.destroy();
         player.destroy();
         snapshot.destroy();
-        for (const asset of lightingAssets) asset.destroy();
+        for (const asset of lightingAssets) asset?.destroy();
       },
     });
-    state.ready = true;
     setBodyState("ready");
     requestAnimationFrame(() => player.resume());
+    const unloadedIndices = entries.map((_, index) => index)
+      .filter((index) => index !== selection.bankIndex);
+    if (unloadedIndices.length === 0) {
+      state.bankLoading = false;
+      state.ready = true;
+      return;
+    }
+    sceneStore.preload(unloadedIndices, {
+      concurrency: 4,
+      async onLoad(_, bankIndex) {
+        const loaded = await loadBank(bankIndex);
+        player.installBank(bankIndex, loaded);
+      },
+    }).then(() => {
+      state.bankLoading = false;
+      state.ready = true;
+    }).catch((error) => {
+      recordError(state, error instanceof Error ? error.stack || error.message : String(error));
+    });
   }
 }
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import { mkdir, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
+import { gzipSync } from "node:zlib";
 import { createServer } from "node:net";
 import { dirname, join, resolve } from "node:path";
 import { chromium } from "playwright";
@@ -58,6 +59,7 @@ try {
       snapshots.push({ sceneId, snapshotPath: paths.snapshotPath, snapshotUrl: paths.snapshotUrl });
     }
     const showreelSnapshot = await buildShowreelBankSnapshot(page, manifest);
+    await publishCompressedRuntimeAssets(sceneIds);
     console.log(JSON.stringify({ snapshots, showreelSnapshot }, null, 2));
   } finally {
     await browser.close();
@@ -166,8 +168,26 @@ async function buildShowreelBankSnapshot(page, preparedManifest) {
   }
   const snapshotPath = join(generatedRoot, "public", showreel.snapshotUrl.replace(/^\//u, ""));
   await mkdir(dirname(snapshotPath), { recursive: true });
-  await writeFile(snapshotPath, html);
+  await writeFile(snapshotPath, gzipSync(Buffer.from(html), { level: 9 }));
   return { snapshotPath, snapshotUrl: showreel.snapshotUrl };
+}
+
+async function publishCompressedRuntimeAssets(sceneIds) {
+  for (const sceneId of sceneIds) {
+    const paths = scenePaths(sceneId);
+    const [sceneBytes, snapshotBytes] = await Promise.all([
+      readFile(paths.runtimeScenePath),
+      readFile(paths.snapshotPath),
+    ]);
+    await Promise.all([
+      writeFile(paths.compressedRuntimeScenePath, gzipSync(sceneBytes, { level: 9 })),
+      writeFile(paths.compressedSnapshotPath, gzipSync(snapshotBytes, { level: 9 })),
+    ]);
+    await Promise.all([
+      unlink(paths.runtimeScenePath),
+      unlink(paths.snapshotPath),
+    ]);
+  }
 }
 
 async function removeStaleShowreelSnapshots(preparedManifest) {
@@ -176,7 +196,8 @@ async function removeStaleShowreelSnapshots(preparedManifest) {
     .filter(Boolean)
     .map((url) => url.replace(/^\/cssgears\/scenes\//u, "")));
   for (const name of await readdir(scenesDirectory)) {
-    if (name.endsWith(".showreel.polycss.html") && !expected.has(name)) {
+    if ((name.endsWith(".showreel.polycss.html") || name.endsWith(".showreel.polycss.html.gz")) &&
+        !expected.has(name)) {
       await unlink(join(scenesDirectory, name));
     }
   }
@@ -203,8 +224,10 @@ function scenePaths(sceneId) {
   return Object.freeze({
     sceneUrl,
     snapshotPath: join(generatedPublicRoot, "scenes", sceneId + ".polycss.html"),
-    snapshotUrl: "/cssgears/scenes/" + sceneId + ".polycss.html",
+    snapshotUrl: "/cssgears/scenes/" + sceneId + ".polycss.html.gz",
+    compressedSnapshotPath: join(generatedPublicRoot, "scenes", sceneId + ".polycss.html.gz"),
     runtimeScenePath: join(generatedRoot, "public", sceneUrl.replace(/^\//, "")),
+    compressedRuntimeScenePath: join(generatedPublicRoot, "scenes", sceneId + ".json.gz"),
     preparedScenePath: join(generatedRoot, "private", "cssgears", "scenes", sceneId + ".prepared.json"),
   });
 }

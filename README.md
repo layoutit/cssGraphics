@@ -17,14 +17,6 @@ pnpm install
 pnpm dev
 ```
 
-To prepare Mario, place your own US `.z64` ROM under `.local/`:
-
-```sh
-pnpm prepare:super-mario-64 -- --rom .local/baserom.us.z64
-```
-
-Nintendo game data is not included.
-
 ## Adapters
 
 ### 3D Pipes
@@ -54,6 +46,26 @@ pnpm dev:flowerbox
 ```
 
 Microsoft source, binaries, captures, and oracle packets are not included.
+
+### Gears
+
+[`src/adapters/gears`](src/adapters/gears) is a source-backed PolyCSS port of
+XScreenSaver Gears. Twenty-four prepared three-gear assemblies enter from
+distinct non-crossing viewport edges, lock, rotate for 15 seconds, and leave
+before a shuffled, non-repeating prepared assembly takes over. The browser
+retains three gear roots and does not build geometry, lighting, ratios, phase,
+camera state, or DOM at runtime. A prepared portrait profile is selected below
+600px. Gzip-prepared scene and snapshot files load selected-first, then fill a
+four-request cached background queue for seamless later transitions.
+
+```sh
+pnpm prepare:gears:artifact
+pnpm build:gears
+pnpm dev:gears
+```
+
+The pinned XScreenSaver checkout, native binaries, captures, and generated
+browser assets are not committed.
 
 ## License
 

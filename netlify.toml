@@ -15,3 +15,13 @@
   for = "/cssflower/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/cssgears/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/cssgears/scenes/*.gz"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

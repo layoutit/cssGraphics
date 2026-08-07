@@ -32,6 +32,25 @@ pnpm build:3dpipes:full
 pnpm dev:3dpipes
 ```
 
+### Gears
+
+[`src/adapters/gears`](src/adapters/gears) is a source-backed PolyCSS port of
+XScreenSaver Gears. Twenty-four prepared three-gear assemblies enter from
+distinct non-crossing viewport edges, lock, rotate for 15 seconds, and leave
+before a shuffled, non-repeating prepared assembly takes over. The browser
+retains three gear roots and does not build geometry, lighting, ratios, phase,
+camera state, or DOM at runtime. A prepared portrait profile is selected below
+600px.
+
+```sh
+pnpm prepare:gears:artifact
+pnpm build:gears
+pnpm dev:gears
+```
+
+The pinned XScreenSaver checkout, native binaries, captures, and generated
+browser assets are not committed.
+
 ## License
 
 cssGraphics source code is [MIT licensed](LICENSE). Third-party models retain

@@ -1,0 +1,30 @@
+{
+  "schema": "cssgears-prepared-bank-lock@1",
+  "tag": "cssgears-product-bank-v1",
+  "asset": "cssgears-product-bank-v1.tar.gz",
+  "url": "https://github.com/layoutit/cssGraphics/releases/download/cssgears-product-bank-v1/cssgears-product-bank-v1.tar.gz",
+  "archiveByteLength": 7924395,
+  "archiveSha256": "62fb00ef3ca6e4b09254f7593e09ca9880f9a40b2c490ccf7e3b32fd1b236637",
+  "productClosureBytes": 40352823,
+  "productClosureSha256": "1f8b16b1aa934c45b21b97f0f5482bbf89ec15ef862170623522a7b1b07a972c",
+  "productFileCount": 74,
+  "productDescriptorByteLength": 1074,
+  "productDescriptorSha256": "cbb9f81e50d65d2c2c54f546531ee068e6212ac2fd7727ca4aafdded7d554b50",
+  "sceneCount": 24,
+  "showreelBankCount": 1,
+  "retainedGearRootCount": 3,
+  "retainedSceneBankCount": 24,
+  "timelineStateCount": 720,
+  "showreelStateCount": 580,
+  "showreelSpinMilliseconds": 15000,
+  "totalPreparedLeaves": 35710,
+  "maximumPreparedLeaves": 3886,
+  "totalSourceFaces": 73542,
+  "lightingAssetCount": 24,
+  "publicBoundary": {
+    "xscreensaverSourceIncluded": false,
+    "nativeBinaryIncluded": false,
+    "nativeCaptureIncluded": false,
+    "oraclePacketIncluded": false
+  }
+}

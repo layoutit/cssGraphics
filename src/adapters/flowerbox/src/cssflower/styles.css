@@ -22,6 +22,32 @@ html > body {
   height: 100dvh;
 }
 
+html > body:not(.r):not(.e)::after {
+  content: "";
+  position: fixed;
+  inset: 50% auto auto 50%;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 1px solid rgb(240 240 240 / 18%);
+  border-top-color: rgb(240 240 240 / 70%);
+  border-radius: 50%;
+  animation: l 0.8s linear infinite;
+}
+
+@keyframes l {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html > body:not(.r):not(.e)::after {
+    animation: none;
+  }
+}
+
 body > .polycss-camera {
   position: absolute !important;
   inset: calc(50% - 360px) auto auto calc(50% - 360px) !important;

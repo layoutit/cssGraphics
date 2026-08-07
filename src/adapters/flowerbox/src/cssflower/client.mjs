@@ -22,14 +22,14 @@ export function mountCssflowerClient(host) {
   installCssflowerDebugApi(state);
 
   window.addEventListener("error", (event) => {
-    recordError(state, event.message || String(event.error || "error"));
+    recordError(state, host, event.message || String(event.error || "error"));
   });
   window.addEventListener("unhandledrejection", (event) => {
-    recordError(state, String(event.reason?.message || event.reason || "unhandled rejection"));
+    recordError(state, host, String(event.reason?.message || event.reason || "unhandled rejection"));
   });
 
   main().catch((error) => {
-    recordError(state, error.stack || error.message || String(error));
+    recordError(state, host, error.stack || error.message || String(error));
   });
 
   async function main() {
@@ -73,11 +73,14 @@ export function mountCssflowerClient(host) {
     });
     state.ready = true;
     state.status = "ready";
+    host.classList.add("r");
     requestAnimationFrame(() => player.resume());
   }
 }
 
-function recordError(state, message) {
+function recordError(state, host, message) {
   state.errors.push(message);
   state.status = "error";
+  host.classList.remove("r");
+  host.classList.add("e");
 }

@@ -47,7 +47,37 @@ try {
     page.on("console", (message) => {
       if (message.type() === "error") pageErrors.push(message.text());
     });
-    await page.goto(`http://127.0.0.1:${port}/${deploy ? "flower/" : ""}`, { waitUntil: "domcontentloaded" });
+    let releaseManifest;
+    let observeManifestRequest;
+    const manifestRelease = new Promise((resolve) => { releaseManifest = resolve; });
+    const manifestRequested = new Promise((resolve) => { observeManifestRequest = resolve; });
+    await page.route("**/cssflower/manifest.json", async (route) => {
+      observeManifestRequest();
+      await manifestRelease;
+      await route.continue();
+    });
+    const navigation = page.goto(`http://127.0.0.1:${port}/${deploy ? "flower/" : ""}`, {
+      waitUntil: "domcontentloaded",
+    });
+    await Promise.race([
+      manifestRequested,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("cssFlower manifest was not requested")), 5_000)),
+    ]);
+    await navigation;
+    const loading = await page.evaluate(() => {
+      const style = getComputedStyle(document.body, "::after");
+      return {
+        bodyChildCount: document.body.childElementCount,
+        bodyAttributeNames: document.body.getAttributeNames(),
+        content: style.content,
+        position: style.position,
+        width: style.width,
+        height: style.height,
+        animationName: style.animationName,
+        animationDuration: style.animationDuration,
+      };
+    });
+    releaseManifest();
     await page.waitForFunction(() => ["ready", "error"].includes(globalThis.__cssFlowerDebug?.status), null, {
       timeout: 30_000,
     });
@@ -58,6 +88,15 @@ try {
     if (startup.status !== "ready") {
       throw new Error(`cssFlower failed before browser proof: ${JSON.stringify(startup)}`);
     }
+    const loadingAfterReady = await page.evaluate(() => {
+      const style = getComputedStyle(document.body, "::after");
+      return {
+        bodyAttributeNames: document.body.getAttributeNames(),
+        bodyClassName: document.body.className,
+        content: style.content,
+        animationName: style.animationName,
+      };
+    });
 
     const proof = await page.evaluate(async () => {
       const debug = globalThis.__cssFlowerDebug;
@@ -113,6 +152,7 @@ try {
         cameraRect: { x: cameraRect.x, y: cameraRect.y, width: cameraRect.width, height: cameraRect.height },
         bodyChildCount: document.body.children.length,
         bodyAttributeNames: document.body.getAttributeNames(),
+        bodyClassName: document.body.className,
         dataAttributeCount: [...document.body.querySelectorAll("*")].reduce((count, element) =>
           count + element.getAttributeNames().filter((name) => name.startsWith("data-")).length, 0),
         bodyElementCount: document.body.querySelectorAll("*").length,
@@ -216,6 +256,8 @@ try {
       schema: "cssgraphics-flowerbox-browser-smoke@2",
       deploy,
       ...proof,
+      loading,
+      loadingAfterReady,
       pageErrors,
       visibility: imageVisibility(screenshotBytes),
       expansionFits,
@@ -236,12 +278,20 @@ try {
 
 function assertProof(state) {
   const stats = state.stats;
-  if (state.status !== "ready" || state.errors.length !== 0 || state.pageErrors.length !== 0 ||
+  if (state.loading.bodyChildCount !== 0 || state.loading.bodyAttributeNames.length !== 0 ||
+      state.loading.content !== '\"\"' || state.loading.position !== "fixed" ||
+      state.loading.width !== "18px" || state.loading.height !== "18px" ||
+      state.loading.animationName !== "l" || state.loading.animationDuration !== "0.8s" ||
+      state.loadingAfterReady.bodyAttributeNames.join(",") !== "class" ||
+      state.loadingAfterReady.bodyClassName !== "r" || state.loadingAfterReady.content !== "none" ||
+      state.loadingAfterReady.animationName !== "none" ||
+      state.status !== "ready" || state.errors.length !== 0 || state.pageErrors.length !== 0 ||
       state.meshCount !== 1 || state.retainedRootCount !== 1 || state.retainedLeafCount !== 1200 ||
       state.triangleIdCount !== 1200 || state.polycssStableTriangleCount !== 1200 || state.rasterAtlasLeafCount !== 1200 ||
       state.rasterLeafWidths.length < 2 || state.rasterLeafHeights.length < 2 ||
       state.retainedLeafTags.length !== 1 || state.retainedLeafTags[0] !== "U" ||
-      state.bodyChildCount !== 1 || state.bodyElementCount !== 1204 || state.bodyAttributeNames.length !== 0 ||
+      state.bodyChildCount !== 1 || state.bodyElementCount !== 1204 ||
+      state.bodyAttributeNames.join(",") !== "class" || state.bodyClassName !== "r" ||
       state.dataAttributeCount !== 0 ||
       state.customClassCount !== 1200 || state.customClassUniqueCount !== 1200 ||
       state.customClassMaxLength !== 2 || state.customClassesValid !== true ||

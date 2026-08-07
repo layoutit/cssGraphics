@@ -12,6 +12,6 @@
   force = true
 
 [[headers]]
-  for = "/cssflower/assets/projected/*"
+  for = "/cssflower/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"

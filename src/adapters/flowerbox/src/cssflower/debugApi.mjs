@@ -3,6 +3,9 @@ export function installCssflowerDebugApi(state) {
     get ready() {
       return state.ready;
     },
+    get status() {
+      return state.status;
+    },
     get manifest() {
       return state.manifest;
     },
@@ -30,6 +33,9 @@ export function installCssflowerDebugApi(state) {
     setTick(tick) {
       return state.mount?.player?.setTick?.(tick) ?? null;
     },
+    sample() {
+      return state.mount?.player?.sample?.() ?? null;
+    },
     nodes() {
       return state.mount?.player?.nodes?.() ?? null;
     },
@@ -44,6 +50,5 @@ export function installCssflowerDebugApi(state) {
     },
   };
   globalThis.__cssFlowerDebug = api;
-  document.body.setAttribute("data-cssflower-devtools-helper", "window.__cssFlowerDebug");
   return api;
 }

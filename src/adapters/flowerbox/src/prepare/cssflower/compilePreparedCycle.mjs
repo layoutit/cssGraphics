@@ -8,12 +8,22 @@ import {
 import { PNG } from "pngjs";
 import {
   CSSFLOWER_BOUNDARY_SEAM_BLEED,
+  CSSFLOWER_LIGHTING_GRID_COLUMNS,
+  CSSFLOWER_LIGHTING_GRID_DECODED_BYTES,
+  CSSFLOWER_LIGHTING_GRID_HEIGHT,
+  CSSFLOWER_LIGHTING_GRID_ROWS,
+  CSSFLOWER_LIGHTING_GRID_WIDTH,
   CSSFLOWER_LIGHTING_LAYOUT,
+  CSSFLOWER_LIGHTING_RASTER_MODE,
+  CSSFLOWER_LIGHTING_SAMPLING,
   CSSFLOWER_LIGHTING_SCHEMA,
   CSSFLOWER_SEAM_BLEED,
   CSSFLOWER_SEAM_BLEED_POLICY,
 } from "../../cssflower/renderContract.mjs";
-import { buildPreparedFullRotationCycle } from "./bloomCycle.mjs";
+import {
+  buildPreparedFullRotationCycle,
+  buildPreparedRoundedProductCycle,
+} from "./bloomCycle.mjs";
 import {
   buildCubeTopology,
   buildSideSiblingSeamPlan,
@@ -48,19 +58,20 @@ export async function compilePreparedCssflowerCycle({
     throw new Error("cssFlower prepared seam policy drifted");
   }
   const seamEdgesByMask = buildSeamEdgesByMask();
-  const cycle = attachPreparedLightingRows(buildPreparedFullRotationCycle());
-  const quadMergeAudit = auditPreparedQuadMergeEligibility(topology, cycle);
-  const rasterFaces = selectPreparedRasterFaces(topology, cycle, siblingSeamPlan, seamEdgesByMask);
+  const sourceCycle = buildPreparedFullRotationCycle();
+  const cycle = attachPreparedLightingRows(buildPreparedRoundedProductCycle());
+  const quadMergeAudit = auditPreparedQuadMergeEligibility(topology, sourceCycle);
+  const rasterFaces = selectPreparedRasterFaces(topology, sourceCycle, siblingSeamPlan, seamEdgesByMask);
   const rasterLayout = buildPreparedLeafRasterLayout(rasterFaces);
-  const matrixValues = new Float32Array(cycle.geometryStateCount * topology.triangleCount * MATRIX_COMPONENTS);
+  const matrixValues = new Float32Array(sourceCycle.geometryStateCount * topology.triangleCount * MATRIX_COMPONENTS);
   const atlasWidth = rasterLayout.atlasWidth;
   const atlasHeight = rasterLayout.atlasHeight;
   const stateEvidence = [];
-  const geometryByState = new Array(cycle.geometryStateCount);
-  const canonicalPointIndices = new Uint16Array(cycle.geometryStateCount * topology.triangleCount * 3);
+  const geometryByState = new Array(sourceCycle.geometryStateCount);
+  const canonicalPointIndices = new Uint16Array(sourceCycle.geometryStateCount * topology.triangleCount * 3);
   let initialPolygons = null;
 
-  for (const geometryState of cycle.geometryStates) {
+  for (const geometryState of sourceCycle.geometryStates) {
     const positions = deformCubePoints(topology, geometryState.sf);
     const normals = computeSmoothPointNormals(topology, positions);
     geometryByState[geometryState.index] = Object.freeze({ positions, normals });
@@ -106,7 +117,7 @@ export async function compilePreparedCssflowerCycle({
       ], (geometryState.index * topology.triangleCount + triangle.index) * 3);
     }
 
-    if (geometryState.index === cycle.states[0].geometryStateIndex) {
+    if (geometryState.index === sourceCycle.states[0].geometryStateIndex) {
       initialPolygons = topology.triangles.map((triangle) => trianglePolygon(topology, triangle, positions));
     }
     const transformStart = transformStateOffset * Float32Array.BYTES_PER_ELEMENT;
@@ -125,15 +136,32 @@ export async function compilePreparedCssflowerCycle({
   if (!initialPolygons || initialPolygons.length !== 1200) {
     throw new Error("cssFlower initial 1,200-triangle product was not compiled");
   }
-  const transformBytes = Buffer.from(matrixValues.buffer);
+  const productTransformByteLength = cycle.geometryStateCount * topology.triangleCount * MATRIX_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
+  const transformBytes = Buffer.from(matrixValues.buffer, 0, productTransformByteLength);
+  const vertexLightingByState = Object.freeze(cycle.states.map((state) => {
+    const geometry = geometryByState[state.geometryStateIndex];
+    if (!geometry) throw new Error(`cssFlower lighting state ${state.tick} has no prepared geometry`);
+    return computePreparedVertexLightingUnquantized(
+      topology,
+      geometry.positions,
+      geometry.normals,
+      state,
+    );
+  }));
+  const lightingAddressSchedule = buildPreparedLightingAddressSchedule({
+    topology,
+    cycle,
+    canonicalPointIndices,
+    vertexLightingByState,
+  });
   const lightingPreparation = await prepareLightingPages({
     topology,
     cycle,
-    geometryByState,
     canonicalPointIndices,
     atlasWidth,
     atlasHeight,
     rasterLayout,
+    vertexLightingByState,
     readLightingPage,
     writeLightingPage,
   });
@@ -153,13 +181,18 @@ export async function compilePreparedCssflowerCycle({
     }),
     topology: topologyEvidence,
     update: Object.freeze({
-      stateCount: cycle.stateCount,
-      geometryStateCount: cycle.geometryStateCount,
-      cycleStartState: cycle.cycleStartState,
-      cycleLength: cycle.cycleLength,
-      bloomTraceStateCount: cycle.bloomTraceStateCount,
-      bloomCycleLength: cycle.bloomCycleLength,
-      rootStateCount: cycle.rootStateCount,
+      stateCount: sourceCycle.stateCount,
+      geometryStateCount: sourceCycle.geometryStateCount,
+      cycleStartState: sourceCycle.cycleStartState,
+      cycleLength: sourceCycle.cycleLength,
+      bloomTraceStateCount: sourceCycle.bloomTraceStateCount,
+      bloomCycleLength: sourceCycle.bloomCycleLength,
+      rootStateCount: sourceCycle.rootStateCount,
+      productStateCount: cycle.stateCount,
+      productGeometryStateCount: cycle.geometryStateCount,
+      productCycleLength: cycle.cycleLength,
+      productBloomCycleLength: cycle.bloomCycleLength,
+      productBloomPeakSf: cycle.bloomPeakSf,
     }),
     camera: CSSFLOWER_CAMERA,
     light: CSSFLOWER_SOURCE_PROFILE.light,
@@ -192,12 +225,15 @@ export async function compilePreparedCssflowerCycle({
       maximumLeafHeight: Math.max(...rasterFaces.map((face) => face.leafHeight)),
       pageRows: CSSFLOWER_LIGHTING_PAGE_ROWS,
       pageCount: lightingPages.length,
-      decodedResidentPageBudget: 2,
-      decodedPeakPageBudget: 3,
+      gridColumns: CSSFLOWER_LIGHTING_GRID_COLUMNS,
+      gridRows: CSSFLOWER_LIGHTING_GRID_ROWS,
+      gridWidth: CSSFLOWER_LIGHTING_GRID_WIDTH,
+      gridHeight: CSSFLOWER_LIGHTING_GRID_HEIGHT,
+      gridDecodedBytes: CSSFLOWER_LIGHTING_GRID_DECODED_BYTES,
     }),
     quadMergeAudit,
     geometryStates: Object.freeze(stateEvidence),
-    ticks: Object.freeze(cycle.states.map((state) => Object.freeze({
+    ticks: Object.freeze(sourceCycle.states.map((state) => Object.freeze({
       tick: state.tick,
       sf: state.sf,
       sfHex: state.sfHex,
@@ -208,14 +244,13 @@ export async function compilePreparedCssflowerCycle({
       rotationZDegrees: state.rotationZDegrees,
       rootStateIndex: state.rootStateIndex,
       geometryStateIndex: state.geometryStateIndex,
-      lightingPageIndex: state.lightingPageIndex,
-      lightingPageRowIndex: state.lightingPageRowIndex,
     }))),
   });
 
   return Object.freeze({
     topology,
     cycle,
+    sourceCycle,
     initialPolygons: Object.freeze(initialPolygons),
     transformBytes,
     transformSha256: sha256(transformBytes),
@@ -232,8 +267,8 @@ export async function compilePreparedCssflowerCycle({
       physicalLayout: CSSFLOWER_LIGHTING_LAYOUT,
       assetUrl: firstLightingPage.assetUrl,
       assetSha256: firstLightingPage.sha256,
-      rasterMode: "leaf-resolution",
-      sampling: rasterLayout.sampling,
+      rasterMode: CSSFLOWER_LIGHTING_RASTER_MODE,
+      sampling: CSSFLOWER_LIGHTING_SAMPLING,
       gutter: rasterLayout.gutter,
       gutterPolicy: rasterLayout.gutterPolicy,
       packing: rasterLayout.packing,
@@ -243,6 +278,10 @@ export async function compilePreparedCssflowerCycle({
       maximumTileWidth: Math.max(...rasterFaces.map((face) => face.leafWidth)),
       minimumTileHeight: Math.min(...rasterFaces.map((face) => face.leafHeight)),
       maximumTileHeight: Math.max(...rasterFaces.map((face) => face.leafHeight)),
+      minimumLeafWidth: Math.min(...rasterFaces.map((face) => face.leafWidth)),
+      maximumLeafWidth: Math.max(...rasterFaces.map((face) => face.leafWidth)),
+      minimumLeafHeight: Math.min(...rasterFaces.map((face) => face.leafHeight)),
+      maximumLeafHeight: Math.max(...rasterFaces.map((face) => face.leafHeight)),
       leafSizing: "raster",
       seamBleed: CSSFLOWER_SEAM_BLEED,
       boundarySeamBleed: CSSFLOWER_BOUNDARY_SEAM_BLEED,
@@ -260,13 +299,21 @@ export async function compilePreparedCssflowerCycle({
       geometryStateCount: cycle.geometryStateCount,
       atlasWidth,
       atlasHeight,
+      gridColumns: CSSFLOWER_LIGHTING_GRID_COLUMNS,
+      gridRows: CSSFLOWER_LIGHTING_GRID_ROWS,
+      gridWidth: CSSFLOWER_LIGHTING_GRID_WIDTH,
+      gridHeight: CSSFLOWER_LIGHTING_GRID_HEIGHT,
       pageRowCount: CSSFLOWER_LIGHTING_PAGE_ROWS,
       pageCount: lightingPages.length,
       pages: lightingPages,
       totalEncodedBytes: lightingPages.reduce((sum, page) => sum + page.byteLength, 0),
       decodedBytesPerFullPage: atlasWidth * atlasHeight * 4,
-      decodedResidentPageBudget: 2,
-      decodedPeakPageBudget: 3,
+      decodedGridBytes: CSSFLOWER_LIGHTING_GRID_DECODED_BYTES,
+      addressSchedule: lightingAddressSchedule,
+      backgroundPositionXs: Object.freeze(Array.from(
+        { length: lightingPages.length },
+        (_, pageIndex) => `${-pageIndex * atlasWidth}px`,
+      )),
       backgroundPositionYs: Object.freeze(Array.from(
         { length: CSSFLOWER_LIGHTING_PAGE_ROWS },
         (_, rowIndex) => `${-rowIndex * rasterLayout.stateSliceHeight}px`,
@@ -283,19 +330,18 @@ export async function compilePreparedCssflowerCycle({
           slotHeight: placement.slotHeight,
           contentX: placement.contentX,
           contentY: placement.contentY,
-          backgroundSize: `${atlasWidth}px ${atlasHeight}px`,
+          backgroundSize: `${CSSFLOWER_LIGHTING_GRID_WIDTH}px ${CSSFLOWER_LIGHTING_GRID_HEIGHT}px`,
           backgroundPositionX: `${-placement.contentX}px`,
-          backgroundPositionY: `calc(var(--cssflower-lighting-y) - ${placement.contentY}px)`,
+          backgroundPositionY: `${-placement.contentY}px`,
         });
       })),
-      rowSelection: "prepared-timeline-state-page-and-row-index",
+      rowSelection: "prepared-exact-rgb8-sparse-leaf-address-schedule",
       temporalInterpolation: false,
       sourceModelviewLighting: "identity-set-positional-light-then-Rx-Ry-Rz-with-normalize-and-infinite-viewer",
       rotationAware: true,
-      runtimeRootFrameVariables: 2,
-      runtimePreparedPagePreload: true,
-      runtimeDecodedResidentPageBudget: 2,
-      runtimeDecodedPeakPageBudget: 3,
+      runtimeRootFrameVariables: 1,
+      runtimePreparedPagePreload: false,
+      runtimeLightingAssetCount: 1,
       runtimeLightingCalculations: 0,
       runtimeAtlasConstruction: 0,
     }),
@@ -319,11 +365,11 @@ function attachPreparedLightingRows(sourceCycle) {
 async function prepareLightingPages({
   topology,
   cycle,
-  geometryByState,
   canonicalPointIndices,
   atlasWidth,
   atlasHeight,
   rasterLayout,
+  vertexLightingByState,
   readLightingPage,
   writeLightingPage,
 }) {
@@ -363,14 +409,10 @@ async function prepareLightingPages({
     );
     for (let rowIndex = 0; rowIndex < usedRowCount; rowIndex += 1) {
       const state = cycle.states[startStateIndex + rowIndex];
-      const geometry = geometryByState[state.geometryStateIndex];
-      if (!geometry) throw new Error(`cssFlower lighting state ${state.tick} has no prepared geometry`);
-      const vertexColors = computePreparedVertexLightingUnquantized(
-        topology,
-        geometry.positions,
-        geometry.normals,
-        state,
-      );
+      const vertexColors = vertexLightingByState[startStateIndex + rowIndex];
+      if (!(vertexColors instanceof Float64Array)) {
+        throw new Error(`cssFlower lighting state ${state.tick} has no prepared vertex colors`);
+      }
       for (const triangle of topology.triangles) {
         writePreparedLeafRasterLightingTile({
           atlasData: atlas.data,
@@ -401,6 +443,96 @@ async function prepareLightingPages({
     cacheHitCount,
     cacheMissCount,
   });
+}
+
+function buildPreparedLightingAddressSchedule({
+  topology,
+  cycle,
+  canonicalPointIndices,
+  vertexLightingByState,
+}) {
+  const faceCount = topology.triangleCount;
+  const signatureStride = 9;
+  if (cycle?.stateCount !== 360 || vertexLightingByState?.length !== cycle.stateCount ||
+      !(canonicalPointIndices instanceof Uint16Array) ||
+      canonicalPointIndices.length < cycle.geometryStateCount * faceCount * 3) {
+    throw new Error("cssFlower sparse lighting preparation inputs are incomplete");
+  }
+  const selectedSignatures = new Uint8Array(faceCount * signatureStride);
+  const currentSignature = new Uint8Array(signatureStride);
+  const updateOffsets = new Uint32Array(cycle.stateCount + 1);
+  const updatedFaceIndices = [];
+  for (let stateIndex = 0; stateIndex < cycle.stateCount; stateIndex += 1) {
+    const state = cycle.states[stateIndex];
+    const vertexColors = vertexLightingByState[stateIndex];
+    updateOffsets[stateIndex] = updatedFaceIndices.length;
+    for (let faceIndex = 0; faceIndex < faceCount; faceIndex += 1) {
+      preparedFaceLightingSignature(
+        currentSignature,
+        canonicalPointIndices,
+        (state.geometryStateIndex * faceCount + faceIndex) * 3,
+        vertexColors,
+      );
+      const selectedOffset = faceIndex * signatureStride;
+      let changed = stateIndex === 0;
+      for (let channel = 0; channel < signatureStride && !changed; channel += 1) {
+        changed = selectedSignatures[selectedOffset + channel] !== currentSignature[channel];
+      }
+      if (!changed) continue;
+      selectedSignatures.set(currentSignature, selectedOffset);
+      updatedFaceIndices.push(faceIndex);
+    }
+  }
+  updateOffsets[cycle.stateCount] = updatedFaceIndices.length;
+  if (updateOffsets[1] !== faceCount || updatedFaceIndices.length < faceCount) {
+    throw new Error("cssFlower sparse lighting schedule did not bind the complete retained target");
+  }
+  const indices = new Uint16Array(updatedFaceIndices);
+  const indexBytes = Buffer.from(indices.buffer, indices.byteOffset, indices.byteLength);
+  const counts = Array.from(
+    { length: cycle.stateCount },
+    (_, stateIndex) => updateOffsets[stateIndex + 1] - updateOffsets[stateIndex],
+  );
+  const sortedCounts = [...counts].sort((left, right) => left - right);
+  return Object.freeze({
+    schema: "cssflower-prepared-exact-sparse-lighting-address-schedule@1",
+    stateCount: cycle.stateCount,
+    faceCount,
+    selectionDomain: "prepared-source-vertex-lighting-rgb8",
+    comparison: "exact-three-canonical-point-rgb8-signature-per-retained-triangle",
+    threshold: 0,
+    cycleBoundaryPolicy: "force-all-faces-to-state-zero-on-each-360-state-wrap",
+    updateCount: indices.length,
+    meanUpdatesPerState: indices.length / cycle.stateCount,
+    p95UpdatesPerState: sortedCounts[Math.ceil(sortedCounts.length * 0.95) - 1],
+    maximumUpdatesPerState: sortedCounts.at(-1),
+    offsets: Object.freeze(Array.from(updateOffsets)),
+    faceIndicesEncoding: "base64-u16le-state-major-updated-face-indices",
+    faceIndicesByteLength: indexBytes.length,
+    faceIndicesSha256: sha256(indexBytes),
+    faceIndicesBase64: indexBytes.toString("base64"),
+    runtimeSelection: "prepared-state-range-only-no-lighting-or-geometry-calculation",
+    visualEquivalence: "source-rgb8-exact-with-bounded-location-dependent-lossy-atlas-raster-drift",
+  });
+}
+
+function preparedFaceLightingSignature(
+  output,
+  canonicalPointIndices,
+  canonicalPointOffset,
+  vertexColors,
+) {
+  if (!(output instanceof Uint8Array) || output.length !== 9 ||
+      !(vertexColors instanceof Float64Array)) {
+    throw new TypeError("cssFlower prepared lighting signature buffers are invalid");
+  }
+  for (let vertex = 0; vertex < 3; vertex += 1) {
+    const pointIndex = canonicalPointIndices[canonicalPointOffset + vertex];
+    for (let channel = 0; channel < 3; channel += 1) {
+      output[vertex * 3 + channel] = clampByte(vertexColors[pointIndex * 3 + channel]);
+    }
+  }
+  return output;
 }
 
 function assertPreparedLightingPageDescriptor(actual, expected) {
@@ -585,11 +717,6 @@ function dot(left, right) {
 
 function clampByte(value) {
   return Math.max(0, Math.min(255, Math.round(value)));
-}
-
-function formatCssNumber(value) {
-  const rounded = Math.round(value * 1_000_000) / 1_000_000;
-  return String(Object.is(rounded, -0) ? 0 : rounded);
 }
 
 function assertLittleEndian() {

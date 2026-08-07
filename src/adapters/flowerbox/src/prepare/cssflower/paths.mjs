@@ -1,6 +1,9 @@
 import { fileURLToPath } from "node:url";
 import { join, resolve } from "node:path";
-import { CSSFLOWER_PROJECTED_ATLAS_EXTENSION } from "../../cssflower/renderContract.mjs";
+import {
+  CSSFLOWER_LIGHTING_ATLAS_EXTENSION,
+  CSSFLOWER_PROJECTED_ATLAS_EXTENSION,
+} from "../../cssflower/renderContract.mjs";
 
 export const repoRoot = resolve(fileURLToPath(new URL("../../../../../../", import.meta.url)));
 export const adapterRoot = resolve(fileURLToPath(new URL("../../../", import.meta.url)));
@@ -11,6 +14,8 @@ export const generatedRoot = resolve(
 export const generatedPublicRoot = join(generatedRoot, "public", "cssflower");
 export const generatedSceneDir = join(generatedPublicRoot, "scenes");
 export const generatedAssetDir = join(generatedPublicRoot, "assets");
+export const generatedTransformAssetDir = join(generatedAssetDir, "transforms");
+export const generatedLightingAssetDir = join(generatedAssetDir, "lighting");
 export const generatedProjectedAssetDir = join(generatedAssetDir, "projected");
 export const manifestPath = join(generatedPublicRoot, "manifest.json");
 export const generatedTransformsPath = join(generatedAssetDir, "flower-box-transforms.f32");
@@ -33,6 +38,26 @@ export function generatedLightingPagePath(pageIndex) {
   return pageIndex === 0
     ? generatedLightingPath
     : join(generatedAssetDir, `flower-box-space-texels-page-${String(pageIndex).padStart(3, "0")}.png`);
+}
+
+export function generatedTransformBlockPath(sha256) {
+  assertSha256(sha256);
+  return join(generatedTransformAssetDir, `block-${sha256}.matrix3d.pack`);
+}
+
+export function generatedTransformBlockUrl(sha256) {
+  assertSha256(sha256);
+  return `/cssflower/assets/transforms/block-${sha256}.matrix3d.pack`;
+}
+
+export function generatedPreparedLightingPath(sha256) {
+  assertSha256(sha256);
+  return join(generatedLightingAssetDir, `grid-${sha256}.${CSSFLOWER_LIGHTING_ATLAS_EXTENSION}`);
+}
+
+export function generatedPreparedLightingUrl(sha256) {
+  assertSha256(sha256);
+  return `/cssflower/assets/lighting/grid-${sha256}.${CSSFLOWER_LIGHTING_ATLAS_EXTENSION}`;
 }
 
 export function generatedProjectedAtlasPath(sha256) {

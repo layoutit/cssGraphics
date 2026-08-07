@@ -9,9 +9,14 @@ import {
   CSSFLOWER_BOUNDARY_SEAM_BLEED_TEXT,
   CSSFLOWER_LIGHTING_ATLAS_HEIGHT,
   CSSFLOWER_LIGHTING_ATLAS_WIDTH,
+  CSSFLOWER_LIGHTING_GRID_COLUMNS,
+  CSSFLOWER_LIGHTING_GRID_HEIGHT,
+  CSSFLOWER_LIGHTING_GRID_ROWS,
+  CSSFLOWER_LIGHTING_GRID_WIDTH,
   CSSFLOWER_LIGHTING_LAYOUT,
   CSSFLOWER_LIGHTING_PAGE_COUNT,
   CSSFLOWER_LIGHTING_PAGE_ROWS,
+  CSSFLOWER_LIGHTING_RASTER_MODE,
   CSSFLOWER_LIGHTING_SCHEMA,
   CSSFLOWER_SEAM_BLEED,
   CSSFLOWER_SEAM_BLEED_TEXT,
@@ -21,7 +26,6 @@ import {
 const host = document.getElementById("scene");
 const params = new URLSearchParams(location.search);
 const sceneUrl = params.get("sceneUrl");
-const preparationLightingUrl = "/cssflower/assets/flower-box-space-texels.png";
 
 main().catch((error) => {
   window.__cssFlowerDebugSnapshot = {
@@ -36,13 +40,15 @@ async function main() {
   }
   const sceneData = await fetchJson(sceneUrl);
   validateScene(sceneData);
-  await Promise.all([
-    fetchVerifiedBytes(preparationLightingUrl, sceneData.lighting.assetSha256),
+  const preparationLightingUrl = sceneData.lighting.grid.assetUrl;
+  const [, , initialTransforms] = await Promise.all([
+    fetchVerifiedBytes(preparationLightingUrl, sceneData.lighting.grid.sha256),
     loadImage(preparationLightingUrl),
+    loadInitialPreparedTransforms(sceneData),
   ]);
   const { scene, mesh } = createSnapshotScene(sceneData);
   try {
-    const retained = mountRetainedTargets({ scene, mesh, sceneData });
+    const retained = mountRetainedTargets({ scene, mesh, sceneData, initialTransforms, preparationLightingUrl });
     scene.applyCamera();
     await scene.whenTexturesReady();
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -53,8 +59,8 @@ async function main() {
     });
     assertSnapshotStats(stats, retained, sceneData);
     const exported = await exportPolySceneSnapshot(host);
-    const preparedAtlasUrl = sceneData.playback.projectedPixels.pages[0].atlas.assetUrl;
-    const html = restorePreparedLightingReference(exported, preparedAtlasUrl);
+    const preparedAtlasUrl = sceneData.lighting.grid.assetUrl;
+    const html = prepareExportedSnapshot(restorePreparedLightingReference(exported, preparedAtlasUrl));
     assertExportedSnapshot(html, sceneData);
     window.__cssFlowerDebugSnapshot = {
       status: "ready",
@@ -71,7 +77,7 @@ async function main() {
       mergedCellCount: 0,
       lightingAtlasStateCount: sceneData.lighting.timelineRowCount,
       lightingAtlasDataUrlCount: (html.match(/data:image\/png;base64/gu) ?? []).length,
-      preparedAtlasReferenceCount: (html.match(/\/cssflower\/assets\/projected\/atlas-[a-f0-9]{64}\.avif/gu) ?? []).length,
+      preparedAtlasReferenceCount: (html.match(/\/cssflower\/assets\/lighting\/grid-[a-f0-9]{64}\.avif/gu) ?? []).length,
       scriptCount: (html.match(/<script\b/giu) ?? []).length,
       canvasCount: (html.match(/<canvas\b/giu) ?? []).length,
       svgCount: (html.match(/<svg\b/giu) ?? []).length,
@@ -98,17 +104,23 @@ function validateScene(sceneData) {
       sceneData.meshes?.length !== 1 ||
       sceneData.meshes[0]?.polygons?.length !== 1200 ||
       sceneData.playback?.schema !== "cssflower-prepared-playback@1" ||
-      sceneData.playback?.cycle?.geometryStateCount !== 414 ||
-      sceneData.playback?.cycle?.states?.length !== 9_331 ||
+      sceneData.playback?.scope !== "rounded-product-cycle-spike-phase-omitted" ||
+      sceneData.playback?.cycle?.schema !== "cssflower-prepared-rounded-product-cycle@1" ||
+      sceneData.playback?.cycle?.geometryStateCount !== 46 ||
+      sceneData.playback?.cycle?.states?.length !== 360 ||
       sceneData.playback?.transformAsset?.triangleCount !== 1200 ||
       sceneData.playback?.transformAsset?.componentCount !== 16 ||
       sceneData.lighting?.schema !== CSSFLOWER_LIGHTING_SCHEMA ||
       sceneData.lighting?.physicalLayout !== CSSFLOWER_LIGHTING_LAYOUT ||
-      sceneData.lighting?.rasterMode !== "leaf-resolution" ||
+      sceneData.lighting?.rasterMode !== CSSFLOWER_LIGHTING_RASTER_MODE ||
       sceneData.lighting?.atlasWidth !== CSSFLOWER_LIGHTING_ATLAS_WIDTH ||
       sceneData.lighting?.atlasHeight !== CSSFLOWER_LIGHTING_ATLAS_HEIGHT ||
+      sceneData.lighting?.gridColumns !== CSSFLOWER_LIGHTING_GRID_COLUMNS ||
+      sceneData.lighting?.gridRows !== CSSFLOWER_LIGHTING_GRID_ROWS ||
+      sceneData.lighting?.gridWidth !== CSSFLOWER_LIGHTING_GRID_WIDTH ||
+      sceneData.lighting?.gridHeight !== CSSFLOWER_LIGHTING_GRID_HEIGHT ||
       sceneData.lighting?.faceCount !== 1200 ||
-      sceneData.lighting?.timelineRowCount !== 9_331 ||
+      sceneData.lighting?.timelineRowCount !== 360 ||
       sceneData.lighting?.pageRowCount !== CSSFLOWER_LIGHTING_PAGE_ROWS ||
       sceneData.lighting?.pageCount !== CSSFLOWER_LIGHTING_PAGE_COUNT ||
       sceneData.lighting?.pages?.length !== CSSFLOWER_LIGHTING_PAGE_COUNT ||
@@ -122,6 +134,7 @@ function validateScene(sceneData) {
       sceneData.lighting?.faces?.length !== 1200 ||
       sceneData.lighting.faces.filter((face) => face.boundaryAdjacent === true && face.seamBleed === CSSFLOWER_BOUNDARY_SEAM_BLEED).length !== 432 ||
       sceneData.lighting.faces.filter((face) => face.boundaryAdjacent === false && face.seamBleed === CSSFLOWER_SEAM_BLEED).length !== 768 ||
+      sceneData.lighting?.backgroundPositionXs?.length !== CSSFLOWER_LIGHTING_PAGE_COUNT ||
       sceneData.lighting?.backgroundPositionYs?.length !== CSSFLOWER_LIGHTING_PAGE_ROWS ||
       sceneData.lighting?.runtimeLightingCalculations !== 0) {
     throw new Error("Prepared cssFlower default-cube scene contract is invalid");
@@ -159,21 +172,13 @@ function createSnapshotScene(sceneData) {
   return { scene, mesh };
 }
 
-function mountRetainedTargets({ scene, mesh, sceneData }) {
+function mountRetainedTargets({ scene, mesh, sceneData, initialTransforms, preparationLightingUrl }) {
   const sceneRoot = host.querySelector(".polycss-scene");
   if (!(sceneRoot instanceof HTMLElement) || !(mesh?.element instanceof HTMLElement)) {
     throw new Error("PolyCSS failed to mount the cssFlower scene and mesh roots");
   }
   const root = document.createElement("div");
   root.dataset.cssflowerRotationRoot = "true";
-  root.dataset.cssflowerRootStateIndex = "0";
-  root.dataset.cssflowerGeometryStateIndex = "0";
-  root.dataset.cssflowerLightingRow = "0";
-  root.dataset.cssflowerLightingPage = "0";
-  root.dataset.cssflowerLightingPageRow = "0";
-  root.dataset.cssflowerRuntimeDomGrowth = "false";
-  root.dataset.cssflowerRuntimeGeometryConstruction = "false";
-  root.dataset.cssflowerRuntimeLightingCalculation = "false";
   Object.assign(root.style, {
     position: "absolute",
     left: "0",
@@ -185,7 +190,6 @@ function mountRetainedTargets({ scene, mesh, sceneData }) {
     transform: sceneData.playback.cycle.rootTransforms[0],
   });
   root.style.setProperty("--cssflower-space-texels", `url("${preparationLightingUrl}")`);
-  root.style.setProperty("--cssflower-lighting-y", sceneData.lighting.backgroundPositionYs[0]);
   sceneRoot.append(root);
   root.append(mesh.element);
 
@@ -207,8 +211,8 @@ function mountRetainedTargets({ scene, mesh, sceneData }) {
     triangleIds.add(triangleId);
     const face = sceneData.lighting.faces[index];
     if (face?.sourceOrder !== index || face.triangleId !== triangleId ||
-        !Number.isSafeInteger(face.leafWidth) || face.leafWidth !== face.tileWidth ||
-        !Number.isSafeInteger(face.leafHeight) || face.leafHeight !== face.tileHeight ||
+        !Number.isSafeInteger(face.leafWidth) || face.tileWidth !== face.leafWidth ||
+        !Number.isSafeInteger(face.leafHeight) || face.tileHeight !== face.leafHeight ||
         typeof face.backgroundPositionX !== "string" || typeof face.backgroundPositionY !== "string") {
       throw new Error(`Prepared cssFlower raster face binding diverged at ${index}`);
     }
@@ -223,9 +227,12 @@ function mountRetainedTargets({ scene, mesh, sceneData }) {
     leaf.dataset.polycssTextureProjection = "affine";
     leaf.dataset.polycssTextureLeafWidth = String(face.leafWidth);
     leaf.dataset.polycssTextureLeafHeight = String(face.leafHeight);
-    if (!leaf.style.transform.startsWith("matrix3d(")) {
+    if (!leaf.style.transform.startsWith("matrix3d(") ||
+        typeof initialTransforms[index] !== "string" ||
+        !initialTransforms[index].startsWith("matrix3d(")) {
       throw new Error(`Prepared cssFlower initial leaf transform ${index} is missing`);
     }
+    leaf.style.transform = initialTransforms[index];
     leaf.style.backgroundImage = "var(--cssflower-space-texels)";
     leaf.style.backgroundColor = "transparent";
     leaf.style.backgroundRepeat = "no-repeat";
@@ -239,7 +246,6 @@ function mountRetainedTargets({ scene, mesh, sceneData }) {
     leaf.style.backgroundSize = face.backgroundSize;
     leaf.style.imageRendering = "auto";
   }
-  root.dataset.cssflowerStableLeafCount = String(leaves.length);
   return { root, leaves, triangleIds };
 }
 
@@ -261,18 +267,17 @@ function assertSnapshotStats(stats, retained, sceneData) {
 function assertExportedSnapshot(html, sceneData) {
   const count = (expression) => (html.match(expression) ?? []).length;
   const dataUrlCount = count(/data:image\/png;base64/gu);
-  const preparedAtlasReferenceCount = count(/\/cssflower\/assets\/projected\/atlas-[a-f0-9]{64}\.avif/gu);
+  const preparedAtlasReferenceCount = count(/\/cssflower\/assets\/lighting\/grid-[a-f0-9]{64}\.avif/gu);
   if (!html.includes("polycss-scene") ||
       count(/<script\b/giu) !== 0 ||
       count(/<canvas\b/giu) !== 0 ||
       count(/<svg\b/giu) !== 0 ||
-      count(/data-cssflower-rotation-root="true"/gu) !== 1 ||
-      count(/data-cssflower-retained-leaf="true"/gu) !== 1200 ||
-      count(new RegExp(`data-cssflower-seam-bleed="${CSSFLOWER_SEAM_BLEED_TEXT}"`, "gu")) !== 768 ||
-      count(new RegExp(`data-cssflower-seam-bleed="${CSSFLOWER_BOUNDARY_SEAM_BLEED_TEXT}"`, "gu")) !== 432 ||
-      count(/data-cssflower-seam-edge-mask="[1-7]"/gu) !== 1200 ||
-      count(/data-polycss-texture-leaf-sizing="raster"/gu) !== 1200 ||
-      count(/data-polycss-texture-image-rendering="auto"/gu) !== 1200 ||
+      count(/\sdata-[a-z0-9-]+=/giu) !== 0 ||
+      count(/<u class="[a-zA-Z]{1,2}"><\/u>/gu) !== 1200 ||
+      count(/\.polycss-mesh>u\.[a-zA-Z]{1,2} \{/gu) !== 1200 ||
+      count(/--polycss-atlas-leaf-sizing: raster/gu) !== 1 ||
+      count(/image-rendering: auto/gu) !== 1 ||
+      !/<body><div class="polycss-camera"><div class="polycss-scene" aria-hidden="true"><div style="[^"]*"><div class="polycss-mesh"/u.test(html) ||
       dataUrlCount !== 0 ||
       preparedAtlasReferenceCount !== 1 ||
       html.length > 3_000_000 ||
@@ -281,8 +286,90 @@ function assertExportedSnapshot(html, sceneData) {
   }
 }
 
+function prepareExportedSnapshot(html) {
+  const parsed = new DOMParser().parseFromString(html, "text/html");
+  for (const element of parsed.querySelectorAll("*")) {
+    for (const name of element.getAttributeNames()) {
+      if (name.startsWith("data-")) element.removeAttribute(name);
+    }
+  }
+  const stylesheet = parsed.querySelector("style");
+  const camera = parsed.body.firstElementChild;
+  const scene = camera?.firstElementChild;
+  const root = scene?.firstElementChild;
+  const mesh = root?.firstElementChild;
+  const leaves = mesh ? [...mesh.children] : [];
+  if (!(stylesheet instanceof HTMLStyleElement) || !(camera instanceof HTMLElement) ||
+      !(scene instanceof HTMLElement) || !(root instanceof HTMLElement) ||
+      !(mesh instanceof HTMLElement) || leaves.length !== 1200) {
+    throw new Error("Exported cssFlower direct hierarchy is missing before stylesheet preparation");
+  }
+  const rules = [];
+  moveStylesToRule(camera, ".polycss-camera", rules);
+  moveStylesToRule(scene, ".polycss-scene", rules);
+  moveStylesToRule(root, ".polycss-scene>div", rules, new Set([
+    "transform",
+    "--cssflower-space-texels",
+  ]));
+  for (const leaf of leaves) leaf.style.removeProperty("transform");
+  moveSharedStylesToRule(leaves, ".polycss-mesh>u", rules, [
+    "background-image",
+    "background-color",
+    "background-repeat",
+    "background-size",
+    "--polycss-atlas-leaf-sizing",
+    "image-rendering",
+  ]);
+  for (let index = 0; index < leaves.length; index += 1) {
+    const className = retainedLeafClassName(index);
+    leaves[index].className = className;
+    moveStylesToRule(leaves[index], `.polycss-mesh>u.${className}`, rules);
+  }
+  stylesheet.textContent += `\n${rules.join("\n")}\n`;
+  return `<!doctype html>${parsed.documentElement.outerHTML}`;
+}
+
+function moveSharedStylesToRule(elements, selector, rules, propertyNames) {
+  const declarations = [];
+  for (const name of propertyNames) {
+    const value = elements[0].style.getPropertyValue(name);
+    const priority = elements[0].style.getPropertyPriority(name);
+    if (!value || elements.some((element) =>
+      element.style.getPropertyValue(name) !== value || element.style.getPropertyPriority(name) !== priority)) {
+      throw new Error(`Exported cssFlower shared leaf style ${name} drifted`);
+    }
+    declarations.push(`${name}: ${value}${priority ? ` !${priority}` : ""};`);
+    for (const element of elements) element.style.removeProperty(name);
+  }
+  rules.push(`${selector} { ${declarations.join(" ")} }`);
+}
+
+function retainedLeafClassName(index) {
+  const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  if (!Number.isSafeInteger(index) || index < 0) throw new RangeError("cssFlower leaf class index is invalid");
+  let value = index;
+  let className = "";
+  do {
+    className = alphabet[value % alphabet.length] + className;
+    value = Math.floor(value / alphabet.length) - 1;
+  } while (value >= 0);
+  return className;
+}
+
+function moveStylesToRule(element, selector, rules, retainedProperties = new Set()) {
+  const names = [...element.style].filter((name) => !retainedProperties.has(name));
+  if (names.length === 0) return;
+  const declarations = names.map((name) => {
+    const priority = element.style.getPropertyPriority(name);
+    return `${name}: ${element.style.getPropertyValue(name)}${priority ? ` !${priority}` : ""};`;
+  });
+  rules.push(`${selector} { ${declarations.join(" ")} }`);
+  for (const name of names) element.style.removeProperty(name);
+  if (element.style.length === 0) element.removeAttribute("style");
+}
+
 function restorePreparedLightingReference(html, assetUrl) {
-  const matches = html.match(/data:image\/png;base64,[a-zA-Z0-9+/=]+/gu) ?? [];
+  const matches = html.match(/data:image\/(?:avif|png);base64,[a-zA-Z0-9+/=]+/gu) ?? [];
   if (matches.length !== 1) {
     throw new Error(`Expected one exported prepared-lighting data URL, found ${matches.length}`);
   }
@@ -310,6 +397,30 @@ async function fetchVerifiedBytes(url, expectedSha256) {
     throw new Error(`Prepared cssFlower asset identity mismatch for ${url}: ${actualSha256}`);
   }
   return bytes;
+}
+
+async function loadInitialPreparedTransforms(sceneData) {
+  const block = sceneData.playback.transformAsset?.blocks?.[0];
+  if (block?.startGeometryStateIndex !== 0 || block.geometryStateCount < 1 ||
+      block.triangleCount !== 1_200 || block.transformCount < 1_200) {
+    throw new Error("Prepared cssFlower initial transform block is missing");
+  }
+  const encoded = await fetchVerifiedBytes(block.assetUrl, block.sha256);
+  if (encoded.byteLength !== block.byteLength) {
+    throw new Error("Prepared cssFlower initial transform block length drifted");
+  }
+  const stream = new Blob([encoded]).stream().pipeThrough(new DecompressionStream("gzip"));
+  const decoded = new Uint8Array(await new Response(stream).arrayBuffer());
+  if (decoded.byteLength !== block.decodedByteLength || await sha256(decoded) !== block.decodedSha256) {
+    throw new Error("Prepared cssFlower decoded initial transform block identity drifted");
+  }
+  const text = new TextDecoder().decode(decoded);
+  const transforms = text.endsWith("\n") ? text.slice(0, -1).split("\n") : [];
+  if (transforms.length !== block.transformCount ||
+      transforms.slice(0, 1_200).some((transform) => !/^matrix3d\([^)]+\)$/u.test(transform))) {
+    throw new Error("Prepared cssFlower initial transform rows are invalid");
+  }
+  return Object.freeze(transforms.slice(0, 1_200));
 }
 
 async function sha256(bytes) {

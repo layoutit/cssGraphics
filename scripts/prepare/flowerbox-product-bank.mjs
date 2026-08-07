@@ -12,9 +12,12 @@ const lock = JSON.parse(await readFile(
   join(repositoryRoot, "src/adapters/flowerbox/prepared-bank.lock.json"),
   "utf8",
 ));
-if (lock.schema !== "cssflower-prepared-bank-lock@2" || lock.projectedVisualPackCount !== 37 ||
-    lock.projectedVisualPackAssetCount !== 37) {
-  throw new Error("Flower Box prepared-bank lock does not bind the visual-pack transport");
+if (lock.schema !== "cssflower-prepared-bank-lock@3" ||
+    lock.retainedTriangleLeafCount !== 1_200 || lock.retainedRotationRootCount !== 1 ||
+    lock.timelineStateCount !== 360 || lock.geometryStateCount !== 46 ||
+    lock.transformBlockCount !== 3 || lock.lightingAssetCount !== 1 ||
+    lock.lightingQuality !== 60 || lock.visibilityMinimumOwnedPixels !== 8) {
+  throw new Error("Flower Box prepared-bank lock does not bind the rounded retained Morph product");
 }
 const generatedRoot = resolve(
   process.env.CSSFLOWER_GENERATED_ROOT ?? join(repositoryRoot, "build", "generated"),
@@ -26,6 +29,8 @@ try {
   const current = await inspectFlowerboxProductBank(targetRoot);
   const descriptorBytes = await readFile(join(targetRoot, "product-bank.json"));
   if (current.closureSha256 === lock.productClosureSha256 &&
+      current.closureBytes === lock.productClosureBytes &&
+      current.fileCount === lock.productFileCount &&
       descriptorBytes.length === lock.productDescriptorByteLength &&
       sha256(descriptorBytes) === lock.productDescriptorSha256) {
     process.stdout.write(`${JSON.stringify({ status: "ready", source: "existing", ...current }, null, 2)}\n`);
@@ -75,7 +80,8 @@ try {
   const stagedProduct = join(stagingRoot, "cssflower");
   const summary = await inspectFlowerboxProductBank(stagedProduct);
   const descriptorBytes = await readFile(join(stagedProduct, "product-bank.json"));
-  if (summary.closureSha256 !== lock.productClosureSha256 || summary.closureBytes !== lock.productClosureBytes) {
+  if (summary.closureSha256 !== lock.productClosureSha256 || summary.closureBytes !== lock.productClosureBytes ||
+      summary.fileCount !== lock.productFileCount) {
     throw new Error("Flower Box unpacked product bank identity mismatch");
   }
   if (descriptorBytes.length !== lock.productDescriptorByteLength ||

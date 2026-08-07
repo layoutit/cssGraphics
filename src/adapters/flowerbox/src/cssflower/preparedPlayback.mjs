@@ -1,5 +1,10 @@
 import { createPolyMorphPreparedDomTarget } from "@layoutit/polycss-morph";
-import { applyPreparedProjectedLeafLayout } from "./projectedPageStyles.mjs";
+import {
+  CSSFLOWER_FRONT_FACE_DILATION_TICKS,
+  CSSFLOWER_FRONT_FACE_SCHEDULE_ENCODING,
+  CSSFLOWER_FRONT_FACE_SCHEDULE_SCHEMA,
+  CSSFLOWER_VISIBILITY_POLICY,
+} from "./renderContract.mjs";
 
 export function timelineStateIndexForTick(tick, cycle) {
   if (!Number.isSafeInteger(tick) || tick < 0) throw new RangeError("cssFlower tick must be a non-negative safe integer");
@@ -8,34 +13,59 @@ export function timelineStateIndexForTick(tick, cycle) {
 }
 
 export async function createCssflowerPreparedPlayer(options) {
-  const { playback, mesh, projectedPages, rotationRoot } = options;
+  const {
+    lighting,
+    lightingPages,
+    mesh,
+    playback,
+    rotationRoot,
+    transformBlocks,
+  } = options;
   const leaves = [...options.leaves];
-  validatePlayback(playback, projectedPages, rotationRoot, mesh, leaves);
-  const projected = playback.projectedPixels;
+  validatePlayback({ playback, lighting, transformBlocks, lightingPages, rotationRoot, mesh, leaves });
   const requestFrame = options.requestFrame ?? globalThis.requestAnimationFrame.bind(globalThis);
   const cancelFrame = options.cancelFrame ?? globalThis.cancelAnimationFrame.bind(globalThis);
-  const now = options.now ?? (() => globalThis.performance.now());
   const frameMilliseconds = 1000 / playback.sourceTicksPerSecond;
   let paused = true;
+  let destroyed = false;
   let request = null;
   let nextFrameAt = null;
   let globalTick = 0;
   let timelineStateIndex = -1;
   let geometryStateIndex = -1;
   let rootStateIndex = -1;
-  let projectedPageIndex = 0;
-  let projectedFrameIndex = -1;
+  let lightingPageIndex = -1;
+  let lightingPageRowIndex = -1;
   let preparedStatesApplied = 0;
+  let preparedGeometryStatePublishes = 0;
   let modelTransformWrites = 0;
-  let shapeTransformWrites = 0;
-  let projectedFrameWrites = 0;
-  let projectedAtlasWrites = 0;
-  let preparedPageLayoutAdoptions = 0;
-  let preparedPageBoundaryLeafStyleWrites = 0;
+  let leafTransformWrites = 0;
+  let selectedLeafTransformAttempts = 0;
+  let leafTransformSelectionTests = 0;
+  let suppressedLeafTransformWrites = 0;
+  let visibilityCatchupTransformAttempts = 0;
+  let visibilityCatchupTransformWrites = 0;
+  let leafVisibilityWrites = 0;
+  let preparedFrontFacingStateSelections = 0;
+  let presentedFrontFacingStateIndex = -1;
+  let currentFrontFacingLeafCount = 0;
+  let lightingAtlasWrites = 0;
+  let lightingColumnWrites = 0;
+  let lightingRowWrites = 0;
+  let preparedLightingAddressWrites = 0;
+  let preparedLightingStateSelections = 0;
+  let preparedLightingSkippedStateSelections = 0;
   let runtimeSchedulerCallbacks = 0;
-  let runtimeSchedulerStateTransitions = 0;
-  let runtimeSchedulerLateResetCount = 0;
-  let runtimeSchedulerMaximumLatenessMs = 0;
+  const lightingAddressSchedule = decodePreparedLightingAddressSchedule(lighting.addressSchedule);
+  const frontFacingSchedule = decodePreparedFrontFacingSchedule(playback.frontFacingSchedule);
+  const selectedFrontFacingByFace = new Uint8Array(leaves.length);
+  selectedFrontFacingByFace.fill(255);
+  const newlySelectedFaces = [];
+  const selectedLightingStateByFace = new Uint16Array(leaves.length);
+  const pendingLightingStateByFace = new Int16Array(leaves.length);
+  pendingLightingStateByFace.fill(-1);
+  const pendingLightingFaces = [];
+  let presentedLightingStateIndex = -1;
 
   const morphTarget = createPolyMorphPreparedDomTarget({
     model: {
@@ -50,59 +80,144 @@ export async function createCssflowerPreparedPlayer(options) {
     leaves: leaves.map((element) => ({ element })),
   });
 
+  function applyPreparedFrontFacingSelection(nextStateIndex) {
+    newlySelectedFaces.length = 0;
+    if (presentedFrontFacingStateIndex === nextStateIndex) return;
+    const stateOffset = nextStateIndex * frontFacingSchedule.bytesPerState;
+    let selectedCount = 0;
+    for (let faceIndex = 0; faceIndex < leaves.length; faceIndex += 1) {
+      const selected = (
+        frontFacingSchedule.bytes[stateOffset + (faceIndex >> 3)] & (1 << (faceIndex & 7))
+      ) !== 0;
+      selectedCount += Number(selected);
+      const selectedByte = Number(selected);
+      if (selectedFrontFacingByFace[faceIndex] === selectedByte) continue;
+      if (selected && selectedFrontFacingByFace[faceIndex] === 0) newlySelectedFaces.push(faceIndex);
+      if (morphTarget.leaves[faceIndex].writeVisibility(selected)) leafVisibilityWrites += 1;
+      selectedFrontFacingByFace[faceIndex] = selectedByte;
+    }
+    currentFrontFacingLeafCount = selectedCount;
+    presentedFrontFacingStateIndex = nextStateIndex;
+    preparedFrontFacingStateSelections += 1;
+  }
+
+  function isPreparedFrontFacing(faceIndex) {
+    return selectedFrontFacingByFace[faceIndex] === 1;
+  }
+
+  function applyPreparedLightingAddress(faceIndex, stateIndex) {
+    if (selectedLightingStateByFace[faceIndex] === stateIndex) return;
+    const addressState = playback.cycle.states[stateIndex];
+    const face = lighting.faces[faceIndex];
+    const x = -(addressState.lightingPageIndex * lighting.atlasWidth + face.contentX);
+    const y = -(addressState.lightingPageRowIndex * lighting.stateSliceHeight + face.contentY);
+    leaves[faceIndex].style.backgroundPosition = `${x}px ${y}px`;
+    selectedLightingStateByFace[faceIndex] = stateIndex;
+    preparedLightingAddressWrites += 1;
+  }
+
+  function applyPreparedLightingAddresses(nextStateIndex) {
+    if (presentedLightingStateIndex === -1) {
+      if (nextStateIndex !== playback.cycle.initialState) {
+        throw new Error("Prepared cssFlower lighting addresses must initialize at the prepared initial state");
+      }
+      presentedLightingStateIndex = nextStateIndex;
+      return;
+    }
+    if (nextStateIndex === presentedLightingStateIndex) return;
+    const advance = (
+      nextStateIndex - presentedLightingStateIndex + lightingAddressSchedule.stateCount
+    ) % lightingAddressSchedule.stateCount;
+    if (advance > 1) preparedLightingSkippedStateSelections += advance - 1;
+    if (advance === 1) {
+      const start = lightingAddressSchedule.offsets[nextStateIndex];
+      const end = lightingAddressSchedule.offsets[nextStateIndex + 1];
+      for (let update = start; update < end; update += 1) {
+        applyPreparedLightingAddress(lightingAddressSchedule.faceIndices[update], nextStateIndex);
+      }
+      presentedLightingStateIndex = nextStateIndex;
+      preparedLightingStateSelections += 1;
+      return;
+    }
+    pendingLightingFaces.length = 0;
+    for (let offset = 1; offset <= advance; offset += 1) {
+      const stateIndex = (presentedLightingStateIndex + offset) % lightingAddressSchedule.stateCount;
+      const start = lightingAddressSchedule.offsets[stateIndex];
+      const end = lightingAddressSchedule.offsets[stateIndex + 1];
+      for (let update = start; update < end; update += 1) {
+        const faceIndex = lightingAddressSchedule.faceIndices[update];
+        if (pendingLightingStateByFace[faceIndex] < 0) pendingLightingFaces.push(faceIndex);
+        pendingLightingStateByFace[faceIndex] = stateIndex;
+      }
+    }
+    for (const faceIndex of pendingLightingFaces) {
+      const stateIndex = pendingLightingStateByFace[faceIndex];
+      pendingLightingStateByFace[faceIndex] = -1;
+      applyPreparedLightingAddress(faceIndex, stateIndex);
+    }
+    presentedLightingStateIndex = nextStateIndex;
+    preparedLightingStateSelections += 1;
+  }
+
   async function applyTick(tick) {
+    if (destroyed) throw new Error("Prepared cssFlower player is destroyed");
     if (!Number.isSafeInteger(tick) || tick < 0) throw new RangeError("cssFlower tick must be a non-negative safe integer");
     const nextTimelineStateIndex = timelineStateIndexForTick(tick, playback.cycle);
     const state = playback.cycle.states[nextTimelineStateIndex];
     if (!state) throw new Error(`Prepared cssFlower timeline state ${nextTimelineStateIndex} is missing`);
-    const nextRootStateIndex = state.rootStateIndex;
-    const nextProjectedPageIndex = state.projectedPageIndex;
-    const nextProjectedFrameIndex = state.projectedFrameIndex;
-    let nextResidentPageIndex = null;
-    if (nextProjectedPageIndex !== projectedPageIndex) {
-      nextResidentPageIndex = projectedPageAfter(projected, playback.cycle, nextProjectedPageIndex);
-      const record = await projectedPages.activate(nextProjectedPageIndex, nextResidentPageIndex);
-      const atlasImage = `url("${record.url}")`;
-      if (rotationRoot.style.getPropertyValue("--cssflower-projected-atlas") !== atlasImage) {
-        rotationRoot.style.setProperty("--cssflower-projected-atlas", atlasImage);
-        projectedAtlasWrites += 1;
-      }
-      applyPreparedProjectedLeafLayout({
-        leaves,
-        layoutValues: record.layoutValues,
-        atlas: projected.pages[nextProjectedPageIndex].atlas,
+    const geometryChanged = state.geometryStateIndex !== geometryStateIndex;
+    const lightingPageChanged = state.lightingPageIndex !== lightingPageIndex;
+    applyPreparedFrontFacingSelection(nextTimelineStateIndex);
+
+    if (geometryChanged) {
+      await transformBlocks.activate(
+        state.geometryStateIndex,
+        state.nextTransformBlockGeometryStateIndex,
+      );
+      transformBlocks.forEachTransform(state.geometryStateIndex, (transform, leafIndex) => {
+        leafTransformSelectionTests += 1;
+        if (!isPreparedFrontFacing(leafIndex)) {
+          suppressedLeafTransformWrites += 1;
+          return;
+        }
+        selectedLeafTransformAttempts += 1;
+        if (morphTarget.leaves[leafIndex].writeTransform(transform)) leafTransformWrites += 1;
       });
-      preparedPageLayoutAdoptions += 1;
-      preparedPageBoundaryLeafStyleWrites += leaves.length;
+      preparedGeometryStatePublishes += 1;
+      transformBlocks.commitPresented(
+        state.geometryStateIndex,
+        state.nextTransformBlockGeometryStateIndex,
+      );
+    } else if (newlySelectedFaces.length > 0) {
+      for (const leafIndex of newlySelectedFaces) {
+        visibilityCatchupTransformAttempts += 1;
+        const transform = transformBlocks.transformAt(state.geometryStateIndex, leafIndex);
+        if (morphTarget.leaves[leafIndex].writeTransform(transform)) {
+          leafTransformWrites += 1;
+          visibilityCatchupTransformWrites += 1;
+        }
+      }
     }
-    const frameValue = `${projected.pages[nextProjectedPageIndex].atlas.frameBackgroundOffsets[nextProjectedFrameIndex]}px`;
-    if (rotationRoot.style.getPropertyValue("--cssflower-projected-frame-offset") !== frameValue) {
-      rotationRoot.style.setProperty("--cssflower-projected-frame-offset", frameValue);
-      projectedFrameWrites += 1;
+
+    if (lightingPageChanged) {
+      await lightingPages.activate(
+        state.lightingPageIndex,
+        state.nextLightingPageIndex,
+      );
+      lightingPages.commitPresented(state.lightingPageIndex, state.nextLightingPageIndex);
     }
-    if (morphTarget.model.writeTransform(playback.cycle.rootTransforms[nextRootStateIndex])) {
+    applyPreparedLightingAddresses(nextTimelineStateIndex);
+    if (morphTarget.model.writeTransform(playback.cycle.rootTransforms[state.rootStateIndex])) {
       modelTransformWrites += 1;
     }
-    if (morphTarget.shapes[0].writeTransform(projected.inverseRootTransforms[nextRootStateIndex])) {
-      shapeTransformWrites += 1;
-    }
+
     globalTick = tick;
     timelineStateIndex = nextTimelineStateIndex;
     geometryStateIndex = state.geometryStateIndex;
-    rootStateIndex = nextRootStateIndex;
-    projectedPageIndex = nextProjectedPageIndex;
-    projectedFrameIndex = nextProjectedFrameIndex;
+    rootStateIndex = state.rootStateIndex;
+    lightingPageIndex = state.lightingPageIndex;
+    lightingPageRowIndex = state.lightingPageRowIndex;
     preparedStatesApplied += 1;
-    rotationRoot.dataset.cssflowerGlobalTick = String(globalTick);
-    rotationRoot.dataset.cssflowerTimelineStateIndex = String(timelineStateIndex);
-    rotationRoot.dataset.cssflowerGeometryStateIndex = String(geometryStateIndex);
-    rotationRoot.dataset.cssflowerRootStateIndex = String(rootStateIndex);
-    rotationRoot.dataset.cssflowerProjectedPage = String(projectedPageIndex);
-    rotationRoot.dataset.cssflowerProjectedFrame = String(projectedFrameIndex);
-    if (nextResidentPageIndex !== null) {
-      await waitForPresentedPaint(requestFrame);
-      projectedPages.commitPresented(nextProjectedPageIndex, nextResidentPageIndex);
-    }
     morphTarget.assertStableDomIdentity();
     return globalTick;
   }
@@ -114,32 +229,26 @@ export async function createCssflowerPreparedPlayer(options) {
     if (nextFrameAt === null) {
       nextFrameAt = timestamp + frameMilliseconds;
     } else if (timestamp >= nextFrameAt - 0.5) {
-      const scheduledAt = nextFrameAt;
-      await applyTick(globalTick + 1);
-      runtimeSchedulerStateTransitions += 1;
-      nextFrameAt = scheduledAt + frameMilliseconds;
-      const completedAt = now();
-      if (completedAt > nextFrameAt) {
-        const lateness = completedAt - nextFrameAt;
-        runtimeSchedulerLateResetCount += 1;
-        runtimeSchedulerMaximumLatenessMs = Math.max(runtimeSchedulerMaximumLatenessMs, lateness);
-        nextFrameAt = completedAt + frameMilliseconds;
-      }
+      const elapsedSteps = Math.max(1, Math.floor((timestamp - nextFrameAt) / frameMilliseconds) + 1);
+      await applyTick(globalTick + elapsedSteps);
+      nextFrameAt += elapsedSteps * frameMilliseconds;
     }
     if (!paused) request = requestFrame(loop);
+  }
+
+  function pause() {
+    paused = true;
+    nextFrameAt = null;
+    if (request !== null) cancelFrame(request);
+    request = null;
+    return globalTick;
   }
 
   await applyTick(0);
   return Object.freeze({
     get tick() { return globalTick; },
     get paused() { return paused; },
-    pause() {
-      paused = true;
-      nextFrameAt = null;
-      if (request !== null) cancelFrame(request);
-      request = null;
-      return globalTick;
-    },
+    pause,
     resume() {
       if (!paused) return globalTick;
       paused = false;
@@ -148,19 +257,29 @@ export async function createCssflowerPreparedPlayer(options) {
       return globalTick;
     },
     async step(count = 1) {
-      this.pause();
+      pause();
       const amount = Math.trunc(Number(count));
       if (!Number.isSafeInteger(amount) || amount < 1) throw new RangeError("cssFlower step count must be a positive integer");
       return applyTick(globalTick + amount);
     },
     async setTick(value) {
-      this.pause();
+      pause();
       const tick = Math.trunc(Number(value));
       return applyTick(tick);
     },
     assertStableDomIdentity() {
       morphTarget.assertStableDomIdentity();
       return true;
+    },
+    sample() {
+      return Object.freeze({
+        globalTick,
+        timelineStateIndex,
+        geometryStateIndex,
+        rootStateIndex,
+        lightingPageIndex,
+        lightingPageRowIndex,
+      });
     },
     stats() {
       morphTarget.assertStableDomIdentity();
@@ -174,9 +293,10 @@ export async function createCssflowerPreparedPlayer(options) {
         globalTick,
         timelineStateIndex,
         geometryStateIndex,
+        transformBlockIndex: state.transformBlockIndex,
         rootStateIndex,
-        projectedPageIndex,
-        projectedFrameIndex,
+        lightingPageIndex,
+        lightingPageRowIndex,
         sourceSf: state.sf,
         sourceSfHex: state.sfHex,
         sourceSfi: state.sfi,
@@ -189,22 +309,43 @@ export async function createCssflowerPreparedPlayer(options) {
         preparedTimelineStateCount: playback.cycle.stateCount,
         preparedGeometryStateCount: playback.cycle.geometryStateCount,
         preparedRootStateCount: playback.cycle.rootStateCount,
-        preparedProjectedPageCount: projected.pageCount,
+        preparedTransformBlockCount: playback.transformAsset.blockCount,
+        preparedLightingPageCount: lighting.pageCount,
         preparedStatesApplied,
+        runtimePreparedGeometryStatePublishes: preparedGeometryStatePublishes,
         runtimeModelTransformWrites: modelTransformWrites,
-        runtimeShapeTransformWrites: shapeTransformWrites,
-        runtimeLeafTransformWrites: 0,
-        runtimePerFrameLeafStyleWrites: 0,
-        runtimeProjectedFrameWrites: projectedFrameWrites,
-        runtimeProjectedAtlasWrites: projectedAtlasWrites,
-        runtimePreparedPageLayoutAdoptions: preparedPageLayoutAdoptions,
-        runtimePreparedPageBoundaryLeafStyleWrites: preparedPageBoundaryLeafStyleWrites,
-        projectedPageLoader: projectedPages.stats(),
+        runtimeShapeTransformWrites: 0,
+        runtimeLeafTransformWrites: leafTransformWrites,
+        runtimeSelectedLeafTransformAttempts: selectedLeafTransformAttempts,
+        runtimeLeafTransformSelectionTests: leafTransformSelectionTests,
+        runtimeSuppressedLeafTransformWrites: suppressedLeafTransformWrites,
+        runtimeVisibilityCatchupTransformAttempts: visibilityCatchupTransformAttempts,
+        runtimeVisibilityCatchupTransformWrites: visibilityCatchupTransformWrites,
+        runtimeLeafVisibilityWrites: leafVisibilityWrites,
+        runtimePreparedFrontFacingStateSelections: preparedFrontFacingStateSelections,
+        preparedFrontFacingDilationTicks: frontFacingSchedule.dilationTicks,
+        preparedFrontFacingSelectedFaceCount: frontFacingSchedule.selectedFaceCount,
+        preparedFrontFacingVisibilityChangeCount: frontFacingSchedule.visibilityChangeCount,
+        preparedVisibilitySelectionDomain: frontFacingSchedule.selectionDomain,
+        preparedVisibilityMinimumOwnedPixels: frontFacingSchedule.minimumOwnedPixels,
+        preparedVisibilitySampleGrid: frontFacingSchedule.sampleGrid,
+        preparedVisibilityAdjacencyRings: frontFacingSchedule.adjacencyRings,
+        currentFrontFacingLeafCount,
+        runtimeLightingAtlasWrites: lightingAtlasWrites,
+        runtimeLightingColumnWrites: lightingColumnWrites,
+        runtimeLightingRowWrites: lightingRowWrites,
+        runtimePreparedLightingAddressWrites: preparedLightingAddressWrites,
+        runtimePreparedLightingStateSelections: preparedLightingStateSelections,
+        runtimePreparedLightingSkippedStateSelections: preparedLightingSkippedStateSelections,
+        runtimeDirectLeafCssTextWrites: 0,
+        runtimeProjectedFrameWrites: 0,
+        runtimeProjectedAtlasWrites: 0,
+        runtimePreparedPageLayoutAdoptions: 0,
+        runtimePreparedPageBoundaryLeafStyleWrites: 0,
+        transformBlockLoader: transformBlocks.stats(),
+        lightingPageLoader: lightingPages.stats(),
+        pendingLightingCommitCount: 0,
         runtimeSchedulerCallbacks,
-        runtimeSchedulerStateTransitions,
-        runtimeSchedulerSkippedPreparedStateCount: 0,
-        runtimeSchedulerLateResetCount,
-        runtimeSchedulerMaximumLatenessMs,
         runtimePolygonConstructionCount: 0,
         runtimeGeometryConstructionCount: 0,
         runtimeRadialProjectionCount: 0,
@@ -222,50 +363,142 @@ export async function createCssflowerPreparedPlayer(options) {
       return Object.freeze({ rotationRoot, mesh, leaves: Object.freeze([...leaves]) });
     },
     destroy() {
-      this.pause();
+      if (destroyed) return;
+      destroyed = true;
+      pause();
       morphTarget.destroy();
     },
   });
 }
 
-function projectedPageAfter(projected, cycle, pageIndex) {
-  if (pageIndex + 1 < projected.pageCount) return pageIndex + 1;
-  return cycle.states[cycle.cycleStartState].projectedPageIndex;
-}
-
-function validatePlayback(playback, projectedPages, rotationRoot, mesh, leaves) {
-  const projected = playback?.projectedPixels;
+function validatePlayback({ playback, lighting, transformBlocks, lightingPages, rotationRoot, mesh, leaves }) {
   if (playback?.schema !== "cssflower-prepared-playback@1" ||
       playback.target !== "createPolyMorphPreparedDomTarget" ||
+      playback.scope !== "rounded-product-cycle-spike-phase-omitted" ||
       playback.sourceTicksPerSecond !== 30 ||
-      playback.cycle?.stateCount !== 9_331 ||
-      playback.cycle?.cycleStartState !== 331 ||
-      playback.cycle?.cycleLength !== 9_000 ||
-      playback.cycle?.bloomTraceStateCount !== 581 ||
-      playback.cycle?.bloomCycleLength !== 250 ||
-      playback.cycle?.geometryStateCount !== 414 ||
+      playback.cycle?.schema !== "cssflower-prepared-rounded-product-cycle@1" ||
+      playback.cycle?.stateCount !== 360 ||
+      playback.cycle?.cycleStartState !== 0 ||
+      playback.cycle?.cycleLength !== 360 ||
+      playback.cycle?.bloomTraceStateCount !== 90 ||
+      playback.cycle?.bloomCycleLength !== 90 ||
+      playback.cycle?.bloomPeakGeometryStateIndex !== 45 ||
+      playback.cycle?.bloomPeakSfHex !== "400ffffc" ||
+      playback.cycle?.bloomPeakSfNominal !== 2.25 ||
+      playback.cycle?.omittedSourceSfAtOrAbove !== 2.5 ||
+      playback.cycle?.geometryStateCount !== 46 ||
       playback.cycle?.rootStateCount !== 360 ||
-      playback.cycle?.states?.length !== 9_331 ||
+      playback.cycle?.states?.length !== 360 ||
       playback.cycle?.rootTransforms?.length !== 360 ||
-      projected?.schema !== "cssflower-prepared-projected-pixel-playback@1" ||
-      projected.stateCount !== playback.cycle.stateCount ||
-      projected.retainedLeafCount !== 1_200 ||
-      projected.pages?.length !== projected.pageCount ||
-      projected.inverseRootTransforms?.length !== playback.cycle.rootStateCount ||
       playback.cycle.states.some((state) =>
         !Number.isSafeInteger(state.rootStateIndex) || state.rootStateIndex < 0 || state.rootStateIndex >= 360 ||
-        !Number.isSafeInteger(state.projectedPageIndex) || state.projectedPageIndex < 0 ||
-        state.projectedPageIndex >= projected.pageCount ||
-        !Number.isSafeInteger(state.projectedFrameIndex) || state.projectedFrameIndex < 0 ||
-        state.projectedFrameIndex >= projected.pages[state.projectedPageIndex].usedFrameCount) ||
-      !projectedPages?.activate || !projectedPages?.commitPresented ||
-      !projectedPages?.urlFor || !projectedPages?.layoutFor || !projectedPages?.stats ||
+        !Number.isSafeInteger(state.geometryStateIndex) || state.geometryStateIndex < 0 ||
+        state.geometryStateIndex >= playback.cycle.geometryStateCount ||
+        !Number.isSafeInteger(state.transformBlockIndex) ||
+        !Number.isSafeInteger(state.nextTransformBlockGeometryStateIndex) ||
+        !Number.isSafeInteger(state.lightingPageIndex) ||
+        !Number.isSafeInteger(state.lightingPageRowIndex) ||
+        !Number.isSafeInteger(state.nextLightingPageIndex)) ||
+      lighting?.backgroundPositionXs?.length !== lighting?.pageCount ||
+      lighting?.backgroundPositionYs?.length !== lighting?.pageRowCount ||
+      !transformBlocks?.activate || !transformBlocks?.forEachTransform ||
+      !transformBlocks?.commitPresented || !transformBlocks?.stats ||
+      !lightingPages?.activate || !lightingPages?.commitPresented ||
+      !lightingPages?.urlFor || !lightingPages?.stats ||
       !(rotationRoot instanceof HTMLElement) || !(mesh instanceof HTMLElement) ||
       leaves.length !== 1_200) {
-    throw new Error("Complete prepared cssFlower projected Morph playback is required");
+    throw new Error("Complete prepared cssFlower retained PolyCSS Morph playback is required");
   }
 }
 
-function waitForPresentedPaint(requestFrame) {
-  return new Promise((resolvePaint) => requestFrame(() => requestFrame(resolvePaint)));
+function decodePreparedLightingAddressSchedule(schedule) {
+  if (schedule?.schema !== "cssflower-prepared-exact-sparse-lighting-address-schedule@1" ||
+      schedule.stateCount !== 360 || schedule.faceCount !== 1_200 || schedule.threshold !== 0 ||
+      schedule.faceIndicesEncoding !== "base64-u16le-state-major-updated-face-indices" ||
+      schedule.offsets?.length !== 361 || schedule.offsets[0] !== 0 ||
+      schedule.offsets.at(-1) !== schedule.updateCount ||
+      !schedule.offsets.every((value, index) => Number.isSafeInteger(value) && value >= 0 &&
+        (index === 0 || value >= schedule.offsets[index - 1])) ||
+      typeof schedule.faceIndicesBase64 !== "string") {
+    throw new Error("Prepared cssFlower exact sparse-lighting schedule is invalid");
+  }
+  const encoded = atob(schedule.faceIndicesBase64);
+  if (encoded.length !== schedule.faceIndicesByteLength || encoded.length !== schedule.updateCount * 2) {
+    throw new Error("Prepared cssFlower sparse-lighting schedule byte length drifted");
+  }
+  const faceIndices = new Uint16Array(schedule.updateCount);
+  for (let index = 0; index < faceIndices.length; index += 1) {
+    faceIndices[index] = encoded.charCodeAt(index * 2) | (encoded.charCodeAt(index * 2 + 1) << 8);
+    if (faceIndices[index] >= schedule.faceCount) {
+      throw new Error(`Prepared cssFlower sparse-lighting face ${index} is out of range`);
+    }
+  }
+  return Object.freeze({
+    stateCount: schedule.stateCount,
+    faceCount: schedule.faceCount,
+    offsets: Object.freeze([...schedule.offsets]),
+    faceIndices,
+  });
+}
+
+function decodePreparedFrontFacingSchedule(schedule) {
+  if (schedule?.schema !== CSSFLOWER_FRONT_FACE_SCHEDULE_SCHEMA ||
+      schedule.stateCount !== 360 || schedule.faceCount !== 1_200 ||
+      schedule.dilationTicks !== CSSFLOWER_FRONT_FACE_DILATION_TICKS ||
+      schedule.selectionDomain !== CSSFLOWER_VISIBILITY_POLICY.selectionDomain ||
+      schedule.depthComparison !== CSSFLOWER_VISIBILITY_POLICY.depthComparison ||
+      schedule.minimumOwnedPixels !== CSSFLOWER_VISIBILITY_POLICY.minimumOwnedPixels ||
+      schedule.sampleGrid !== CSSFLOWER_VISIBILITY_POLICY.sampleGrid ||
+      schedule.adjacency !== CSSFLOWER_VISIBILITY_POLICY.adjacency ||
+      schedule.adjacencyRings !== CSSFLOWER_VISIBILITY_POLICY.adjacencyRings ||
+      schedule.dilationPolicy !== CSSFLOWER_VISIBILITY_POLICY.dilationPolicy ||
+      schedule.encoding !== CSSFLOWER_FRONT_FACE_SCHEDULE_ENCODING ||
+      schedule.bytesPerState !== Math.ceil(schedule.faceCount / 8) ||
+      schedule.byteLength !== schedule.stateCount * schedule.bytesPerState ||
+      !Number.isSafeInteger(schedule.selectedFaceCount) || schedule.selectedFaceCount < 1 ||
+      schedule.suppressedFaceCount !== schedule.stateCount * schedule.faceCount - schedule.selectedFaceCount ||
+      schedule.initialVisibilitySelectionCount !== schedule.faceCount ||
+      !Number.isSafeInteger(schedule.visibilityChangeCount) || schedule.visibilityChangeCount < 1 ||
+      typeof schedule.dataBase64 !== "string") {
+    throw new Error("Prepared cssFlower owned-pixel visibility transform schedule is invalid");
+  }
+  const encoded = atob(schedule.dataBase64);
+  if (encoded.length !== schedule.byteLength) {
+    throw new Error("Prepared cssFlower front-face transform schedule byte length drifted");
+  }
+  const bytes = Uint8Array.from(encoded, (character) => character.charCodeAt(0));
+  let selectedFaceCount = 0;
+  let visibilityChangeCount = 0;
+  for (let stateIndex = 0; stateIndex < schedule.stateCount; stateIndex += 1) {
+    const stateOffset = stateIndex * schedule.bytesPerState;
+    for (let faceIndex = 0; faceIndex < schedule.faceCount; faceIndex += 1) {
+      const selected = Number((bytes[stateOffset + (faceIndex >> 3)] & (1 << (faceIndex & 7))) !== 0);
+      selectedFaceCount += selected;
+      const previousStateIndex = (stateIndex + schedule.stateCount - 1) % schedule.stateCount;
+      const previousStateOffset = previousStateIndex * schedule.bytesPerState;
+      const previouslySelected = Number(
+        (bytes[previousStateOffset + (faceIndex >> 3)] & (1 << (faceIndex & 7))) !== 0,
+      );
+      visibilityChangeCount += Number(previouslySelected !== selected);
+    }
+  }
+  if (selectedFaceCount !== schedule.selectedFaceCount) {
+    throw new Error("Prepared cssFlower front-face transform selection count drifted");
+  }
+  if (visibilityChangeCount !== schedule.visibilityChangeCount) {
+    throw new Error("Prepared cssFlower front-face visibility-change count drifted");
+  }
+  return Object.freeze({
+    stateCount: schedule.stateCount,
+    faceCount: schedule.faceCount,
+    dilationTicks: schedule.dilationTicks,
+    selectionDomain: schedule.selectionDomain,
+    minimumOwnedPixels: schedule.minimumOwnedPixels,
+    sampleGrid: schedule.sampleGrid,
+    adjacencyRings: schedule.adjacencyRings,
+    bytesPerState: schedule.bytesPerState,
+    bytes,
+    selectedFaceCount,
+    visibilityChangeCount,
+  });
 }

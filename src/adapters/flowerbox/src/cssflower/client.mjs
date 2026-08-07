@@ -8,12 +8,11 @@ import { createRouteState } from "./routeState.mjs";
 import { installCssflowerDebugApi } from "./debugApi.mjs";
 import { installCssflowerStagePresentation } from "./stagePresentation.mjs";
 
-export function mountCssflowerClient() {
-  const host = document.getElementById("scene");
-  const status = document.getElementById("status");
-  const presentation = installCssflowerStagePresentation(host);
+export function mountCssflowerClient(host) {
+  if (!(host instanceof HTMLElement)) throw new TypeError("cssFlower scene host is missing");
   const state = {
     ready: false,
+    status: "loading",
     route: null,
     manifest: null,
     sceneData: null,
@@ -23,43 +22,36 @@ export function mountCssflowerClient() {
   installCssflowerDebugApi(state);
 
   window.addEventListener("error", (event) => {
-    recordError(state, event.message || String(event.error || "error"), status);
+    recordError(state, event.message || String(event.error || "error"));
   });
   window.addEventListener("unhandledrejection", (event) => {
-    recordError(state, String(event.reason?.message || event.reason || "unhandled rejection"), status);
+    recordError(state, String(event.reason?.message || event.reason || "unhandled rejection"));
   });
 
   main().catch((error) => {
-    recordError(state, error.stack || error.message || String(error), status);
+    recordError(state, error.stack || error.message || String(error));
   });
 
   async function main() {
-    document.body.dataset.productView = "1";
-    document.body.dataset.gameView = "polycss";
-    document.body.dataset.portSlug = "cssflower";
-    setStatus(status, "Loading Flower Box…", "loading");
-
     const route = createRouteState();
     state.route = route;
-    document.body.dataset.routeScene = route.scene;
 
     const manifest = await loadPreparedManifest(route);
     state.manifest = manifest;
 
-    setStatus(status, "Loading prepared scene…", "loading");
-    const { entry, sceneData, snapshotHtml, projectedPages } = await loadPreparedScene(manifest, route);
+    const { entry, sceneData, snapshotHtml, preparedAssets } = await loadPreparedScene(manifest, route);
     state.sceneData = sceneData;
-    document.body.dataset.sceneUrl = entry.sceneUrl;
-    if (entry.snapshotUrl) document.body.dataset.snapshotUrl = entry.snapshotUrl;
 
-    setStatus(status, "Mounting retained PolyCSS scene…", "loading");
-    const snapshot = mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, projectedPages });
+    const snapshot = mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, preparedAssets });
+    const presentation = installCssflowerStagePresentation({ host, camera: snapshot.camera });
     const player = await createCssflowerPreparedPlayer({
       playback: sceneData.playback,
+      lighting: sceneData.lighting,
       rotationRoot: snapshot.rotationRoot,
       mesh: snapshot.mesh,
       leaves: snapshot.leaves,
-      projectedPages,
+      transformBlocks: preparedAssets.transformBlocks,
+      lightingPages: preparedAssets.lightingPages,
     });
     state.mount = Object.freeze({
       ...snapshot,
@@ -74,22 +66,18 @@ export function mountCssflowerClient() {
       destroy() {
         presentation.destroy();
         player.destroy();
-        projectedPages.destroy();
+        preparedAssets.transformBlocks.destroy();
+        preparedAssets.lightingPages.destroy();
         snapshot.destroy();
       },
     });
     state.ready = true;
-    setStatus(status, "Ready — 1,200 retained PolyCSS triangles", "ready");
+    state.status = "ready";
     requestAnimationFrame(() => player.resume());
   }
 }
 
-function recordError(state, message, status) {
+function recordError(state, message) {
   state.errors.push(message);
-  setStatus(status, message, "error");
-}
-
-function setStatus(status, message, kind = "loading") {
-  document.body.dataset.portStatus = kind;
-  if (status) status.textContent = message;
+  state.status = "error";
 }

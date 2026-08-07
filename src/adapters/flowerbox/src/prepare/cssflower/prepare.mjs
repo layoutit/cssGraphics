@@ -1,6 +1,7 @@
 import {
   buildCssflowerFirstSliceScene,
 } from "./sceneBuilder.mjs";
+import { compilePreparedCssflowerCycle } from "./compilePreparedCycle.mjs";
 import {
   resolveCssflowerDataSource,
 } from "./dataSource.mjs";
@@ -11,7 +12,6 @@ import {
   writeCssflowerPreparedAssets,
   createCssflowerPreparedLightingPageStore,
 } from "./writePreparedAssets.mjs";
-import { prepareCssflowerSharedFrameWindowPages } from "./sharedFramePageStore.mjs";
 
 export async function prepareCssflower(options = {}) {
   const dataSource = await resolveCssflowerDataSource({
@@ -19,18 +19,18 @@ export async function prepareCssflower(options = {}) {
   });
   const sceneId = options.scene ?? "default-cube";
   const lightingPageStore = await createCssflowerPreparedLightingPageStore();
-  const projectedPixels = await prepareCssflowerSharedFrameWindowPages({
-    concurrency: options.concurrency,
-    onProgress: options.onProjectedProgress,
-  });
-  const { scene, compiled } = await buildCssflowerFirstSliceScene({
-    dataSource,
-    projectedPixels,
-    sceneId,
+  const compiled = await compilePreparedCssflowerCycle({
+    nativeAuthorityStatus: dataSource?.nativeAuthorityStatus ?? "missing",
     readLightingPage: lightingPageStore.read,
     writeLightingPage: lightingPageStore.write,
   });
-  const assets = await writeCssflowerPreparedAssets(compiled, projectedPixels);
+  const assets = await writeCssflowerPreparedAssets(compiled, { lightingPageStore });
+  const { scene } = await buildCssflowerFirstSliceScene({
+    compiled,
+    dataSource,
+    preparedAssets: assets,
+    sceneId,
+  });
   const output = await writeCssflowerPreparedOutput({
     scenes: [scene],
     defaultSceneId: scene.id,

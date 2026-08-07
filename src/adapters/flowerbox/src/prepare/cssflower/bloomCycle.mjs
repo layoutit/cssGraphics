@@ -6,6 +6,11 @@ import {
   preparedRootTransform,
 } from "./sourceProfile.mjs";
 
+export const CSSFLOWER_PRODUCT_BLOOM_PEAK_GEOMETRY_STATE = 45;
+export const CSSFLOWER_PRODUCT_BLOOM_PEAK_SF_NOMINAL = 2.25;
+export const CSSFLOWER_PRODUCT_BLOOM_CYCLE_LENGTH = 90;
+export const CSSFLOWER_PRODUCT_ROTATION_CYCLE_LENGTH = 360;
+
 export function buildPreparedBloomCycle() {
   const bloom = CSSFLOWER_SOURCE_PROFILE.bloom;
   let sf = FLOAT(bloom.resetSf);
@@ -112,6 +117,68 @@ export function buildPreparedFullRotationCycle() {
     geometryStates: bloomCycle.geometryStates,
     rootStateCount: bloomCycle.rootStateCount,
     rootTransforms: bloomCycle.rootTransforms,
+    states: Object.freeze(states),
+  });
+}
+
+export function buildPreparedRoundedProductCycle() {
+  const sourceBloom = buildPreparedBloomCycle();
+  const peakGeometryStateIndex = CSSFLOWER_PRODUCT_BLOOM_PEAK_GEOMETRY_STATE;
+  const geometryStates = sourceBloom.geometryStates.slice(0, peakGeometryStateIndex + 1);
+  const bloomGeometryStateIndices = Object.freeze([
+    ...Array.from({ length: peakGeometryStateIndex + 1 }, (_, index) => index),
+    ...Array.from({ length: peakGeometryStateIndex - 1 }, (_, index) => peakGeometryStateIndex - 1 - index),
+  ]);
+  if (bloomGeometryStateIndices.length !== CSSFLOWER_PRODUCT_BLOOM_CYCLE_LENGTH ||
+      geometryStates.length !== peakGeometryStateIndex + 1 ||
+      geometryStates.at(-1)?.sfHex !== "400ffffc") {
+    throw new Error("cssFlower rounded product bloom contract drifted");
+  }
+
+  const sourceIncrement = Math.fround(CSSFLOWER_SOURCE_PROFILE.bloom.sfIncrement);
+  const states = Array.from({ length: CSSFLOWER_PRODUCT_ROTATION_CYCLE_LENGTH }, (_, tick) => {
+    const productBloomPhaseIndex = tick % CSSFLOWER_PRODUCT_BLOOM_CYCLE_LENGTH;
+    const geometryStateIndex = bloomGeometryStateIndices[productBloomPhaseIndex];
+    const geometryState = geometryStates[geometryStateIndex];
+    const sfi = Math.fround(productBloomPhaseIndex < peakGeometryStateIndex
+      ? sourceIncrement
+      : -sourceIncrement);
+    return Object.freeze({
+      tick,
+      sf: geometryState.sf,
+      sfHex: geometryState.sfHex,
+      sfi,
+      sfiHex: floatHex(sfi),
+      rotationXDegrees: tick * CSSFLOWER_SOURCE_PROFILE.rotation.xDegreesPerUpdate,
+      rotationYDegrees: tick * CSSFLOWER_SOURCE_PROFILE.rotation.yDegreesPerUpdate,
+      rotationZDegrees: 0,
+      rootStateIndex: tick,
+      geometryStateIndex,
+      bloomStateIndex: productBloomPhaseIndex,
+      productBloomPhaseIndex,
+    });
+  });
+
+  return Object.freeze({
+    schema: "cssflower-prepared-rounded-product-cycle@1",
+    scope: "source-derived-rounded-cube-to-bloom-with-spike-phase-omitted",
+    initialState: 0,
+    stateCount: CSSFLOWER_PRODUCT_ROTATION_CYCLE_LENGTH,
+    cycleStartState: 0,
+    cycleLength: CSSFLOWER_PRODUCT_ROTATION_CYCLE_LENGTH,
+    repeatKey: `${floatBits(states[0].sf)}:${floatBits(states[0].sfi)}:${states[0].rootStateIndex}`,
+    bloomTraceStateCount: CSSFLOWER_PRODUCT_BLOOM_CYCLE_LENGTH,
+    bloomCycleStartState: 0,
+    bloomCycleLength: CSSFLOWER_PRODUCT_BLOOM_CYCLE_LENGTH,
+    bloomPeakGeometryStateIndex: peakGeometryStateIndex,
+    bloomPeakSf: geometryStates.at(-1).sf,
+    bloomPeakSfHex: geometryStates.at(-1).sfHex,
+    bloomPeakSfNominal: CSSFLOWER_PRODUCT_BLOOM_PEAK_SF_NOMINAL,
+    omittedSourceSfAtOrAbove: 2.5,
+    geometryStateCount: geometryStates.length,
+    geometryStates,
+    rootStateCount: sourceBloom.rootStateCount,
+    rootTransforms: sourceBloom.rootTransforms,
     states: Object.freeze(states),
   });
 }

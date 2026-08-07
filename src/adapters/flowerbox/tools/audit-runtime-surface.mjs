@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { inspectFlowerboxProductBank } from "./productBank.mjs";
@@ -13,8 +14,8 @@ const runtimeFiles = [
   "src/cssflower/debugApi.mjs",
   "src/cssflower/manifestClient.mjs",
   "src/cssflower/polycssScene.mjs",
+  "src/cssflower/preparedAssetLoaders.mjs",
   "src/cssflower/preparedPlayback.mjs",
-  "src/cssflower/projectedPageStyles.mjs",
   "src/cssflower/renderContract.mjs",
   "src/cssflower/routeState.mjs",
   "src/cssflower/stagePresentation.mjs",
@@ -26,6 +27,12 @@ const sources = new Map(await Promise.all(runtimeFiles.map(async (path) => [
   await readFile(join(adapterRoot, path), "utf8"),
 ])));
 
+const index = sources.get("index.html");
+if (!/<body><\/body>/u.test(index.replace(/\s+/gu, "")) ||
+    /<(?:main|header|section|article|form|button|input|output|img|video|canvas|svg)\b/iu.test(index) ||
+    /\bdata-[a-z0-9-]+=/iu.test(index)) {
+  failures.push("index.html is not the empty direct-camera shell");
+}
 for (const [path, source] of sources) {
   reject(path, source, "alternate renderer", /(?:getContext\s*\(|WebGLRenderingContext|WebGPU|GPUDevice|from\s+["']three["']|createElement\s*\(\s*["'](?:canvas|svg)["']|<(?:canvas|svg)\b)/iu);
   reject(path, source, "browser prepare or oracle import", /from\s+["'][^"']*(?:\/prepare\/|\/oracle\/)/u);
@@ -35,27 +42,33 @@ for (const [path, source] of sources) {
 const productCss = sources.get("src/cssflower/styles.css");
 reject("src/cssflower/styles.css", productCss, "paint-heavy product CSS", /(?:clip-path|mask(?:-image)?|filter|box-shadow|text-shadow|linear-gradient|radial-gradient|mix-blend-mode)\s*:/iu);
 const playback = sources.get("src/cssflower/preparedPlayback.mjs");
-if (!playback.includes("createPolyMorphPreparedDomTarget({")) failures.push("PolyCSS Morph prepared target is missing");
-if (!playback.includes("runtimeSchedulerSkippedPreparedStateCount: 0") || playback.includes("elapsedSteps")) {
-  failures.push("Prepared playback does not retain sequential no-skip scheduling");
+if (!playback.includes("createPolyMorphPreparedDomTarget({") ||
+    !playback.includes("morphTarget.leaves[leafIndex].writeTransform(transform)")) {
+  failures.push("PolyCSS Morph prepared leaf target is missing");
 }
-if (/\b(?:document|DOMParser|MutationObserver)\b|createElement|appendChild|replaceChildren/u.test(playback)) {
+if (/projectedPageStyles|applyPreparedProjectedLeafLayout|\.style\.cssText/u.test(playback)) {
+  failures.push("Projected-page or direct leaf cssText path is present");
+}
+if (/\b(?:document|DOMParser|MutationObserver|Image)\b|createElement|appendChild|replaceChildren/u.test(playback)) {
   failures.push("Prepared playback constructs DOM");
 }
-const manifestClient = sources.get("src/cssflower/manifestClient.mjs");
-if (!manifestClient.includes("cssflower-prepared-visual-pack-transport@1")) {
-  failures.push("Prepared visual-pack transport is missing");
+if (existsSync(join(adapterRoot, "src/cssflower/projectedPageStyles.mjs"))) {
+  failures.push("Projected-page runtime module remains");
 }
 
 const bank = await inspectFlowerboxProductBank(join(repositoryRoot, "build", "generated", "public", "cssflower"));
-if (bank.closureBytes >= 31_000_000) failures.push(`Product bank is too large: ${bank.closureBytes}`);
-if (bank.projectedVisualPackCount !== 37 || bank.projectedVisualPackAssetCount !== 37) {
-  failures.push("Product bank does not contain the 37 block-aligned visual packs");
+if (bank.closureBytes >= 7_000_000) failures.push(`Product bank is too large: ${bank.closureBytes}`);
+if (bank.timelineStateCount !== 360 || bank.geometryStateCount !== 46 ||
+    bank.transformBlockCount !== 3 || bank.lightingAssetCount !== 1 ||
+    bank.lightingQuality !== 60 || bank.visibilityMinimumOwnedPixels !== 8) {
+  failures.push("Product bank is not the accepted rounded q60/min-8 closure");
 }
+
 const report = {
-  schema: "cssgraphics-flowerbox-runtime-audit@1",
+  schema: "cssgraphics-flowerbox-runtime-audit@2",
   status: failures.length === 0 ? "pass" : "fail",
   renderer: "retained-dom-polycss-only",
+  morphTarget: "@layoutit/polycss-morph#createPolyMorphPreparedDomTarget",
   runtimeFiles,
   bank,
   runtime: {
@@ -68,7 +81,15 @@ const report = {
     lightingCalculation: false,
     domGrowth: false,
   },
-  excluded: ["Microsoft source", "Microsoft binaries", "native captures", "oracle packets", "Three.js", "pixelmatch"],
+  excluded: [
+    "Microsoft source",
+    "Microsoft binaries",
+    "native captures",
+    "oracle packets",
+    "projected visual packs",
+    "Three.js",
+    "pixelmatch",
+  ],
   failures,
 };
 const reportPath = join(repositoryRoot, "build", "reports", "flowerbox-runtime-audit.json");

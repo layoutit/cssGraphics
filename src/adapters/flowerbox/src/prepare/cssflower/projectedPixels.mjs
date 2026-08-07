@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import { PNG } from "pngjs";
-import { buildPreparedFullRotationCycle } from "./bloomCycle.mjs";
+import {
+  buildPreparedFullRotationCycle,
+  buildPreparedRoundedProductCycle,
+} from "./bloomCycle.mjs";
 import {
   buildCubeTopology,
   computeSmoothPointNormals,
@@ -19,11 +22,220 @@ const DEPTH_MAX = (1 << 16) - 1;
 const EPSILON = 1e-10;
 const topology = buildCubeTopology();
 const cycle = buildPreparedFullRotationCycle();
+const roundedProductOwnedPixelCounts = new Map();
+const roundedProductTriangleAdjacency = new Map();
 
 export function buildCssflowerPreparedInverseRootTransforms() {
   return Object.freeze(Array.from({ length: cycle.rootStateCount }, (_, rootStateIndex) => (
     preparedInverseRootTransform({ rootStateIndex })
   )));
+}
+
+export function buildCssflowerPreparedFrontFacingSchedule() {
+  return buildFrontFacingSchedule(cycle);
+}
+
+export function buildCssflowerPreparedRoundedFrontFacingSchedule(dilationTicks = 0) {
+  if (!Number.isSafeInteger(dilationTicks) || dilationTicks < 0 || dilationTicks > 4) {
+    throw new RangeError("Prepared cssFlower front-face dilation must be an integer from zero through four");
+  }
+  const schedule = buildFrontFacingSchedule(buildPreparedRoundedProductCycle());
+  if (dilationTicks === 0) return schedule;
+  return Object.freeze(schedule.map((_, stateIndex) => {
+    const selected = new Uint8Array(topology.triangleCount);
+    for (let offset = -dilationTicks; offset <= dilationTicks; offset += 1) {
+      const neighbor = (stateIndex + offset + schedule.length) % schedule.length;
+      for (const leafIndex of schedule[neighbor]) selected[leafIndex] = 1;
+    }
+    return Object.freeze(Array.from(selected, (value, leafIndex) => value === 1 ? leafIndex : -1)
+      .filter((leafIndex) => leafIndex >= 0));
+  }));
+}
+
+export function buildCssflowerPreparedRoundedOcclusionSchedule(options = {}) {
+  const {
+    adjacency = "edge",
+    adjacencyRings = 1,
+    minimumOwnedPixels = 1,
+    sampleGrid = 1,
+    temporalDilationTicks = 1,
+  } = options;
+  if (!["edge", "vertex"].includes(adjacency) ||
+      !Number.isSafeInteger(adjacencyRings) || adjacencyRings < 0 || adjacencyRings > 4 ||
+      !Number.isSafeInteger(minimumOwnedPixels) || minimumOwnedPixels < 1 || minimumOwnedPixels > EDGE * EDGE ||
+      ![1, 2, 4].includes(sampleGrid) ||
+      !Number.isSafeInteger(temporalDilationTicks) || temporalDilationTicks < 0 || temporalDilationTicks > 4) {
+    throw new RangeError("Prepared cssFlower occlusion schedule options are invalid");
+  }
+  const ownedPixelCounts = getRoundedProductOwnedPixelCounts(sampleGrid);
+  const adjacencyTable = adjacencyRings > 0 ? triangleAdjacency(adjacency) : null;
+  const spatialSchedule = ownedPixelCounts.map((counts) => {
+    const selected = new Uint8Array(topology.triangleCount);
+    for (let leafIndex = 0; leafIndex < counts.length; leafIndex += 1) {
+      if (counts[leafIndex] >= minimumOwnedPixels) selected[leafIndex] = 1;
+    }
+    for (let ring = 0; ring < adjacencyRings; ring += 1) {
+      const previous = selected.slice();
+      for (let leafIndex = 0; leafIndex < previous.length; leafIndex += 1) {
+        if (previous[leafIndex] !== 1) continue;
+        for (const neighbor of adjacencyTable[leafIndex]) selected[neighbor] = 1;
+      }
+    }
+    return selected;
+  });
+  return Object.freeze(spatialSchedule.map((_, stateIndex) => {
+    const selected = new Uint8Array(topology.triangleCount);
+    for (let offset = -temporalDilationTicks; offset <= temporalDilationTicks; offset += 1) {
+      const neighbor = (stateIndex + offset + spatialSchedule.length) % spatialSchedule.length;
+      for (let leafIndex = 0; leafIndex < topology.triangleCount; leafIndex += 1) {
+        selected[leafIndex] |= spatialSchedule[neighbor][leafIndex];
+      }
+    }
+    return Object.freeze(Array.from(selected, (value, leafIndex) => value === 1 ? leafIndex : -1)
+      .filter((leafIndex) => leafIndex >= 0));
+  }));
+}
+
+function getRoundedProductOwnedPixelCounts(sampleGrid) {
+  const cached = roundedProductOwnedPixelCounts.get(sampleGrid);
+  if (cached) return cached;
+  const productCycle = buildPreparedRoundedProductCycle();
+  const sampleCount = sampleGrid * sampleGrid;
+  const owner = new Int16Array(EDGE * EDGE * sampleCount);
+  const depth = new Uint16Array(EDGE * EDGE * sampleCount);
+  const counts = new Uint32Array(topology.triangleCount);
+  const result = Object.freeze(productCycle.states.map((state) => {
+    owner.fill(-1);
+    depth.fill(DEPTH_MAX);
+    counts.fill(0);
+    const positions = deformCubePoints(topology, state.sf);
+    const rotation = sourceModelRotation(state);
+    const projectedPoints = topology.points.map((point) => {
+      const pointOffset = point.index * 3;
+      const world = rotateSourceVector(rotation, [
+        positions[pointOffset],
+        positions[pointOffset + 1],
+        positions[pointOffset + 2],
+      ]);
+      const eyeDistance = CAMERA.eye[2] - world[2];
+      if (eyeDistance < CAMERA.near || eyeDistance > CAMERA.far) {
+        throw new Error(`cssFlower prepared occlusion point ${point.index} left the source clip interval`);
+      }
+      return {
+        x: HALF_EDGE + FOCAL_PIXELS * world[0] / eyeDistance,
+        y: HALF_EDGE - FOCAL_PIXELS * world[1] / eyeDistance,
+        windowDepth: windowDepthForEyeDistance(eyeDistance),
+      };
+    });
+    for (const triangle of topology.triangles) {
+      const first = projectedPoints[triangle.pointIndices[0]];
+      const second = projectedPoints[triangle.pointIndices[1]];
+      const third = projectedPoints[triangle.pointIndices[2]];
+      const area = orient(first, second, third);
+      if (area >= -EPSILON) continue;
+      const inverseArea = 1 / area;
+      const minX = Math.max(0, Math.floor(Math.min(first.x, second.x, third.x)));
+      const maxX = Math.min(EDGE - 1, Math.floor(Math.max(first.x, second.x, third.x)));
+      const minY = Math.max(0, Math.floor(Math.min(first.y, second.y, third.y)));
+      const maxY = Math.min(EDGE - 1, Math.floor(Math.max(first.y, second.y, third.y)));
+      for (let y = minY; y <= maxY; y += 1) {
+        for (let x = minX; x <= maxX; x += 1) {
+          const pixelIndex = y * EDGE + x;
+          for (let sampleY = 0; sampleY < sampleGrid; sampleY += 1) {
+            for (let sampleX = 0; sampleX < sampleGrid; sampleX += 1) {
+              const sample = {
+                x: x + (sampleX + 0.5) / sampleGrid,
+                y: y + (sampleY + 0.5) / sampleGrid,
+              };
+              const weight0 = orient(second, third, sample) * inverseArea;
+              const weight1 = orient(third, first, sample) * inverseArea;
+              const weight2 = orient(first, second, sample) * inverseArea;
+              if (weight0 < -EPSILON || weight1 < -EPSILON || weight2 < -EPSILON) continue;
+              const windowDepth = weight0 * first.windowDepth +
+                weight1 * second.windowDepth + weight2 * third.windowDepth;
+              const depth16 = Math.max(0, Math.min(DEPTH_MAX, Math.round(windowDepth * DEPTH_MAX)));
+              const sampleIndex = pixelIndex * sampleCount + sampleY * sampleGrid + sampleX;
+              if (depth16 >= depth[sampleIndex]) continue;
+              const previousOwner = owner[sampleIndex];
+              if (previousOwner >= 0) counts[previousOwner] -= 1;
+              owner[sampleIndex] = triangle.index;
+              depth[sampleIndex] = depth16;
+              counts[triangle.index] += 1;
+            }
+          }
+        }
+      }
+    }
+    const result = Object.freeze(Array.from(counts));
+    if (!result.some((count) => count > 0)) {
+      throw new Error(`Prepared cssFlower occlusion schedule is empty at tick ${state.tick}`);
+    }
+    return result;
+  }));
+  roundedProductOwnedPixelCounts.set(sampleGrid, result);
+  return result;
+}
+
+function triangleAdjacency(kind) {
+  const cached = roundedProductTriangleAdjacency.get(kind);
+  if (cached) return cached;
+  const owners = new Map();
+  for (const triangle of topology.triangles) {
+    const pointKeys = triangle.pointIndices.map((pointIndex) => topology.points[pointIndex].source.join(","));
+    const keys = kind === "edge"
+      ? [
+          [pointKeys[0], pointKeys[1]].sort().join("|"),
+          [pointKeys[1], pointKeys[2]].sort().join("|"),
+          [pointKeys[2], pointKeys[0]].sort().join("|"),
+        ]
+      : pointKeys;
+    for (const key of keys) {
+      const indices = owners.get(key) ?? [];
+      indices.push(triangle.index);
+      owners.set(key, indices);
+    }
+  }
+  const neighbors = Array.from({ length: topology.triangleCount }, () => new Set());
+  for (const indices of owners.values()) {
+    for (const left of indices) {
+      for (const right of indices) {
+        if (left !== right) neighbors[left].add(right);
+      }
+    }
+  }
+  const result = Object.freeze(neighbors.map((values) => Object.freeze([...values].sort((a, b) => a - b))));
+  roundedProductTriangleAdjacency.set(kind, result);
+  return result;
+}
+
+function buildFrontFacingSchedule(selectedCycle) {
+  return Object.freeze(selectedCycle.states.map((state) => {
+    const positions = deformCubePoints(topology, state.sf);
+    const rotation = sourceModelRotation(state);
+    const projectedPoints = topology.points.map((point) => {
+      const offset = point.index * 3;
+      const world = rotateSourceVector(rotation, [
+        positions[offset],
+        positions[offset + 1],
+        positions[offset + 2],
+      ]);
+      const eyeDistance = CAMERA.eye[2] - world[2];
+      return Object.freeze({
+        x: HALF_EDGE + FOCAL_PIXELS * world[0] / eyeDistance,
+        y: HALF_EDGE - FOCAL_PIXELS * world[1] / eyeDistance,
+      });
+    });
+    const leafIndices = topology.triangles
+      .filter((triangle) => {
+        const vertices = triangle.pointIndices.map((pointIndex) => projectedPoints[pointIndex]);
+        return orient(vertices[0], vertices[1], vertices[2]) < -EPSILON;
+      })
+      .map((triangle) => triangle.index);
+    if (leafIndices.length < 1 || leafIndices.length >= topology.triangleCount) {
+      throw new Error(`Prepared cssFlower front-face count ${leafIndices.length} drifted at tick ${state.tick}`);
+    }
+    return Object.freeze(leafIndices);
+  }));
 }
 
 export function scanCssflowerProjectedLeafBounds() {

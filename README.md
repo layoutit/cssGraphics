@@ -43,8 +43,9 @@ pnpm dev:3dpipes
 ### Flower Box
 
 [`src/adapters/flowerbox`](src/adapters/flowerbox) is an independent PolyCSS
-reconstruction of the classic Flower Box. Its complete prepared cycle uses
-1,200 stable retained triangle leaves and streams a hash-bound q40 visual bank.
+reconstruction of the classic Flower Box. Its rounded prepared cycle uses
+1,200 stable retained triangle leaves, prepared Morph transforms, and a
+hash-bound q60 space-texel lighting atlas.
 
 ```sh
 pnpm prepare:flowerbox:artifact

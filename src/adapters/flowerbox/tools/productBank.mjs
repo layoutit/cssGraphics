@@ -3,7 +3,7 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { gunzipSync } from "node:zlib";
 
-export const FLOWERBOX_PRODUCT_BANK_SCHEMA = "cssflower-product-bank@2";
+export const FLOWERBOX_PRODUCT_BANK_SCHEMA = "cssflower-product-bank@3";
 
 export async function inspectFlowerboxProductBank(root, { verifyDescriptor = true } = {}) {
   const manifestBytes = await readFile(join(root, "manifest.json"));
@@ -13,53 +13,111 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
   assert(entry?.sceneUrl === "/cssflower/scenes/default-cube.json.gz", "scene URL");
   assert(entry?.snapshotUrl === "/cssflower/scenes/default-cube.polycss.html.gz", "snapshot URL");
 
-  const scenePath = join(root, "scenes", "default-cube.json.gz");
-  const snapshotPath = join(root, "scenes", "default-cube.polycss.html.gz");
-  const sceneEncoded = await readFile(scenePath);
-  const snapshotEncoded = await readFile(snapshotPath);
+  const sceneEncoded = await readFile(join(root, "scenes", "default-cube.json.gz"));
+  const snapshotEncoded = await readFile(join(root, "scenes", "default-cube.polycss.html.gz"));
   const sceneDecoded = gunzipSync(sceneEncoded);
   const snapshotDecoded = gunzipSync(snapshotEncoded);
   const scene = JSON.parse(sceneDecoded.toString("utf8"));
-  const projected = scene.playback?.projectedPixels;
+  const playback = scene.playback;
+  const transforms = playback?.transformAsset;
+  const lighting = scene.lighting;
 
   assert(scene.schema === "cssflower-prepared-scene@1", "scene schema");
-  assert(scene.metrics?.preparedLeafCount === 1_200 && scene.metrics?.preparedRootCount === 1, "retained counts");
-  assert(scene.renderer?.morphTarget === "createPolyMorphPreparedDomTarget" && scene.renderer?.stableDom === true, "retained Morph target");
-  assert(scene.renderer?.merge === false && scene.metrics?.mergedCellCount === 0, "triangle topology");
-  assert(scene.metrics?.runtimePolygonConstructionCount === 0 && scene.metrics?.runtimeRadialProjectionCount === 0 &&
-    scene.metrics?.runtimeNormalCalculationCount === 0 && scene.metrics?.runtimeLightingCalculationCount === 0 &&
-    scene.metrics?.runtimeDomGrowth === false, "zero runtime construction");
-  assert(projected?.schema === "cssflower-prepared-projected-pixel-playback@1" && projected.pageCount === 2_333 &&
-    projected.pages?.length === 2_333 && projected.layoutBlocks?.length === 37 && projected.retainedLeafCount === 1_200,
-  "prepared visual bank");
-  assert(projected.visualEncoding?.codec === "AVIF" && projected.visualEncoding?.quality === 40 &&
-    projected.visualEncoding?.chromaSubsampling === "4:4:4", "q40 AVIF binding");
-  assert(projected.runtimeProjection === false && projected.runtimeRasterization === false &&
-    projected.runtimeGeometryConstruction === false && projected.runtimeNormalCalculation === false &&
-    projected.runtimeLightingCalculation === false && projected.runtimeDomGrowth === false, "projected runtime boundary");
-  assert(!scene.meshes && !scene.oracle && !scene.playback.stateEvidenceUrl && !scene.playback.transformAsset,
+  assert(scene.metrics?.preparedLeafCount === 1_200 && scene.metrics?.preparedRootCount === 1,
+    "retained counts");
+  assert(scene.metrics?.preparedTimelineStateCount === 360 &&
+    scene.metrics?.preparedGeometryStateCount === 46 &&
+    scene.metrics?.retainedSourceOracleTimelineStateCount === 9_331,
+  "prepared cycle counts");
+  assert(scene.renderer?.morphTarget === "createPolyMorphPreparedDomTarget" &&
+    scene.renderer?.stableDom === true && scene.renderer?.merge === false,
+  "retained Morph target");
+  assert(scene.metrics?.mergedCellCount === 0 && scene.metrics?.mergeEligibleCellCount === 0,
+    "triangle topology");
+  assert(scene.metrics?.runtimePolygonConstructionCount === 0 &&
+    scene.metrics?.runtimeRadialProjectionCount === 0 &&
+    scene.metrics?.runtimeNormalCalculationCount === 0 &&
+    scene.metrics?.runtimeLightingCalculationCount === 0 &&
+    scene.metrics?.runtimeDomGrowth === false,
+  "zero runtime construction");
+  assert(playback?.schema === "cssflower-prepared-playback@1" &&
+    playback.scope === "rounded-product-cycle-spike-phase-omitted" &&
+    playback.cycle?.schema === "cssflower-prepared-rounded-product-cycle@1" &&
+    playback.cycle?.stateCount === 360 && playback.cycle?.geometryStateCount === 46 &&
+    playback.cycle?.states?.length === 360 && playback.cycle?.rootTransforms?.length === 360,
+  "rounded prepared cycle");
+  assert(!Object.hasOwn(playback, "projectedPixels"), "projected product removed");
+  assert(playback.frontFacingSchedule?.schema === "cssflower-prepared-front-face-transform-schedule@1" &&
+    playback.frontFacingSchedule.minimumOwnedPixels === 8 &&
+    playback.frontFacingSchedule.stateCount === 360 &&
+    playback.frontFacingSchedule.faceCount === 1_200,
+  "prepared visibility schedule");
+  assert(transforms?.schema === "cssflower-prepared-matrix3d-blocks@1" &&
+    transforms.blockCount === 3 && transforms.blocks?.length === 3 &&
+    transforms.geometryStateCount === 46 && transforms.triangleCount === 1_200,
+  "prepared transform blocks");
+  assert(lighting?.schema === "cssflower-prepared-space-texel-lighting@4" &&
+    lighting.timelineRowCount === 360 && lighting.faceCount === 1_200 &&
+    lighting.grid?.schema === "cssflower-prepared-leaf-lighting-grid@1" &&
+    lighting.grid?.quality === 60 && lighting.grid?.columns === 12 && lighting.grid?.rows === 1 &&
+    lighting.assetCount === 1 && lighting.faces?.length === 1_200,
+  "prepared q60 lighting grid");
+  assert(!scene.meshes && !scene.oracle && !playback.stateEvidenceUrl && !transforms.sourceFloat32,
     "product-only scene");
-  assert(!manifest.assets?.stateEvidence && !manifest.productionTransport?.assets?.some((asset) => asset.id === "state-evidence"),
-    "state evidence excluded");
+  assert(!manifest.assets?.stateEvidence && !manifest.productionTransport?.assets?.some((asset) =>
+    asset.id === "state-evidence"), "state evidence excluded");
+
   const publicText = `${manifestBytes}\n${sceneDecoded}`;
-  assert(!/(?:\.local\/|nativeQualification|executableSha256|compilerSha256|stateEvidenceUrl)/u.test(publicText),
+  assert(!/(?:\/Users\/|\\Users\\|file:\/\/|\.local\/|\/opt\/homebrew\/|nativeQualification|executableSha256|compilerSha256|stateEvidenceUrl)/u.test(publicText),
     "private oracle metadata excluded");
+
   const snapshot = snapshotDecoded.toString("utf8");
-  assert(count(snapshot, /data-cssflower-retained-leaf="true"/gu) === 1_200, "snapshot leaves");
-  assert(count(snapshot, /data-cssflower-rotation-root="true"/gu) === 1, "snapshot root");
+  assert(count(snapshot, /\sdata-[a-z0-9-]+=/giu) === 0, "snapshot data attributes");
+  assert(count(snapshot, /<u class="[a-zA-Z]{1,2}"><\/u>/gu) === 1_200, "snapshot leaves");
+  assert(count(snapshot, /\.polycss-mesh>u\.[a-zA-Z]{1,2} \{/gu) === 1_200,
+    "snapshot leaf rules");
+  assert(count(snapshot, /class="polycss-camera"/gu) === 1 &&
+    count(snapshot, /class="polycss-scene"/gu) === 1 &&
+    count(snapshot, /class="polycss-mesh"/gu) === 1,
+  "snapshot retained hierarchy");
   assert(count(snapshot, /<(?:script|canvas|svg)\b/giu) === 0, "snapshot forbidden elements");
   assert(sha256(snapshotDecoded) === entry.snapshot.sha256, "snapshot decoded identity");
+  assert(snapshotDecoded.length === entry.snapshot.byteLength, "snapshot decoded length");
 
-  const visualPacks = await inspectVisualPacks(root, projected);
+  const expectedAssetPaths = new Set([
+    "manifest.json",
+    "scenes/default-cube.json.gz",
+    "scenes/default-cube.polycss.html.gz",
+  ]);
+  let transformBytes = 0;
+  for (const block of transforms.blocks) {
+    const path = productPath(block.assetUrl);
+    const bytes = await readFile(join(root, path));
+    assert(bytes.length === block.byteLength && sha256(bytes) === block.sha256,
+      `transform block ${block.index} identity`);
+    const decoded = gunzipSync(bytes);
+    assert(decoded.length === block.decodedByteLength && sha256(decoded) === block.decodedSha256,
+      `transform block ${block.index} decoded identity`);
+    expectedAssetPaths.add(path);
+    transformBytes += bytes.length;
+  }
+  assert(transformBytes === transforms.byteLength, "transform aggregate bytes");
+
+  const lightingPath = productPath(lighting.grid.assetUrl);
+  const lightingBytes = await readFile(join(root, lightingPath));
+  assert(lightingBytes.length === lighting.grid.byteLength &&
+    sha256(lightingBytes) === lighting.grid.sha256 &&
+    lighting.grid.sha256 === lighting.assetSha256,
+  "lighting grid identity");
+  assert(lightingBytes.subarray(4, 12).toString("ascii").startsWith("ftypavi"), "lighting AVIF signature");
+  expectedAssetPaths.add(lightingPath);
 
   const files = (await walk(root))
     .map((path) => relative(root, path).split(sep).join("/"))
     .filter((path) => path !== "product-bank.json")
     .sort();
-  const projectedAssetFiles = files.filter((path) => path.startsWith("assets/projected/"));
-  assert(projectedAssetFiles.length === visualPacks.assetCount && projectedAssetFiles.every((path) =>
-    /^assets\/projected\/visual-pack-[a-f0-9]{64}\.bin$/u.test(path)),
-  "pack-only projected transport");
+  assert(files.length === expectedAssetPaths.size && files.every((path) => expectedAssetPaths.has(path)),
+    "exact product file closure");
   const closure = createHash("sha256");
   let closureBytes = 0;
   for (const path of files) {
@@ -67,6 +125,7 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
     closure.update(path).update("\0").update(bytes).update("\0");
     closureBytes += bytes.length;
   }
+
   const summary = Object.freeze({
     schema: FLOWERBOX_PRODUCT_BANK_SCHEMA,
     closureSha256: closure.digest("hex"),
@@ -74,14 +133,15 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
     fileCount: files.length,
     retainedTriangleLeafCount: 1_200,
     retainedRotationRootCount: 1,
-    timelineStateCount: 9_331,
-    projectedPageCount: projected.pageCount,
-    projectedAtlasAssetCount: new Set(projected.pages.map((page) => page.atlas.assetUrl)).size,
-    projectedLayoutBlockCount: projected.layoutBlocks.length,
-    projectedVisualPackCount: visualPacks.packCount,
-    projectedVisualPackAssetCount: visualPacks.assetCount,
-    projectedVisualPackBytes: visualPacks.totalPackBytes,
-    projectedLogicalVisualBankBytes: projected.contentAddressedAtlasBytes + projected.compressedLayoutBytes,
+    timelineStateCount: 360,
+    geometryStateCount: 46,
+    retainedSourceOracleTimelineStateCount: 9_331,
+    transformBlockCount: transforms.blockCount,
+    transformAssetBytes: transformBytes,
+    lightingAssetCount: 1,
+    lightingAssetBytes: lightingBytes.length,
+    lightingQuality: lighting.grid.quality,
+    visibilityMinimumOwnedPixels: playback.frontFacingSchedule.minimumOwnedPixels,
     sceneEncodedSha256: sha256(sceneEncoded),
     sceneDecodedSha256: sha256(sceneDecoded),
     snapshotEncodedSha256: sha256(snapshotEncoded),
@@ -92,86 +152,13 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
     for (const [key, value] of Object.entries(summary)) {
       assert(descriptor[key] === value, `product descriptor ${key}`);
     }
+    assert(descriptor.publicBoundary?.microsoftSourceIncluded === false &&
+      descriptor.publicBoundary?.microsoftBinaryIncluded === false &&
+      descriptor.publicBoundary?.nativeCaptureIncluded === false &&
+      descriptor.publicBoundary?.oraclePacketIncluded === false,
+    "product public boundary");
   }
   return summary;
-}
-
-async function inspectVisualPacks(root, projected) {
-  const transport = projected.transport;
-  assert(transport?.schema === "cssflower-prepared-visual-pack-transport@1" &&
-    transport.representation === "layout-block-aligned-exact-byte-slices" &&
-    transport.packCount === projected.layoutBlocks.length && transport.packCount === 37 &&
-    transport.blockPageCount === projected.layoutBlockPageCount &&
-    transport.compressedResidentPackBudget === 2 && transport.earlyPrefetchPageOffset === 16 &&
-    transport.logicalContentAddressedAtlasBytes === projected.contentAddressedAtlasBytes &&
-    transport.logicalCompressedLayoutBytes === projected.compressedLayoutBytes &&
-    transport.runtimeGeometryConstruction === false && transport.runtimeProjection === false &&
-    transport.runtimeRasterization === false && transport.runtimeLightingCalculation === false &&
-    transport.packs?.length === transport.packCount,
-  "visual pack transport");
-
-  const expectedAssets = new Map();
-  let totalPackBytes = 0;
-  let maximumPackBytes = 0;
-  for (let packIndex = 0; packIndex < transport.packs.length; packIndex += 1) {
-    const pack = transport.packs[packIndex];
-    const block = projected.layoutBlocks[packIndex];
-    assert(pack?.schema === "cssflower-prepared-visual-pack@1" && pack.index === packIndex &&
-      pack.startPageIndex === block.startPageIndex && pack.pageCount === block.pageCount &&
-      Number.isSafeInteger(pack.byteLength) && pack.byteLength > 0 &&
-      /^[a-f0-9]{64}$/u.test(pack.sha256 ?? "") &&
-      pack.layout?.byteOffset === 0 && pack.layout.byteLength === block.byteLength &&
-      pack.layout.sha256 === block.sha256 && pack.layout.decodedByteLength === block.decodedByteLength &&
-      pack.layout.decodedSha256 === block.decodedSha256 &&
-      pack.atlasSlices?.length === pack.pageCount,
-    `visual pack ${packIndex} descriptor`);
-    addExpected(expectedAssets, pack.assetUrl, pack.byteLength, pack.sha256);
-    let expectedOffset = pack.layout.byteLength;
-    for (let localPageIndex = 0; localPageIndex < pack.pageCount; localPageIndex += 1) {
-      const pageIndex = pack.startPageIndex + localPageIndex;
-      const page = projected.pages[pageIndex];
-      const slice = pack.atlasSlices[localPageIndex];
-      assert(slice?.pageIndex === pageIndex && slice.byteOffset === expectedOffset &&
-        slice.byteLength === page.atlas.byteLength && slice.sha256 === page.atlas.sha256 &&
-        slice.mimeType === page.atlas.mimeType,
-      `visual pack ${packIndex} page ${pageIndex} descriptor`);
-      expectedOffset += slice.byteLength;
-    }
-    assert(expectedOffset === pack.byteLength, `visual pack ${packIndex} byte coverage`);
-    totalPackBytes += pack.byteLength;
-    maximumPackBytes = Math.max(maximumPackBytes, pack.byteLength);
-  }
-  assert(totalPackBytes === transport.totalPackBytes && maximumPackBytes === transport.maximumPackBytes,
-    "visual pack aggregate bytes");
-
-  await parallel(transport.packs, 8, async (pack) => {
-    const bytes = await readFile(publicPath(root, pack.assetUrl));
-    assert(bytes.length === pack.byteLength && sha256(bytes) === pack.sha256,
-      `visual pack ${pack.index} identity`);
-    const block = projected.layoutBlocks[pack.index];
-    const layoutCompressed = bytes.subarray(
-      pack.layout.byteOffset,
-      pack.layout.byteOffset + pack.layout.byteLength,
-    );
-    assert(layoutCompressed.length === block.byteLength && sha256(layoutCompressed) === block.sha256,
-      `visual pack ${pack.index} layout slice`);
-    const layoutDecoded = gunzipSync(layoutCompressed);
-    assert(layoutDecoded.length === block.decodedByteLength && sha256(layoutDecoded) === block.decodedSha256,
-      `visual pack ${pack.index} decoded layout`);
-    for (const slice of pack.atlasSlices) {
-      const page = projected.pages[slice.pageIndex];
-      const atlasBytes = bytes.subarray(slice.byteOffset, slice.byteOffset + slice.byteLength);
-      assert(atlasBytes.length === page.atlas.byteLength && sha256(atlasBytes) === page.atlas.sha256,
-        `visual pack ${pack.index} atlas slice ${slice.pageIndex}`);
-    }
-  });
-
-  return Object.freeze({
-    packCount: transport.packCount,
-    assetCount: expectedAssets.size,
-    totalPackBytes,
-    maximumPackBytes,
-  });
 }
 
 export async function writeFlowerboxProductBankDescriptor(root, summary, source) {
@@ -194,16 +181,10 @@ export async function writeFlowerboxProductBankDescriptor(root, summary, source)
   return descriptor;
 }
 
-function addExpected(map, url, byteLength, hash) {
-  assert(typeof url === "string" && url.startsWith("/cssflower/") && !url.includes(".."), "asset URL");
-  assert(Number.isSafeInteger(byteLength) && byteLength > 0 && /^[a-f0-9]{64}$/u.test(hash), "asset descriptor");
-  const previous = map.get(url);
-  if (previous) assert(previous.byteLength === byteLength && previous.sha256 === hash, `alias ${url}`);
-  else map.set(url, { byteLength, sha256: hash });
-}
-
-function publicPath(root, url) {
-  return join(root, url.slice("/cssflower/".length));
+function productPath(url) {
+  assert(typeof url === "string" && url.startsWith("/cssflower/") && !url.includes(".."),
+    "safe product asset URL");
+  return url.slice("/cssflower/".length);
 }
 
 async function walk(root) {
@@ -215,16 +196,6 @@ async function walk(root) {
     else throw new Error(`Unsupported product-bank entry ${path}`);
   }
   return paths;
-}
-
-async function parallel(values, concurrency, task) {
-  let next = 0;
-  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, async () => {
-    while (next < values.length) {
-      const index = next++;
-      await task(values[index]);
-    }
-  }));
 }
 
 function sha256(bytes) {

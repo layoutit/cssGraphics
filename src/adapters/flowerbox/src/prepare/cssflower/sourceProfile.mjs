@@ -5,7 +5,7 @@ export const CSSFLOWER_SOURCE_PROFILE = Object.freeze({
   schema: "cssflower-source-profile@1",
   id: "microsoft-flower-box-default-cube-subdiv10",
   authority: "src/adapters/flowerbox/README.md",
-  authorityStatus: "pinned-source-native-state-validation-in-progress",
+  authorityStatus: "pinned-source-native-state-validated-locally-not-packaged",
   geometry: "cube",
   subdivision: 10,
   sideCount: 6,

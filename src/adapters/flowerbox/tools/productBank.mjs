@@ -59,13 +59,15 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
     transforms.blockCount === 5 && transforms.blocks?.length === 5 &&
     transforms.geometryStateCount === 73 && transforms.triangleCount === 1_200,
   "prepared transform blocks");
-  assert(lighting?.schema === "cssflower-prepared-space-texel-lighting@5" &&
+  assert(lighting?.schema === "cssflower-prepared-space-texel-lighting@6" &&
+    lighting.boundaryClipMaximumSf === 1.0000001192092896 &&
+    lighting.boundaryClipMaximumSfHex === "3f800001" &&
     lighting.timelineRowCount === 360 && lighting.faceCount === 1_200 &&
     lighting.grid?.schema === "cssflower-prepared-leaf-lighting-grid@1" &&
     lighting.grid?.encoding === "avif-flat-12x1-lossy-q83-alpha-lossless-speed4-yuv444" &&
     lighting.grid?.quality === 83 && lighting.grid?.alphaQuality === 100 &&
     lighting.grid?.alphaCoverage ===
-      "mario-rounded-triangle-4x4-supersampled-nearest-shared-edge-side-boundary-half-plane-clipped-all-shared-vertex-half-texel-inset-one-texel-guarded-max-pool" &&
+      "mario-rounded-triangle-4x4-supersampled-nearest-shared-edge-conjoined-through-sf-3f800001-side-boundary-half-plane-clipped-all-shared-vertex-half-texel-inset-one-texel-guarded-max-pool" &&
     lighting.grid?.columns === 12 && lighting.grid?.rows === 1 &&
     lighting.pages?.every((page) => page.sourceEncoding === "PNG-RGBA8") &&
     lighting.assetCount === 1 && lighting.faces?.length === 1_200,

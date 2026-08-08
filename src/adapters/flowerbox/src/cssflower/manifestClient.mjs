@@ -8,6 +8,8 @@ import {
   validatePreparedMorphAssets,
 } from "./preparedAssetLoaders.mjs";
 import {
+  CSSFLOWER_BOUNDARY_CLIP_MAXIMUM_SF,
+  CSSFLOWER_BOUNDARY_CLIP_MAXIMUM_SF_HEX,
   CSSFLOWER_BOUNDARY_SEAM_BLEED,
   CSSFLOWER_LIGHTING_ATLAS_HEIGHT,
   CSSFLOWER_LIGHTING_ATLAS_WIDTH,
@@ -67,6 +69,8 @@ export async function loadPreparedScene(manifest, routeState) {
       sceneData?.renderer?.seamBleedBoundaryAdjacentTriangleCount !== 432 ||
       sceneData?.renderer?.merge !== false ||
       sceneData?.lighting?.schema !== CSSFLOWER_LIGHTING_SCHEMA ||
+      sceneData?.lighting?.boundaryClipMaximumSf !== CSSFLOWER_BOUNDARY_CLIP_MAXIMUM_SF ||
+      sceneData?.lighting?.boundaryClipMaximumSfHex !== CSSFLOWER_BOUNDARY_CLIP_MAXIMUM_SF_HEX ||
       sceneData?.lighting?.physicalLayout !== CSSFLOWER_LIGHTING_LAYOUT ||
       sceneData?.lighting?.rasterMode !== CSSFLOWER_LIGHTING_RASTER_MODE ||
       sceneData?.lighting?.sampling !== CSSFLOWER_LIGHTING_SAMPLING ||
@@ -169,8 +173,8 @@ export async function loadPreparedScene(manifest, routeState) {
 function validPreparedLightingAddressSchedule(schedule) {
   return schedule?.schema === "cssflower-prepared-exact-sparse-lighting-address-schedule@1" &&
     schedule.stateCount === 360 && schedule.faceCount === 1_200 && schedule.threshold === 0 &&
-    schedule.selectionDomain === "prepared-source-vertex-lighting-rgb8-canonical-alpha-edge-mask-and-side-boundary-clip-geometry" &&
-    schedule.comparison === "exact-three-canonical-point-rgb8-plus-remapped-edge-mask-and-side-boundary-clip-geometry-per-retained-triangle" &&
+    schedule.selectionDomain === "prepared-source-vertex-lighting-rgb8-canonical-alpha-edge-mask-and-conjoined-side-boundary-clip-geometry" &&
+    schedule.comparison === "exact-three-canonical-point-rgb8-plus-remapped-edge-mask-and-conjoined-side-boundary-clip-geometry-per-retained-triangle" &&
     schedule.cycleBoundaryPolicy === "force-all-faces-to-state-zero-on-each-360-state-wrap" &&
     Number.isSafeInteger(schedule.updateCount) && schedule.updateCount >= 1_200 &&
     Number.isFinite(schedule.meanUpdatesPerState) && schedule.meanUpdatesPerState > 0 &&

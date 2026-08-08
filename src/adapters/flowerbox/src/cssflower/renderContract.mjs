@@ -3,12 +3,14 @@ export const CSSFLOWER_SEAM_BLEED_TEXT = String(CSSFLOWER_SEAM_BLEED);
 export const CSSFLOWER_BOUNDARY_SEAM_BLEED = 0.125;
 export const CSSFLOWER_BOUNDARY_SEAM_BLEED_TEXT = String(CSSFLOWER_BOUNDARY_SEAM_BLEED);
 export const CSSFLOWER_SEAM_BLEED_POLICY = "side-local-shared-edges-boundary-ring-0.125";
-export const CSSFLOWER_LIGHTING_SCHEMA = "cssflower-prepared-space-texel-lighting@5";
+export const CSSFLOWER_LIGHTING_SCHEMA = "cssflower-prepared-space-texel-lighting@6";
 export const CSSFLOWER_LIGHTING_LAYOUT = "guttered-leaf-raster-shelves-by-horizontal-page-grid-and-timeline-state-slices";
 export const CSSFLOWER_LIGHTING_RASTER_MODE = "leaf-resolution";
 export const CSSFLOWER_LIGHTING_SAMPLING = "endpoint-aligned-pixel-centers";
 export const CSSFLOWER_LIGHTING_ALPHA_COVERAGE =
-  "mario-rounded-triangle-4x4-supersampled-nearest-shared-edge-side-boundary-half-plane-clipped-all-shared-vertex-half-texel-inset-one-texel-guarded-max-pool";
+  "mario-rounded-triangle-4x4-supersampled-nearest-shared-edge-conjoined-through-sf-3f800001-side-boundary-half-plane-clipped-all-shared-vertex-half-texel-inset-one-texel-guarded-max-pool";
+export const CSSFLOWER_BOUNDARY_CLIP_MAXIMUM_SF = 1.0000001192092896;
+export const CSSFLOWER_BOUNDARY_CLIP_MAXIMUM_SF_HEX = "3f800001";
 export const CSSFLOWER_LIGHTING_PAGE_ROWS = 32;
 export const CSSFLOWER_LIGHTING_PAGE_COUNT = 12;
 export const CSSFLOWER_LIGHTING_MICRO_CONTENT_SIZE = 2;

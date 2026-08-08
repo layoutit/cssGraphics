@@ -108,11 +108,12 @@ export function inspectCandidatePath(candidatePath, bytes = null) {
   const basename = path.slice(path.lastIndexOf("/") + 1).toLowerCase();
   const extension = extname(basename);
   const readmeMedia = README_MEDIA_PATHS.has(path);
+  const adapterToolSource = /^src\/adapters\/[^/]+\/tools\/.*\.(?:c|mjs)$/u.test(path);
   if (basename.startsWith("baserom.")
     || (DATA_EXTENSIONS.has(extension) && !readmeMedia)) {
     issues.push(`Nintendo/game-data-capable extension or name is denied: ${extension || basename}`);
   }
-  if (!path.startsWith("internal/")
+  if (!path.startsWith("internal/") && !adapterToolSource
     && /^(screenshot|capture|frame[-_]?\d+|trace)([._-]|$)/i.test(basename)) {
     issues.push("capture, screenshot, frame, or trace artifact is denied");
   }

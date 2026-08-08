@@ -1,0 +1,183 @@
+{
+  "schema": "polycss-reference-lock@2",
+  "project": "cssMenger",
+  "target": {
+    "family": "XScreenSaver",
+    "hack": "menger",
+    "release": "6.15",
+    "description": "A rotating, depth-changing three-dimensional Menger sponge"
+  },
+  "repository": {
+    "url": "https://github.com/Zygo/xscreensaver",
+    "role": "read-only mirror of the XScreenSaver 6.15 source release",
+    "commit": "906693799e4fb7581436590cf84ecb2d3c9186ba",
+    "tree": "0505073ed2b1d5d51ef373da1b3801b7daca772e",
+    "upstreamRelease": "https://www.jwz.org/xscreensaver/xscreensaver-6.15.tar.gz"
+  },
+  "artifacts": {
+    "hacks/glx/menger.c": {
+      "sha256": "eb7687dd6f7e946f4d45af647b0c0eb081a0011bf55c0c74261b5ad6a16d21c0",
+      "bytes": 17097,
+      "gitBlob": "a1184009c4f308ddf327314f2cd21511bc51bd29"
+    },
+    "utils/colors.c": {
+      "sha256": "d10c5334e617a3043f674e6b5849e01887433a9c48b3df081a1b47cb61a48318",
+      "bytes": 20132,
+      "gitBlob": "01f8fc6efe206d5da847b15202eca8aeac68cca1"
+    },
+    "utils/colors.h": {
+      "sha256": "3ddd76a53f318fdc968ccb254aa125ae750a0054f6dbe5e22d2234a56e9c415e",
+      "bytes": 5921,
+      "gitBlob": "526a38a09b16061de07c19ea80a00997279f163e"
+    },
+    "utils/hsv.c": {
+      "sha256": "b0dcc28f6ed1b6709f00aac1e796a8d28c8285a6a3c698d008bce0aed4d0f265",
+      "bytes": 2189,
+      "gitBlob": "cf1cc8d18e27462e229061e7c967002a75bf23fc"
+    },
+    "utils/hsv.h": {
+      "sha256": "4f263f1cc0b56694281417107b2e51b7b5e4ac032f6020349b6e671cbcaac2b6",
+      "bytes": 998,
+      "gitBlob": "e0fdfb0fe60a8b9a204da7712069bbc52ffed6b0"
+    },
+    "hacks/glx/rotator.c": {
+      "sha256": "0e63d9a6fedcdef751c07c081dfe1141600fff1631c3fcf1eac45d2b52084abc",
+      "bytes": 7359,
+      "gitBlob": "ab0513073710d0cb795ce88b74c0232993c1a813"
+    },
+    "hacks/glx/rotator.h": {
+      "sha256": "0df63fa719e76abfd73fb314012edde19a0ec92700b7f83b6ffef547d89f8006",
+      "bytes": 2405,
+      "gitBlob": "b3f36f6824460680009d7907284d989e441e193c"
+    },
+    "hacks/glx/gltrackball.c": {
+      "sha256": "c5f1ae69419557dcc83d330d67c9f52ee9e8668bb0d6e90585fca52ce43efc10",
+      "bytes": 9041,
+      "gitBlob": "e5bce9a60f94a9ba407975e8a6508dbee05a41ef"
+    },
+    "hacks/glx/gltrackball.h": {
+      "sha256": "6d74d4e6d5eb831de0a7531b87aeaf2e2d052b819ef782b99cd201751514dc4b",
+      "bytes": 3097,
+      "gitBlob": "16478d6a8328e3f811d5f7d809af2ba6a93ab24c"
+    },
+    "hacks/glx/trackball.c": {
+      "sha256": "618033a011d1f0f1204c13ff79000f214dd02ad5fe7f0bfeb088c015ef2bc1e0",
+      "bytes": 4764,
+      "gitBlob": "4e502e219f3782248f7244e9b72f26ff7ab8af85"
+    },
+    "hacks/glx/trackball.h": {
+      "sha256": "cb3c83705d94727f44911d29265630ed8e19653b95c12d82b939c90bddebbdaa",
+      "bytes": 2381,
+      "gitBlob": "92fa3859397f0cec6dddc5bfb3474680b1e80a91"
+    },
+    "hacks/glx/quaternion.c": {
+      "sha256": "94ef86a29833f4af7e30bf278273d935724b0caa4147585a7ce0288fef80dab4",
+      "bytes": 6445,
+      "gitBlob": "c2ecd4864545866f24186bfc8cd6905f2661e945"
+    },
+    "hacks/glx/quaternion.h": {
+      "sha256": "bcd01e64dbc58a47bfc3214e55b095a5915fe249a8d71ffde5e09bbf52647522",
+      "bytes": 1546,
+      "gitBlob": "b4be15b31d4a0bea6ab723ca998516ad01d989dc"
+    },
+    "utils/yarandom.c": {
+      "sha256": "32967bcf84b46a60968723d6d3d86d1d69d9f30a52b36dddfdedaa3ee3e4c931",
+      "bytes": 4861,
+      "gitBlob": "0f51cb60ec547bfe00aa863f1cc742b47eb79c7e"
+    },
+    "utils/yarandom.h": {
+      "sha256": "958707f757cd273579290830a0546215b61db5e11110cf46656333c51002269b",
+      "bytes": 4762,
+      "gitBlob": "9a75cdf3f5998bd15c2b45543daa63f07d204c81"
+    },
+    "hacks/xlockmore.h": {
+      "sha256": "0ec482c620b50faa35983b22e0daba515b880164fa9b9e78b28ff75c3cefa54a",
+      "bytes": 8992,
+      "gitBlob": "858f6ecb0cc6a2d0598f95eaa2d0c952da0ab64b"
+    },
+    "hacks/config/menger.xml": {
+      "sha256": "954faff9b4f13958f1fc53afde232124fb35d5b1c6e49793152799755d3d514e",
+      "bytes": 1859,
+      "gitBlob": "5d05168460ef8d1ac059ff8bcc540f424fa8b2de"
+    },
+    "hacks/glx/menger.man": {
+      "sha256": "a5ed1f3ee2bdc5f5d75ed670816023037450c031174d131a2ad84f154c1609f4",
+      "bytes": 2376,
+      "gitBlob": "6094a8eecdd3268f421b029f4468bfeba5b44b3a"
+    }
+  },
+  "authority": {
+    "primary": [
+      "hacks/glx/menger.c"
+    ],
+    "behavioralSupport": [
+      "utils/colors.c",
+      "utils/colors.h",
+      "utils/hsv.c",
+      "utils/hsv.h",
+      "hacks/glx/rotator.c",
+      "hacks/glx/rotator.h",
+      "hacks/glx/gltrackball.c",
+      "hacks/glx/gltrackball.h",
+      "hacks/glx/trackball.c",
+      "hacks/glx/trackball.h",
+      "hacks/glx/quaternion.c",
+      "hacks/glx/quaternion.h",
+      "utils/yarandom.c",
+      "utils/yarandom.h"
+    ],
+    "adapterInterface": [
+      "hacks/xlockmore.h"
+    ],
+    "behaviorReferences": [
+      "hacks/config/menger.xml",
+      "hacks/glx/menger.man"
+    ]
+  },
+  "dependencyClosure": {
+    "status": "complete-for-polycss-port-authority",
+    "fileCount": 18,
+    "scope": "All pinned files that define Menger geometry, visible-face ordering, depth progression, colors, random sequence, rotation, and trackball behavior, plus the XScreenSaver adapter interface and behavior references.",
+    "nativeBuildBoundary": "Generated config.h, X11/OpenGL headers and libraries, and generic XScreenSaver process/window support are platform build inputs. They must be bound by the later native-oracle harness but do not define the portable Menger preparation contract."
+  },
+  "rights": {
+    "status": "reviewed-for-locked-port-authority",
+    "sourceNotice": "The locked source/support files carry embedded permission notices; trackball.c and trackball.h carry the Silicon Graphics notice.",
+    "referenceBoundary": "menger.xml is retained as a hash-locked reference and is not vendored or redistributed.",
+    "handling": "Keep upstream source, native binaries, captures, and traces local; publish independently authored PolyCSS code and generated browser-safe results."
+  },
+  "data": {
+    "status": "none-required",
+    "note": "Menger is procedural and has no external art, model, texture, or proprietary data dependency."
+  },
+  "nativeOracle": {
+    "status": "implemented-exact-first-common-prefix",
+    "harness": "tools/native/headless/capture-menger.c",
+    "renderer": "no-window macOS CGL framebuffer",
+    "sourceInputs": [
+      "hacks/glx/menger.c",
+      "hacks/glx/rotator.c",
+      "utils/yarandom.c",
+      "utils/colors.c",
+      "utils/hsv.c"
+    ],
+    "scenario": {
+      "seed": 26080801,
+      "depth": 3,
+      "spin": true,
+      "wander": false,
+      "viewport": [960, 600],
+      "ticks": "0-45 inclusive"
+    },
+    "gates": {
+      "nativeStateAa": "byte-exact",
+      "nativeVisualAa": "pixel-exact",
+      "browserStateAa": "byte-exact",
+      "browserVisualAa": "pixel-exact",
+      "nativeBrowserSourceState": "exact",
+      "nativeBrowserPixels": "diverged-unqualified"
+    },
+    "artifactBoundary": "Native binaries, captures, reports, and native/browser/absolute-diff images stay in ignored local storage and are not product inputs."
+  },
+  "verifiedAt": "2026-08-08"
+}

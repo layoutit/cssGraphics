@@ -270,6 +270,7 @@ export function writePreparedLeafRasterLightingTile({
   layout,
   canonicalPointIndices,
   canonicalPointOffset = 0,
+  seamEdgeMask = 0,
   vertexColors,
 }) {
   if (!(atlasData instanceof Uint8Array)) {
@@ -298,6 +299,7 @@ export function writePreparedLeafRasterLightingTile({
       !validPointIndices ||
       !Number.isSafeInteger(canonicalPointOffset) || canonicalPointOffset < 0 ||
       canonicalPointOffset + 3 > canonicalPointIndices.length ||
+      !Number.isSafeInteger(seamEdgeMask) || seamEdgeMask < 0 || seamEdgeMask > 7 ||
       !validVertexColors) {
     throw new TypeError("Prepared cssFlower leaf raster tile inputs are invalid");
   }
@@ -307,7 +309,7 @@ export function writePreparedLeafRasterLightingTile({
   const originX = placement.contentX;
   const originY = rowIndex * layout.stateSliceHeight + placement.contentY;
   const weights = preparedLightingWeights(placement.width, placement.height);
-  const alpha = preparedLightingAlpha(placement.width, placement.height);
+  const alpha = preparedLightingAlpha(placement.width, placement.height, seamEdgeMask);
   let weightOffset = 0;
   let alphaOffset = 0;
   for (let y = 0; y < placement.height; y += 1) {
@@ -363,8 +365,8 @@ export function writePreparedLeafRasterLightingTile({
   }
 }
 
-function preparedLightingAlpha(width, height) {
-  const key = `${width}x${height}`;
+function preparedLightingAlpha(width, height, seamEdgeMask) {
+  const key = `${width}x${height}:${seamEdgeMask}`;
   const cached = lightingAlphaCache.get(key);
   if (cached) return cached;
   const alpha = new Uint8Array(width * height);
@@ -373,6 +375,8 @@ function preparedLightingAlpha(width, height) {
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       let covered = 0;
+      let crossedSharedEdge = false;
+      let crossedBoundaryEdge = false;
       for (let sampleY = 0; sampleY < LIGHTING_ALPHA_SUPERSAMPLES; sampleY += 1) {
         const v = (y + (sampleY + 0.5) / LIGHTING_ALPHA_SUPERSAMPLES) / height;
         const apex = 1 - v;
@@ -380,12 +384,22 @@ function preparedLightingAlpha(width, height) {
           const u = (x + (sampleX + 0.5) / LIGHTING_ALPHA_SUPERSAMPLES) / width;
           const right = u - 0.5 * apex;
           const left = 1 - apex - right;
-          if (apex >= 0 && apex <= 1 && left >= 0 && left <= 1 && right >= 0 && right <= 1) {
+          if (apex >= 0 && left >= 0 && right >= 0) {
             covered += 1;
+          } else {
+            const crossedEdgeMask =
+              (right < 0 ? 1 : 0) |
+              (apex < 0 ? 2 : 0) |
+              (left < 0 ? 4 : 0);
+            crossedSharedEdge ||= (crossedEdgeMask & seamEdgeMask) !== 0;
+            crossedBoundaryEdge ||= (crossedEdgeMask & ~seamEdgeMask & 7) !== 0;
           }
         }
       }
-      alpha[offset] = Math.round(covered / sampleCount * 255);
+      alpha[offset] = covered > 0 && covered < sampleCount &&
+          crossedSharedEdge && !crossedBoundaryEdge
+        ? 255
+        : Math.round(covered / sampleCount * 255);
       offset += 1;
     }
   }

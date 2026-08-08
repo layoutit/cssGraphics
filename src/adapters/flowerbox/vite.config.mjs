@@ -12,7 +12,7 @@ const generatedPublicDir = resolve(
 const deployBuild = process.env.CSSFLOWER_DEPLOY_BUILD === "1";
 
 export default defineConfig({
-  base: deployBuild ? "/flower/" : "/",
+  base: deployBuild ? "/flowerbox/" : "/",
   root: adapterRoot,
   publicDir: deployBuild ? resolve(adapterRoot, "public") : generatedPublicDir,
   plugins: deployBuild ? [{
@@ -30,7 +30,7 @@ export default defineConfig({
   preview: { host: "127.0.0.1" },
   build: {
     target: "es2022",
-    outDir: resolve(repositoryRoot, deployBuild ? "dist/site/flower" : "dist/flowerbox"),
+    outDir: resolve(repositoryRoot, deployBuild ? "dist/site/flowerbox" : "dist/flowerbox"),
     emptyOutDir: true,
   },
 });

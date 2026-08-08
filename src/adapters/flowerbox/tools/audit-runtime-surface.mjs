@@ -55,6 +55,11 @@ if (/projectedPageStyles|applyPreparedProjectedLeafLayout|\.style\.cssText/u.tes
 if (/\b(?:document|DOMParser|MutationObserver|Image)\b|createElement|appendChild|replaceChildren/u.test(playback)) {
   failures.push("Prepared playback constructs DOM");
 }
+if (!playback.includes("forEachTransformAtIndices(") ||
+    !playback.includes("frontFacingSchedule.visibilityChangeAssignments[update]") ||
+    playback.includes("frontFacingSchedule.isSelected(leafIndex)")) {
+  failures.push("Prepared playback does not use sparse transform and visibility ranges exclusively");
+}
 if (existsSync(join(adapterRoot, "src/cssflower/projectedPageStyles.mjs"))) {
   failures.push("Projected-page runtime module remains");
 }
@@ -63,7 +68,11 @@ const bank = await inspectFlowerboxProductBank(join(repositoryRoot, "build", "ge
 if (bank.closureBytes >= 8_000_000) failures.push(`Product bank is too large: ${bank.closureBytes}`);
 if (bank.timelineStateCount !== 360 || bank.geometryStateCount !== 73 ||
     bank.transformBlockCount !== 5 || bank.lightingAssetCount !== 1 ||
-    bank.lightingQuality !== 83 || bank.visibilityMinimumOwnedPixels !== 8) {
+    bank.lightingQuality !== 83 || bank.visibilityMinimumOwnedPixels !== 8 ||
+    bank.frontFacingScheduleSchema !== "cssflower-prepared-front-face-transform-schedule@2" ||
+    bank.frontFacingSelectedFaceCount !== 166_886 ||
+    bank.frontFacingVisibilityChangeCount !== 8_310 ||
+    bank.frontFacingSparsePayloadBytes !== 352_792) {
   failures.push("Product bank is not the accepted rounded q83/min-8 closure with the negative cube lobe");
 }
 

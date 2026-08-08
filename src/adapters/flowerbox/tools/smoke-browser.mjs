@@ -349,10 +349,12 @@ function assertProof(state) {
       stats.runtimeVisibilityCatchupTransformAttempts < 1 ||
       stats.runtimeVisibilityCatchupTransformWrites < 1 ||
       stats.runtimeVisibilityCatchupTransformWrites > stats.runtimeVisibilityCatchupTransformAttempts ||
-      stats.runtimeLeafTransformSelectionTests <= stats.runtimeLeafTransformWrites ||
-      stats.runtimeLeafTransformSelectionTests !==
-        stats.runtimeSelectedLeafTransformAttempts + stats.runtimeSuppressedLeafTransformWrites ||
-      stats.runtimeSuppressedLeafTransformWrites <= 0 || stats.runtimeLeafVisibilityWrites <= 0 ||
+      stats.runtimeLeafTransformSelectionTests !== 0 ||
+      stats.runtimeSuppressedLeafTransformWrites !== 0 ||
+      stats.runtimePreparedSelectedTransformIndexReads !== stats.runtimeSelectedLeafTransformAttempts ||
+      stats.runtimePreparedSelectedTransformIndexReads <= 0 ||
+      stats.runtimePreparedVisibilityAssignmentReads <= 0 ||
+      stats.runtimeVisibilityFullScanTests !== 0 || stats.runtimeLeafVisibilityWrites <= 0 ||
       stats.runtimePreparedFrontFacingStateSelections <= 0 || stats.preparedFrontFacingDilationTicks !== 1 ||
       stats.preparedFrontFacingSelectedFaceCount !== 166886 ||
       stats.preparedFrontFacingVisibilityChangeCount !== 8310 ||

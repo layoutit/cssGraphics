@@ -34,8 +34,8 @@ export const CSSFLOWER_LIGHTING_ATLAS_QUALITY = 83;
 export const CSSFLOWER_LIGHTING_VISUAL_BANK_MAX_BYTES = 125_000_000;
 export const CSSFLOWER_TRANSFORM_BLOCK_SCHEMA = "cssflower-prepared-matrix3d-blocks@1";
 export const CSSFLOWER_TRANSFORM_BLOCK_GEOMETRY_STATES = 16;
-export const CSSFLOWER_FRONT_FACE_SCHEDULE_SCHEMA = "cssflower-prepared-front-face-transform-schedule@1";
-export const CSSFLOWER_FRONT_FACE_SCHEDULE_ENCODING = "base64-lsb0-state-major-bitset";
+export const CSSFLOWER_FRONT_FACE_SCHEDULE_SCHEMA = "cssflower-prepared-front-face-transform-schedule@2";
+export const CSSFLOWER_FRONT_FACE_SCHEDULE_ENCODING = "base64-u16le-sparse-state-ranges";
 export const CSSFLOWER_VISIBILITY_POLICY = Object.freeze({
   schema: "cssflower-prepared-depth16-owned-pixel-visibility-policy@1",
   selectionDomain: "prepared-source-camera-depth16-owned-pixel-occlusion",

@@ -133,17 +133,14 @@ export async function loadPreparedScene(manifest, routeState) {
     throw new Error("Generated cssFlower retained snapshot binding is missing. Run pnpm prepare:cssflower first.");
   }
   const addressBytes = decodePreparedLightingAddressBytes(sceneData.lighting.addressSchedule);
-  const frontFacingBytes = decodePreparedFrontFacingBytes(sceneData.playback.frontFacingSchedule);
+  const frontFacingPayloads = decodePreparedFrontFacingPayloads(sceneData.playback.frontFacingSchedule);
   await assertSha256(
     addressBytes,
     sceneData.lighting.addressSchedule.faceIndicesSha256,
     "exact sparse-lighting address schedule",
   );
-  await assertSha256(
-    frontFacingBytes,
-    sceneData.playback.frontFacingSchedule.dataSha256,
-    "front-face transform schedule",
-  );
+  await Promise.all(frontFacingPayloads.map(({ bytes, sha256, label }) =>
+    assertSha256(bytes, sha256, label)));
   await assertSha256(new TextEncoder().encode(snapshotHtml), entry.snapshot.sha256, "snapshot");
   validatePreparedMorphAssets(sceneData.playback, sceneData.lighting);
   const transformBlocks = createPreparedTransformBlockLoader(sceneData.playback.transformAsset);
@@ -202,7 +199,6 @@ function validPreparedFrontFacingSchedule(schedule) {
     schedule.adjacencyRings === CSSFLOWER_VISIBILITY_POLICY.adjacencyRings &&
     schedule.dilationPolicy === CSSFLOWER_VISIBILITY_POLICY.dilationPolicy &&
     schedule.encoding === CSSFLOWER_FRONT_FACE_SCHEDULE_ENCODING &&
-    schedule.bytesPerState === 150 && schedule.byteLength === schedule.stateCount * schedule.bytesPerState &&
     Number.isSafeInteger(schedule.selectedFaceCount) && schedule.selectedFaceCount > 0 &&
     schedule.selectedFaceCount < schedule.stateCount * schedule.faceCount &&
     schedule.suppressedFaceCount === schedule.stateCount * schedule.faceCount - schedule.selectedFaceCount &&
@@ -213,22 +209,67 @@ function validPreparedFrontFacingSchedule(schedule) {
     schedule.maximumSelectedFacesPerState <= schedule.faceCount &&
     schedule.initialVisibilitySelectionCount === schedule.faceCount &&
     Number.isSafeInteger(schedule.visibilityChangeCount) && schedule.visibilityChangeCount > 0 &&
-    /^[a-f0-9]{64}$/u.test(schedule.dataSha256 ?? "") &&
-    typeof schedule.dataBase64 === "string" && schedule.dataBase64.length > 0 &&
-    schedule.runtimeSelection === "prepared-bit-test-only-no-geometry-projection-normal-or-lighting-calculation";
+    validOffsets(schedule.selectedFaceOffsets, schedule.stateCount + 1, schedule.selectedFaceCount) &&
+    schedule.selectedFaceIndicesEncoding === "base64-u16le-state-major-selected-face-indices" &&
+    schedule.selectedFaceIndicesByteLength === schedule.selectedFaceCount * 2 &&
+    /^[a-f0-9]{64}$/u.test(schedule.selectedFaceIndicesSha256 ?? "") &&
+    typeof schedule.selectedFaceIndicesBase64 === "string" && schedule.selectedFaceIndicesBase64.length > 0 &&
+    validOffsets(schedule.visibilityChangeOffsets, schedule.stateCount + 1, schedule.visibilityChangeCount) &&
+    schedule.visibilityChangeAssignmentsEncoding === "base64-u16le-state-major-face-index-shift-1-or-selected" &&
+    schedule.visibilityChangeAssignmentsByteLength === schedule.visibilityChangeCount * 2 &&
+    /^[a-f0-9]{64}$/u.test(schedule.visibilityChangeAssignmentsSha256 ?? "") &&
+    typeof schedule.visibilityChangeAssignmentsBase64 === "string" && schedule.visibilityChangeAssignmentsBase64.length > 0 &&
+    schedule.initialVisibilityAssignmentsEncoding === "base64-u16le-face-major-face-index-shift-1-or-selected" &&
+    schedule.initialVisibilityAssignmentsByteLength === schedule.faceCount * 2 &&
+    /^[a-f0-9]{64}$/u.test(schedule.initialVisibilityAssignmentsSha256 ?? "") &&
+    typeof schedule.initialVisibilityAssignmentsBase64 === "string" && schedule.initialVisibilityAssignmentsBase64.length > 0 &&
+    schedule.runtimeSelection === "prepared-sparse-state-ranges-only-no-face-wide-tests-or-geometry-projection-normal-lighting-calculation";
 }
 
-function decodePreparedFrontFacingBytes(schedule) {
+function validOffsets(offsets, expectedLength, expectedLast) {
+  return offsets?.length === expectedLength && offsets[0] === 0 && offsets.at(-1) === expectedLast &&
+    offsets.every((value, index) => Number.isSafeInteger(value) && value >= 0 &&
+      (index === 0 || value >= offsets[index - 1]));
+}
+
+function decodePreparedFrontFacingPayloads(schedule) {
+  return [
+    decodeBase64Payload(
+      schedule.selectedFaceIndicesBase64,
+      schedule.selectedFaceIndicesByteLength,
+      schedule.selectedFaceIndicesSha256,
+      "selected transform indices",
+    ),
+    decodeBase64Payload(
+      schedule.visibilityChangeAssignmentsBase64,
+      schedule.visibilityChangeAssignmentsByteLength,
+      schedule.visibilityChangeAssignmentsSha256,
+      "visibility-change assignments",
+    ),
+    decodeBase64Payload(
+      schedule.initialVisibilityAssignmentsBase64,
+      schedule.initialVisibilityAssignmentsByteLength,
+      schedule.initialVisibilityAssignmentsSha256,
+      "initial visibility assignments",
+    ),
+  ];
+}
+
+function decodeBase64Payload(base64, expectedByteLength, sha256, label) {
   let encoded;
   try {
-    encoded = atob(schedule.dataBase64);
+    encoded = atob(base64);
   } catch (error) {
-    throw new Error(`Generated cssFlower front-face schedule encoding is invalid: ${error.message}`);
+    throw new Error(`Generated cssFlower ${label} encoding is invalid: ${error.message}`);
   }
-  if (encoded.length !== schedule.byteLength) {
-    throw new Error("Generated cssFlower front-face schedule byte length drifted.");
+  if (encoded.length !== expectedByteLength) {
+    throw new Error(`Generated cssFlower ${label} byte length drifted.`);
   }
-  return Uint8Array.from(encoded, (character) => character.charCodeAt(0));
+  return Object.freeze({
+    bytes: Uint8Array.from(encoded, (character) => character.charCodeAt(0)),
+    sha256,
+    label,
+  });
 }
 
 function decodePreparedLightingAddressBytes(schedule) {

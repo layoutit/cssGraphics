@@ -17,9 +17,12 @@ import {
   CSSFLOWER_LIGHTING_GRID_HEIGHT,
   CSSFLOWER_LIGHTING_GRID_ROWS,
   CSSFLOWER_LIGHTING_GRID_WIDTH,
+  CSSFLOWER_LIGHTING_ADDRESS_SCHEDULE_SCHEMA,
+  CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT,
   CSSFLOWER_LIGHTING_ALPHA_COVERAGE,
   CSSFLOWER_LIGHTING_LAYOUT,
   CSSFLOWER_LIGHTING_RASTER_MODE,
+  CSSFLOWER_LIGHTING_ROW_SELECTION,
   CSSFLOWER_LIGHTING_SAMPLING,
   CSSFLOWER_LIGHTING_SCHEMA,
   CSSFLOWER_SEAM_BLEED,
@@ -398,7 +401,7 @@ export async function compilePreparedCssflowerCycle({
           backgroundPositionY: `${-placement.contentY}px`,
         });
       })),
-      rowSelection: "prepared-exact-rgb8-sparse-leaf-address-schedule",
+      rowSelection: CSSFLOWER_LIGHTING_ROW_SELECTION,
       temporalInterpolation: false,
       sourceModelviewLighting: "identity-set-positional-light-then-Rx-Ry-Rz-with-normalize-and-infinite-viewer",
       rotationAware: true,
@@ -581,6 +584,9 @@ function buildPreparedLightingAddressSchedule({
     throw new Error("cssFlower sparse lighting schedule did not bind the complete retained target");
   }
   const indices = new Uint16Array(updatedFaceIndices);
+  if (indices.length !== CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT) {
+    throw new Error(`cssFlower exact sparse lighting schedule drifted (${indices.length} updates)`);
+  }
   const indexBytes = Buffer.from(indices.buffer, indices.byteOffset, indices.byteLength);
   const counts = Array.from(
     { length: cycle.stateCount },
@@ -588,7 +594,7 @@ function buildPreparedLightingAddressSchedule({
   );
   const sortedCounts = [...counts].sort((left, right) => left - right);
   return Object.freeze({
-    schema: "cssflower-prepared-exact-sparse-lighting-address-schedule@1",
+    schema: CSSFLOWER_LIGHTING_ADDRESS_SCHEDULE_SCHEMA,
     stateCount: cycle.stateCount,
     faceCount,
     selectionDomain: "prepared-source-vertex-lighting-rgb8-canonical-alpha-edge-mask-and-conjoined-side-boundary-clip-geometry",

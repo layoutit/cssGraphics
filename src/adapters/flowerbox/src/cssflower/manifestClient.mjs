@@ -18,10 +18,13 @@ import {
   CSSFLOWER_LIGHTING_GRID_HEIGHT,
   CSSFLOWER_LIGHTING_GRID_ROWS,
   CSSFLOWER_LIGHTING_GRID_WIDTH,
+  CSSFLOWER_LIGHTING_ADDRESS_SCHEDULE_SCHEMA,
+  CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT,
   CSSFLOWER_LIGHTING_LAYOUT,
   CSSFLOWER_LIGHTING_PAGE_COUNT,
   CSSFLOWER_LIGHTING_PAGE_ROWS,
   CSSFLOWER_LIGHTING_RASTER_MODE,
+  CSSFLOWER_LIGHTING_ROW_SELECTION,
   CSSFLOWER_LIGHTING_SAMPLING,
   CSSFLOWER_LIGHTING_SCHEMA,
   CSSFLOWER_LIGHTING_STATE_SLICE_HEIGHT,
@@ -116,7 +119,7 @@ export async function loadPreparedScene(manifest, routeState) {
       sceneData?.lighting?.backgroundPositionYs?.length !== CSSFLOWER_LIGHTING_PAGE_ROWS ||
       sceneData?.lighting?.backgroundPositionXs?.length !== CSSFLOWER_LIGHTING_PAGE_COUNT ||
       !validPreparedLightingAddressSchedule(sceneData?.lighting?.addressSchedule) ||
-      sceneData?.lighting?.rowSelection !== "prepared-exact-rgb8-sparse-leaf-address-schedule" ||
+      sceneData?.lighting?.rowSelection !== CSSFLOWER_LIGHTING_ROW_SELECTION ||
       sceneData?.lighting?.temporalInterpolation !== false ||
       sceneData?.lighting?.runtimeRootFrameVariables !== 1 ||
       !validPreparedFrontFacingSchedule(sceneData?.playback?.frontFacingSchedule) ||
@@ -168,12 +171,13 @@ export async function loadPreparedScene(manifest, routeState) {
 }
 
 function validPreparedLightingAddressSchedule(schedule) {
-  return schedule?.schema === "cssflower-prepared-exact-sparse-lighting-address-schedule@1" &&
+  return schedule?.schema === CSSFLOWER_LIGHTING_ADDRESS_SCHEDULE_SCHEMA &&
     schedule.stateCount === 360 && schedule.faceCount === 1_200 && schedule.threshold === 0 &&
     schedule.selectionDomain === "prepared-source-vertex-lighting-rgb8-canonical-alpha-edge-mask-and-conjoined-side-boundary-clip-geometry" &&
     schedule.comparison === "exact-three-canonical-point-rgb8-plus-remapped-edge-mask-and-conjoined-side-boundary-clip-geometry-per-retained-triangle" &&
     schedule.cycleBoundaryPolicy === "force-all-faces-to-state-zero-on-each-360-state-wrap" &&
-    Number.isSafeInteger(schedule.updateCount) && schedule.updateCount >= 1_200 &&
+    schedule.updateCount === CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT &&
+    !Object.hasOwn(schedule, "heldStateCount") && !Object.hasOwn(schedule, "publication") &&
     Number.isFinite(schedule.meanUpdatesPerState) && schedule.meanUpdatesPerState > 0 &&
     Number.isSafeInteger(schedule.p95UpdatesPerState) && schedule.p95UpdatesPerState >= 0 &&
     Number.isSafeInteger(schedule.maximumUpdatesPerState) && schedule.maximumUpdatesPerState === 1_200 &&

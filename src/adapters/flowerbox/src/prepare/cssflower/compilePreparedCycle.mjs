@@ -9,6 +9,8 @@ import {
 } from "@layoutit/polycss";
 import { PNG } from "pngjs";
 import {
+  CSSFLOWER_BOUNDARY_CLIP_MAXIMUM_SF,
+  CSSFLOWER_BOUNDARY_CLIP_MAXIMUM_SF_HEX,
   CSSFLOWER_BOUNDARY_SEAM_BLEED,
   CSSFLOWER_LIGHTING_GRID_COLUMNS,
   CSSFLOWER_LIGHTING_GRID_DECODED_BYTES,
@@ -180,6 +182,7 @@ export async function compilePreparedCssflowerCycle({
     prepareSourceBoundaryTrianglesForGeometry({
       topology,
       positions: geometry.positions,
+      sf: geometryState.sf,
       rasterFaces,
       matrixValues,
       sourceBoundaryEdgesByPoint,
@@ -264,6 +267,8 @@ export async function compilePreparedCssflowerCycle({
       sharedEdgeIncidenceCount: siblingSeamPlan.sharedEdgeIncidenceCount,
       boundaryEdgeCount: siblingSeamPlan.boundaryEdgeCount,
       boundaryEdgeIncidenceCount: siblingSeamPlan.boundaryEdgeIncidenceCount,
+      boundaryClipMaximumSf: CSSFLOWER_BOUNDARY_CLIP_MAXIMUM_SF,
+      boundaryClipMaximumSfHex: CSSFLOWER_BOUNDARY_CLIP_MAXIMUM_SF_HEX,
       canonicalSize: SOLID_TRIANGLE_CANONICAL_SIZE,
       sampling: rasterLayout.sampling,
       gutter: rasterLayout.gutter,
@@ -348,6 +353,8 @@ export async function compilePreparedCssflowerCycle({
       sharedEdgeIncidenceCount: siblingSeamPlan.sharedEdgeIncidenceCount,
       boundaryEdgeCount: siblingSeamPlan.boundaryEdgeCount,
       boundaryEdgeIncidenceCount: siblingSeamPlan.boundaryEdgeIncidenceCount,
+      boundaryClipMaximumSf: CSSFLOWER_BOUNDARY_CLIP_MAXIMUM_SF,
+      boundaryClipMaximumSfHex: CSSFLOWER_BOUNDARY_CLIP_MAXIMUM_SF_HEX,
       canonicalLeafSize: SOLID_TRIANGLE_CANONICAL_SIZE,
       rasterSelection: "per-face maximum resolveAtlasLeafBox(..., raster) across every prepared geometry state",
       faceCount: topology.triangleCount,
@@ -584,8 +591,8 @@ function buildPreparedLightingAddressSchedule({
     schema: "cssflower-prepared-exact-sparse-lighting-address-schedule@1",
     stateCount: cycle.stateCount,
     faceCount,
-    selectionDomain: "prepared-source-vertex-lighting-rgb8-canonical-alpha-edge-mask-and-side-boundary-clip-geometry",
-    comparison: "exact-three-canonical-point-rgb8-plus-remapped-edge-mask-and-side-boundary-clip-geometry-per-retained-triangle",
+    selectionDomain: "prepared-source-vertex-lighting-rgb8-canonical-alpha-edge-mask-and-conjoined-side-boundary-clip-geometry",
+    comparison: "exact-three-canonical-point-rgb8-plus-remapped-edge-mask-and-conjoined-side-boundary-clip-geometry-per-retained-triangle",
     threshold: 0,
     cycleBoundaryPolicy: "force-all-faces-to-state-zero-on-each-360-state-wrap",
     updateCount: indices.length,
@@ -758,6 +765,7 @@ function fitCanonicalTransformToRasterLeaf(values, leafWidth, leafHeight) {
 function prepareSourceBoundaryTrianglesForGeometry({
   topology,
   positions,
+  sf,
   rasterFaces,
   matrixValues,
   sourceBoundaryEdgesByPoint,
@@ -765,6 +773,7 @@ function prepareSourceBoundaryTrianglesForGeometry({
   sourceBoundaryClipLineCounts,
   sourceBoundaryClipLineValues,
 }) {
+  if (!shouldPrepareSourceBoundaryClip(sf)) return;
   const faceCount = topology.triangleCount;
   for (const triangle of topology.triangles) {
     if (!rasterFaces[triangle.index].boundaryAdjacent) continue;
@@ -841,6 +850,13 @@ function prepareSourceBoundaryTrianglesForGeometry({
     }
     sourceBoundaryClipLineCounts[geometryFaceIndex] = lineIndex;
   }
+}
+
+export function shouldPrepareSourceBoundaryClip(sf) {
+  if (!Number.isFinite(sf)) {
+    throw new TypeError("cssFlower prepared boundary coverage requires a finite bloom scalar");
+  }
+  return sf <= CSSFLOWER_BOUNDARY_CLIP_MAXIMUM_SF;
 }
 
 function projectWorldPointToPreparedLeaf(matrixValues, matrixOffset, point) {

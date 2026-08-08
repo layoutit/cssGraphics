@@ -37,13 +37,13 @@ negative cube lobe through `sf = -1.1499998569488525`, and stays below the
 generated output remains ignored
 under `build/generated/`. A full source preparation is available separately
 through `pnpm prepare:flowerbox:source` when the pinned `avifenc` is supplied.
-The locked `cssflower-product-rounded-q83-shared-edge-v6` release is a
-7,215,388-byte portable archive with a 7,236,114-byte nine-file product
-closure. Its prepared lighting alpha promotes only
-side-local sibling-edge fringe coverage; true face-boundary edges remain
-supersampled so the internal dark outline is removed without growing the
-silhouette. The portable archive uses timestamp-free gzip and contains no
-AppleDouble entries or extended attributes.
+The locked `cssflower-product-rounded-q83-conjoined-boundary-v8` release is a
+6,664,674-byte portable archive with a 6,685,444-byte nine-file product
+closure. Its prepared lighting alpha clips true face boundaries through the
+last conjoined state (`sf = 0x3f800001`), then preserves side-local sibling-edge
+coverage while the lobes are separated. This removes the sparse internal black
+gaps without growing the conjoined silhouette. The portable archive uses
+timestamp-free gzip and contains no AppleDouble entries or extended attributes.
 
 The source profile is bound to `DigitalMars/dmc` revision
 `9478d25a677f70dbe4fc0ed317cc5a5e5050ef8b`. Exact native-state qualification

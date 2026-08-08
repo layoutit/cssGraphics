@@ -169,8 +169,8 @@ export async function loadPreparedScene(manifest, routeState) {
 function validPreparedLightingAddressSchedule(schedule) {
   return schedule?.schema === "cssflower-prepared-exact-sparse-lighting-address-schedule@1" &&
     schedule.stateCount === 360 && schedule.faceCount === 1_200 && schedule.threshold === 0 &&
-    schedule.selectionDomain === "prepared-source-vertex-lighting-rgb8" &&
-    schedule.comparison === "exact-three-canonical-point-rgb8-signature-per-retained-triangle" &&
+    schedule.selectionDomain === "prepared-source-vertex-lighting-rgb8-canonical-alpha-edge-mask-and-side-boundary-clip-geometry" &&
+    schedule.comparison === "exact-three-canonical-point-rgb8-plus-remapped-edge-mask-and-side-boundary-clip-geometry-per-retained-triangle" &&
     schedule.cycleBoundaryPolicy === "force-all-faces-to-state-zero-on-each-360-state-wrap" &&
     Number.isSafeInteger(schedule.updateCount) && schedule.updateCount >= 1_200 &&
     Number.isFinite(schedule.meanUpdatesPerState) && schedule.meanUpdatesPerState > 0 &&

@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import {
+  DEFAULT_TILE,
   SOLID_TRIANGLE_CANONICAL_SIZE,
   computeSolidTrianglePlan,
   computeTextureAtlasPlanPublic,
+  cssPoints,
   resolveAtlasLeafBox,
 } from "@layoutit/polycss";
 import { PNG } from "pngjs";
@@ -32,7 +34,7 @@ import {
   deformCubePoints,
   trianglePolygon,
 } from "./cubeTopology.mjs";
-import { CSSFLOWER_CAMERA, CSSFLOWER_SOURCE_PROFILE } from "./sourceProfile.mjs";
+import { CSSFLOWER_CAMERA, CSSFLOWER_SOURCE_PROFILE, sourceToPolyCss } from "./sourceProfile.mjs";
 import { auditPreparedQuadMergeEligibility } from "./quadMergeAudit.mjs";
 import {
   CSSFLOWER_LEAF_RASTER_PAGE_ROWS,
@@ -41,6 +43,11 @@ import {
 } from "./leafRasterLighting.mjs";
 
 const MATRIX_COMPONENTS = 16;
+const MAXIMUM_SOURCE_BOUNDARY_CLIP_LINES = 4;
+const SOURCE_BOUNDARY_CLIP_LINE_COMPONENTS = 4;
+const SOURCE_BOUNDARY_CLIP_LINE_VALUE_STRIDE =
+  MAXIMUM_SOURCE_BOUNDARY_CLIP_LINES * SOURCE_BOUNDARY_CLIP_LINE_COMPONENTS;
+const ALL_SHARED_BOUNDARY_VERTEX_INSET_PIXELS = 0.5;
 const MINIMUM_RASTER_LEAF_SIZE = 4;
 export const CSSFLOWER_LIGHTING_PAGE_ROWS = CSSFLOWER_LEAF_RASTER_PAGE_ROWS;
 
@@ -59,6 +66,7 @@ export async function compilePreparedCssflowerCycle({
     throw new Error("cssFlower prepared seam policy drifted");
   }
   const seamEdgesByMask = buildSeamEdgesByMask();
+  const sourceBoundaryEdgesByPoint = buildSourceBoundaryEdgesByPoint(topology, siblingSeamPlan);
   const sourceCycle = buildPreparedFullRotationCycle();
   const cycle = attachPreparedLightingRows(buildPreparedRoundedProductCycle());
   const quadMergeAudit = auditPreparedQuadMergeEligibility(topology, sourceCycle);
@@ -81,8 +89,7 @@ export async function compilePreparedCssflowerCycle({
     for (const triangle of topology.triangles) {
       const polygon = trianglePolygon(topology, triangle, positions);
       const rasterFace = rasterFaces[triangle.index];
-      const seamEdgeMask = siblingSeamPlan.edgeMasks[triangle.index];
-      const seamEdges = seamEdgesByMask[seamEdgeMask];
+      const seamEdges = seamEdgesByMask[rasterFace.seamEdgeMask];
       const texturePlan = computeTextureAtlasPlanPublic(polygon, triangle.index, {
         seamBleed: rasterFace.seamBleed,
         seamEdges,
@@ -139,6 +146,10 @@ export async function compilePreparedCssflowerCycle({
   }
   const matrixValues = new Float32Array(cycle.geometryStateCount * topology.triangleCount * MATRIX_COMPONENTS);
   const canonicalPointIndices = new Uint16Array(cycle.geometryStateCount * topology.triangleCount * 3);
+  const sourceBoundaryClipLineCounts = new Uint8Array(cycle.geometryStateCount * topology.triangleCount);
+  const sourceBoundaryClipLineValues = new Float32Array(
+    cycle.geometryStateCount * topology.triangleCount * SOURCE_BOUNDARY_CLIP_LINE_VALUE_STRIDE,
+  );
   const productGeometryByState = new Array(cycle.geometryStateCount);
   for (const geometryState of cycle.geometryStates) {
     const sourceGeometryStateIndex = geometryState.sourceGeometryStateIndex ?? geometryState.index;
@@ -166,6 +177,16 @@ export async function compilePreparedCssflowerCycle({
       ),
       productCanonicalStart,
     );
+    prepareSourceBoundaryTrianglesForGeometry({
+      topology,
+      positions: geometry.positions,
+      rasterFaces,
+      matrixValues,
+      sourceBoundaryEdgesByPoint,
+      geometryStateIndex: geometryState.index,
+      sourceBoundaryClipLineCounts,
+      sourceBoundaryClipLineValues,
+    });
   }
   const transformBytes = Buffer.from(matrixValues.buffer);
   const vertexLightingByState = Object.freeze(cycle.states.map((state) => {
@@ -182,12 +203,16 @@ export async function compilePreparedCssflowerCycle({
     topology,
     cycle,
     canonicalPointIndices,
+    sourceBoundaryClipLineCounts,
+    rasterFaces,
     vertexLightingByState,
   });
   const lightingPreparation = await prepareLightingPages({
     topology,
     cycle,
     canonicalPointIndices,
+    sourceBoundaryClipLineCounts,
+    sourceBoundaryClipLineValues,
     atlasWidth,
     atlasHeight,
     rasterFaces,
@@ -397,6 +422,8 @@ async function prepareLightingPages({
   topology,
   cycle,
   canonicalPointIndices,
+  sourceBoundaryClipLineCounts,
+  sourceBoundaryClipLineValues,
   atlasWidth,
   atlasHeight,
   rasterFaces,
@@ -447,6 +474,7 @@ async function prepareLightingPages({
         throw new Error(`cssFlower lighting state ${state.tick} has no prepared vertex colors`);
       }
       for (const triangle of topology.triangles) {
+        const geometryFaceIndex = state.geometryStateIndex * topology.triangleCount + triangle.index;
         writePreparedLeafRasterLightingTile({
           atlasData: atlas.data,
           atlasPixels,
@@ -456,7 +484,16 @@ async function prepareLightingPages({
           layout: rasterLayout,
           canonicalPointIndices,
           canonicalPointOffset: (state.geometryStateIndex * topology.triangleCount + triangle.index) * 3,
-          seamEdgeMask: rasterFaces[triangle.index].seamEdgeMask,
+          seamEdgeMask: remapPreparedSeamEdgeMask(
+            triangle.pointIndices,
+            canonicalPointIndices,
+            (state.geometryStateIndex * topology.triangleCount + triangle.index) * 3,
+            rasterFaces[triangle.index].seamEdgeMask,
+          ),
+          sourceBoundaryClipLines: sourceBoundaryClipLineValues,
+          sourceBoundaryClipLineOffset: geometryFaceIndex * SOURCE_BOUNDARY_CLIP_LINE_VALUE_STRIDE,
+          sourceBoundaryClipLineCount: sourceBoundaryClipLineCounts[geometryFaceIndex],
+          alphaCacheKey: `${state.geometryStateIndex}:${triangle.index}`,
           vertexColors,
         });
       }
@@ -483,13 +520,18 @@ function buildPreparedLightingAddressSchedule({
   topology,
   cycle,
   canonicalPointIndices,
+  sourceBoundaryClipLineCounts,
+  rasterFaces,
   vertexLightingByState,
 }) {
   const faceCount = topology.triangleCount;
-  const signatureStride = 9;
+  const signatureStride = 11;
   if (cycle?.stateCount !== 360 || vertexLightingByState?.length !== cycle.stateCount ||
       !(canonicalPointIndices instanceof Uint16Array) ||
-      canonicalPointIndices.length < cycle.geometryStateCount * faceCount * 3) {
+      canonicalPointIndices.length < cycle.geometryStateCount * faceCount * 3 ||
+      !(sourceBoundaryClipLineCounts instanceof Uint8Array) ||
+      sourceBoundaryClipLineCounts.length < cycle.geometryStateCount * faceCount ||
+      !Array.isArray(rasterFaces) || rasterFaces.length !== faceCount) {
     throw new Error("cssFlower sparse lighting preparation inputs are incomplete");
   }
   const selectedSignatures = new Uint8Array(faceCount * signatureStride);
@@ -501,11 +543,21 @@ function buildPreparedLightingAddressSchedule({
     const vertexColors = vertexLightingByState[stateIndex];
     updateOffsets[stateIndex] = updatedFaceIndices.length;
     for (let faceIndex = 0; faceIndex < faceCount; faceIndex += 1) {
+      const canonicalPointOffset = (state.geometryStateIndex * faceCount + faceIndex) * 3;
       preparedFaceLightingSignature(
         currentSignature,
         canonicalPointIndices,
-        (state.geometryStateIndex * faceCount + faceIndex) * 3,
+        canonicalPointOffset,
         vertexColors,
+        remapPreparedSeamEdgeMask(
+          topology.triangles[faceIndex].pointIndices,
+          canonicalPointIndices,
+          canonicalPointOffset,
+          rasterFaces[faceIndex].seamEdgeMask,
+        ),
+        sourceBoundaryClipLineCounts[state.geometryStateIndex * faceCount + faceIndex] > 0
+          ? state.geometryStateIndex
+          : 255,
       );
       const selectedOffset = faceIndex * signatureStride;
       let changed = stateIndex === 0;
@@ -532,8 +584,8 @@ function buildPreparedLightingAddressSchedule({
     schema: "cssflower-prepared-exact-sparse-lighting-address-schedule@1",
     stateCount: cycle.stateCount,
     faceCount,
-    selectionDomain: "prepared-source-vertex-lighting-rgb8",
-    comparison: "exact-three-canonical-point-rgb8-signature-per-retained-triangle",
+    selectionDomain: "prepared-source-vertex-lighting-rgb8-canonical-alpha-edge-mask-and-side-boundary-clip-geometry",
+    comparison: "exact-three-canonical-point-rgb8-plus-remapped-edge-mask-and-side-boundary-clip-geometry-per-retained-triangle",
     threshold: 0,
     cycleBoundaryPolicy: "force-all-faces-to-state-zero-on-each-360-state-wrap",
     updateCount: indices.length,
@@ -546,7 +598,7 @@ function buildPreparedLightingAddressSchedule({
     faceIndicesSha256: sha256(indexBytes),
     faceIndicesBase64: indexBytes.toString("base64"),
     runtimeSelection: "prepared-state-range-only-no-lighting-or-geometry-calculation",
-    visualEquivalence: "source-rgb8-exact-with-bounded-location-dependent-lossy-atlas-raster-drift",
+    visualEquivalence: "source-rgb8-and-alpha-edge-exact-with-bounded-location-dependent-lossy-atlas-raster-drift",
   });
 }
 
@@ -555,9 +607,15 @@ function preparedFaceLightingSignature(
   canonicalPointIndices,
   canonicalPointOffset,
   vertexColors,
+  canonicalSeamEdgeMask,
+  boundaryCapGeometryStateIndex,
 ) {
-  if (!(output instanceof Uint8Array) || output.length !== 9 ||
-      !(vertexColors instanceof Float64Array)) {
+  if (!(output instanceof Uint8Array) || output.length !== 11 ||
+      !(vertexColors instanceof Float64Array) ||
+      !Number.isSafeInteger(canonicalSeamEdgeMask) ||
+      canonicalSeamEdgeMask < 0 || canonicalSeamEdgeMask > 7 ||
+      !Number.isSafeInteger(boundaryCapGeometryStateIndex) ||
+      boundaryCapGeometryStateIndex < 0 || boundaryCapGeometryStateIndex > 255) {
     throw new TypeError("cssFlower prepared lighting signature buffers are invalid");
   }
   for (let vertex = 0; vertex < 3; vertex += 1) {
@@ -566,6 +624,8 @@ function preparedFaceLightingSignature(
       output[vertex * 3 + channel] = clampByte(vertexColors[pointIndex * 3 + channel]);
     }
   }
+  output[9] = canonicalSeamEdgeMask;
+  output[10] = boundaryCapGeometryStateIndex;
   return output;
 }
 
@@ -604,7 +664,7 @@ function selectPreparedRasterFaces(topology, cycle, siblingSeamPlan, seamEdgesBy
     for (const triangle of topology.triangles) {
       const polygon = trianglePolygon(topology, triangle, positions);
       const face = faces[triangle.index];
-      const seamEdges = seamEdgesByMask[siblingSeamPlan.edgeMasks[triangle.index]];
+      const seamEdges = seamEdgesByMask[face.seamEdgeMask];
       const plan = computeTextureAtlasPlanPublic(polygon, triangle.index, {
         seamBleed: face.seamBleed,
         seamEdges,
@@ -630,6 +690,58 @@ function buildSeamEdgesByMask() {
   )));
 }
 
+function buildSourceBoundaryEdgesByPoint(topology, siblingSeamPlan) {
+  const edgesByPoint = new Map();
+  for (const triangle of topology.triangles) {
+    const seamEdgeMask = siblingSeamPlan.edgeMasks[triangle.index];
+    for (let edgeIndex = 0; edgeIndex < 3; edgeIndex += 1) {
+      if ((seamEdgeMask & (1 << edgeIndex)) !== 0) continue;
+      const first = triangle.pointIndices[edgeIndex];
+      const second = triangle.pointIndices[(edgeIndex + 1) % 3];
+      const key = `${Math.min(first, second)}:${Math.max(first, second)}`;
+      for (const pointIndex of [first, second]) {
+        const incident = edgesByPoint.get(pointIndex) ?? new Map();
+        incident.set(key, Object.freeze({ key, first, second }));
+        edgesByPoint.set(pointIndex, incident);
+      }
+    }
+  }
+  return edgesByPoint;
+}
+
+export function remapPreparedSeamEdgeMask(
+  sourcePointIndices,
+  canonicalPointIndices,
+  canonicalPointOffset,
+  sourceEdgeMask,
+) {
+  if (!Array.isArray(sourcePointIndices) || sourcePointIndices.length !== 3 ||
+      !(Array.isArray(canonicalPointIndices) || canonicalPointIndices instanceof Uint16Array ||
+        canonicalPointIndices instanceof Uint32Array) ||
+      !Number.isSafeInteger(canonicalPointOffset) || canonicalPointOffset < 0 ||
+      canonicalPointOffset + 3 > canonicalPointIndices.length ||
+      !Number.isSafeInteger(sourceEdgeMask) || sourceEdgeMask < 0 || sourceEdgeMask > 7) {
+    throw new TypeError("cssFlower prepared seam-edge remap inputs are invalid");
+  }
+  let canonicalEdgeMask = 0;
+  for (let canonicalEdge = 0; canonicalEdge < 3; canonicalEdge += 1) {
+    const first = canonicalPointIndices[canonicalPointOffset + canonicalEdge];
+    const second = canonicalPointIndices[canonicalPointOffset + (canonicalEdge + 1) % 3];
+    const sourceEdge = sourcePointIndices.findIndex((pointIndex, edgeIndex) => {
+      const nextPointIndex = sourcePointIndices[(edgeIndex + 1) % 3];
+      return (pointIndex === first && nextPointIndex === second) ||
+        (pointIndex === second && nextPointIndex === first);
+    });
+    if (sourceEdge < 0) {
+      throw new Error("cssFlower canonical triangle lost its source-edge identity");
+    }
+    if ((sourceEdgeMask & (1 << sourceEdge)) !== 0) {
+      canonicalEdgeMask |= 1 << canonicalEdge;
+    }
+  }
+  return canonicalEdgeMask;
+}
+
 function sameEdgeSet(actual, expected) {
   return actual?.size === expected.size && [...expected].every((edgeIndex) => actual.has(edgeIndex));
 }
@@ -641,6 +753,119 @@ function fitCanonicalTransformToRasterLeaf(values, leafWidth, leafHeight) {
   for (const index of [0, 1, 2]) fitted[index] *= xScale;
   for (const index of [4, 5, 6]) fitted[index] *= yScale;
   return fitted;
+}
+
+function prepareSourceBoundaryTrianglesForGeometry({
+  topology,
+  positions,
+  rasterFaces,
+  matrixValues,
+  sourceBoundaryEdgesByPoint,
+  geometryStateIndex,
+  sourceBoundaryClipLineCounts,
+  sourceBoundaryClipLineValues,
+}) {
+  const faceCount = topology.triangleCount;
+  for (const triangle of topology.triangles) {
+    if (!rasterFaces[triangle.index].boundaryAdjacent) continue;
+    const geometryFaceIndex = geometryStateIndex * faceCount + triangle.index;
+    const matrixOffset = geometryFaceIndex * MATRIX_COMPONENTS;
+    const valueOffset = geometryFaceIndex * SOURCE_BOUNDARY_CLIP_LINE_VALUE_STRIDE;
+    const incidentEdges = new Map();
+    for (const pointIndex of triangle.pointIndices) {
+      for (const [key, edge] of sourceBoundaryEdgesByPoint.get(pointIndex) ?? []) {
+        incidentEdges.set(key, edge);
+      }
+    }
+    if (incidentEdges.size < 1 || incidentEdges.size > MAXIMUM_SOURCE_BOUNDARY_CLIP_LINES) {
+      throw new Error(`cssFlower geometry ${geometryStateIndex} triangle ${triangle.index} has ${incidentEdges.size} local side-boundary clip lines`);
+    }
+    const sourcePolygon = trianglePolygon(topology, triangle, positions);
+    const worldPoints = cssPoints(sourcePolygon.vertices, DEFAULT_TILE, DEFAULT_TILE);
+    const projectedTriangle = worldPoints.map((point) => projectWorldPointToPreparedLeaf(
+      matrixValues,
+      matrixOffset,
+      point,
+    ));
+    const centroid = [
+      (projectedTriangle[0][0] + projectedTriangle[1][0] + projectedTriangle[2][0]) / 3,
+      (projectedTriangle[0][1] + projectedTriangle[1][1] + projectedTriangle[2][1]) / 3,
+    ];
+    let lineIndex = 0;
+    for (const edge of incidentEdges.values()) {
+      const firstPositionOffset = edge.first * 3;
+      const secondPositionOffset = edge.second * 3;
+      let first = projectWorldPointToPreparedLeaf(
+        matrixValues,
+        matrixOffset,
+        cssPoints([sourceToPolyCss([
+          positions[firstPositionOffset],
+          positions[firstPositionOffset + 1],
+          positions[firstPositionOffset + 2],
+        ])], DEFAULT_TILE, DEFAULT_TILE)[0],
+      );
+      let second = projectWorldPointToPreparedLeaf(
+        matrixValues,
+        matrixOffset,
+        cssPoints([sourceToPolyCss([
+          positions[secondPositionOffset],
+          positions[secondPositionOffset + 1],
+          positions[secondPositionOffset + 2],
+        ])], DEFAULT_TILE, DEFAULT_TILE)[0],
+      );
+      if (cross2d(
+        second[0] - first[0],
+        second[1] - first[1],
+        centroid[0] - first[0],
+        centroid[1] - first[1],
+      ) < 0) {
+        [first, second] = [second, first];
+      }
+      if (rasterFaces[triangle.index].seamEdgeMask === 7) {
+        const dx = second[0] - first[0];
+        const dy = second[1] - first[1];
+        const length = Math.hypot(dx, dy);
+        if (!(length > 1e-6)) {
+          throw new Error(`cssFlower geometry ${geometryStateIndex} triangle ${triangle.index} has a degenerate side-boundary clip line`);
+        }
+        const insetX = -dy / length * ALL_SHARED_BOUNDARY_VERTEX_INSET_PIXELS;
+        const insetY = dx / length * ALL_SHARED_BOUNDARY_VERTEX_INSET_PIXELS;
+        first = [first[0] + insetX, first[1] + insetY];
+        second = [second[0] + insetX, second[1] + insetY];
+      }
+      sourceBoundaryClipLineValues.set(
+        [first[0], first[1], second[0], second[1]],
+        valueOffset + lineIndex * SOURCE_BOUNDARY_CLIP_LINE_COMPONENTS,
+      );
+      lineIndex += 1;
+    }
+    sourceBoundaryClipLineCounts[geometryFaceIndex] = lineIndex;
+  }
+}
+
+function projectWorldPointToPreparedLeaf(matrixValues, matrixOffset, point) {
+  const x0 = matrixValues[matrixOffset];
+  const x1 = matrixValues[matrixOffset + 1];
+  const x2 = matrixValues[matrixOffset + 2];
+  const y0 = matrixValues[matrixOffset + 4];
+  const y1 = matrixValues[matrixOffset + 5];
+  const y2 = matrixValues[matrixOffset + 6];
+  const dx = point[0] - matrixValues[matrixOffset + 12];
+  const dy = point[1] - matrixValues[matrixOffset + 13];
+  const dz = point[2] - matrixValues[matrixOffset + 14];
+  const xx = x0 * x0 + x1 * x1 + x2 * x2;
+  const xy = x0 * y0 + x1 * y1 + x2 * y2;
+  const yy = y0 * y0 + y1 * y1 + y2 * y2;
+  const bx = dx * x0 + dy * x1 + dz * x2;
+  const by = dx * y0 + dy * y1 + dz * y2;
+  const determinant = xx * yy - xy * xy;
+  if (!(determinant > 1e-12)) {
+    throw new Error("cssFlower prepared boundary segment has a degenerate retained-leaf basis");
+  }
+  return [
+    (bx * yy - by * xy) / determinant,
+    (by * xx - bx * xy) / determinant,
+  ];
 }
 
 function topologyEvidenceFor(topology) {
@@ -747,6 +972,10 @@ function normalize(value) {
 
 function dot(left, right) {
   return left[0] * right[0] + left[1] * right[1] + left[2] * right[2];
+}
+
+function cross2d(ax, ay, bx, by) {
+  return ax * by - ay * bx;
 }
 
 function clampByte(value) {

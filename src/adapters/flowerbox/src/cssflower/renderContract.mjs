@@ -7,6 +7,8 @@ export const CSSFLOWER_LIGHTING_SCHEMA = "cssflower-prepared-space-texel-lightin
 export const CSSFLOWER_LIGHTING_LAYOUT = "guttered-leaf-raster-shelves-by-horizontal-page-grid-and-timeline-state-slices";
 export const CSSFLOWER_LIGHTING_RASTER_MODE = "leaf-resolution";
 export const CSSFLOWER_LIGHTING_SAMPLING = "endpoint-aligned-pixel-centers";
+export const CSSFLOWER_LIGHTING_ALPHA_COVERAGE =
+  "mario-rounded-triangle-4x4-supersampled-shared-edge-opaque-fringe";
 export const CSSFLOWER_LIGHTING_PAGE_ROWS = 32;
 export const CSSFLOWER_LIGHTING_PAGE_COUNT = 12;
 export const CSSFLOWER_LIGHTING_MICRO_CONTENT_SIZE = 2;

@@ -19,7 +19,7 @@ and then presents it through `requestAnimationFrame`. The runtime does not
 construct geometry, project vertices, calculate normals or lighting,
 rasterize, or grow the DOM. The canonical page is the responsive `/` route;
 there is no separate presentation or oracle mode. Its fixed css.graphics shell
-matches the Pipes presentation with a `/flower` wordmark and repository action,
+matches the Pipes presentation with a `/flowerbox` wordmark and repository action,
 while the prepared PolyCSS camera remains an unchanged direct body child.
 
 From the repository root:
@@ -37,10 +37,13 @@ negative cube lobe through `sf = -1.1499998569488525`, and stays below the
 generated output remains ignored
 under `build/generated/`. A full source preparation is available separately
 through `pnpm prepare:flowerbox:source` when the pinned `avifenc` is supplied.
-The locked `cssflower-product-rounded-q83-negative-cube-v5` release contains a
-7,918,095-byte portable archive and a 7,939,543-byte nine-file product closure.
-The archive uses timestamp-free gzip, has no AppleDouble entries or extended
-attributes, and extracts equivalently with BSD tar and GNU tar.
+The locked `cssflower-product-rounded-q83-shared-edge-v6` release is a
+7,215,388-byte portable archive with a 7,236,114-byte nine-file product
+closure. Its prepared lighting alpha promotes only
+side-local sibling-edge fringe coverage; true face-boundary edges remain
+supersampled so the internal dark outline is removed without growing the
+silhouette. The portable archive uses timestamp-free gzip and contains no
+AppleDouble entries or extended attributes.
 
 The source profile is bound to `DigitalMars/dmc` revision
 `9478d25a677f70dbe4fc0ed317cc5a5e5050ef8b`. Exact native-state qualification

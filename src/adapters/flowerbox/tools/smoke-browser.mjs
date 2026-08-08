@@ -5,6 +5,7 @@ import { createServer } from "node:net";
 import { join, resolve } from "node:path";
 import { chromium } from "playwright";
 import { PNG } from "pngjs";
+import { CSSFLOWER_PREPARED_STAGE_EDGE } from "../src/cssflower/stagePresentation.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..", "..");
 const deploy = process.argv.includes("--deploy");
@@ -56,7 +57,7 @@ try {
       await manifestRelease;
       await route.continue();
     });
-    const navigation = page.goto(`http://127.0.0.1:${port}/${deploy ? "flower/" : ""}`, {
+    const navigation = page.goto(`http://127.0.0.1:${port}/${deploy ? "flowerbox/" : ""}`, {
       waitUntil: "domcontentloaded",
     });
     await Promise.race([
@@ -242,7 +243,7 @@ try {
       { width: 390, height: 844, scale: 0.54166667 },
       { width: 1280, height: 720, scale: 1 },
       { width: 720, height: 720, scale: 1 },
-      { width: 960, height: 900, scale: 1.25 },
+      { width: 960, height: 900, scale: 1 },
     ]) {
       await page.setViewportSize({ width: expected.width, height: expected.height });
       await page.waitForFunction((expectedScale) =>
@@ -319,8 +320,8 @@ function assertProof(state) {
       state.dataAttributeCount !== 0 ||
       state.customClassCount !== 1200 || state.customClassUniqueCount !== 1200 ||
       state.customClassMaxLength !== 2 || state.customClassesValid !== true ||
-      state.comparisonElementCount !== 1 || state.shellWordmarkText !== "css.graphics/flower" ||
-      state.shellWordmarkHref !== "https://css.graphics/flower/" ||
+      state.comparisonElementCount !== 1 || state.shellWordmarkText !== "css.graphics/flowerbox" ||
+      state.shellWordmarkHref !== "https://css.graphics/flowerbox/" ||
       state.shellGithubText !== "GitHub" || state.shellGithubHref !== "https://github.com/layoutit/cssGraphics" ||
       state.shellStructure !== true || state.snapshotStyleCount !== 1 || state.preparedLeafRuleCount !== 1200 ||
       state.leafInlineTransformCount <= 0 || state.leafInlineTransformCount > 1200 ||
@@ -372,12 +373,12 @@ function assertProof(state) {
       stats.lightingPageLoader?.errors?.length !== 0 ||
       state.lightingGridRequestCount !== 1 || state.lightingGridRequestUrlCount !== 1 ||
       stats.stagePresentation !== "responsive" || stats.preparedStageEdgePixels !== 720 ||
-      stats.runtimeModelGeometryCalculations !== 0 || Math.abs(stats.presentationScale - 1.25) > 1e-8 ||
+      stats.runtimeModelGeometryCalculations !== 0 || Math.abs(stats.presentationScale - 1) > 1e-8 ||
       stats.responsivePresentationFit !== "contain" || stats.responsivePresentationStageFraction !== 1 ||
       stats.runtimePresentationScaleWrites < 1 ||
       state.bodyRect.width !== 960 || state.bodyRect.height !== 900 ||
-      Math.abs(state.cameraRect.width - 900) > 0.01 || Math.abs(state.cameraRect.height - 900) > 0.01 ||
-      Math.abs(state.cameraRect.x - 30) > 0.01 || Math.abs(state.cameraRect.y) > 0.01 ||
+      Math.abs(state.cameraRect.width - 720) > 0.01 || Math.abs(state.cameraRect.height - 720) > 0.01 ||
+      Math.abs(state.cameraRect.x - 120) > 0.01 || Math.abs(state.cameraRect.y - 90) > 0.01 ||
       state.responsiveFits.length !== 4 || !state.responsiveFits.every(responsiveFitMatches) ||
       state.expansionFits.length !== 3 || !state.expansionFits.every((entry) =>
         entry.visibility.chromaticPixelCount > 1000 && Math.min(...entry.visibility.chromaticMargins) >= 40) ||
@@ -401,7 +402,7 @@ function assertProof(state) {
 }
 
 function responsiveFitMatches(entry) {
-  const fittedEdge = Math.min(entry.width, entry.height);
+  const fittedEdge = CSSFLOWER_PREPARED_STAGE_EDGE * entry.scale;
   return Math.abs(entry.bodyRect.width - entry.width) < 0.01 &&
     Math.abs(entry.bodyRect.height - entry.height) < 0.01 &&
     Math.abs(entry.cameraRect.width - fittedEdge) < 0.02 &&

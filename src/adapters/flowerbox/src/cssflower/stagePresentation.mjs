@@ -6,7 +6,7 @@ export function cssflowerStageScale(viewportWidth, viewportHeight) {
       viewportWidth <= 0 || viewportHeight <= 0) {
     throw new RangeError("cssFlower viewport dimensions must be positive finite numbers");
   }
-  return Math.min(viewportWidth, viewportHeight) / CSSFLOWER_PREPARED_STAGE_EDGE *
+  return Math.min(1, Math.min(viewportWidth, viewportHeight) / CSSFLOWER_PREPARED_STAGE_EDGE) *
     CSSFLOWER_RESPONSIVE_STAGE_FRACTION;
 }
 

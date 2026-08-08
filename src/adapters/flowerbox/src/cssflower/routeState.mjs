@@ -14,7 +14,7 @@ export function createRouteState(search = globalThis.location?.search ?? "") {
 }
 
 export function publicRouteFor({ scene = DEFAULT_SCENE_ID } = {}) {
-  const base = globalThis.location?.pathname?.startsWith("/flower") ? "/flower/" : "/";
+  const base = globalThis.location?.pathname?.startsWith("/flowerbox") ? "/flowerbox/" : "/";
   if (scene === DEFAULT_SCENE_ID) return base;
   const params = new URLSearchParams();
   params.set("scene", scene);

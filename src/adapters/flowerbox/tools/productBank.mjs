@@ -64,7 +64,8 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
     lighting.grid?.schema === "cssflower-prepared-leaf-lighting-grid@1" &&
     lighting.grid?.encoding === "avif-flat-12x1-lossy-q83-alpha-lossless-speed6-yuv444" &&
     lighting.grid?.quality === 83 && lighting.grid?.alphaQuality === 100 &&
-    lighting.grid?.alphaCoverage === "mario-rounded-triangle-4x4-supersampled" &&
+    lighting.grid?.alphaCoverage ===
+      "mario-rounded-triangle-4x4-supersampled-shared-edge-opaque-fringe" &&
     lighting.grid?.columns === 12 && lighting.grid?.rows === 1 &&
     lighting.pages?.every((page) => page.sourceEncoding === "PNG-RGBA8") &&
     lighting.assetCount === 1 && lighting.faces?.length === 1_200,

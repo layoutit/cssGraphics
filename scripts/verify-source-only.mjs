@@ -44,6 +44,15 @@ const README_MEDIA_PATHS = new Set([
   "src/adapters/flowerbox/public/flower-social.png",
 ]);
 const SHA256 = /^[a-f0-9]{64}$/u;
+const PUBLIC_PREPARED_ARCHIVES = new Map([
+  [
+    "src/adapters/flowerbox/prepared/cssflower-product-rounded-q83-negative-cube-v4.tar.gz",
+    {
+      byteLength: 7_920_557,
+      sha256: "7d7998ab6805af45f7aa3961906b9a7aa955cee2850f207e2d0c82df0854ccfc",
+    },
+  ],
+]);
 
 const GENERATED_PREFIXES = Object.freeze([
   ".local/",
@@ -95,6 +104,17 @@ export function inspectCandidatePath(candidatePath, bytes = null) {
 
   if (!path || path.startsWith("/") || path.split("/").includes("..")) {
     issues.push("path must be a normalized repository-relative path");
+    return issues;
+  }
+
+  const publicPreparedArchive = PUBLIC_PREPARED_ARCHIVES.get(path);
+  if (publicPreparedArchive) {
+    if (!bytes) return issues;
+    const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+    if (buffer.length !== publicPreparedArchive.byteLength ||
+        createHash("sha256").update(buffer).digest("hex") !== publicPreparedArchive.sha256) {
+      issues.push("public prepared archive identity mismatch");
+    }
     return issues;
   }
 

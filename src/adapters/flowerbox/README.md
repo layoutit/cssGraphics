@@ -33,8 +33,9 @@ pnpm dev:flowerbox
 The public rounded q83 product bank is a content-addressed build artifact. It
 omits only the positive petal states at `sf >= 2.5`, retains the source-derived
 negative cube lobe through `sf = -1.1499998569488525`, and stays below the
-8 MB product-bank budget. Its lock binds the archive and unpacked closure;
-generated output remains ignored
+8 MB product-bank budget. Its lock binds the archive and unpacked closure. The
+exact public archive is bundled so production builds require no release-host
+download; generated output remains ignored
 under `build/generated/`. A full source preparation is available separately
 through `pnpm prepare:flowerbox:source` when the pinned `avifenc` is supplied.
 The locked `cssflower-product-rounded-q83-negative-cube-v4` release contains a

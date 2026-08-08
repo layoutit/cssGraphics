@@ -38,22 +38,35 @@ try {
     process.exit(0);
   }
 } catch {
-  // Missing or stale output is replaced only after the downloaded bank verifies.
+  // Missing or stale output is replaced only after the prepared bank verifies.
 }
 
 const localArchive = process.env.CSSFLOWER_PRODUCT_BANK_ARCHIVE;
+const bundledArchive = join(
+  repositoryRoot,
+  "src/adapters/flowerbox/prepared",
+  lock.asset,
+);
 const cacheRoot = join(repositoryRoot, ".local", "downloads", "cssflower");
-const archivePath = localArchive
+let archivePath = localArchive
   ? resolve(localArchive)
-  : join(cacheRoot, `${lock.archiveSha256}.tar.gz`);
+  : bundledArchive;
+let archiveSource = localArchive ? "local-archive" : "bundled-archive";
 let archiveBytes;
 try {
   archiveBytes = await readFile(archivePath);
 } catch (error) {
   if (localArchive || error?.code !== "ENOENT") throw error;
-  archiveBytes = await downloadArchive(lock);
-  await mkdir(cacheRoot, { recursive: true });
-  await writeFile(archivePath, archiveBytes);
+  archivePath = join(cacheRoot, `${lock.archiveSha256}.tar.gz`);
+  archiveSource = "release";
+  try {
+    archiveBytes = await readFile(archivePath);
+  } catch (cacheError) {
+    if (cacheError?.code !== "ENOENT") throw cacheError;
+    archiveBytes = await downloadArchive(lock);
+    await mkdir(cacheRoot, { recursive: true });
+    await writeFile(archivePath, archiveBytes);
+  }
 }
 if (archiveBytes.length !== lock.archiveByteLength || sha256(archiveBytes) !== lock.archiveSha256) {
   throw new Error("Flower Box product bank archive identity mismatch");
@@ -90,7 +103,7 @@ try {
   await mkdir(publicRoot, { recursive: true });
   await rm(targetRoot, { recursive: true, force: true });
   await rename(stagedProduct, targetRoot);
-  process.stdout.write(`${JSON.stringify({ status: "ready", source: localArchive ? "local-archive" : "release", ...summary }, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify({ status: "ready", source: archiveSource, ...summary }, null, 2)}\n`);
 } finally {
   await rm(stagingRoot, { recursive: true, force: true });
 }

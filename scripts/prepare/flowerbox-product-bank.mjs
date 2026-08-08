@@ -14,9 +14,9 @@ const lock = JSON.parse(await readFile(
 ));
 if (lock.schema !== "cssflower-prepared-bank-lock@3" ||
     lock.retainedTriangleLeafCount !== 1_200 || lock.retainedRotationRootCount !== 1 ||
-    lock.timelineStateCount !== 360 || lock.geometryStateCount !== 46 ||
-    lock.transformBlockCount !== 3 || lock.lightingAssetCount !== 1 ||
-    lock.lightingQuality !== 60 || lock.visibilityMinimumOwnedPixels !== 8) {
+    lock.timelineStateCount !== 360 || lock.geometryStateCount !== 73 ||
+    lock.transformBlockCount !== 5 || lock.lightingAssetCount !== 1 ||
+    lock.lightingQuality !== 83 || lock.visibilityMinimumOwnedPixels !== 8) {
   throw new Error("Flower Box prepared-bank lock does not bind the rounded retained Morph product");
 }
 const generatedRoot = resolve(

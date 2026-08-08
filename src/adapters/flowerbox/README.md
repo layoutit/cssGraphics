@@ -1,12 +1,13 @@
 # Flower Box
 
 An independently authored PolyCSS reconstruction of the classic 1995 Flower
-Box. The rounded default-cube bloom and complete rotation cycle are rendered
+Box. The rounded default-cube bloom, negative cube lobe, and complete rotation
+cycle are rendered
 through 1,200 stable retained HTML triangle leaves and one retained rotation
 root.
 
-The browser loads one prepared PolyCSS snapshot, pins three prepared matrix3d
-blocks, and loads one flat q60 prepared space-texel lighting atlas containing
+The browser loads one prepared PolyCSS snapshot, pins five prepared matrix3d
+blocks, and loads one flat q83 prepared space-texel lighting atlas containing
 twelve horizontal page regions. The ordinary AVIF image avoids the unsupported
 AVIF Grid container path in Firefox. As in the Mario adapter, each retained
 leaf's rounded triangle coverage is a prepared 4-by-4 supersampled alpha raster;
@@ -29,10 +30,15 @@ pnpm build:flowerbox
 pnpm dev:flowerbox
 ```
 
-The public rounded q60 product bank is a content-addressed build artifact. Its
-lock binds the archive and unpacked closure; generated output remains ignored
+The public rounded q83 product bank is a content-addressed build artifact. It
+omits only the positive petal states at `sf >= 2.5`, retains the source-derived
+negative cube lobe through `sf = -1.1499998569488525`, and stays below the
+8 MB product-bank budget. Its lock binds the archive and unpacked closure;
+generated output remains ignored
 under `build/generated/`. A full source preparation is available separately
 through `pnpm prepare:flowerbox:source` when the pinned `avifenc` is supplied.
+The locked `cssflower-product-rounded-q83-negative-cube-v4` release contains a
+7,920,557-byte archive and a 7,939,543-byte nine-file product closure.
 
 The source profile is bound to `DigitalMars/dmc` revision
 `9478d25a677f70dbe4fc0ed317cc5a5e5050ef8b`. Exact native-state qualification

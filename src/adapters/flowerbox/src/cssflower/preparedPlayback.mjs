@@ -402,19 +402,23 @@ export async function createCssflowerPreparedPlayer(options) {
 function validatePlayback({ playback, lighting, transformBlocks, lightingPages, rotationRoot, mesh, leaves }) {
   if (playback?.schema !== "cssflower-prepared-playback@1" ||
       playback.target !== "createPolyMorphPreparedDomTarget" ||
-      playback.scope !== "rounded-product-cycle-spike-phase-omitted" ||
+      playback.scope !== "rounded-product-cycle-positive-petals-omitted-negative-cube-lobe-retained" ||
       playback.sourceTicksPerSecond !== 30 ||
-      playback.cycle?.schema !== "cssflower-prepared-rounded-product-cycle@1" ||
+      playback.cycle?.schema !== "cssflower-prepared-rounded-product-cycle@2" ||
       playback.cycle?.stateCount !== 360 ||
       playback.cycle?.cycleStartState !== 0 ||
       playback.cycle?.cycleLength !== 360 ||
-      playback.cycle?.bloomTraceStateCount !== 90 ||
-      playback.cycle?.bloomCycleLength !== 90 ||
-      playback.cycle?.bloomPeakGeometryStateIndex !== 45 ||
-      playback.cycle?.bloomPeakSfHex !== "400ffffc" ||
-      playback.cycle?.bloomPeakSfNominal !== 2.25 ||
+      playback.cycle?.bloomTraceStateCount !== 180 ||
+      playback.cycle?.bloomCycleLength !== 180 ||
+      playback.cycle?.bloomPeakGeometryStateIndex !== 49 ||
+      playback.cycle?.bloomPeakSfHex !== "401cccc8" ||
+      playback.cycle?.bloomPeakSfNominal !== 2.45 ||
+      playback.cycle?.bloomMinimumGeometryStateIndex !== 72 ||
+      playback.cycle?.bloomMinimumSfHex !== "bf933332" ||
+      playback.cycle?.bloomMinimumSfNominal !== -1.15 ||
+      playback.cycle?.bloomSourcePathLength !== 144 ||
       playback.cycle?.omittedSourceSfAtOrAbove !== 2.5 ||
-      playback.cycle?.geometryStateCount !== 46 ||
+      playback.cycle?.geometryStateCount !== 73 ||
       playback.cycle?.rootStateCount !== 360 ||
       playback.cycle?.states?.length !== 360 ||
       playback.cycle?.rootTransforms?.length !== 360 ||

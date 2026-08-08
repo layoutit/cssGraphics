@@ -116,7 +116,7 @@ try {
       const initialLeafTransforms = leaves.map((leaf) => leaf.style.transform);
       const rootInitialTransform = root.style.transform;
       const rows = [];
-      for (const tick of [0, 31, 32, 44, 45, 46, 89, 90, 179, 359, 360, 361]) {
+      for (const tick of [0, 31, 32, 45, 48, 49, 50, 51, 99, 149, 179, 180, 359, 360, 361]) {
         await debug.setTick(tick);
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const current = debug.nodes();
@@ -266,7 +266,7 @@ try {
     }
 
     const expansionFits = [];
-    for (const tick of [0, 45]) {
+    for (const tick of [0, 49, 149]) {
       await page.evaluate((value) => globalThis.__cssFlowerDebug.setTick(value), tick);
       await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const path = join(smokeDir, `expansion-tick-${tick}.png`);
@@ -353,8 +353,8 @@ function assertProof(state) {
         stats.runtimeSelectedLeafTransformAttempts + stats.runtimeSuppressedLeafTransformWrites ||
       stats.runtimeSuppressedLeafTransformWrites <= 0 || stats.runtimeLeafVisibilityWrites <= 0 ||
       stats.runtimePreparedFrontFacingStateSelections <= 0 || stats.preparedFrontFacingDilationTicks !== 1 ||
-      stats.preparedFrontFacingSelectedFaceCount !== 165466 ||
-      stats.preparedFrontFacingVisibilityChangeCount !== 8804 ||
+      stats.preparedFrontFacingSelectedFaceCount !== 166886 ||
+      stats.preparedFrontFacingVisibilityChangeCount !== 8310 ||
       stats.preparedVisibilitySelectionDomain !== "prepared-source-camera-depth16-owned-pixel-occlusion" ||
       stats.preparedVisibilityMinimumOwnedPixels !== 8 ||
       stats.preparedVisibilitySampleGrid !== 1 || stats.preparedVisibilityAdjacencyRings !== 0 ||
@@ -379,21 +379,23 @@ function assertProof(state) {
       Math.abs(state.cameraRect.width - 900) > 0.01 || Math.abs(state.cameraRect.height - 900) > 0.01 ||
       Math.abs(state.cameraRect.x - 30) > 0.01 || Math.abs(state.cameraRect.y) > 0.01 ||
       state.responsiveFits.length !== 4 || !state.responsiveFits.every(responsiveFitMatches) ||
-      state.expansionFits.length !== 2 || !state.expansionFits.every((entry) =>
-        entry.visibility.chromaticPixelCount > 1000 && Math.min(...entry.visibility.chromaticMargins) >= 64) ||
+      state.expansionFits.length !== 3 || !state.expansionFits.every((entry) =>
+        entry.visibility.chromaticPixelCount > 1000 && Math.min(...entry.visibility.chromaticMargins) >= 40) ||
       stats.runtimeShapeTransformWrites !== 0 || stats.polycss?.surfaceLeafCounts?.stableTriangle !== 1200 ||
       state.visibility.nonBlackPixelCount < 1000 || state.visibility.chromaticPixelCount < 1000) {
     throw new Error(`cssFlower browser proof failed:\n${JSON.stringify(state, null, 2)}`);
   }
   const row = (tick) => state.identityRows.find((entry) => entry.tick === tick);
-  if (row(44).sfiHex !== "3d4ccccd" || row(45).sfiHex !== "bd4ccccd" ||
-      row(89).sfiHex !== "bd4ccccd" || row(90).sfiHex !== "3d4ccccd" ||
-      row(44).geometryStateIndex !== 44 || row(45).geometryStateIndex !== 45 ||
-      row(46).geometryStateIndex !== 44 || row(89).geometryStateIndex !== 1 ||
+  if (row(48).sfiHex !== "3d4ccccd" || row(49).sfiHex !== "bd4ccccd" ||
+      row(149).sfiHex !== "3d4ccccd" || row(179).sfiHex !== "3d4ccccd" ||
+      row(45).geometryStateIndex !== 45 || row(48).geometryStateIndex !== 48 ||
+      row(49).geometryStateIndex !== 49 || row(50).geometryStateIndex !== 48 ||
+      row(149).geometryStateIndex !== 72 || row(179).geometryStateIndex !== 50 ||
+      row(180).geometryStateIndex !== 0 || row(359).geometryStateIndex !== 50 ||
       !state.identityRows.every((entry) => entry.preparedAssetMappingMatches) ||
       row(359).timelineStateIndex !== 359 || row(360).timelineStateIndex !== 0 ||
-      row(361).timelineStateIndex !== 1 || row(45).rotation[0] - row(44).rotation[0] !== 3 ||
-      row(45).rotation[1] - row(44).rotation[1] !== 2) {
+      row(361).timelineStateIndex !== 1 || row(49).rotation[0] - row(48).rotation[0] !== 3 ||
+      row(49).rotation[1] - row(48).rotation[1] !== 2) {
     throw new Error(`cssFlower rounded product update/reversal proof failed:\n${JSON.stringify(state.identityRows, null, 2)}`);
   }
 }

@@ -26,7 +26,7 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
   assert(scene.metrics?.preparedLeafCount === 1_200 && scene.metrics?.preparedRootCount === 1,
     "retained counts");
   assert(scene.metrics?.preparedTimelineStateCount === 360 &&
-    scene.metrics?.preparedGeometryStateCount === 46 &&
+    scene.metrics?.preparedGeometryStateCount === 73 &&
     scene.metrics?.retainedSourceOracleTimelineStateCount === 9_331,
   "prepared cycle counts");
   assert(scene.renderer?.morphTarget === "createPolyMorphPreparedDomTarget" &&
@@ -41,9 +41,12 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
     scene.metrics?.runtimeDomGrowth === false,
   "zero runtime construction");
   assert(playback?.schema === "cssflower-prepared-playback@1" &&
-    playback.scope === "rounded-product-cycle-spike-phase-omitted" &&
-    playback.cycle?.schema === "cssflower-prepared-rounded-product-cycle@1" &&
-    playback.cycle?.stateCount === 360 && playback.cycle?.geometryStateCount === 46 &&
+    playback.scope === "rounded-product-cycle-positive-petals-omitted-negative-cube-lobe-retained" &&
+    playback.cycle?.schema === "cssflower-prepared-rounded-product-cycle@2" &&
+    playback.cycle?.stateCount === 360 && playback.cycle?.geometryStateCount === 73 &&
+    playback.cycle?.bloomCycleLength === 180 &&
+    playback.cycle?.bloomPeakSfHex === "401cccc8" &&
+    playback.cycle?.bloomMinimumSfHex === "bf933332" &&
     playback.cycle?.states?.length === 360 && playback.cycle?.rootTransforms?.length === 360,
   "rounded prepared cycle");
   assert(!Object.hasOwn(playback, "projectedPixels"), "projected product removed");
@@ -53,19 +56,19 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
     playback.frontFacingSchedule.faceCount === 1_200,
   "prepared visibility schedule");
   assert(transforms?.schema === "cssflower-prepared-matrix3d-blocks@1" &&
-    transforms.blockCount === 3 && transforms.blocks?.length === 3 &&
-    transforms.geometryStateCount === 46 && transforms.triangleCount === 1_200,
+    transforms.blockCount === 5 && transforms.blocks?.length === 5 &&
+    transforms.geometryStateCount === 73 && transforms.triangleCount === 1_200,
   "prepared transform blocks");
   assert(lighting?.schema === "cssflower-prepared-space-texel-lighting@5" &&
     lighting.timelineRowCount === 360 && lighting.faceCount === 1_200 &&
     lighting.grid?.schema === "cssflower-prepared-leaf-lighting-grid@1" &&
-    lighting.grid?.encoding === "avif-flat-12x1-lossy-q60-alpha-lossless-speed6-yuv444" &&
-    lighting.grid?.quality === 60 && lighting.grid?.alphaQuality === 100 &&
+    lighting.grid?.encoding === "avif-flat-12x1-lossy-q83-alpha-lossless-speed6-yuv444" &&
+    lighting.grid?.quality === 83 && lighting.grid?.alphaQuality === 100 &&
     lighting.grid?.alphaCoverage === "mario-rounded-triangle-4x4-supersampled" &&
     lighting.grid?.columns === 12 && lighting.grid?.rows === 1 &&
     lighting.pages?.every((page) => page.sourceEncoding === "PNG-RGBA8") &&
     lighting.assetCount === 1 && lighting.faces?.length === 1_200,
-  "prepared q60 lighting grid");
+  "prepared q83 lighting grid");
   assert(!scene.meshes && !scene.oracle && !playback.stateEvidenceUrl && !transforms.sourceFloat32,
     "product-only scene");
   assert(!manifest.assets?.stateEvidence && !manifest.productionTransport?.assets?.some((asset) =>
@@ -138,7 +141,7 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
     retainedTriangleLeafCount: 1_200,
     retainedRotationRootCount: 1,
     timelineStateCount: 360,
-    geometryStateCount: 46,
+    geometryStateCount: 73,
     retainedSourceOracleTimelineStateCount: 9_331,
     transformBlockCount: transforms.blockCount,
     transformAssetBytes: transformBytes,

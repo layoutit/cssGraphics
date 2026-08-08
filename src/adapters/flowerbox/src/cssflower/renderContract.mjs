@@ -4,6 +4,11 @@ export const CSSFLOWER_BOUNDARY_SEAM_BLEED = 0.125;
 export const CSSFLOWER_BOUNDARY_SEAM_BLEED_TEXT = String(CSSFLOWER_BOUNDARY_SEAM_BLEED);
 export const CSSFLOWER_SEAM_BLEED_POLICY = "side-local-shared-edges-boundary-ring-0.125";
 export const CSSFLOWER_LIGHTING_SCHEMA = "cssflower-prepared-space-texel-lighting@6";
+export const CSSFLOWER_LIGHTING_ADDRESS_SCHEDULE_SCHEMA =
+  "cssflower-prepared-exact-sparse-lighting-address-schedule@1";
+export const CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT = 263_397;
+export const CSSFLOWER_LIGHTING_ROW_SELECTION =
+  "prepared-exact-rgb8-sparse-leaf-address-schedule";
 export const CSSFLOWER_LIGHTING_LAYOUT = "guttered-leaf-raster-shelves-by-horizontal-page-grid-and-timeline-state-slices";
 export const CSSFLOWER_LIGHTING_RASTER_MODE = "leaf-resolution";
 export const CSSFLOWER_LIGHTING_SAMPLING = "endpoint-aligned-pixel-centers";

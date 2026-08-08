@@ -2,6 +2,11 @@ import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { gunzipSync } from "node:zlib";
+import {
+  CSSFLOWER_LIGHTING_ADDRESS_SCHEDULE_SCHEMA,
+  CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT,
+  CSSFLOWER_LIGHTING_ROW_SELECTION,
+} from "../src/cssflower/renderContract.mjs";
 
 export const FLOWERBOX_PRODUCT_BANK_SCHEMA = "cssflower-product-bank@4";
 
@@ -97,6 +102,12 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
     lighting.pages?.every((page) => page.sourceEncoding === "PNG-RGBA8") &&
     lighting.assetCount === 1 && lighting.faces?.length === 1_200,
   "prepared q83 lighting grid");
+  assert(lighting.rowSelection === CSSFLOWER_LIGHTING_ROW_SELECTION &&
+    lighting.addressSchedule?.schema === CSSFLOWER_LIGHTING_ADDRESS_SCHEDULE_SCHEMA &&
+    lighting.addressSchedule?.updateCount === CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT &&
+    !Object.hasOwn(lighting.addressSchedule, "heldStateCount") &&
+    !Object.hasOwn(lighting.addressSchedule, "publication"),
+  "exact unheld prepared lighting schedule");
   assert(!scene.meshes && !scene.oracle && !playback.stateEvidenceUrl && !transforms.sourceFloat32,
     "product-only scene");
   assert(!manifest.assets?.stateEvidence && !manifest.productionTransport?.assets?.some((asset) =>

@@ -3,6 +3,8 @@ import {
   CSSFLOWER_FRONT_FACE_DILATION_TICKS,
   CSSFLOWER_FRONT_FACE_SCHEDULE_ENCODING,
   CSSFLOWER_FRONT_FACE_SCHEDULE_SCHEMA,
+  CSSFLOWER_LIGHTING_ADDRESS_SCHEDULE_SCHEMA,
+  CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT,
   CSSFLOWER_VISIBILITY_POLICY,
 } from "./renderContract.mjs";
 
@@ -502,8 +504,10 @@ function validatePlayback({ playback, lighting, transformBlocks, lightingPages, 
 }
 
 function decodePreparedLightingAddressSchedule(schedule) {
-  if (schedule?.schema !== "cssflower-prepared-exact-sparse-lighting-address-schedule@1" ||
+  if (schedule?.schema !== CSSFLOWER_LIGHTING_ADDRESS_SCHEDULE_SCHEMA ||
       schedule.stateCount !== 360 || schedule.faceCount !== 1_200 || schedule.threshold !== 0 ||
+      schedule.updateCount !== CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT ||
+      Object.hasOwn(schedule, "heldStateCount") || Object.hasOwn(schedule, "publication") ||
       schedule.faceIndicesEncoding !== "base64-u16le-state-major-updated-face-indices" ||
       schedule.offsets?.length !== 361 || schedule.offsets[0] !== 0 ||
       schedule.offsets.at(-1) !== schedule.updateCount ||

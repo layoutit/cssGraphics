@@ -387,8 +387,9 @@ async function prepareLightingPages({
       rowCount: CSSFLOWER_LIGHTING_PAGE_ROWS,
       assetUrl: lightingPageAssetUrl(pageIndex),
       role: "cssflower-prepared-full-rotation-leaf-raster-space-time-page",
-      encoding: "PNG-RGB8",
-      opaqueUsedRows: true,
+      encoding: "PNG-RGBA8",
+      opaqueUsedRows: false,
+      alphaCoverage: "mario-rounded-triangle-4x4-supersampled",
       width: atlasWidth,
       height: atlasHeight,
       decodedBytes: atlasWidth * atlasHeight * 4,
@@ -427,7 +428,7 @@ async function prepareLightingPages({
         });
       }
     }
-    const bytes = PNG.sync.write(atlas, { colorType: 2, inputColorType: 6 });
+    const bytes = PNG.sync.write(atlas, { colorType: 6, inputColorType: 6 });
     const pageWithBytes = Object.freeze({
       ...expectedPage,
       byteLength: bytes.length,

@@ -25,10 +25,15 @@ export async function createCssflowerPreparedPlayer(options) {
   validatePlayback({ playback, lighting, transformBlocks, lightingPages, rotationRoot, mesh, leaves });
   const requestFrame = options.requestFrame ?? globalThis.requestAnimationFrame.bind(globalThis);
   const cancelFrame = options.cancelFrame ?? globalThis.cancelAnimationFrame.bind(globalThis);
+  const setDelay = options.setDelay ?? globalThis.setTimeout.bind(globalThis);
+  const clearDelay = options.clearDelay ?? globalThis.clearTimeout.bind(globalThis);
+  const readNow = options.readNow ?? globalThis.performance.now.bind(globalThis.performance);
   const frameMilliseconds = 1000 / playback.sourceTicksPerSecond;
+  const schedulerLeadMilliseconds = Math.min(4, frameMilliseconds / 4);
   let paused = true;
   let destroyed = false;
   let request = null;
+  let delayRequest = null;
   let nextFrameAt = null;
   let globalTick = 0;
   let timelineStateIndex = -1;
@@ -56,6 +61,8 @@ export async function createCssflowerPreparedPlayer(options) {
   let preparedLightingStateSelections = 0;
   let preparedLightingSkippedStateSelections = 0;
   let runtimeSchedulerCallbacks = 0;
+  let runtimeSchedulerTimerCallbacks = 0;
+  let runtimeSchedulerTimerSchedules = 0;
   const lightingAddressSchedule = decodePreparedLightingAddressSchedule(lighting.addressSchedule);
   const frontFacingSchedule = decodePreparedFrontFacingSchedule(playback.frontFacingSchedule);
   const selectedFrontFacingByFace = new Uint8Array(leaves.length);
@@ -222,6 +229,23 @@ export async function createCssflowerPreparedPlayer(options) {
     return globalTick;
   }
 
+  function scheduleNextFrame() {
+    if (paused || request !== null || delayRequest !== null) return;
+    const delay = nextFrameAt === null
+      ? 0
+      : Math.max(0, nextFrameAt - readNow() - schedulerLeadMilliseconds);
+    if (delay <= 1) {
+      request = requestFrame(loop);
+      return;
+    }
+    runtimeSchedulerTimerSchedules += 1;
+    delayRequest = setDelay(() => {
+      delayRequest = null;
+      runtimeSchedulerTimerCallbacks += 1;
+      if (!paused && request === null) request = requestFrame(loop);
+    }, delay);
+  }
+
   async function loop(timestamp) {
     request = null;
     runtimeSchedulerCallbacks += 1;
@@ -233,7 +257,7 @@ export async function createCssflowerPreparedPlayer(options) {
       await applyTick(globalTick + elapsedSteps);
       nextFrameAt += elapsedSteps * frameMilliseconds;
     }
-    if (!paused) request = requestFrame(loop);
+    scheduleNextFrame();
   }
 
   function pause() {
@@ -241,6 +265,8 @@ export async function createCssflowerPreparedPlayer(options) {
     nextFrameAt = null;
     if (request !== null) cancelFrame(request);
     request = null;
+    if (delayRequest !== null) clearDelay(delayRequest);
+    delayRequest = null;
     return globalTick;
   }
 
@@ -253,7 +279,7 @@ export async function createCssflowerPreparedPlayer(options) {
       if (!paused) return globalTick;
       paused = false;
       nextFrameAt = null;
-      request = requestFrame(loop);
+      scheduleNextFrame();
       return globalTick;
     },
     async step(count = 1) {
@@ -346,6 +372,8 @@ export async function createCssflowerPreparedPlayer(options) {
         lightingPageLoader: lightingPages.stats(),
         pendingLightingCommitCount: 0,
         runtimeSchedulerCallbacks,
+        runtimeSchedulerTimerCallbacks,
+        runtimeSchedulerTimerSchedules,
         runtimePolygonConstructionCount: 0,
         runtimeGeometryConstructionCount: 0,
         runtimeRadialProjectionCount: 0,

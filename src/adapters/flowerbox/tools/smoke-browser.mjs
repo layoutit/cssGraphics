@@ -106,7 +106,11 @@ try {
       const root = retained.rotationRoot;
       const mesh = retained.mesh;
       const leaves = [...retained.leaves];
-      const camera = document.body.firstElementChild;
+      const header = document.body.querySelector(":scope > .site-header");
+      const wordmark = header?.querySelector(":scope > .site-wordmark");
+      const actions = header?.querySelector(":scope > .site-actions");
+      const github = actions?.querySelector(":scope > .site-action");
+      const camera = document.body.querySelector(":scope > .polycss-camera");
       const scene = camera?.firstElementChild;
       const triangleIds = debug.scene.lighting.faces.map((face) => face.triangleId);
       const initialLeafTransforms = leaves.map((leaf) => leaf.style.transform);
@@ -127,7 +131,18 @@ try {
       const cameraRect = camera.getBoundingClientRect();
       const allClasses = [...document.body.querySelectorAll("[class]")]
         .flatMap((element) => [...element.classList]);
-      const permittedClasses = new Set(["polycss-camera", "polycss-scene", "polycss-mesh"]);
+      const permittedClasses = new Set([
+        "polycss-camera",
+        "polycss-scene",
+        "polycss-mesh",
+        "site-header",
+        "site-wordmark",
+        "site-wordmark-css",
+        "site-wordmark-graphics",
+        "site-wordmark-path",
+        "site-actions",
+        "site-action",
+      ]);
       const customClasses = [...new Set(allClasses.filter((name) => !permittedClasses.has(name)))];
       const stylesheetText = document.head.querySelector("style")?.textContent ?? "";
       const preparedLeafRuleCount = (stylesheetText.match(/\.polycss-mesh>u\.[a-zA-Z]{1,2} \{/gu) ?? []).length;
@@ -161,6 +176,15 @@ try {
         customClassMaxLength: Math.max(...customClasses.map((name) => name.length)),
         customClassesValid: customClasses.every((name) => /^[a-zA-Z]{1,2}$/u.test(name)),
         comparisonElementCount: document.body.querySelectorAll("main,header,section,article,form,button,input,output,img,video,canvas,svg,script").length,
+        shellWordmarkText: wordmark?.textContent?.replace(/\s+/gu, "") ?? "",
+        shellWordmarkHref: wordmark?.href ?? "",
+        shellGithubText: github?.textContent?.trim() ?? "",
+        shellGithubHref: github?.href ?? "",
+        shellStructure: header?.parentElement === document.body &&
+          header === document.body.firstElementChild &&
+          actions?.parentElement === header &&
+          github?.parentElement === actions &&
+          camera === document.body.lastElementChild,
         snapshotStyleCount: document.head.querySelectorAll("style").length,
         preparedLeafRuleCount,
         leafInlineTransformCount: leaves.filter((leaf) => leaf.style.transform.startsWith("matrix3d(")).length,
@@ -228,7 +252,7 @@ try {
         const debug = globalThis.__cssFlowerDebug;
         debug.assertStableDomIdentity();
         const bodyRect = document.body.getBoundingClientRect();
-        const camera = document.body.firstElementChild;
+        const camera = document.body.querySelector(":scope > .polycss-camera");
         const cameraRect = camera.getBoundingClientRect();
         return {
           ...target,
@@ -278,7 +302,7 @@ try {
 
 function assertProof(state) {
   const stats = state.stats;
-  if (state.loading.bodyChildCount !== 0 || state.loading.bodyAttributeNames.length !== 0 ||
+  if (state.loading.bodyChildCount !== 1 || state.loading.bodyAttributeNames.length !== 0 ||
       state.loading.content !== '\"\"' || state.loading.position !== "fixed" ||
       state.loading.width !== "18px" || state.loading.height !== "18px" ||
       state.loading.animationName !== "l" || state.loading.animationDuration !== "0.8s" ||
@@ -290,12 +314,15 @@ function assertProof(state) {
       state.triangleIdCount !== 1200 || state.polycssStableTriangleCount !== 1200 || state.rasterAtlasLeafCount !== 1200 ||
       state.rasterLeafWidths.length < 2 || state.rasterLeafHeights.length < 2 ||
       state.retainedLeafTags.length !== 1 || state.retainedLeafTags[0] !== "U" ||
-      state.bodyChildCount !== 1 || state.bodyElementCount !== 1204 ||
+      state.bodyChildCount !== 2 || state.bodyElementCount !== 1211 ||
       state.bodyAttributeNames.join(",") !== "class" || state.bodyClassName !== "r" ||
       state.dataAttributeCount !== 0 ||
       state.customClassCount !== 1200 || state.customClassUniqueCount !== 1200 ||
       state.customClassMaxLength !== 2 || state.customClassesValid !== true ||
-      state.comparisonElementCount !== 0 || state.snapshotStyleCount !== 1 || state.preparedLeafRuleCount !== 1200 ||
+      state.comparisonElementCount !== 1 || state.shellWordmarkText !== "css.graphics/flower" ||
+      state.shellWordmarkHref !== "https://css.graphics/flower/" ||
+      state.shellGithubText !== "GitHub" || state.shellGithubHref !== "https://github.com/layoutit/cssGraphics" ||
+      state.shellStructure !== true || state.snapshotStyleCount !== 1 || state.preparedLeafRuleCount !== 1200 ||
       state.leafInlineTransformCount <= 0 || state.leafInlineTransformCount > 1200 ||
       state.leafInlinePreparedAddressPropertyCount <= 0 ||
       state.leafInlineVisibilityCount !== 1200 ||
@@ -337,7 +364,9 @@ function assertProof(state) {
       stats.runtimeDirectLeafCssTextWrites !== 0 || stats.runtimeProjectedAtlasWrites !== 0 ||
       stats.runtimeProjectedFrameWrites !== 0 || stats.runtimePreparedPageLayoutAdoptions !== 0 ||
       stats.runtimePreparedPageBoundaryLeafStyleWrites !== 0 ||
-      stats.transformBlockLoader?.residentBlockCount > 2 || stats.transformBlockLoader?.errors?.length !== 0 ||
+      stats.transformBlockLoader?.residentBlockCount !== stats.preparedTransformBlockCount ||
+      stats.transformBlockLoader?.loadCount !== stats.preparedTransformBlockCount ||
+      stats.transformBlockLoader?.releaseCount !== 0 || stats.transformBlockLoader?.errors?.length !== 0 ||
       stats.lightingPageLoader?.schema !== "cssflower-prepared-lighting-grid-loader@1" ||
       stats.lightingPageLoader?.residentGridCount !== 1 || stats.lightingPageLoader?.loadCount !== 1 ||
       stats.lightingPageLoader?.errors?.length !== 0 ||
@@ -351,7 +380,7 @@ function assertProof(state) {
       Math.abs(state.cameraRect.x - 30) > 0.01 || Math.abs(state.cameraRect.y) > 0.01 ||
       state.responsiveFits.length !== 4 || !state.responsiveFits.every(responsiveFitMatches) ||
       state.expansionFits.length !== 2 || !state.expansionFits.every((entry) =>
-        entry.visibility.nonBlackPixelCount > 1000 && Math.min(...entry.visibility.margins) >= 64) ||
+        entry.visibility.chromaticPixelCount > 1000 && Math.min(...entry.visibility.chromaticMargins) >= 64) ||
       stats.runtimeShapeTransformWrites !== 0 || stats.polycss?.surfaceLeafCounts?.stableTriangle !== 1200 ||
       state.visibility.nonBlackPixelCount < 1000 || state.visibility.chromaticPixelCount < 1000) {
     throw new Error(`cssFlower browser proof failed:\n${JSON.stringify(state, null, 2)}`);
@@ -389,6 +418,10 @@ function imageVisibility(bytes) {
   let minimumY = png.height;
   let maximumX = -1;
   let maximumY = -1;
+  let chromaticMinimumX = png.width;
+  let chromaticMinimumY = png.height;
+  let chromaticMaximumX = -1;
+  let chromaticMaximumY = -1;
   for (let y = 0; y < png.height; y += 1) {
     for (let x = 0; x < png.width; x += 1) {
       const offset = (y * png.width + x) * 4;
@@ -405,6 +438,10 @@ function imageVisibility(bytes) {
       }
       if (a > 0 && Math.max(r, g, b) - Math.min(r, g, b) > 18 && Math.max(r, g, b) > 30) {
         chromaticPixelCount += 1;
+        chromaticMinimumX = Math.min(chromaticMinimumX, x);
+        chromaticMinimumY = Math.min(chromaticMinimumY, y);
+        chromaticMaximumX = Math.max(chromaticMaximumX, x);
+        chromaticMaximumY = Math.max(chromaticMaximumY, y);
       }
     }
   }
@@ -415,6 +452,13 @@ function imageVisibility(bytes) {
     chromaticPixelCount,
     bounds: [minimumX, minimumY, maximumX, maximumY],
     margins: [minimumX, minimumY, png.width - 1 - maximumX, png.height - 1 - maximumY],
+    chromaticBounds: [chromaticMinimumX, chromaticMinimumY, chromaticMaximumX, chromaticMaximumY],
+    chromaticMargins: [
+      chromaticMinimumX,
+      chromaticMinimumY,
+      png.width - 1 - chromaticMaximumX,
+      png.height - 1 - chromaticMaximumY,
+    ],
   };
 }
 

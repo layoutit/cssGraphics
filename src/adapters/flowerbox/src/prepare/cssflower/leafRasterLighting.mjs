@@ -12,7 +12,9 @@ export const CSSFLOWER_LEAF_RASTER_PAGE_ROWS = CSSFLOWER_LIGHTING_PAGE_ROWS;
 export const CSSFLOWER_LEAF_RASTER_MAX_TEXTURE_DIMENSION = 8_192;
 
 const lightingWeightCache = new Map();
+const lightingAlphaCache = new Map();
 const affineMicroWeightCache = new Map();
+const LIGHTING_ALPHA_SUPERSAMPLES = 4;
 
 export function buildPreparedLeafRasterLayout(faces, options = {}) {
   if (!Array.isArray(faces) || faces.length < 1) {
@@ -305,7 +307,9 @@ export function writePreparedLeafRasterLightingTile({
   const originX = placement.contentX;
   const originY = rowIndex * layout.stateSliceHeight + placement.contentY;
   const weights = preparedLightingWeights(placement.width, placement.height);
+  const alpha = preparedLightingAlpha(placement.width, placement.height);
   let weightOffset = 0;
+  let alphaOffset = 0;
   for (let y = 0; y < placement.height; y += 1) {
     let firstPixel = 0;
     let lastPixel = 0;
@@ -329,7 +333,8 @@ export function writePreparedLeafRasterLightingTile({
         vertexColors[point1 * 3 + 2] * left +
         vertexColors[point2 * 3 + 2] * right,
       );
-      const pixel = red | (green << 8) | (blue << 16) | (255 << 24);
+      const pixel = red | (green << 8) | (blue << 16) | (alpha[alphaOffset] << 24);
+      alphaOffset += 1;
       pixels[(originY + y) * atlasWidth + originX + x] = pixel;
       if (x === 0) firstPixel = pixel;
       if (x === placement.width - 1) lastPixel = pixel;
@@ -356,6 +361,36 @@ export function writePreparedLeafRasterLightingTile({
       lastRowOffset + slotWidth,
     );
   }
+}
+
+function preparedLightingAlpha(width, height) {
+  const key = `${width}x${height}`;
+  const cached = lightingAlphaCache.get(key);
+  if (cached) return cached;
+  const alpha = new Uint8Array(width * height);
+  const sampleCount = LIGHTING_ALPHA_SUPERSAMPLES * LIGHTING_ALPHA_SUPERSAMPLES;
+  let offset = 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let covered = 0;
+      for (let sampleY = 0; sampleY < LIGHTING_ALPHA_SUPERSAMPLES; sampleY += 1) {
+        const v = (y + (sampleY + 0.5) / LIGHTING_ALPHA_SUPERSAMPLES) / height;
+        const apex = 1 - v;
+        for (let sampleX = 0; sampleX < LIGHTING_ALPHA_SUPERSAMPLES; sampleX += 1) {
+          const u = (x + (sampleX + 0.5) / LIGHTING_ALPHA_SUPERSAMPLES) / width;
+          const right = u - 0.5 * apex;
+          const left = 1 - apex - right;
+          if (apex >= 0 && apex <= 1 && left >= 0 && left <= 1 && right >= 0 && right <= 1) {
+            covered += 1;
+          }
+        }
+      }
+      alpha[offset] = Math.round(covered / sampleCount * 255);
+      offset += 1;
+    }
+  }
+  lightingAlphaCache.set(key, alpha);
+  return alpha;
 }
 
 function preparedLightingWeights(width, height) {

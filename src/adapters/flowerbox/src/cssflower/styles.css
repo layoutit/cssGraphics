@@ -48,6 +48,90 @@ html > body:not(.r):not(.e)::after {
   }
 }
 
+.site-header,
+.site-header * {
+  box-sizing: border-box;
+}
+
+.site-header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 21;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 50px;
+  padding: 0 12px 0 16px;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+}
+
+.site-wordmark {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  color: #f0f0f0;
+  font: 400 24px/30px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0.1px;
+  opacity: 0.72;
+  text-decoration: none;
+}
+
+.site-wordmark-css {
+  font-weight: 500;
+}
+
+.site-wordmark-graphics {
+  font-weight: 200;
+}
+
+.site-wordmark-path {
+  font-weight: 100;
+}
+
+.site-wordmark:hover,
+.site-wordmark:focus-visible {
+  opacity: 1;
+}
+
+.site-wordmark:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 4px;
+}
+
+.site-actions {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+}
+
+.site-action {
+  display: inline-flex;
+  min-width: 72px;
+  height: 50px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  color: #f0f0f0;
+  font: 400 13px/1 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  letter-spacing: 0.01em;
+  opacity: 0.72;
+  text-decoration: none;
+}
+
+.site-action:hover,
+.site-action:focus-visible {
+  opacity: 1;
+}
+
+.site-action:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: -5px;
+}
+
 body > .polycss-camera {
   position: absolute !important;
   inset: calc(50% - 360px) auto auto calc(50% - 360px) !important;
@@ -55,4 +139,10 @@ body > .polycss-camera {
   height: 720px !important;
   scale: 1;
   transform-origin: 50% 50%;
+}
+
+@media (max-width: 360px) {
+  .site-header {
+    padding-inline: 12px;
+  }
 }

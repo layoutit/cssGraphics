@@ -37,6 +37,8 @@ negative cube lobe through `sf = -1.1499998569488525`, and stays below the
 generated output remains ignored
 under `build/generated/`. A full source preparation is available separately
 through `pnpm prepare:flowerbox:source` when the pinned `avifenc` is supplied.
+The locked `cssflower-product-rounded-q83-negative-cube-v4` release contains a
+7,920,557-byte archive and a 7,939,543-byte nine-file product closure.
 
 The source profile is bound to `DigitalMars/dmc` revision
 `9478d25a677f70dbe4fc0ed317cc5a5e5050ef8b`. Exact native-state qualification

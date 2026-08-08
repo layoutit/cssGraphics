@@ -320,6 +320,7 @@ function prepareExportedSnapshot(html) {
     "--polycss-atlas-leaf-sizing",
     "image-rendering",
   ]);
+  rules.push(".polycss-mesh>u { border: 0; box-sizing: border-box; border-top-left-radius: 50% 100%; border-top-right-radius: 50% 100%; corner-top-left-shape: bevel; corner-top-right-shape: bevel; }");
   for (let index = 0; index < leaves.length; index += 1) {
     const className = retainedLeafClassName(index);
     leaves[index].className = className;

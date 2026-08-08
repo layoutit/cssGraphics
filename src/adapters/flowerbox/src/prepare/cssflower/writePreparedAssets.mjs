@@ -4,6 +4,7 @@ import { copyFile, link, mkdir, readFile, readdir, rename, rm, stat, unlink, wri
 import { gzipSync } from "node:zlib";
 import { promisify } from "node:util";
 import { dirname, join } from "node:path";
+import { PNG } from "pngjs";
 import {
   CSSFLOWER_LIGHTING_ATLAS_ENCODING,
   CSSFLOWER_LIGHTING_ATLAS_MIME_TYPE,
@@ -155,7 +156,7 @@ async function materializePreparedLightingPages(compiled, lightingPageStore, avi
   }
   const sourcePaths = compiled.lightingPages.map((page) => lightingPageStore.pathFor(page.index));
   const sourceBinding = sha256(Buffer.from(compiled.lightingPages.map((page) => page.sha256).join("\n")));
-  const cacheRoot = join(localRoot, "cache", "prepared-leaf-lighting-avif-grid", binding);
+  const cacheRoot = join(localRoot, "cache", "prepared-leaf-lighting-avif-flat", binding);
   const encodedCachePath = join(cacheRoot, `${sourceBinding}.avif`);
   let encoded;
   try {
@@ -164,20 +165,29 @@ async function materializePreparedLightingPages(compiled, lightingPageStore, avi
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
     await mkdir(dirname(encodedCachePath), { recursive: true });
-    const temporary = `${encodedCachePath}.tmp-${process.pid}.avif`;
-    await execFileAsync(avifenc, [
-      "--qcolor", String(CSSFLOWER_LIGHTING_ATLAS_QUALITY),
-      "--speed", "6",
-      "--jobs", "2",
-      "--yuv", "444",
-      "--ignore-exif",
-      "--ignore-xmp",
-      "--ignore-icc",
-      "--grid", `${CSSFLOWER_LIGHTING_GRID_COLUMNS}x${CSSFLOWER_LIGHTING_GRID_ROWS}`,
-      ...sourcePaths,
-      temporary,
-    ], { maxBuffer: 8 * 1024 * 1024 });
-    await rename(temporary, encodedCachePath);
+    const temporaryPng = `${encodedCachePath}.tmp-${process.pid}.png`;
+    const temporaryAvif = `${encodedCachePath}.tmp-${process.pid}.avif`;
+    try {
+      await writeFlatLightingAtlasPng(sourcePaths, temporaryPng);
+      await execFileAsync(avifenc, [
+        "--qcolor", String(CSSFLOWER_LIGHTING_ATLAS_QUALITY),
+        "--qalpha", "100",
+        "--speed", "6",
+        "--jobs", "2",
+        "--yuv", "444",
+        "--ignore-exif",
+        "--ignore-xmp",
+        "--ignore-icc",
+        temporaryPng,
+        temporaryAvif,
+      ], { maxBuffer: 8 * 1024 * 1024 });
+      await rename(temporaryAvif, encodedCachePath);
+    } finally {
+      await Promise.all([
+        unlinkIfPresent(temporaryPng),
+        unlinkIfPresent(temporaryAvif),
+      ]);
+    }
     encoded = await readFile(encodedCachePath);
   }
   const encodedSha256 = sha256(encoded);
@@ -188,6 +198,8 @@ async function materializePreparedLightingPages(compiled, lightingPageStore, avi
     mimeType: CSSFLOWER_LIGHTING_ATLAS_MIME_TYPE,
     quality: CSSFLOWER_LIGHTING_ATLAS_QUALITY,
     chromaSubsampling: "4:4:4",
+    alphaQuality: 100,
+    alphaCoverage: "mario-rounded-triangle-4x4-supersampled",
     exactPreparedPixels: false,
     columns: CSSFLOWER_LIGHTING_GRID_COLUMNS,
     rows: CSSFLOWER_LIGHTING_GRID_ROWS,
@@ -224,7 +236,7 @@ async function materializePreparedLightingPages(compiled, lightingPageStore, avi
   await materializeContentAddressedAssets([asset], 1);
   return Object.freeze({
     schema: "cssflower-prepared-leaf-lighting-assets@2",
-    distribution: "public-independent-prepared-leaf-lighting-horizontal-grid",
+    distribution: "public-independent-prepared-leaf-lighting-flat-atlas",
     encoding: CSSFLOWER_LIGHTING_ATLAS_ENCODING,
     mimeType: CSSFLOWER_LIGHTING_ATLAS_MIME_TYPE,
     quality: CSSFLOWER_LIGHTING_ATLAS_QUALITY,
@@ -236,6 +248,31 @@ async function materializePreparedLightingPages(compiled, lightingPageStore, avi
     grid,
     pages,
   });
+}
+
+async function writeFlatLightingAtlasPng(sourcePaths, targetPath) {
+  const atlas = new PNG({
+    width: CSSFLOWER_LIGHTING_GRID_WIDTH,
+    height: CSSFLOWER_LIGHTING_GRID_HEIGHT,
+    colorType: 6,
+  });
+  for (let pageIndex = 0; pageIndex < sourcePaths.length; pageIndex += 1) {
+    const page = PNG.sync.read(await readFile(sourcePaths[pageIndex]));
+    if (page.width * sourcePaths.length !== atlas.width || page.height !== atlas.height) {
+      throw new Error(`Prepared cssFlower lighting page ${pageIndex} cannot form the flat atlas`);
+    }
+    for (let row = 0; row < page.height; row += 1) {
+      const sourceStart = row * page.width * 4;
+      const targetStart = (row * atlas.width + pageIndex * page.width) * 4;
+      page.data.copy(atlas.data, targetStart, sourceStart, sourceStart + page.width * 4);
+    }
+  }
+  await writeAtomic(targetPath, PNG.sync.write(atlas, {
+    colorType: 6,
+    inputColorType: 6,
+    bitDepth: 8,
+    inputHasAlpha: true,
+  }));
 }
 
 async function pruneAssetDirectory(root, keepPaths) {

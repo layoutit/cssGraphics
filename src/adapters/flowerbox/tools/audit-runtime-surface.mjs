@@ -28,10 +28,13 @@ const sources = new Map(await Promise.all(runtimeFiles.map(async (path) => [
 ])));
 
 const index = sources.get("index.html");
-if (!/<body><\/body>/u.test(index.replace(/\s+/gu, "")) ||
-    /<(?:main|header|section|article|form|button|input|output|img|video|canvas|svg)\b/iu.test(index) ||
+if (!/<body>\s*<header class="site-header">[\s\S]*<\/header>\s*<\/body>/u.test(index) ||
+    !index.includes('class="site-wordmark" href="https://css.graphics/flower/"') ||
+    !index.includes('class="site-actions" aria-label="Scene actions"') ||
+    !index.includes('href="https://github.com/layoutit/cssGraphics"') ||
+    /<(?:main|section|article|form|button|input|output|img|video|canvas|svg)\b/iu.test(index) ||
     /\bdata-[a-z0-9-]+=/iu.test(index)) {
-  failures.push("index.html is not the empty direct-camera shell");
+  failures.push("index.html is not the branded direct-camera shell");
 }
 for (const [path, source] of sources) {
   reject(path, source, "alternate renderer", /(?:getContext\s*\(|WebGLRenderingContext|WebGPU|GPUDevice|from\s+["']three["']|createElement\s*\(\s*["'](?:canvas|svg)["']|<(?:canvas|svg)\b)/iu);

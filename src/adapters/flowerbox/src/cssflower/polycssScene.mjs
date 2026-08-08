@@ -42,9 +42,12 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, pr
     "--cssflower-space-texels",
     `url("${preparedAssets.lightingPages.urlFor(0)}")`,
   );
-  host.replaceChildren(importedCamera);
+  for (const mounted of host.querySelectorAll(":scope > .polycss-camera")) {
+    mounted.remove();
+  }
+  host.append(importedCamera);
 
-  const camera = host.firstElementChild;
+  const camera = host.querySelector(":scope > .polycss-camera");
   const scene = camera?.firstElementChild;
   const rotationRoot = scene?.firstElementChild;
   const mesh = rotationRoot?.firstElementChild;
@@ -87,7 +90,7 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, pr
   observer.observe(host, { childList: true, subtree: true });
 
   function assertStableDomIdentity() {
-    const currentCamera = host.firstElementChild;
+    const currentCamera = host.querySelector(":scope > .polycss-camera");
     const currentScene = currentCamera?.firstElementChild;
     const currentRoot = currentScene?.firstElementChild;
     const currentMesh = currentRoot?.firstElementChild;
@@ -128,7 +131,7 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, pr
     },
     destroy() {
       observer.disconnect();
-      host.replaceChildren();
+      camera.remove();
       removePreparedSnapshotStyles();
     },
   });

@@ -5,13 +5,21 @@ Box. The rounded default-cube bloom and complete rotation cycle are rendered
 through 1,200 stable retained HTML triangle leaves and one retained rotation
 root.
 
-The browser loads one prepared PolyCSS snapshot, three prepared matrix3d
-blocks, and one q60 prepared space-texel lighting grid. PolyCSS Morph writes
-only selected prepared leaf transforms; a prepared source-camera visibility
-schedule suppresses cells owning fewer than eight pixels. The runtime does not
+The browser loads one prepared PolyCSS snapshot, pins three prepared matrix3d
+blocks, and loads one flat q60 prepared space-texel lighting atlas containing
+twelve horizontal page regions. The ordinary AVIF image avoids the unsupported
+AVIF Grid container path in Firefox. As in the Mario adapter, each retained
+leaf's rounded triangle coverage is a prepared 4-by-4 supersampled alpha raster;
+the browser does not depend on Firefox implementing CSS `corner-shape`. PolyCSS Morph
+writes only selected prepared leaf transforms; a prepared source-camera
+visibility schedule suppresses cells owning fewer than eight pixels. A
+deadline-aware scheduler sleeps until each 30 Hz prepared source update is near
+and then presents it through `requestAnimationFrame`. The runtime does not
 construct geometry, project vertices, calculate normals or lighting,
 rasterize, or grow the DOM. The canonical page is the responsive `/` route;
-there is no separate presentation or oracle mode.
+there is no separate presentation or oracle mode. Its fixed css.graphics shell
+matches the Pipes presentation with a `/flower` wordmark and repository action,
+while the prepared PolyCSS camera remains an unchanged direct body child.
 
 From the repository root:
 

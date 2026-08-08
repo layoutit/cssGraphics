@@ -107,7 +107,7 @@ export function validatePreparedMorphAssets(playback, lighting) {
         page.decodedBytes !== page.width * page.height * 4 ||
         page.gridColumn !== pageIndex || page.gridRow !== 0 ||
         page.gridOffsetX !== pageIndex * lighting.atlasWidth || page.gridOffsetY !== 0 ||
-        page.sourceEncoding !== "PNG-RGB8" ||
+        page.sourceEncoding !== "PNG-RGBA8" ||
         !Number.isSafeInteger(page.sourcePngByteLength) || page.sourcePngByteLength < 1 ||
         !/^[a-f0-9]{64}$/u.test(page.sourcePngSha256 ?? "")) {
       throw new Error(`Prepared cssFlower lighting page ${pageIndex} is invalid`);
@@ -143,6 +143,7 @@ export function validatePreparedMorphAssets(playback, lighting) {
 
 export function createPreparedTransformBlockLoader(transforms) {
   const records = new Map();
+  const allBlockIndices = new Set(transforms.blocks.map((block) => block.index));
   const errors = [];
   let currentBlockIndex = 0;
   let loadCount = 0;
@@ -220,15 +221,14 @@ export function createPreparedTransformBlockLoader(transforms) {
   return Object.freeze({
     async prime(geometryStateIndex, nextGeometryStateIndex) {
       const current = blockIndexForGeometryState(geometryStateIndex);
-      const next = blockIndexForGeometryState(nextGeometryStateIndex);
+      blockIndexForGeometryState(nextGeometryStateIndex);
       currentBlockIndex = current;
-      releaseExcept(new Set([current, next]));
-      await Promise.all([...new Set([current, next])].map(ensure));
+      desiredBlockIndices = new Set(allBlockIndices);
+      await Promise.all([...allBlockIndices].map(ensure));
     },
     async activate(geometryStateIndex, nextGeometryStateIndex) {
       const target = blockIndexForGeometryState(geometryStateIndex);
       const next = blockIndexForGeometryState(nextGeometryStateIndex);
-      releaseExcept(new Set([currentBlockIndex, target, next]));
       const record = await ensure(target);
       currentBlockIndex = target;
       prefetch(next);
@@ -258,7 +258,7 @@ export function createPreparedTransformBlockLoader(transforms) {
     commitPresented(geometryStateIndex, nextGeometryStateIndex) {
       const current = blockIndexForGeometryState(geometryStateIndex);
       const next = blockIndexForGeometryState(nextGeometryStateIndex);
-      releaseExcept(new Set([current, next]));
+      currentBlockIndex = current;
       prefetch(next);
     },
     stats() {

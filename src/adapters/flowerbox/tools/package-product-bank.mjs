@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { gzipSync, gunzipSync } from "node:zlib";
 import {
   inspectFlowerboxProductBank,
@@ -11,7 +12,7 @@ import {
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.source) {
-  throw new Error("Usage: package-product-bank.mjs --source <dist/cssflower> [--output <directory>]");
+  throw new Error("Usage: package-product-bank.mjs --source <dist/cssflower> [--output <directory>] [--archive <file.tar.gz>]");
 }
 const sourceRoot = resolve(args.source);
 const outputRoot = resolve(args.output ?? "build/generated/public/cssflower");
@@ -130,7 +131,8 @@ try {
   await inspectFlowerboxProductBank(stagingRoot);
   await rm(outputRoot, { recursive: true, force: true });
   await rename(stagingRoot, outputRoot);
-  process.stdout.write(`${JSON.stringify({ outputRoot, ...summary }, null, 2)}\n`);
+  const archive = args.archive ? await writePortableArchive(outputRoot, args.archive) : null;
+  process.stdout.write(`${JSON.stringify({ outputRoot, archive, ...summary }, null, 2)}\n`);
 } catch (error) {
   await rm(stagingRoot, { recursive: true, force: true });
   throw error;
@@ -182,4 +184,62 @@ function parseArgs(argv) {
 
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+async function writePortableArchive(productRoot, requestedArchivePath) {
+  if (basename(productRoot) !== "cssflower") {
+    throw new Error("Portable Flower Box archives require an output directory named cssflower");
+  }
+  const archivePath = resolve(requestedArchivePath);
+  const temporaryTar = `${archivePath}.staging-${process.pid}.tar`;
+  const temporaryArchive = `${temporaryTar}.gz`;
+  await mkdir(dirname(archivePath), { recursive: true });
+  await rm(temporaryTar, { force: true });
+  await rm(temporaryArchive, { force: true });
+  try {
+    runArchiveTool("tar", [
+      "--no-xattrs",
+      "-cf",
+      temporaryTar,
+      "-C",
+      dirname(productRoot),
+      "cssflower",
+    ], { COPYFILE_DISABLE: "1" });
+    runArchiveTool("gzip", ["-n", "-9", "-f", temporaryTar]);
+    const listing = runArchiveTool("tar", ["-tzf", temporaryArchive]);
+    const entries = listing.trim().split("\n").filter(Boolean);
+    if (entries.length === 0 || entries.some(isUnsafeArchiveEntry)) {
+      throw new Error("Portable Flower Box archive contains an unsafe or metadata entry");
+    }
+    const bytes = await readFile(temporaryArchive);
+    await rm(archivePath, { force: true });
+    await rename(temporaryArchive, archivePath);
+    return {
+      path: archivePath,
+      byteLength: bytes.length,
+      sha256: sha256(bytes),
+    };
+  } finally {
+    await rm(temporaryTar, { force: true });
+    await rm(temporaryArchive, { force: true });
+  }
+}
+
+function isUnsafeArchiveEntry(entry) {
+  const parts = entry.split("/");
+  return entry.startsWith("/") || parts.includes("..") ||
+    parts.some((part) => part.startsWith("._")) ||
+    !(entry === "cssflower" || entry === "cssflower/" || entry.startsWith("cssflower/"));
+}
+
+function runArchiveTool(command, args, extraEnvironment = {}) {
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    env: { ...process.env, ...extraEnvironment },
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`${command} failed: ${result.stderr.trim() || `exit ${result.status}`}`);
+  }
+  return result.stdout;
 }

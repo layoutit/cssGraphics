@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { setTimeout as delay } from "node:timers/promises";
 import { inspectFlowerboxProductBank } from "../../src/adapters/flowerbox/tools/productBank.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -50,9 +51,7 @@ try {
   archiveBytes = await readFile(archivePath);
 } catch (error) {
   if (localArchive || error?.code !== "ENOENT") throw error;
-  const response = await fetch(lock.url, { redirect: "follow" });
-  if (!response.ok) throw new Error(`Flower Box product bank download failed: ${response.status}`);
-  archiveBytes = Buffer.from(await response.arrayBuffer());
+  archiveBytes = await downloadArchive(lock);
   await mkdir(cacheRoot, { recursive: true });
   await writeFile(archivePath, archiveBytes);
 }
@@ -98,4 +97,32 @@ try {
 
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+async function downloadArchive(expected) {
+  let lastError;
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    try {
+      const response = await fetch(expected.url, {
+        redirect: "follow",
+        headers: { "user-agent": "cssGraphics-prepared-bank/1" },
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (bytes.length !== expected.archiveByteLength ||
+          sha256(bytes) !== expected.archiveSha256) {
+        throw new Error("downloaded archive identity mismatch");
+      }
+      return bytes;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 4) await delay(attempt * 1_000);
+    }
+  }
+  throw new Error(
+    `Flower Box product bank download failed after 4 verified attempts: ${lastError?.message ?? "unknown error"}`,
+  );
 }

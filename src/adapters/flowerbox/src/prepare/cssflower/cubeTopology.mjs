@@ -146,7 +146,7 @@ export function buildSideSiblingSeamPlan(topology) {
   }
   return Object.freeze({
     schema: "cssflower-side-sibling-seam-plan@1",
-    policy: "side-local-shared-edges-boundary-ring-damped",
+    policy: "side-local-shared-edges-boundary-ring-0.125",
     boundaryVertexCount: boundaryPointIndices.size,
     boundaryAdjacentTriangles: Object.freeze(boundaryAdjacentTriangles),
     boundaryAdjacentTriangleCount,

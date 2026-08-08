@@ -173,7 +173,7 @@ async function materializePreparedLightingPages(compiled, lightingPageStore, avi
       await execFileAsync(avifenc, [
         "--qcolor", String(CSSFLOWER_LIGHTING_ATLAS_QUALITY),
         "--qalpha", "100",
-        "--speed", "6",
+        "--speed", "4",
         "--jobs", "2",
         "--yuv", "444",
         "--ignore-exif",

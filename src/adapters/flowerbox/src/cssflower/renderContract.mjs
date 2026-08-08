@@ -1,14 +1,14 @@
 export const CSSFLOWER_SEAM_BLEED = 0.2;
 export const CSSFLOWER_SEAM_BLEED_TEXT = String(CSSFLOWER_SEAM_BLEED);
-export const CSSFLOWER_BOUNDARY_SEAM_BLEED = 0.05;
+export const CSSFLOWER_BOUNDARY_SEAM_BLEED = 0.125;
 export const CSSFLOWER_BOUNDARY_SEAM_BLEED_TEXT = String(CSSFLOWER_BOUNDARY_SEAM_BLEED);
-export const CSSFLOWER_SEAM_BLEED_POLICY = "side-local-shared-edges-boundary-ring-damped";
+export const CSSFLOWER_SEAM_BLEED_POLICY = "side-local-shared-edges-boundary-ring-0.125";
 export const CSSFLOWER_LIGHTING_SCHEMA = "cssflower-prepared-space-texel-lighting@5";
 export const CSSFLOWER_LIGHTING_LAYOUT = "guttered-leaf-raster-shelves-by-horizontal-page-grid-and-timeline-state-slices";
 export const CSSFLOWER_LIGHTING_RASTER_MODE = "leaf-resolution";
 export const CSSFLOWER_LIGHTING_SAMPLING = "endpoint-aligned-pixel-centers";
 export const CSSFLOWER_LIGHTING_ALPHA_COVERAGE =
-  "mario-rounded-triangle-4x4-supersampled-shared-edge-opaque-fringe";
+  "mario-rounded-triangle-4x4-supersampled-nearest-shared-edge-side-boundary-half-plane-clipped-all-shared-vertex-half-texel-inset-one-texel-guarded-max-pool";
 export const CSSFLOWER_LIGHTING_PAGE_ROWS = 32;
 export const CSSFLOWER_LIGHTING_PAGE_COUNT = 12;
 export const CSSFLOWER_LIGHTING_MICRO_CONTENT_SIZE = 2;
@@ -25,7 +25,7 @@ export const CSSFLOWER_LIGHTING_GRID_ROWS = 1;
 export const CSSFLOWER_LIGHTING_GRID_WIDTH = CSSFLOWER_LIGHTING_ATLAS_WIDTH * CSSFLOWER_LIGHTING_GRID_COLUMNS;
 export const CSSFLOWER_LIGHTING_GRID_HEIGHT = CSSFLOWER_LIGHTING_ATLAS_HEIGHT;
 export const CSSFLOWER_LIGHTING_GRID_DECODED_BYTES = CSSFLOWER_LIGHTING_GRID_WIDTH * CSSFLOWER_LIGHTING_GRID_HEIGHT * 4;
-export const CSSFLOWER_LIGHTING_ATLAS_ENCODING = "avif-flat-12x1-lossy-q83-alpha-lossless-speed6-yuv444";
+export const CSSFLOWER_LIGHTING_ATLAS_ENCODING = "avif-flat-12x1-lossy-q83-alpha-lossless-speed4-yuv444";
 export const CSSFLOWER_LIGHTING_ATLAS_MIME_TYPE = "image/avif";
 export const CSSFLOWER_LIGHTING_ATLAS_EXTENSION = "avif";
 export const CSSFLOWER_LIGHTING_ATLAS_QUALITY = 83;

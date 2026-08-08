@@ -15,6 +15,7 @@ const lightingWeightCache = new Map();
 const lightingAlphaCache = new Map();
 const affineMicroWeightCache = new Map();
 const LIGHTING_ALPHA_SUPERSAMPLES = 4;
+const SOURCE_BOUNDARY_MAX_POOL_GUARD_PIXELS = 1;
 
 export function buildPreparedLeafRasterLayout(faces, options = {}) {
   if (!Array.isArray(faces) || faces.length < 1) {
@@ -271,6 +272,10 @@ export function writePreparedLeafRasterLightingTile({
   canonicalPointIndices,
   canonicalPointOffset = 0,
   seamEdgeMask = 0,
+  sourceBoundaryClipLines = null,
+  sourceBoundaryClipLineOffset = 0,
+  sourceBoundaryClipLineCount = 0,
+  alphaCacheKey = null,
   vertexColors,
 }) {
   if (!(atlasData instanceof Uint8Array)) {
@@ -284,6 +289,10 @@ export function writePreparedLeafRasterLightingTile({
     vertexColors instanceof Uint8ClampedArray ||
     vertexColors instanceof Float32Array ||
     vertexColors instanceof Float64Array;
+  const validSourceBoundaryClipLines = sourceBoundaryClipLineCount === 0 ||
+    Array.isArray(sourceBoundaryClipLines) ||
+    sourceBoundaryClipLines instanceof Float32Array ||
+    sourceBoundaryClipLines instanceof Float64Array;
   const pixels = atlasPixels ?? (
     atlasData.byteOffset % Uint32Array.BYTES_PER_ELEMENT === 0
       ? new Uint32Array(
@@ -300,6 +309,12 @@ export function writePreparedLeafRasterLightingTile({
       !Number.isSafeInteger(canonicalPointOffset) || canonicalPointOffset < 0 ||
       canonicalPointOffset + 3 > canonicalPointIndices.length ||
       !Number.isSafeInteger(seamEdgeMask) || seamEdgeMask < 0 || seamEdgeMask > 7 ||
+      !Number.isSafeInteger(sourceBoundaryClipLineOffset) || sourceBoundaryClipLineOffset < 0 ||
+      !Number.isSafeInteger(sourceBoundaryClipLineCount) ||
+      sourceBoundaryClipLineCount < 0 || sourceBoundaryClipLineCount > 4 ||
+      !validSourceBoundaryClipLines || (sourceBoundaryClipLineCount > 0 &&
+        sourceBoundaryClipLineOffset + sourceBoundaryClipLineCount * 4 > sourceBoundaryClipLines.length) ||
+      !(alphaCacheKey === null || typeof alphaCacheKey === "string") ||
       !validVertexColors) {
     throw new TypeError("Prepared cssFlower leaf raster tile inputs are invalid");
   }
@@ -309,7 +324,15 @@ export function writePreparedLeafRasterLightingTile({
   const originX = placement.contentX;
   const originY = rowIndex * layout.stateSliceHeight + placement.contentY;
   const weights = preparedLightingWeights(placement.width, placement.height);
-  const alpha = preparedLightingAlpha(placement.width, placement.height, seamEdgeMask);
+  const alpha = preparedLightingAlpha(
+    placement.width,
+    placement.height,
+    seamEdgeMask,
+    sourceBoundaryClipLines,
+    sourceBoundaryClipLineOffset,
+    sourceBoundaryClipLineCount,
+    alphaCacheKey,
+  );
   let weightOffset = 0;
   let alphaOffset = 0;
   for (let y = 0; y < placement.height; y += 1) {
@@ -365,8 +388,30 @@ export function writePreparedLeafRasterLightingTile({
   }
 }
 
-function preparedLightingAlpha(width, height, seamEdgeMask) {
-  const key = `${width}x${height}:${seamEdgeMask}`;
+function preparedLightingAlpha(
+  width,
+  height,
+  seamEdgeMask,
+  sourceBoundaryClipLines,
+  sourceBoundaryClipLineOffset,
+  sourceBoundaryClipLineCount,
+  alphaCacheKey,
+) {
+  const boundaryKey = sourceBoundaryClipLineCount === 0
+    ? ""
+    : alphaCacheKey ?? Array.from(
+      sourceBoundaryClipLines.subarray
+        ? sourceBoundaryClipLines.subarray(
+          sourceBoundaryClipLineOffset,
+          sourceBoundaryClipLineOffset + sourceBoundaryClipLineCount * 4,
+        )
+        : sourceBoundaryClipLines.slice(
+          sourceBoundaryClipLineOffset,
+          sourceBoundaryClipLineOffset + sourceBoundaryClipLineCount * 4,
+        ),
+      (value) => Number(value).toFixed(6),
+    ).join(",");
+  const key = `${width}x${height}:${seamEdgeMask}:${boundaryKey}`;
   const cached = lightingAlphaCache.get(key);
   if (cached) return cached;
   const alpha = new Uint8Array(width * height);
@@ -375,36 +420,117 @@ function preparedLightingAlpha(width, height, seamEdgeMask) {
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       let covered = 0;
-      let crossedSharedEdge = false;
       let crossedBoundaryEdge = false;
+      let crossedBoundaryCap = false;
       for (let sampleY = 0; sampleY < LIGHTING_ALPHA_SUPERSAMPLES; sampleY += 1) {
-        const v = (y + (sampleY + 0.5) / LIGHTING_ALPHA_SUPERSAMPLES) / height;
+        const samplePointY = y + (sampleY + 0.5) / LIGHTING_ALPHA_SUPERSAMPLES;
+        const v = samplePointY / height;
         const apex = 1 - v;
         for (let sampleX = 0; sampleX < LIGHTING_ALPHA_SUPERSAMPLES; sampleX += 1) {
-          const u = (x + (sampleX + 0.5) / LIGHTING_ALPHA_SUPERSAMPLES) / width;
+          const samplePointX = x + (sampleX + 0.5) / LIGHTING_ALPHA_SUPERSAMPLES;
+          const u = samplePointX / width;
           const right = u - 0.5 * apex;
           const left = 1 - apex - right;
           if (apex >= 0 && left >= 0 && right >= 0) {
-            covered += 1;
+            const crossedSourceBoundary = sourceBoundaryClipLineCount > 0 &&
+              crossesSourceBoundaryClipLine(
+                samplePointX,
+                samplePointY,
+                sourceBoundaryClipLines,
+                sourceBoundaryClipLineOffset,
+                sourceBoundaryClipLineCount,
+              );
+            if (!crossedSourceBoundary) {
+              covered += 1;
+            } else {
+              crossedBoundaryCap = true;
+            }
           } else {
             const crossedEdgeMask =
               (right < 0 ? 1 : 0) |
               (apex < 0 ? 2 : 0) |
               (left < 0 ? 4 : 0);
-            crossedSharedEdge ||= (crossedEdgeMask & seamEdgeMask) !== 0;
             crossedBoundaryEdge ||= (crossedEdgeMask & ~seamEdgeMask & 7) !== 0;
           }
         }
       }
-      alpha[offset] = covered > 0 && covered < sampleCount &&
-          crossedSharedEdge && !crossedBoundaryEdge
-        ? 255
-        : Math.round(covered / sampleCount * 255);
+      let pixelAlpha = Math.round(covered / sampleCount * 255);
+      if (covered > 0 && covered < sampleCount) {
+        const edgeIndex = canonicalEdgeIndexAt(x + 0.5, y + 0.5, width, height);
+        const nearTrueSourceBoundary = sourceBoundaryClipLineCount > 0 && isNearTrueSourceBoundary(
+          x + 0.5,
+          y + 0.5,
+          sourceBoundaryClipLines,
+          sourceBoundaryClipLineOffset,
+          sourceBoundaryClipLineCount,
+          SOURCE_BOUNDARY_MAX_POOL_GUARD_PIXELS,
+        );
+        if (!crossedBoundaryEdge && !crossedBoundaryCap &&
+            !nearTrueSourceBoundary &&
+            (seamEdgeMask & (1 << edgeIndex)) !== 0) {
+          pixelAlpha = 255;
+        }
+      }
+      alpha[offset] = pixelAlpha;
       offset += 1;
     }
   }
   lightingAlphaCache.set(key, alpha);
   return alpha;
+}
+
+function crossesSourceBoundaryClipLine(x, y, lines, offset, lineCount) {
+  for (let line = 0; line < lineCount; line += 1) {
+    const lineOffset = offset + line * 4;
+    const ax = lines[lineOffset];
+    const ay = lines[lineOffset + 1];
+    const bx = lines[lineOffset + 2];
+    const by = lines[lineOffset + 3];
+    if (cross2d(bx - ax, by - ay, x - ax, y - ay) < -1e-6) return true;
+  }
+  return false;
+}
+
+function cross2d(ax, ay, bx, by) {
+  return ax * by - ay * bx;
+}
+
+function isNearTrueSourceBoundary(x, y, lines, offset, lineCount, maximumDistance) {
+  for (let line = 0; line < lineCount; line += 1) {
+    const lineOffset = offset + line * 4;
+    if (pointToSegmentDistance(
+      x,
+      y,
+      lines[lineOffset],
+      lines[lineOffset + 1],
+      lines[lineOffset + 2],
+      lines[lineOffset + 3],
+    ) <= maximumDistance) return true;
+  }
+  return false;
+}
+
+function pointToSegmentDistance(x, y, ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lengthSquared = dx * dx + dy * dy;
+  const projection = lengthSquared > 1e-12
+    ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / lengthSquared))
+    : 0;
+  return Math.hypot(x - (ax + projection * dx), y - (ay + projection * dy));
+}
+
+function canonicalEdgeIndexAt(x, y, width, height) {
+  const v = y / height;
+  const apex = 1 - v;
+  const right = x / width - 0.5 * apex;
+  const left = 1 - apex - right;
+  const oppositeWeights = [right, apex, left];
+  let edgeIndex = 0;
+  for (let index = 1; index < oppositeWeights.length; index += 1) {
+    if (oppositeWeights[index] < oppositeWeights[edgeIndex]) edgeIndex = index;
+  }
+  return edgeIndex;
 }
 
 function preparedLightingWeights(width, height) {

@@ -31,8 +31,6 @@ export function validatePreparedMorphAssets(playback, lighting) {
       frontFacing.adjacencyRings !== CSSFLOWER_VISIBILITY_POLICY.adjacencyRings ||
       frontFacing.dilationPolicy !== CSSFLOWER_VISIBILITY_POLICY.dilationPolicy ||
       frontFacing.encoding !== CSSFLOWER_FRONT_FACE_SCHEDULE_ENCODING ||
-      frontFacing.bytesPerState !== Math.ceil(frontFacing.faceCount / 8) ||
-      frontFacing.byteLength !== frontFacing.stateCount * frontFacing.bytesPerState ||
       !Number.isSafeInteger(frontFacing.selectedFaceCount) || frontFacing.selectedFaceCount < 1 ||
       frontFacing.selectedFaceCount >= frontFacing.stateCount * frontFacing.faceCount ||
       frontFacing.suppressedFaceCount !== frontFacing.stateCount * frontFacing.faceCount - frontFacing.selectedFaceCount ||
@@ -43,9 +41,21 @@ export function validatePreparedMorphAssets(playback, lighting) {
       frontFacing.maximumSelectedFacesPerState < frontFacing.minimumSelectedFacesPerState ||
       frontFacing.initialVisibilitySelectionCount !== frontFacing.faceCount ||
       !Number.isSafeInteger(frontFacing.visibilityChangeCount) || frontFacing.visibilityChangeCount < 1 ||
-      !/^[a-f0-9]{64}$/u.test(frontFacing.dataSha256 ?? "") ||
-      typeof frontFacing.dataBase64 !== "string" || frontFacing.dataBase64.length < 1 ||
-      frontFacing.runtimeSelection !== "prepared-bit-test-only-no-geometry-projection-normal-or-lighting-calculation") {
+      !validOffsets(frontFacing.selectedFaceOffsets, frontFacing.stateCount + 1, frontFacing.selectedFaceCount) ||
+      frontFacing.selectedFaceIndicesEncoding !== "base64-u16le-state-major-selected-face-indices" ||
+      frontFacing.selectedFaceIndicesByteLength !== frontFacing.selectedFaceCount * 2 ||
+      !/^[a-f0-9]{64}$/u.test(frontFacing.selectedFaceIndicesSha256 ?? "") ||
+      typeof frontFacing.selectedFaceIndicesBase64 !== "string" || frontFacing.selectedFaceIndicesBase64.length < 1 ||
+      !validOffsets(frontFacing.visibilityChangeOffsets, frontFacing.stateCount + 1, frontFacing.visibilityChangeCount) ||
+      frontFacing.visibilityChangeAssignmentsEncoding !== "base64-u16le-state-major-face-index-shift-1-or-selected" ||
+      frontFacing.visibilityChangeAssignmentsByteLength !== frontFacing.visibilityChangeCount * 2 ||
+      !/^[a-f0-9]{64}$/u.test(frontFacing.visibilityChangeAssignmentsSha256 ?? "") ||
+      typeof frontFacing.visibilityChangeAssignmentsBase64 !== "string" || frontFacing.visibilityChangeAssignmentsBase64.length < 1 ||
+      frontFacing.initialVisibilityAssignmentsEncoding !== "base64-u16le-face-major-face-index-shift-1-or-selected" ||
+      frontFacing.initialVisibilityAssignmentsByteLength !== frontFacing.faceCount * 2 ||
+      !/^[a-f0-9]{64}$/u.test(frontFacing.initialVisibilityAssignmentsSha256 ?? "") ||
+      typeof frontFacing.initialVisibilityAssignmentsBase64 !== "string" || frontFacing.initialVisibilityAssignmentsBase64.length < 1 ||
+      frontFacing.runtimeSelection !== "prepared-sparse-state-ranges-only-no-face-wide-tests-or-geometry-projection-normal-lighting-calculation") {
     throw new Error("Complete prepared cssFlower owned-pixel visibility transform schedule is required");
   }
   if (transforms?.schema !== CSSFLOWER_TRANSFORM_BLOCK_SCHEMA ||
@@ -139,6 +149,12 @@ export function validatePreparedMorphAssets(playback, lighting) {
   })) {
     throw new Error("Prepared cssFlower asset prefetch schedule is incomplete");
   }
+}
+
+function validOffsets(offsets, expectedLength, expectedLast) {
+  return offsets?.length === expectedLength && offsets[0] === 0 && offsets.at(-1) === expectedLast &&
+    offsets.every((value, index) => Number.isSafeInteger(value) && value >= 0 &&
+      (index === 0 || value >= offsets[index - 1]));
 }
 
 export function createPreparedTransformBlockLoader(transforms) {
@@ -243,6 +259,23 @@ export function createPreparedTransformBlockLoader(transforms) {
       const start = localState * transforms.triangleCount;
       for (let leafIndex = 0; leafIndex < transforms.triangleCount; leafIndex += 1) {
         visit(record.transforms[start + leafIndex], leafIndex);
+      }
+    },
+    forEachTransformAtIndices(geometryStateIndex, faceIndices, rangeStart, rangeEnd, visit) {
+      if (!(faceIndices instanceof Uint16Array) ||
+          !Number.isSafeInteger(rangeStart) || !Number.isSafeInteger(rangeEnd) ||
+          rangeStart < 0 || rangeEnd < rangeStart || rangeEnd > faceIndices.length ||
+          typeof visit !== "function") {
+        throw new TypeError("Prepared transform indexed range and visitor are required");
+      }
+      const blockIndex = blockIndexForGeometryState(geometryStateIndex);
+      const record = records.get(blockIndex);
+      if (!record?.transforms) throw new Error(`Prepared transform block ${blockIndex} is not decoded`);
+      const localState = geometryStateIndex - transforms.blocks[blockIndex].startGeometryStateIndex;
+      const transformStart = localState * transforms.triangleCount;
+      for (let index = rangeStart; index < rangeEnd; index += 1) {
+        const leafIndex = faceIndices[index];
+        visit(record.transforms[transformStart + leafIndex], leafIndex);
       }
     },
     transformAt(geometryStateIndex, leafIndex) {

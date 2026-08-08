@@ -13,11 +13,15 @@ const lock = JSON.parse(await readFile(
   join(repositoryRoot, "src/adapters/flowerbox/prepared-bank.lock.json"),
   "utf8",
 ));
-if (lock.schema !== "cssflower-prepared-bank-lock@3" ||
+if (lock.schema !== "cssflower-prepared-bank-lock@4" ||
     lock.retainedTriangleLeafCount !== 1_200 || lock.retainedRotationRootCount !== 1 ||
     lock.timelineStateCount !== 360 || lock.geometryStateCount !== 73 ||
     lock.transformBlockCount !== 5 || lock.lightingAssetCount !== 1 ||
-    lock.lightingQuality !== 83 || lock.visibilityMinimumOwnedPixels !== 8) {
+    lock.lightingQuality !== 83 || lock.visibilityMinimumOwnedPixels !== 8 ||
+    lock.frontFacingScheduleSchema !== "cssflower-prepared-front-face-transform-schedule@2" ||
+    lock.frontFacingSelectedFaceCount !== 166_886 ||
+    lock.frontFacingVisibilityChangeCount !== 8_310 ||
+    lock.frontFacingSparsePayloadBytes !== 352_792) {
   throw new Error("Flower Box prepared-bank lock does not bind the rounded retained Morph product");
 }
 const generatedRoot = resolve(

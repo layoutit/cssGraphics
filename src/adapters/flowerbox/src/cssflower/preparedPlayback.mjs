@@ -48,9 +48,14 @@ export async function createCssflowerPreparedPlayer(options) {
   let selectedLeafTransformAttempts = 0;
   let leafTransformSelectionTests = 0;
   let suppressedLeafTransformWrites = 0;
+  let preparedSelectedTransformIndexReads = 0;
   let visibilityCatchupTransformAttempts = 0;
   let visibilityCatchupTransformWrites = 0;
   let leafVisibilityWrites = 0;
+  let preparedVisibilityAssignmentReads = 0;
+  let visibilityFullScanTests = 0;
+  let visibilityCoalescedNoopAssignments = 0;
+  let visibilitySkippedStateSelections = 0;
   let preparedFrontFacingStateSelections = 0;
   let presentedFrontFacingStateIndex = -1;
   let currentFrontFacingLeafCount = 0;
@@ -68,6 +73,9 @@ export async function createCssflowerPreparedPlayer(options) {
   const selectedFrontFacingByFace = new Uint8Array(leaves.length);
   selectedFrontFacingByFace.fill(255);
   const newlySelectedFaces = [];
+  const pendingVisibilityByFace = new Int8Array(leaves.length);
+  pendingVisibilityByFace.fill(-1);
+  const pendingVisibilityFaces = [];
   const selectedLightingStateByFace = new Uint16Array(leaves.length);
   const pendingLightingStateByFace = new Int16Array(leaves.length);
   pendingLightingStateByFace.fill(-1);
@@ -87,29 +95,71 @@ export async function createCssflowerPreparedPlayer(options) {
     leaves: leaves.map((element) => ({ element })),
   });
 
+  function applyPreparedVisibilityAssignment(assignment) {
+    const faceIndex = assignment >> 1;
+    const selectedByte = assignment & 1;
+    const previous = selectedFrontFacingByFace[faceIndex];
+    if (previous === selectedByte) {
+      visibilityCoalescedNoopAssignments += 1;
+      return;
+    }
+    if (selectedByte === 1 && previous === 0) newlySelectedFaces.push(faceIndex);
+    if (previous === 1) currentFrontFacingLeafCount -= 1;
+    if (selectedByte === 1) currentFrontFacingLeafCount += 1;
+    if (morphTarget.leaves[faceIndex].writeVisibility(selectedByte === 1)) leafVisibilityWrites += 1;
+    selectedFrontFacingByFace[faceIndex] = selectedByte;
+  }
+
   function applyPreparedFrontFacingSelection(nextStateIndex) {
     newlySelectedFaces.length = 0;
     if (presentedFrontFacingStateIndex === nextStateIndex) return;
-    const stateOffset = nextStateIndex * frontFacingSchedule.bytesPerState;
-    let selectedCount = 0;
-    for (let faceIndex = 0; faceIndex < leaves.length; faceIndex += 1) {
-      const selected = (
-        frontFacingSchedule.bytes[stateOffset + (faceIndex >> 3)] & (1 << (faceIndex & 7))
-      ) !== 0;
-      selectedCount += Number(selected);
-      const selectedByte = Number(selected);
-      if (selectedFrontFacingByFace[faceIndex] === selectedByte) continue;
-      if (selected && selectedFrontFacingByFace[faceIndex] === 0) newlySelectedFaces.push(faceIndex);
-      if (morphTarget.leaves[faceIndex].writeVisibility(selected)) leafVisibilityWrites += 1;
-      selectedFrontFacingByFace[faceIndex] = selectedByte;
+    if (presentedFrontFacingStateIndex === -1) {
+      if (nextStateIndex !== playback.cycle.initialState) {
+        throw new Error("Prepared cssFlower visibility must initialize at the prepared initial state");
+      }
+      for (const assignment of frontFacingSchedule.initialVisibilityAssignments) {
+        preparedVisibilityAssignmentReads += 1;
+        applyPreparedVisibilityAssignment(assignment);
+      }
+      presentedFrontFacingStateIndex = nextStateIndex;
+      preparedFrontFacingStateSelections += 1;
+      return;
     }
-    currentFrontFacingLeafCount = selectedCount;
+    const advance = (
+      nextStateIndex - presentedFrontFacingStateIndex + frontFacingSchedule.stateCount
+    ) % frontFacingSchedule.stateCount;
+    if (advance > 1) visibilitySkippedStateSelections += advance - 1;
+    if (advance === 1) {
+      const start = frontFacingSchedule.visibilityChangeOffsets[nextStateIndex];
+      const end = frontFacingSchedule.visibilityChangeOffsets[nextStateIndex + 1];
+      for (let update = start; update < end; update += 1) {
+        preparedVisibilityAssignmentReads += 1;
+        applyPreparedVisibilityAssignment(frontFacingSchedule.visibilityChangeAssignments[update]);
+      }
+      presentedFrontFacingStateIndex = nextStateIndex;
+      preparedFrontFacingStateSelections += 1;
+      return;
+    }
+    pendingVisibilityFaces.length = 0;
+    for (let offset = 1; offset <= advance; offset += 1) {
+      const stateIndex = (presentedFrontFacingStateIndex + offset) % frontFacingSchedule.stateCount;
+      const start = frontFacingSchedule.visibilityChangeOffsets[stateIndex];
+      const end = frontFacingSchedule.visibilityChangeOffsets[stateIndex + 1];
+      for (let update = start; update < end; update += 1) {
+        const assignment = frontFacingSchedule.visibilityChangeAssignments[update];
+        const faceIndex = assignment >> 1;
+        preparedVisibilityAssignmentReads += 1;
+        if (pendingVisibilityByFace[faceIndex] < 0) pendingVisibilityFaces.push(faceIndex);
+        pendingVisibilityByFace[faceIndex] = assignment & 1;
+      }
+    }
+    for (const faceIndex of pendingVisibilityFaces) {
+      const selected = pendingVisibilityByFace[faceIndex];
+      pendingVisibilityByFace[faceIndex] = -1;
+      applyPreparedVisibilityAssignment((faceIndex << 1) | selected);
+    }
     presentedFrontFacingStateIndex = nextStateIndex;
     preparedFrontFacingStateSelections += 1;
-  }
-
-  function isPreparedFrontFacing(faceIndex) {
-    return selectedFrontFacingByFace[faceIndex] === 1;
   }
 
   function applyPreparedLightingAddress(faceIndex, stateIndex) {
@@ -181,12 +231,15 @@ export async function createCssflowerPreparedPlayer(options) {
         state.geometryStateIndex,
         state.nextTransformBlockGeometryStateIndex,
       );
-      transformBlocks.forEachTransform(state.geometryStateIndex, (transform, leafIndex) => {
-        leafTransformSelectionTests += 1;
-        if (!isPreparedFrontFacing(leafIndex)) {
-          suppressedLeafTransformWrites += 1;
-          return;
-        }
+      const selectedStart = frontFacingSchedule.selectedFaceOffsets[nextTimelineStateIndex];
+      const selectedEnd = frontFacingSchedule.selectedFaceOffsets[nextTimelineStateIndex + 1];
+      transformBlocks.forEachTransformAtIndices(
+        state.geometryStateIndex,
+        frontFacingSchedule.selectedFaceIndices,
+        selectedStart,
+        selectedEnd,
+        (transform, leafIndex) => {
+        preparedSelectedTransformIndexReads += 1;
         selectedLeafTransformAttempts += 1;
         if (morphTarget.leaves[leafIndex].writeTransform(transform)) leafTransformWrites += 1;
       });
@@ -345,9 +398,14 @@ export async function createCssflowerPreparedPlayer(options) {
         runtimeSelectedLeafTransformAttempts: selectedLeafTransformAttempts,
         runtimeLeafTransformSelectionTests: leafTransformSelectionTests,
         runtimeSuppressedLeafTransformWrites: suppressedLeafTransformWrites,
+        runtimePreparedSelectedTransformIndexReads: preparedSelectedTransformIndexReads,
         runtimeVisibilityCatchupTransformAttempts: visibilityCatchupTransformAttempts,
         runtimeVisibilityCatchupTransformWrites: visibilityCatchupTransformWrites,
         runtimeLeafVisibilityWrites: leafVisibilityWrites,
+        runtimePreparedVisibilityAssignmentReads: preparedVisibilityAssignmentReads,
+        runtimeVisibilityFullScanTests: visibilityFullScanTests,
+        runtimeVisibilityCoalescedNoopAssignments: visibilityCoalescedNoopAssignments,
+        runtimeVisibilitySkippedStateSelections: visibilitySkippedStateSelections,
         runtimePreparedFrontFacingStateSelections: preparedFrontFacingStateSelections,
         preparedFrontFacingDilationTicks: frontFacingSchedule.dilationTicks,
         preparedFrontFacingSelectedFaceCount: frontFacingSchedule.selectedFaceCount,
@@ -433,7 +491,7 @@ function validatePlayback({ playback, lighting, transformBlocks, lightingPages, 
         !Number.isSafeInteger(state.nextLightingPageIndex)) ||
       lighting?.backgroundPositionXs?.length !== lighting?.pageCount ||
       lighting?.backgroundPositionYs?.length !== lighting?.pageRowCount ||
-      !transformBlocks?.activate || !transformBlocks?.forEachTransform ||
+      !transformBlocks?.activate || !transformBlocks?.forEachTransformAtIndices ||
       !transformBlocks?.commitPresented || !transformBlocks?.stats ||
       !lightingPages?.activate || !lightingPages?.commitPresented ||
       !lightingPages?.urlFor || !lightingPages?.stats ||
@@ -485,40 +543,94 @@ function decodePreparedFrontFacingSchedule(schedule) {
       schedule.adjacencyRings !== CSSFLOWER_VISIBILITY_POLICY.adjacencyRings ||
       schedule.dilationPolicy !== CSSFLOWER_VISIBILITY_POLICY.dilationPolicy ||
       schedule.encoding !== CSSFLOWER_FRONT_FACE_SCHEDULE_ENCODING ||
-      schedule.bytesPerState !== Math.ceil(schedule.faceCount / 8) ||
-      schedule.byteLength !== schedule.stateCount * schedule.bytesPerState ||
       !Number.isSafeInteger(schedule.selectedFaceCount) || schedule.selectedFaceCount < 1 ||
       schedule.suppressedFaceCount !== schedule.stateCount * schedule.faceCount - schedule.selectedFaceCount ||
       schedule.initialVisibilitySelectionCount !== schedule.faceCount ||
       !Number.isSafeInteger(schedule.visibilityChangeCount) || schedule.visibilityChangeCount < 1 ||
-      typeof schedule.dataBase64 !== "string") {
+      schedule.selectedFaceOffsets?.length !== schedule.stateCount + 1 ||
+      schedule.selectedFaceOffsets[0] !== 0 ||
+      schedule.selectedFaceOffsets.at(-1) !== schedule.selectedFaceCount ||
+      !validMonotonicOffsets(schedule.selectedFaceOffsets) ||
+      schedule.selectedFaceIndicesEncoding !== "base64-u16le-state-major-selected-face-indices" ||
+      schedule.selectedFaceIndicesByteLength !== schedule.selectedFaceCount * 2 ||
+      typeof schedule.selectedFaceIndicesBase64 !== "string" ||
+      schedule.visibilityChangeOffsets?.length !== schedule.stateCount + 1 ||
+      schedule.visibilityChangeOffsets[0] !== 0 ||
+      schedule.visibilityChangeOffsets.at(-1) !== schedule.visibilityChangeCount ||
+      !validMonotonicOffsets(schedule.visibilityChangeOffsets) ||
+      schedule.visibilityChangeAssignmentsEncoding !== "base64-u16le-state-major-face-index-shift-1-or-selected" ||
+      schedule.visibilityChangeAssignmentsByteLength !== schedule.visibilityChangeCount * 2 ||
+      typeof schedule.visibilityChangeAssignmentsBase64 !== "string" ||
+      schedule.initialVisibilityAssignmentsEncoding !== "base64-u16le-face-major-face-index-shift-1-or-selected" ||
+      schedule.initialVisibilityAssignmentsByteLength !== schedule.faceCount * 2 ||
+      typeof schedule.initialVisibilityAssignmentsBase64 !== "string") {
     throw new Error("Prepared cssFlower owned-pixel visibility transform schedule is invalid");
   }
-  const encoded = atob(schedule.dataBase64);
-  if (encoded.length !== schedule.byteLength) {
-    throw new Error("Prepared cssFlower front-face transform schedule byte length drifted");
+  const selectedFaceIndices = decodeUint16Le(
+    schedule.selectedFaceIndicesBase64,
+    schedule.selectedFaceIndicesByteLength,
+    "selected transform indices",
+  );
+  const visibilityChangeAssignments = decodeUint16Le(
+    schedule.visibilityChangeAssignmentsBase64,
+    schedule.visibilityChangeAssignmentsByteLength,
+    "visibility-change assignments",
+  );
+  const initialVisibilityAssignments = decodeUint16Le(
+    schedule.initialVisibilityAssignmentsBase64,
+    schedule.initialVisibilityAssignmentsByteLength,
+    "initial visibility assignments",
+  );
+  const selectedByFace = new Uint8Array(schedule.faceCount);
+  let selectedCount = 0;
+  for (let index = 0; index < initialVisibilityAssignments.length; index += 1) {
+    const assignment = initialVisibilityAssignments[index];
+    const faceIndex = assignment >> 1;
+    const selected = assignment & 1;
+    if (faceIndex !== index) throw new Error("Prepared cssFlower initial visibility assignment order drifted");
+    selectedByFace[faceIndex] = selected;
+    selectedCount += selected;
   }
-  const bytes = Uint8Array.from(encoded, (character) => character.charCodeAt(0));
-  let selectedFaceCount = 0;
-  let visibilityChangeCount = 0;
-  for (let stateIndex = 0; stateIndex < schedule.stateCount; stateIndex += 1) {
-    const stateOffset = stateIndex * schedule.bytesPerState;
-    for (let faceIndex = 0; faceIndex < schedule.faceCount; faceIndex += 1) {
-      const selected = Number((bytes[stateOffset + (faceIndex >> 3)] & (1 << (faceIndex & 7))) !== 0);
-      selectedFaceCount += selected;
-      const previousStateIndex = (stateIndex + schedule.stateCount - 1) % schedule.stateCount;
-      const previousStateOffset = previousStateIndex * schedule.bytesPerState;
-      const previouslySelected = Number(
-        (bytes[previousStateOffset + (faceIndex >> 3)] & (1 << (faceIndex & 7))) !== 0,
-      );
-      visibilityChangeCount += Number(previouslySelected !== selected);
+  assertPreparedSelectedState(0, selectedByFace, selectedCount);
+  for (let stateIndex = 1; stateIndex < schedule.stateCount; stateIndex += 1) {
+    selectedCount = applyPreparedTransitionState(stateIndex, selectedByFace, selectedCount);
+    assertPreparedSelectedState(stateIndex, selectedByFace, selectedCount);
+  }
+  selectedCount = applyPreparedTransitionState(0, selectedByFace, selectedCount);
+  assertPreparedSelectedState(0, selectedByFace, selectedCount);
+
+  function applyPreparedTransitionState(stateIndex, current, currentCount) {
+    const start = schedule.visibilityChangeOffsets[stateIndex];
+    const end = schedule.visibilityChangeOffsets[stateIndex + 1];
+    let previousFaceIndex = -1;
+    for (let update = start; update < end; update += 1) {
+      const assignment = visibilityChangeAssignments[update];
+      const faceIndex = assignment >> 1;
+      const selected = assignment & 1;
+      if (faceIndex >= schedule.faceCount || faceIndex <= previousFaceIndex || current[faceIndex] === selected) {
+        throw new Error(`Prepared cssFlower visibility transition ${stateIndex} is invalid`);
+      }
+      previousFaceIndex = faceIndex;
+      currentCount += selected === 1 ? 1 : -1;
+      current[faceIndex] = selected;
     }
+    return currentCount;
   }
-  if (selectedFaceCount !== schedule.selectedFaceCount) {
-    throw new Error("Prepared cssFlower front-face transform selection count drifted");
-  }
-  if (visibilityChangeCount !== schedule.visibilityChangeCount) {
-    throw new Error("Prepared cssFlower front-face visibility-change count drifted");
+
+  function assertPreparedSelectedState(stateIndex, current, currentCount) {
+    const start = schedule.selectedFaceOffsets[stateIndex];
+    const end = schedule.selectedFaceOffsets[stateIndex + 1];
+    if (end - start !== currentCount) {
+      throw new Error(`Prepared cssFlower selected transform count ${stateIndex} drifted`);
+    }
+    let previousFaceIndex = -1;
+    for (let index = start; index < end; index += 1) {
+      const faceIndex = selectedFaceIndices[index];
+      if (faceIndex >= schedule.faceCount || faceIndex <= previousFaceIndex || current[faceIndex] !== 1) {
+        throw new Error(`Prepared cssFlower selected transform range ${stateIndex} is invalid`);
+      }
+      previousFaceIndex = faceIndex;
+    }
   }
   return Object.freeze({
     stateCount: schedule.stateCount,
@@ -528,9 +640,29 @@ function decodePreparedFrontFacingSchedule(schedule) {
     minimumOwnedPixels: schedule.minimumOwnedPixels,
     sampleGrid: schedule.sampleGrid,
     adjacencyRings: schedule.adjacencyRings,
-    bytesPerState: schedule.bytesPerState,
-    bytes,
-    selectedFaceCount,
-    visibilityChangeCount,
+    selectedFaceOffsets: Object.freeze([...schedule.selectedFaceOffsets]),
+    selectedFaceIndices,
+    visibilityChangeOffsets: Object.freeze([...schedule.visibilityChangeOffsets]),
+    visibilityChangeAssignments,
+    initialVisibilityAssignments,
+    selectedFaceCount: schedule.selectedFaceCount,
+    visibilityChangeCount: schedule.visibilityChangeCount,
   });
+}
+
+function validMonotonicOffsets(offsets) {
+  return offsets.every((value, index) => Number.isSafeInteger(value) && value >= 0 &&
+    (index === 0 || value >= offsets[index - 1]));
+}
+
+function decodeUint16Le(base64, expectedByteLength, label) {
+  const encoded = atob(base64);
+  if (encoded.length !== expectedByteLength || encoded.length % 2 !== 0) {
+    throw new Error(`Prepared cssFlower ${label} byte length drifted`);
+  }
+  const values = new Uint16Array(encoded.length / 2);
+  for (let index = 0; index < values.length; index += 1) {
+    values[index] = encoded.charCodeAt(index * 2) | (encoded.charCodeAt(index * 2 + 1) << 8);
+  }
+  return values;
 }

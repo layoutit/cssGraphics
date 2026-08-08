@@ -3,7 +3,7 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { gunzipSync } from "node:zlib";
 
-export const FLOWERBOX_PRODUCT_BANK_SCHEMA = "cssflower-product-bank@3";
+export const FLOWERBOX_PRODUCT_BANK_SCHEMA = "cssflower-product-bank@4";
 
 export async function inspectFlowerboxProductBank(root, { verifyDescriptor = true } = {}) {
   const manifestBytes = await readFile(join(root, "manifest.json"));
@@ -21,6 +21,7 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
   const playback = scene.playback;
   const transforms = playback?.transformAsset;
   const lighting = scene.lighting;
+  const visibility = playback?.frontFacingSchedule;
 
   assert(scene.schema === "cssflower-prepared-scene@1", "scene schema");
   assert(scene.metrics?.preparedLeafCount === 1_200 && scene.metrics?.preparedRootCount === 1,
@@ -50,10 +51,34 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
     playback.cycle?.states?.length === 360 && playback.cycle?.rootTransforms?.length === 360,
   "rounded prepared cycle");
   assert(!Object.hasOwn(playback, "projectedPixels"), "projected product removed");
-  assert(playback.frontFacingSchedule?.schema === "cssflower-prepared-front-face-transform-schedule@1" &&
-    playback.frontFacingSchedule.minimumOwnedPixels === 8 &&
-    playback.frontFacingSchedule.stateCount === 360 &&
-    playback.frontFacingSchedule.faceCount === 1_200,
+  assert(visibility?.schema === "cssflower-prepared-front-face-transform-schedule@2" &&
+    visibility.encoding === "base64-u16le-sparse-state-ranges" &&
+    visibility.minimumOwnedPixels === 8 && visibility.stateCount === 360 &&
+    visibility.faceCount === 1_200 && visibility.selectedFaceCount === 166_886 &&
+    visibility.visibilityChangeCount === 8_310 &&
+    visibility.initialVisibilitySelectionCount === 1_200 &&
+    validOffsets(visibility.selectedFaceOffsets, 361, visibility.selectedFaceCount) &&
+    validPreparedPayload(
+      visibility.selectedFaceIndicesBase64,
+      visibility.selectedFaceIndicesByteLength,
+      visibility.selectedFaceIndicesSha256,
+      visibility.selectedFaceCount * 2,
+    ) &&
+    validOffsets(visibility.visibilityChangeOffsets, 361, visibility.visibilityChangeCount) &&
+    validPreparedPayload(
+      visibility.visibilityChangeAssignmentsBase64,
+      visibility.visibilityChangeAssignmentsByteLength,
+      visibility.visibilityChangeAssignmentsSha256,
+      visibility.visibilityChangeCount * 2,
+    ) &&
+    validPreparedPayload(
+      visibility.initialVisibilityAssignmentsBase64,
+      visibility.initialVisibilityAssignmentsByteLength,
+      visibility.initialVisibilityAssignmentsSha256,
+      visibility.faceCount * 2,
+    ) &&
+    visibility.runtimeSelection ===
+      "prepared-sparse-state-ranges-only-no-face-wide-tests-or-geometry-projection-normal-lighting-calculation",
   "prepared visibility schedule");
   assert(transforms?.schema === "cssflower-prepared-matrix3d-blocks@1" &&
     transforms.blockCount === 5 && transforms.blocks?.length === 5 &&
@@ -151,7 +176,13 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
     lightingAssetCount: 1,
     lightingAssetBytes: lightingBytes.length,
     lightingQuality: lighting.grid.quality,
-    visibilityMinimumOwnedPixels: playback.frontFacingSchedule.minimumOwnedPixels,
+    visibilityMinimumOwnedPixels: visibility.minimumOwnedPixels,
+    frontFacingScheduleSchema: visibility.schema,
+    frontFacingSelectedFaceCount: visibility.selectedFaceCount,
+    frontFacingVisibilityChangeCount: visibility.visibilityChangeCount,
+    frontFacingSparsePayloadBytes: visibility.selectedFaceIndicesByteLength +
+      visibility.visibilityChangeAssignmentsByteLength +
+      visibility.initialVisibilityAssignmentsByteLength,
     sceneEncodedSha256: sha256(sceneEncoded),
     sceneDecodedSha256: sha256(sceneDecoded),
     snapshotEncodedSha256: sha256(snapshotEncoded),
@@ -210,6 +241,19 @@ async function walk(root) {
 
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+function validOffsets(offsets, expectedLength, expectedLast) {
+  return offsets?.length === expectedLength && offsets[0] === 0 && offsets.at(-1) === expectedLast &&
+    offsets.every((value, index) => Number.isSafeInteger(value) && value >= 0 &&
+      (index === 0 || value >= offsets[index - 1]));
+}
+
+function validPreparedPayload(base64, byteLength, digest, expectedByteLength) {
+  if (typeof base64 !== "string" || byteLength !== expectedByteLength ||
+      !/^[a-f0-9]{64}$/u.test(digest ?? "")) return false;
+  const bytes = Buffer.from(base64, "base64");
+  return bytes.length === byteLength && sha256(bytes) === digest;
 }
 
 function count(text, expression) {

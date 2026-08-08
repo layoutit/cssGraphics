@@ -63,12 +63,12 @@ export async function compilePreparedCssflowerCycle({
   const quadMergeAudit = auditPreparedQuadMergeEligibility(topology, sourceCycle);
   const rasterFaces = selectPreparedRasterFaces(topology, sourceCycle, siblingSeamPlan, seamEdgesByMask);
   const rasterLayout = buildPreparedLeafRasterLayout(rasterFaces);
-  const matrixValues = new Float32Array(sourceCycle.geometryStateCount * topology.triangleCount * MATRIX_COMPONENTS);
+  const sourceMatrixValues = new Float32Array(sourceCycle.geometryStateCount * topology.triangleCount * MATRIX_COMPONENTS);
   const atlasWidth = rasterLayout.atlasWidth;
   const atlasHeight = rasterLayout.atlasHeight;
   const stateEvidence = [];
   const geometryByState = new Array(sourceCycle.geometryStateCount);
-  const canonicalPointIndices = new Uint16Array(sourceCycle.geometryStateCount * topology.triangleCount * 3);
+  const sourceCanonicalPointIndices = new Uint16Array(sourceCycle.geometryStateCount * topology.triangleCount * 3);
   let initialPolygons = null;
 
   for (const geometryState of sourceCycle.geometryStates) {
@@ -101,7 +101,7 @@ export async function compilePreparedCssflowerCycle({
           texturePlan.projectiveMatrix !== null || !solidPlan?.transformText) {
         throw new Error(`cssFlower state ${geometryState.index} triangle ${triangle.index} lost its prepared seam-bleed triangle plan`);
       }
-      matrixValues.set(
+      sourceMatrixValues.set(
         fitCanonicalTransformToRasterLeaf(
           parseMatrix3d(solidPlan.transformText),
           rasterFace.leafWidth,
@@ -110,7 +110,7 @@ export async function compilePreparedCssflowerCycle({
         transformStateOffset + triangle.index * MATRIX_COMPONENTS,
       );
       const { a, b, c } = solidPlan.basis;
-      canonicalPointIndices.set([
+      sourceCanonicalPointIndices.set([
         triangle.pointIndices[c],
         triangle.pointIndices[a],
         triangle.pointIndices[b],
@@ -129,17 +129,46 @@ export async function compilePreparedCssflowerCycle({
       sfHex: geometryState.sfHex,
       positionsSha256: sha256(typedArrayBytes(positions)),
       normalsSha256: sha256(typedArrayBytes(normals)),
-      transformsSha256: sha256(Buffer.from(matrixValues.buffer, transformStart, transformEnd - transformStart)),
+      transformsSha256: sha256(Buffer.from(sourceMatrixValues.buffer, transformStart, transformEnd - transformStart)),
     }));
   }
 
   if (!initialPolygons || initialPolygons.length !== 1200) {
     throw new Error("cssFlower initial 1,200-triangle product was not compiled");
   }
-  const productTransformByteLength = cycle.geometryStateCount * topology.triangleCount * MATRIX_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
-  const transformBytes = Buffer.from(matrixValues.buffer, 0, productTransformByteLength);
+  const matrixValues = new Float32Array(cycle.geometryStateCount * topology.triangleCount * MATRIX_COMPONENTS);
+  const canonicalPointIndices = new Uint16Array(cycle.geometryStateCount * topology.triangleCount * 3);
+  const productGeometryByState = new Array(cycle.geometryStateCount);
+  for (const geometryState of cycle.geometryStates) {
+    const sourceGeometryStateIndex = geometryState.sourceGeometryStateIndex ?? geometryState.index;
+    const sourceGeometryState = sourceCycle.geometryStates[sourceGeometryStateIndex];
+    const geometry = geometryByState[sourceGeometryStateIndex];
+    if (!sourceGeometryState || !geometry || sourceGeometryState.sfHex !== geometryState.sfHex) {
+      throw new Error(`cssFlower product geometry ${geometryState.index} lost its source-derived binding`);
+    }
+    productGeometryByState[geometryState.index] = geometry;
+    const sourceTransformStart = sourceGeometryStateIndex * topology.triangleCount * MATRIX_COMPONENTS;
+    const productTransformStart = geometryState.index * topology.triangleCount * MATRIX_COMPONENTS;
+    matrixValues.set(
+      sourceMatrixValues.subarray(
+        sourceTransformStart,
+        sourceTransformStart + topology.triangleCount * MATRIX_COMPONENTS,
+      ),
+      productTransformStart,
+    );
+    const sourceCanonicalStart = sourceGeometryStateIndex * topology.triangleCount * 3;
+    const productCanonicalStart = geometryState.index * topology.triangleCount * 3;
+    canonicalPointIndices.set(
+      sourceCanonicalPointIndices.subarray(
+        sourceCanonicalStart,
+        sourceCanonicalStart + topology.triangleCount * 3,
+      ),
+      productCanonicalStart,
+    );
+  }
+  const transformBytes = Buffer.from(matrixValues.buffer);
   const vertexLightingByState = Object.freeze(cycle.states.map((state) => {
-    const geometry = geometryByState[state.geometryStateIndex];
+    const geometry = productGeometryByState[state.geometryStateIndex];
     if (!geometry) throw new Error(`cssFlower lighting state ${state.tick} has no prepared geometry`);
     return computePreparedVertexLightingUnquantized(
       topology,

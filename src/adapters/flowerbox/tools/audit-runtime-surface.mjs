@@ -60,11 +60,11 @@ if (existsSync(join(adapterRoot, "src/cssflower/projectedPageStyles.mjs"))) {
 }
 
 const bank = await inspectFlowerboxProductBank(join(repositoryRoot, "build", "generated", "public", "cssflower"));
-if (bank.closureBytes >= 7_000_000) failures.push(`Product bank is too large: ${bank.closureBytes}`);
-if (bank.timelineStateCount !== 360 || bank.geometryStateCount !== 46 ||
-    bank.transformBlockCount !== 3 || bank.lightingAssetCount !== 1 ||
-    bank.lightingQuality !== 60 || bank.visibilityMinimumOwnedPixels !== 8) {
-  failures.push("Product bank is not the accepted rounded q60/min-8 closure");
+if (bank.closureBytes >= 8_000_000) failures.push(`Product bank is too large: ${bank.closureBytes}`);
+if (bank.timelineStateCount !== 360 || bank.geometryStateCount !== 73 ||
+    bank.transformBlockCount !== 5 || bank.lightingAssetCount !== 1 ||
+    bank.lightingQuality !== 83 || bank.visibilityMinimumOwnedPixels !== 8) {
+  failures.push("Product bank is not the accepted rounded q83/min-8 closure with the negative cube lobe");
 }
 
 const report = {

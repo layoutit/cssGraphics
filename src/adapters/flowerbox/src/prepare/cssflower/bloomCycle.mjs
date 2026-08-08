@@ -6,9 +6,12 @@ import {
   preparedRootTransform,
 } from "./sourceProfile.mjs";
 
-export const CSSFLOWER_PRODUCT_BLOOM_PEAK_GEOMETRY_STATE = 45;
-export const CSSFLOWER_PRODUCT_BLOOM_PEAK_SF_NOMINAL = 2.25;
-export const CSSFLOWER_PRODUCT_BLOOM_CYCLE_LENGTH = 90;
+export const CSSFLOWER_PRODUCT_BLOOM_PEAK_GEOMETRY_STATE = 49;
+export const CSSFLOWER_PRODUCT_BLOOM_PEAK_SF_NOMINAL = 2.45;
+export const CSSFLOWER_PRODUCT_BLOOM_MINIMUM_GEOMETRY_STATE = 72;
+export const CSSFLOWER_PRODUCT_BLOOM_MINIMUM_SF_NOMINAL = -1.15;
+export const CSSFLOWER_PRODUCT_BLOOM_SOURCE_PATH_LENGTH = 144;
+export const CSSFLOWER_PRODUCT_BLOOM_CYCLE_LENGTH = 180;
 export const CSSFLOWER_PRODUCT_ROTATION_CYCLE_LENGTH = 360;
 
 export function buildPreparedBloomCycle() {
@@ -124,23 +127,57 @@ export function buildPreparedFullRotationCycle() {
 export function buildPreparedRoundedProductCycle() {
   const sourceBloom = buildPreparedBloomCycle();
   const peakGeometryStateIndex = CSSFLOWER_PRODUCT_BLOOM_PEAK_GEOMETRY_STATE;
-  const geometryStates = sourceBloom.geometryStates.slice(0, peakGeometryStateIndex + 1);
-  const bloomGeometryStateIndices = Object.freeze([
-    ...Array.from({ length: peakGeometryStateIndex + 1 }, (_, index) => index),
-    ...Array.from({ length: peakGeometryStateIndex - 1 }, (_, index) => peakGeometryStateIndex - 1 - index),
+  const positiveGeometryStates = sourceBloom.geometryStates.slice(0, peakGeometryStateIndex + 1);
+  const firstNegativeDescentStateIndex = sourceBloom.states.findIndex(
+    (state) => state.sf < 0 && state.sfi < 0,
+  );
+  const negativeDescentSourceStates = [];
+  for (let index = firstNegativeDescentStateIndex; index < sourceBloom.states.length; index += 1) {
+    const state = sourceBloom.states[index];
+    if (state.sf >= 0) break;
+    negativeDescentSourceStates.push(state);
+    if (state.sfi > 0) break;
+  }
+  const negativeGeometryStates = negativeDescentSourceStates.map((state, index) => Object.freeze({
+    index: positiveGeometryStates.length + index,
+    sf: state.sf,
+    sfHex: state.sfHex,
+    firstTick: state.tick,
+    sourceGeometryStateIndex: state.geometryStateIndex,
+  }));
+  const geometryStates = Object.freeze([
+    ...positiveGeometryStates,
+    ...negativeGeometryStates,
   ]);
-  if (bloomGeometryStateIndices.length !== CSSFLOWER_PRODUCT_BLOOM_CYCLE_LENGTH ||
-      geometryStates.length !== peakGeometryStateIndex + 1 ||
-      geometryStates.at(-1)?.sfHex !== "400ffffc") {
+  const sourcePathGeometryStateIndices = Object.freeze([
+    ...Array.from({ length: peakGeometryStateIndex + 1 }, (_, index) => index),
+    ...Array.from({ length: peakGeometryStateIndex }, (_, index) => peakGeometryStateIndex - 1 - index),
+    ...negativeGeometryStates.map((state) => state.index),
+    ...negativeGeometryStates.slice(0, -1).reverse().map((state) => state.index),
+  ]);
+  if (sourcePathGeometryStateIndices.length !== CSSFLOWER_PRODUCT_BLOOM_SOURCE_PATH_LENGTH ||
+      geometryStates.length !== CSSFLOWER_PRODUCT_BLOOM_MINIMUM_GEOMETRY_STATE + 1 ||
+      geometryStates[peakGeometryStateIndex]?.sfHex !== "401cccc8" ||
+      geometryStates.at(-1)?.sfHex !== "bf933332") {
     throw new Error("cssFlower rounded product bloom contract drifted");
   }
 
   const sourceIncrement = Math.fround(CSSFLOWER_SOURCE_PROFILE.bloom.sfIncrement);
   const states = Array.from({ length: CSSFLOWER_PRODUCT_ROTATION_CYCLE_LENGTH }, (_, tick) => {
     const productBloomPhaseIndex = tick % CSSFLOWER_PRODUCT_BLOOM_CYCLE_LENGTH;
-    const geometryStateIndex = bloomGeometryStateIndices[productBloomPhaseIndex];
+    const sourcePathPhaseIndex = productBloomPhaseIndex <= peakGeometryStateIndex
+      ? productBloomPhaseIndex
+      : peakGeometryStateIndex + 1 + Math.floor(
+        (productBloomPhaseIndex - peakGeometryStateIndex - 1) *
+        (CSSFLOWER_PRODUCT_BLOOM_SOURCE_PATH_LENGTH - peakGeometryStateIndex - 1) /
+        (CSSFLOWER_PRODUCT_BLOOM_CYCLE_LENGTH - peakGeometryStateIndex - 1),
+      );
+    const geometryStateIndex = sourcePathGeometryStateIndices[sourcePathPhaseIndex];
     const geometryState = geometryStates[geometryStateIndex];
-    const sfi = Math.fround(productBloomPhaseIndex < peakGeometryStateIndex
+    const minimumSourcePathPhaseIndex = CSSFLOWER_PRODUCT_BLOOM_SOURCE_PATH_LENGTH -
+      negativeGeometryStates.length;
+    const sfi = Math.fround(sourcePathPhaseIndex < peakGeometryStateIndex ||
+      sourcePathPhaseIndex >= minimumSourcePathPhaseIndex
       ? sourceIncrement
       : -sourceIncrement);
     return Object.freeze({
@@ -156,12 +193,13 @@ export function buildPreparedRoundedProductCycle() {
       geometryStateIndex,
       bloomStateIndex: productBloomPhaseIndex,
       productBloomPhaseIndex,
+      sourcePathPhaseIndex,
     });
   });
 
   return Object.freeze({
-    schema: "cssflower-prepared-rounded-product-cycle@1",
-    scope: "source-derived-rounded-cube-to-bloom-with-spike-phase-omitted",
+    schema: "cssflower-prepared-rounded-product-cycle@2",
+    scope: "source-derived-rounded-positive-petals-omitted-negative-cube-lobe-retained",
     initialState: 0,
     stateCount: CSSFLOWER_PRODUCT_ROTATION_CYCLE_LENGTH,
     cycleStartState: 0,
@@ -171,9 +209,15 @@ export function buildPreparedRoundedProductCycle() {
     bloomCycleStartState: 0,
     bloomCycleLength: CSSFLOWER_PRODUCT_BLOOM_CYCLE_LENGTH,
     bloomPeakGeometryStateIndex: peakGeometryStateIndex,
-    bloomPeakSf: geometryStates.at(-1).sf,
-    bloomPeakSfHex: geometryStates.at(-1).sfHex,
+    bloomPeakSf: geometryStates[peakGeometryStateIndex].sf,
+    bloomPeakSfHex: geometryStates[peakGeometryStateIndex].sfHex,
     bloomPeakSfNominal: CSSFLOWER_PRODUCT_BLOOM_PEAK_SF_NOMINAL,
+    bloomMinimumGeometryStateIndex: CSSFLOWER_PRODUCT_BLOOM_MINIMUM_GEOMETRY_STATE,
+    bloomMinimumSf: geometryStates[CSSFLOWER_PRODUCT_BLOOM_MINIMUM_GEOMETRY_STATE].sf,
+    bloomMinimumSfHex: geometryStates[CSSFLOWER_PRODUCT_BLOOM_MINIMUM_GEOMETRY_STATE].sfHex,
+    bloomMinimumSfNominal: CSSFLOWER_PRODUCT_BLOOM_MINIMUM_SF_NOMINAL,
+    bloomSourcePathLength: CSSFLOWER_PRODUCT_BLOOM_SOURCE_PATH_LENGTH,
+    bloomPacing: "source-exact-opening-then-evenly-held-source-step-path-to-180-states",
     omittedSourceSfAtOrAbove: 2.5,
     geometryStateCount: geometryStates.length,
     geometryStates,

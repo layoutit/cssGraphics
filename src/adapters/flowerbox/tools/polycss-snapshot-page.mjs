@@ -104,9 +104,9 @@ function validateScene(sceneData) {
       sceneData.meshes?.length !== 1 ||
       sceneData.meshes[0]?.polygons?.length !== 1200 ||
       sceneData.playback?.schema !== "cssflower-prepared-playback@1" ||
-      sceneData.playback?.scope !== "rounded-product-cycle-spike-phase-omitted" ||
-      sceneData.playback?.cycle?.schema !== "cssflower-prepared-rounded-product-cycle@1" ||
-      sceneData.playback?.cycle?.geometryStateCount !== 46 ||
+      sceneData.playback?.scope !== "rounded-product-cycle-positive-petals-omitted-negative-cube-lobe-retained" ||
+      sceneData.playback?.cycle?.schema !== "cssflower-prepared-rounded-product-cycle@2" ||
+      sceneData.playback?.cycle?.geometryStateCount !== 73 ||
       sceneData.playback?.cycle?.states?.length !== 360 ||
       sceneData.playback?.transformAsset?.triangleCount !== 1200 ||
       sceneData.playback?.transformAsset?.componentCount !== 16 ||

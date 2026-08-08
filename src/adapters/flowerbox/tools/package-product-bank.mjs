@@ -117,7 +117,7 @@ try {
     sourceManifestSha256: sha256(sourceManifestBytes),
     sourceSceneEncodedSha256: sha256(sourceSceneEncoded),
     sourceSnapshotEncodedSha256: sha256(sourceSnapshotEncoded),
-    productPolicy: "rounded-360-state-retained-polycss-morph-q60-minimum-8-owned-pixels",
+    productPolicy: "rounded-360-state-positive-petals-omitted-negative-cube-retained-polycss-morph-q83-minimum-8-owned-pixels",
     sanitization: [
       "native qualification identities",
       "oracle metadata and state evidence",

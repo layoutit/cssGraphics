@@ -46,7 +46,7 @@
     "build:flowerbox:full": "pnpm prepare:flowerbox:artifact && pnpm build:flowerbox",
     "build:gears": "vite build --config src/adapters/gears/vite.config.mjs",
     "build:gears:full": "pnpm prepare:gears:source && pnpm build:gears",
-    "build:deploy": "pnpm exec playwright install chromium && pnpm prepare:3dpipes && pnpm prepare:flowerbox:artifact && pnpm prepare:gears:artifact && CSSPIPES_DEPLOY_BUILD=1 pnpm build:3dpipes && CSSFLOWER_DEPLOY_BUILD=1 pnpm build:flowerbox && CSSGEARS_DEPLOY_BUILD=1 pnpm build:gears",
+    "build:deploy": "pnpm prepare:3dpipes && pnpm prepare:flowerbox:artifact && pnpm prepare:gears:artifact && CSSPIPES_DEPLOY_BUILD=1 pnpm build:3dpipes && CSSFLOWER_DEPLOY_BUILD=1 pnpm build:flowerbox && CSSGEARS_DEPLOY_BUILD=1 pnpm build:gears",
     "prepack": "pnpm build:lib",
     "preview": "vite preview --host 127.0.0.1",
     "prepare:super-mario-64": "pnpm build:lib && node scripts/prepare/super-mario-64.mjs",

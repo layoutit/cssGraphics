@@ -50,13 +50,16 @@ try {
   archiveBytes = await readFile(archivePath);
 } catch (error) {
   if (localArchive || error?.code !== "ENOENT") throw error;
-  const response = await fetch(lock.url, { redirect: "follow" });
-  if (!response.ok) throw new Error(`cssMaze product bank download failed: ${response.status}`);
-  archiveBytes = Buffer.from(await response.arrayBuffer());
+  archiveBytes = await downloadReleaseArchive();
   await mkdir(cacheRoot, { recursive: true });
   await writeFile(archivePath, archiveBytes);
 }
-if (archiveBytes.length !== lock.archiveByteLength || sha256(archiveBytes) !== lock.archiveSha256) {
+if (!matchesArchiveLock(archiveBytes) && !localArchive) {
+  archiveBytes = await downloadReleaseArchive();
+  await mkdir(cacheRoot, { recursive: true });
+  await writeFile(archivePath, archiveBytes);
+}
+if (!matchesArchiveLock(archiveBytes)) {
   throw new Error("cssMaze product bank archive identity mismatch");
 }
 
@@ -101,4 +104,14 @@ try {
 
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+function matchesArchiveLock(bytes) {
+  return bytes.length === lock.archiveByteLength && sha256(bytes) === lock.archiveSha256;
+}
+
+async function downloadReleaseArchive() {
+  const response = await fetch(lock.url, { redirect: "follow" });
+  if (!response.ok) throw new Error(`cssMaze product bank download failed: ${response.status}`);
+  return Buffer.from(await response.arrayBuffer());
 }

@@ -1,8 +1,8 @@
 {
   "schema": "cssmaze-prepared-bank-lock@1",
-  "tag": "cssmaze-product-bank-v1",
-  "asset": "cssmaze-product-bank-v1.tar.gz",
-  "url": "https://github.com/layoutit/cssGraphics/releases/download/cssmaze-product-bank-v1/cssmaze-product-bank-v1.tar.gz",
+  "tag": "cssmaze-product-bank-v2",
+  "asset": "cssmaze-product-bank-v2.tar.gz",
+  "url": "https://github.com/layoutit/cssGraphics/releases/download/cssmaze-product-bank-v2/cssmaze-product-bank-v2.tar.gz",
   "archiveByteLength": 6038791,
   "archiveSha256": "303c0da78f635ac29afcd38a6ffb23b0f9dbafd96b51033e883f00d8dc164530",
   "productClosureBytes": 6160686,

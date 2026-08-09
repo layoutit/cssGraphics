@@ -21,6 +21,7 @@ test("public product slug is gravitywell everywhere", async () => {
   assert.doesNotMatch(source, /gravity-well/u);
   assert.match(source, /https:\/\/css\.graphics\/gravitywell\//u);
   assert.match(source, /site-wordmark-path">\/gravitywell/u);
+  assert.match(source, /<link rel="icon" href="\/favicon\.ico" sizes="any" \/>/u);
   assert.match(source, /base:\s*deployBuild \? "\/gravitywell\/" : "\/"/u);
   assert.match(source, /identity\.id !== "gravitywell"/u);
   assert.match(source, /"dev:gravitywell"/u);

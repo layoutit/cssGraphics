@@ -5,8 +5,8 @@ export function timelineStateIndexForTick(tick, playback) {
     : Math.min(playback.segmentEndState, Math.max(playback.segmentStartState, tick));
 }
 
-export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicationRoot, ...overrides }) {
-  validatePlayback(playback, planeAtlas, publicationRoot);
+export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicationRoot, leaves, ...overrides }) {
+  validatePlayback(playback, planeAtlas, publicationRoot, leaves);
   const requestFrame = overrides.requestFrame ?? globalThis.requestAnimationFrame.bind(globalThis);
   const cancelFrame = overrides.cancelFrame ?? globalThis.cancelAnimationFrame.bind(globalThis);
   const requestDelay = overrides.requestDelay ?? globalThis.setTimeout.bind(globalThis);
@@ -20,13 +20,37 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
   let delay = null;
   let nextFrameAt = null;
 
+  function publishAxisColor(stateIndex, axis) {
+    const backgroundPositionY = planeAtlas.paletteBackgroundPositionYs[playback.colorRows[stateIndex][axis]];
+    const schedule = playback.frontFacingSchedule;
+    const segmentIndex = stateIndex * schedule.axisCount + axis;
+    const start = schedule.offsets[segmentIndex];
+    const end = schedule.offsets[segmentIndex + 1];
+    for (let index = start; index < end; index += 1) {
+      leaves[schedule.leafIndices[index]].style.backgroundPositionY = backgroundPositionY;
+    }
+    return { scheduleStart: start, backgroundPositionY, targetCount: end - start };
+  }
+
+  function publishInitial(stateIndex) {
+    publicationRoot.style.transform = playback.transforms[stateIndex];
+    const colorRow = playback.colorRows[stateIndex];
+    const leavesPerAxis = planeAtlas.leafCount / 3;
+    for (let axis = 0; axis < 3; axis += 1) {
+      const backgroundPositionY = planeAtlas.paletteBackgroundPositionYs[colorRow[axis]];
+      const end = (axis + 1) * leavesPerAxis;
+      for (let leafIndex = axis * leavesPerAxis; leafIndex < end; leafIndex += 1) {
+        leaves[leafIndex].style.backgroundPositionY = backgroundPositionY;
+      }
+    }
+    tick = stateIndex;
+    return tick;
+  }
+
   function publishAdjacentFast(stateIndex) {
     const transform = playback.transforms[stateIndex];
-    publicationRoot.style.setProperty("--m", transform);
-    const colorRow = playback.colorRows[stateIndex];
-    publicationRoot.style.setProperty("--x", planeAtlas.paletteBackgroundPositionYs[colorRow[0]]);
-    publicationRoot.style.setProperty("--y", planeAtlas.paletteBackgroundPositionYs[colorRow[1]]);
-    publicationRoot.style.setProperty("--z", planeAtlas.paletteBackgroundPositionYs[colorRow[2]]);
+    publicationRoot.style.transform = transform;
+    for (let axis = 0; axis < 3; axis += 1) publishAxisColor(stateIndex, axis);
     tick = stateIndex;
     return tick;
   }
@@ -39,7 +63,7 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
     const transformComparedAt = profile ? readNow() : 0;
     const transformChanged = adjacentState || previousTransform !== transform;
     if (transformChanged) {
-      publicationRoot.style.setProperty("--m", transform);
+      publicationRoot.style.transform = transform;
     }
     const transformPublishedAt = profile ? readNow() : 0;
     const colorRow = playback.colorRows[stateIndex];
@@ -48,13 +72,18 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
     let lastAxisPublishedAt = colorRowResolvedAt;
     for (let axis = 0; axis < 3; axis += 1) {
       const axisStartedAt = profile ? readNow() : 0;
-      const backgroundPositionY = planeAtlas.paletteBackgroundPositionYs[colorRow[axis]];
       const previousBackgroundPositionY = planeAtlas.paletteBackgroundPositionYs[playback.colorRows[tick][axis]];
       const axisComparedAt = profile ? readNow() : 0;
-      const axisChanged = adjacentState || previousBackgroundPositionY !== backgroundPositionY;
-      if (axisChanged) {
-        publicationRoot.style.setProperty(`--${"xyz"[axis]}`, backgroundPositionY);
-      }
+      const axisChanged = adjacentState || tick !== stateIndex;
+      const publication = axisChanged
+        ? publishAxisColor(stateIndex, axis)
+        : {
+            scheduleStart: playback.frontFacingSchedule.offsets[
+              stateIndex * playback.frontFacingSchedule.axisCount + axis
+            ],
+            backgroundPositionY: previousBackgroundPositionY,
+            targetCount: 0,
+          };
       const axisPublishedAt = profile ? readNow() : 0;
       lastAxisPublishedAt = axisPublishedAt;
       if (profile) {
@@ -62,7 +91,9 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
           axis,
           paletteIndex: colorRow[axis],
           previousBackgroundPositionY,
-          backgroundPositionY,
+          backgroundPositionY: publication.backgroundPositionY,
+          scheduleStart: publication.scheduleStart,
+          targetCount: publication.targetCount,
           changed: axisChanged,
           resolveAndCompareMilliseconds: axisComparedAt - axisStartedAt,
           conditionalStyleWriteMilliseconds: axisPublishedAt - axisComparedAt,
@@ -139,7 +170,7 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
     scheduleNextDraw();
   }
 
-  publishAdjacentFast(playback.initial.stateIndex);
+  publishInitial(playback.initial.stateIndex);
   return Object.freeze({
     get tick() { return tick; },
     get paused() { return paused; },
@@ -202,6 +233,12 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
         runtimeAdjacentPublicationComparisonCount: 0,
         runtimeHotPathProfilingBranchCount: 0,
         runtimeHotPathDebugCounterWritesPerScheduledTick: 0,
+        preparedFrontFacingAxisSelectionsPerScheduledTick: 3,
+        preparedFrontFacingLeafWritesPerScheduledTick: Object.freeze({
+          minimum: playback.frontFacingSchedule.minimumSelectedLeafCountPerState,
+          maximum: playback.frontFacingSchedule.maximumSelectedLeafCountPerState,
+          average: playback.frontFacingSchedule.averageSelectedLeafCountPerState,
+        }),
         preparedAdjacentPublicationMode: playback.adjacentPublicationMode,
         runtimeGeometryConstructionCount: 0,
         runtimeRecursionCount: 0,
@@ -218,13 +255,27 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
   });
 }
 
-function validatePlayback(playback, planeAtlas, publicationRoot) {
+function validatePlayback(playback, planeAtlas, publicationRoot, leaves) {
   if (playback?.schema !== "cssmenger-prepared-playback@1" ||
       !(publicationRoot instanceof HTMLElement) ||
+      !Array.isArray(leaves) || leaves.length !== planeAtlas?.leafCount ||
+      leaves.some((leaf) => !(leaf instanceof HTMLElement)) ||
       !Array.isArray(playback.transforms) || playback.transforms.length !== playback.stateCount ||
       !Array.isArray(playback.colorRows) || playback.colorRows.length !== playback.stateCount ||
       playback.colorRows.some((row) => !Array.isArray(row) || row.length !== 3) ||
       !Array.isArray(playback.palette) || playback.palette.length !== 128 ||
+      playback.frontFacingSchedule?.schema !== "cssmenger-prepared-front-facing-leaf-schedule@1" ||
+      playback.frontFacingSchedule.encoding !== "state-axis-offsets-plus-global-leaf-indices" ||
+      playback.frontFacingSchedule.stateCount !== playback.stateCount ||
+      playback.frontFacingSchedule.axisCount !== 3 ||
+      playback.frontFacingSchedule.frontFaceDilationTicks !== 1 ||
+      playback.frontFacingSchedule.offsets?.length !== playback.stateCount * 3 + 1 ||
+      playback.frontFacingSchedule.offsets[0] !== 0 ||
+      playback.frontFacingSchedule.offsets.at(-1) !== playback.frontFacingSchedule.leafIndices?.length ||
+      playback.frontFacingSchedule.offsets.some((offset, index, offsets) =>
+        !Number.isSafeInteger(offset) || offset < 0 || (index > 0 && offset < offsets[index - 1])) ||
+      playback.frontFacingSchedule.leafIndices.some((leafIndex) =>
+        !Number.isSafeInteger(leafIndex) || leafIndex < 0 || leafIndex >= planeAtlas.leafCount) ||
       playback.adjacentPublicationMode !== "all-fields-change" ||
       planeAtlas?.schema !== "cssmenger-prepared-coplanar-plane-atlas@1" ||
       planeAtlas.paletteStateCount !== playback.palette.length ||

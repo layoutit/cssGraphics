@@ -45,6 +45,25 @@ try {
         return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0 &&
           rect.left < innerWidth && rect.top < innerHeight && style.backgroundImage !== "none";
       }).length;
+      const frontFacingSchedule = debug.scene.playback.frontFacingSchedule;
+      const expectedAxisAtlasPositions = debug.scene.playback.colorRows[420].map((paletteIndex) =>
+        debug.scene.planeAtlas.paletteBackgroundPositionYs[paletteIndex]);
+      const selectedLeafPalettePositions = [0, 1, 2].map((axis) => {
+        const segmentIndex = 420 * frontFacingSchedule.axisCount + axis;
+        const start = frontFacingSchedule.offsets[segmentIndex];
+        const end = frontFacingSchedule.offsets[segmentIndex + 1];
+        return frontFacingSchedule.leafIndices
+          .slice(start, end)
+          .map((leafIndex) => ({
+          leafIndex,
+          actual: leaves[leafIndex]?.style.backgroundPositionY ?? "",
+          expected: expectedAxisAtlasPositions[axis],
+          }));
+      });
+      const modelTransform = scene?.style.transform ?? "";
+      const expectedTransform = debug.scene.playback.transforms[420];
+      const actualMatrix = new DOMMatrix(modelTransform).toFloat64Array();
+      const expectedMatrix = new DOMMatrix(expectedTransform).toFloat64Array();
       return {
         status: document.body.dataset.portStatus,
         message: document.querySelector(".cssmenger-error-message")?.textContent ?? "",
@@ -62,11 +81,15 @@ try {
         shellGithubHref: document.querySelector(".site-action-icon-only")?.href ?? "",
         visibleSampleCount,
         backfaceVisibility: getComputedStyle(leaves[0]).backfaceVisibility,
-        axisAtlasPositions: ["--x", "--y", "--z"].map((property) => scene?.style.getPropertyValue(property) ?? ""),
-        expectedAxisAtlasPositions: debug.scene.playback.colorRows[420].map((paletteIndex) =>
-          debug.scene.planeAtlas.paletteBackgroundPositionYs[paletteIndex]),
-        modelTransform: scene?.style.getPropertyValue("--m") ?? "",
-        expectedTransform: debug.scene.playback.transforms[420],
+        inheritedPublicationProperties: ["--m", "--x", "--y", "--z"].map((property) =>
+          scene?.style.getPropertyValue(property) ?? ""),
+        selectedLeafPalettePositions,
+        modelTransform,
+        expectedTransform,
+        modelTransformMatrixMaxDelta: Math.max(...actualMatrix.map((value, index) =>
+          Math.abs(value - expectedMatrix[index]))),
+        viewTranslate: scene?.style.translate ?? "",
+        viewScale: scene?.style.scale ?? "",
         geometryPayload: Array.isArray(debug.scene.meshes),
         pageMetadataCount: document.querySelectorAll("[data-poly-index], [data-polycss-leaf]").length,
         renderLeafAttributeCounts: leaves.map((leaf) => leaf.attributes.length),
@@ -81,8 +104,10 @@ try {
         evidence.shellWordmarkPath !== "/menger" || evidence.shellHomeHref !== "https://css.graphics/" ||
         evidence.shellGithubHref !== "https://github.com/layoutit/cssGraphics" ||
         evidence.backfaceVisibility !== "hidden" ||
-        evidence.axisAtlasPositions.some((value, index) => value !== evidence.expectedAxisAtlasPositions[index]) ||
-        evidence.modelTransform !== evidence.expectedTransform || evidence.geometryPayload || evidence.pageMetadataCount !== 0 ||
+        evidence.inheritedPublicationProperties.some(Boolean) ||
+        evidence.selectedLeafPalettePositions.flat().some(({ actual, expected }) => actual !== expected) ||
+        evidence.modelTransformMatrixMaxDelta > 1e-5 || evidence.viewTranslate !== "0px 0px -980.385px" ||
+        evidence.viewScale !== "1.4" || evidence.geometryPayload || evidence.pageMetadataCount !== 0 ||
         evidence.renderLeafAttributeCounts.some((count) => count !== 1) ||
         evidence.shellScaffoldingCount !== 0 || evidence.sceneElementCount !== 86 ||
         evidence.stats.runtimeInstrumentationEnabled || evidence.stats.preparedStatesApplied !== null ||
@@ -90,6 +115,10 @@ try {
         evidence.stats.runtimeAdjacentPublicationComparisonCount !== 0 ||
         evidence.stats.runtimeHotPathProfilingBranchCount !== 0 ||
         evidence.stats.runtimeHotPathDebugCounterWritesPerScheduledTick !== 0 ||
+        evidence.stats.preparedFrontFacingAxisSelectionsPerScheduledTick !== 3 ||
+        evidence.stats.preparedFrontFacingLeafWritesPerScheduledTick.minimum !== 41 ||
+        evidence.stats.preparedFrontFacingLeafWritesPerScheduledTick.maximum !== 50 ||
+        evidence.stats.preparedFrontFacingLeafWritesPerScheduledTick.average !== 42.725 ||
         evidence.stats.runtimeDomMutationCount !== 0 || evidence.stats.runtimeGeometryConstructionCount !== 0 ||
         evidence.stats.runtimeRecursionCount !== 0 || evidence.stats.runtimeMergeCount !== 0 ||
         evidence.stats.runtimeColorGenerationCount !== 0 || evidence.stats.runtimeRotationCalculationCount !== 0 ||

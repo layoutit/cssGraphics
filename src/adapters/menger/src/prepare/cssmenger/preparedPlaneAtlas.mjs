@@ -103,8 +103,9 @@ export function buildPreparedMengerPlaneAtlas({ geometry, palette }) {
     runtime: Object.freeze({
       geometryConstruction: 0,
       atlasConstruction: 0,
-      perLeafStyleWrites: 0,
-      rootBackgroundPositionWritesPerPublishedState: 3,
+      perLeafStyleWritesPerPublishedState: "prepared-front-facing-schedule",
+      rootTransformWritesPerPublishedState: 1,
+      rootBackgroundPositionWritesPerPublishedState: 0,
       topologyMutation: false,
     }),
   });

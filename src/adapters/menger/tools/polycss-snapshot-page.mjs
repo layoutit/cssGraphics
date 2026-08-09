@@ -75,7 +75,8 @@ async function main() {
   const exported = await exportPolySceneSnapshot(host, {
     title: "cssMenger — prepared XScreenSaver depth-3 sponge",
   });
-  const html = sanitizeSnapshot(exported, sceneData.planeAtlas);
+  const sanitized = sanitizeSnapshot(exported, sceneData);
+  const html = sanitized.html;
   if ((html.match(/<b\b/gu) ?? []).length !== 28 ||
       (html.match(/<i\b/gu) ?? []).length !== 28 ||
       (html.match(/<s\b/gu) ?? []).length !== 28 ||
@@ -83,10 +84,18 @@ async function main() {
       /\/(?:Users|home)\//u.test(html)) {
     throw new Error("Prepared cssMenger snapshot failed retained-root sanitization");
   }
-  window.__cssMengerDebugSnapshot = { status: "ready", sceneUrl, html, mountedLeaves, stats };
+  window.__cssMengerDebugSnapshot = {
+    status: "ready",
+    sceneUrl,
+    html,
+    frontFacingSchedule: sanitized.frontFacingSchedule,
+    mountedLeaves,
+    stats,
+  };
 }
 
-function sanitizeSnapshot(html, planeAtlas) {
+function sanitizeSnapshot(html, sceneData) {
+  const planeAtlas = sceneData.planeAtlas;
   const parsed = new DOMParser().parseFromString(html, "text/html");
   const stylesheet = parsed.querySelector("style");
   const camera = parsed.querySelector(".polycss-camera");
@@ -111,28 +120,30 @@ function sanitizeSnapshot(html, planeAtlas) {
     `font-weight:normal;font-style:normal;line-height:0;text-decoration:none;` +
     `width:${planeAtlas.tileWidth}px;height:${planeAtlas.tileHeight}px;color:transparent!important;` +
     `background-color:transparent!important;background-image:var(--a)!important;background-repeat:no-repeat!important;` +
-    `background-size:${planeAtlas.backgroundSize}!important;image-rendering:pixelated;backface-visibility:hidden!important}` +
-    `.polycss-scene>b{background-position-y:var(--x)!important}` +
-    `.polycss-scene>i{background-position-y:var(--y)!important}` +
-    `.polycss-scene>s{background-position-y:var(--z)!important}`;
+    `background-size:${planeAtlas.backgroundSize}!important;image-rendering:pixelated;backface-visibility:hidden!important}`;
   camera.removeAttribute("style");
-  scene.style.transform = `${viewTransform} var(--m)`;
-  scene.style.setProperty("--m", modelTransform);
+  const view = preparedViewLonghands(viewTransform);
+  scene.style.translate = view.translate;
+  scene.style.scale = view.scale;
+  scene.style.transform = modelTransform;
   const fragment = parsed.createDocumentFragment();
+  const flattenedLeaves = [];
   for (let axis = 0; axis < axes.length; axis += 1) {
     const axisRoot = axes[axis];
     const palettePosition = axisRoot.style.getPropertyValue("--axis-atlas-y");
     if (!palettePosition) throw new Error(`Exported cssMenger axis ${axis} has no prepared palette row`);
-    scene.style.setProperty(`--${"xyz"[axis]}`, palettePosition);
     const tagName = ["b", "i", "s"][axis];
     for (const leaf of axisRoot.querySelectorAll(":scope > b")) {
       const flattened = parsed.createElement(tagName);
       flattened.style.transform = leaf.style.transform;
       flattened.style.backgroundPositionX = leaf.style.backgroundPositionX;
-      if (!flattened.style.transform || !flattened.style.backgroundPositionX) {
+      flattened.style.backgroundPositionY = palettePosition;
+      if (!flattened.style.transform || !flattened.style.backgroundPositionX ||
+          !flattened.style.backgroundPositionY) {
         throw new Error("Exported cssMenger leaf is missing prepared placement");
       }
       fragment.append(flattened);
+      flattenedLeaves.push(flattened);
     }
   }
   model.remove();
@@ -143,7 +154,99 @@ function sanitizeSnapshot(html, planeAtlas) {
     }
   }
   for (const element of parsed.querySelectorAll("script, canvas, svg")) element.remove();
-  return `<!doctype html>${parsed.documentElement.outerHTML}\n`;
+  return Object.freeze({
+    html: `<!doctype html>${parsed.documentElement.outerHTML}\n`,
+    frontFacingSchedule: prepareFrontFacingSchedule({
+      playback: sceneData.playback,
+      perspective,
+      planeAtlas,
+      view,
+      leaves: flattenedLeaves,
+    }),
+  });
+}
+
+function preparedViewLonghands(viewTransform) {
+  const match = /^translateZ\((-?\d+(?:\.\d+)?px)\) scale\((-?\d+(?:\.\d+)?)\) rotateX\(0deg\) rotate\(0deg\) translate3d\(0px, 0px, 0px\)$/u.exec(viewTransform);
+  if (!match) throw new Error(`Exported cssMenger view transform cannot use direct prepared publication: ${viewTransform}`);
+  return Object.freeze({
+    translate: `0px 0px ${match[1]}`,
+    scale: match[2],
+    translateZ: Number.parseFloat(match[1]),
+    scaleNumber: Number(match[2]),
+  });
+}
+
+function prepareFrontFacingSchedule({ playback, perspective, planeAtlas, view, leaves }) {
+  if (leaves.length !== planeAtlas.leafCount || leaves.length !== 84 ||
+      playback.transforms?.length !== playback.stateCount) {
+    throw new Error("Prepared cssMenger front-facing schedule inputs are incomplete");
+  }
+  const perspectivePixels = Number.parseFloat(perspective);
+  if (!(perspectivePixels > 0) || !Number.isFinite(view.translateZ) || !(view.scaleNumber > 0)) {
+    throw new Error("Prepared cssMenger projection cannot produce a front-facing schedule");
+  }
+  const localCorners = leaves.map((leaf) => {
+    const leafMatrix = new DOMMatrix(leaf.style.transform);
+    return [[0, 0], [planeAtlas.tileWidth, 0], [planeAtlas.tileWidth, planeAtlas.tileHeight], [0, planeAtlas.tileHeight]]
+      .map(([x, y]) => leafMatrix.transformPoint(new DOMPoint(x, y, 0, 1)));
+  });
+  const visibleByState = [];
+  for (let stateIndex = 0; stateIndex < playback.stateCount; stateIndex += 1) {
+    const modelMatrix = new DOMMatrix(playback.transforms[stateIndex]);
+    const visible = new Uint8Array(leaves.length);
+    for (let leafIndex = 0; leafIndex < leaves.length; leafIndex += 1) {
+      const projected = localCorners[leafIndex].map((corner) => {
+        const point = modelMatrix.transformPoint(corner);
+        const z = point.z * view.scaleNumber + view.translateZ;
+        const perspectiveScale = 1 - z / perspectivePixels;
+        return [point.x * view.scaleNumber / perspectiveScale, point.y * view.scaleNumber / perspectiveScale];
+      });
+      visible[leafIndex] = signedQuadArea(projected) > 0 ? 1 : 0;
+    }
+    visibleByState.push(visible);
+  }
+  const leafIndices = [];
+  const offsets = [0];
+  const selectedLeafCounts = [];
+  for (let stateIndex = 0; stateIndex < playback.stateCount; stateIndex += 1) {
+    const stateStart = leafIndices.length;
+    const previous = visibleByState[Math.max(0, stateIndex - 1)];
+    const current = visibleByState[stateIndex];
+    const next = visibleByState[Math.min(playback.stateCount - 1, stateIndex + 1)];
+    for (let axis = 0; axis < 3; axis += 1) {
+      const axisStart = axis * 28;
+      for (let leafIndex = axisStart; leafIndex < axisStart + 28; leafIndex += 1) {
+        if (previous[leafIndex] || current[leafIndex] || next[leafIndex]) leafIndices.push(leafIndex);
+      }
+      offsets.push(leafIndices.length);
+    }
+    selectedLeafCounts.push(leafIndices.length - stateStart);
+  }
+  return Object.freeze({
+    schema: "cssmenger-prepared-front-facing-leaf-schedule@1",
+    encoding: "state-axis-offsets-plus-global-leaf-indices",
+    stateCount: playback.stateCount,
+    axisCount: 3,
+    offsets: Object.freeze(offsets),
+    leafIndices: Object.freeze(leafIndices),
+    minimumSelectedLeafCountPerState: Math.min(...selectedLeafCounts),
+    maximumSelectedLeafCountPerState: Math.max(...selectedLeafCounts),
+    averageSelectedLeafCountPerState: selectedLeafCounts.reduce((sum, count) => sum + count, 0) /
+      selectedLeafCounts.length,
+    frontFaceDilationTicks: 1,
+    runtimeProjectionCalculation: false,
+    runtimeNormalCalculation: false,
+  });
+}
+
+function signedQuadArea(points) {
+  let twiceArea = 0;
+  for (let index = 0; index < points.length; index += 1) {
+    const next = (index + 1) % points.length;
+    twiceArea += points[index][0] * points[next][1] - points[next][0] * points[index][1];
+  }
+  return twiceArea;
 }
 
 function applyPreparedPlaneAtlas(modelRoot, atlas) {

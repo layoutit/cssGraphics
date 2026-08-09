@@ -8,6 +8,7 @@ import {
   adapterRoot,
   generatedPrivateRoot,
   generatedPublicRoot,
+  manifestPath,
   repositoryRoot,
 } from "../src/prepare/cssmenger/paths.mjs";
 
@@ -69,6 +70,12 @@ async function publishRuntimeScene() {
   const scene = JSON.parse(await readFile(privateScenePath, "utf8"));
   const runtimeScene = {
     ...scene,
+    metrics: {
+      ...scene.metrics,
+      preparedRenderWrapperCount: 2,
+      preparedModelRootCount: 0,
+      preparedAxisRootCount: 0,
+    },
     renderer: { ...scene.renderer, runtimeGeometryPayload: false },
     meshDescriptors: scene.meshes.map((mesh) => ({
       id: mesh.id,
@@ -81,6 +88,13 @@ async function publishRuntimeScene() {
   const temporary = `${scenePath}.tmp`;
   await writeFile(temporary, `${JSON.stringify(runtimeScene, null, 2)}\n`);
   await rename(temporary, scenePath);
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  const entry = manifest.scenes?.find((candidate) => candidate.id === sceneId);
+  if (!entry) throw new Error(`cssMenger manifest is missing ${sceneId}`);
+  entry.metrics = runtimeScene.metrics;
+  const manifestTemporary = `${manifestPath}.tmp`;
+  await writeFile(manifestTemporary, `${JSON.stringify(manifest, null, 2)}\n`);
+  await rename(manifestTemporary, manifestPath);
 }
 
 async function freePort() {

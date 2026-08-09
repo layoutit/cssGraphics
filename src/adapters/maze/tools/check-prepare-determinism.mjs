@@ -25,18 +25,35 @@ try {
 }
 
 function runPrepare(output, sourceRoot) {
-  const result = spawnSync(process.execPath, [
+  const environment = {
+    ...process.env,
+    CSSMAZE_GENERATED_PUBLIC_DIR: output,
+    CSSMAZE_GENERATED_PRIVATE_DIR: `${output}-private`,
+  };
+  const sourceResult = spawnSync(process.execPath, [
     join(adapterRoot, "tools/prepare-cssmaze.mjs"),
     "--source-root",
     sourceRoot,
-    "--output",
-    output,
   ], {
     cwd: repositoryRoot,
     encoding: "utf8",
-    timeout: 120_000,
+    env: environment,
+    timeout: 300_000,
   });
-  if (result.status !== 0) throw new Error(result.stderr || result.stdout || "cssMaze prepare failed");
+  if (sourceResult.status !== 0) {
+    throw new Error(sourceResult.stderr || sourceResult.stdout || "cssMaze source prepare failed");
+  }
+  const snapshotResult = spawnSync(process.execPath, [
+    join(adapterRoot, "tools/prepare-polycss-snapshot.mjs"),
+  ], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    env: environment,
+    timeout: 300_000,
+  });
+  if (snapshotResult.status !== 0) {
+    throw new Error(snapshotResult.stderr || snapshotResult.stdout || "cssMaze snapshot prepare failed");
+  }
 }
 
 async function directoryHashes(root) {

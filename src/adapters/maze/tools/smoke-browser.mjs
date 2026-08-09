@@ -99,6 +99,8 @@ const result = await withCssmazeBrowser(async ({ page }) => {
         headerPointerEvents: getComputedStyle(header).pointerEvents,
         wordmarkPointerEvents: getComputedStyle(wordmark).pointerEvents,
         actionPointerEvents: getComputedStyle(action).pointerEvents,
+        wordmarkColor: getComputedStyle(wordmark).color,
+        wordmarkStroke: getComputedStyle(wordmarkText).stroke,
         wordmarkStrokeWidth: getComputedStyle(wordmarkText).strokeWidth,
         wordmarkPaintOrder: getComputedStyle(wordmarkText).paintOrder,
         logoOutlineCount: document.querySelectorAll(".site-action-icon-outline").length,
@@ -141,8 +143,9 @@ const result = await withCssmazeBrowser(async ({ page }) => {
       evidence.shell.headerPointerEvents !== "none" ||
       evidence.shell.wordmarkPointerEvents !== "auto" ||
       evidence.shell.actionPointerEvents !== "auto" ||
-      evidence.shell.wordmarkStrokeWidth !== "1.5px" ||
-      !evidence.shell.wordmarkPaintOrder.startsWith("stroke") ||
+      evidence.shell.wordmarkColor !== "rgb(174, 180, 188)" ||
+      evidence.shell.wordmarkStroke !== "none" ||
+      evidence.shell.wordmarkPaintOrder !== "normal" ||
       evidence.shell.logoOutlineCount !== 2 ||
       evidence.shell.logoOutlineStrokeWidth !== "4px" ||
       !evidence.shell.wordmarkOverScene ||

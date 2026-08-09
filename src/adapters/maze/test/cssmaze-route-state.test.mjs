@@ -7,7 +7,7 @@ test("default route delegates to startup random prepared-bank selection", () => 
     requestedScene: null,
     scene: null,
     explicitScene: false,
-    selection: "startup-random-low-rotation-prepared-scene",
+    selection: "startup-random-common-loop-low-consecutive-turn-prepared-scene",
   });
 });
 
@@ -25,6 +25,6 @@ test("clean prepared scene ids can be pinned", () => {
     requestedScene: null,
     scene: null,
     explicitScene: false,
-    selection: "startup-random-low-rotation-prepared-scene",
+    selection: "startup-random-common-loop-low-consecutive-turn-prepared-scene",
   });
 });

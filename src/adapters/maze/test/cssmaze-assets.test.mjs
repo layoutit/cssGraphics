@@ -23,26 +23,51 @@ test("generated manifest exposes 24 source-backed low-rotation prepared scenes",
   assert.equal(manifest.preparedBank.sceneIds.length, 24);
   assert.deepEqual(manifest.scenes.map((entry) => entry.id), manifest.preparedBank.sceneIds);
   assert.deepEqual(manifest.scenes.map((entry) => entry.nativeSeed), manifest.preparedBank.seeds);
-  assert.equal(manifest.preparedBank.ranking.algorithm, "lowest-turning-frame-ratio-then-quarter-turn-count");
-  assert.equal(manifest.preparedBank.ranking.candidateSeedCount, 4096);
+  assert.equal(manifest.preparedBank.ranking.algorithm,
+    "common-loop-orientation-then-lowest-maximum-consecutive-quarter-turns");
+  assert.equal(manifest.preparedBank.ranking.candidateSeedCount, 131_072);
   assert.equal(manifest.preparedBank.ranking.minimumStateCount, 600);
+  assert.equal(manifest.preparedBank.ranking.maximumConsecutiveQuarterTurnCount, 2);
+  assert.equal(manifest.preparedBank.ranking.maximumLoopOrientationChangeDegrees, 0);
+  assert.equal(manifest.preparedBank.ranking.requiredLoopOrientationDegrees, 180);
+  assert.equal(manifest.preparedBank.ranking.loopTexturePhaseAligned, true);
   assert.equal(manifest.preparedBank.ranking.runtimeScoring, false);
   assert.equal(manifest.preparedBank.runtimeSceneGeneration, false);
   assert.equal(manifest.preparedBank.runtimeRotationScoring, false);
   assert.equal(manifest.preparedBank.mountedSceneCount, 1);
-  assert.deepEqual(manifest.transport, {
-    schema: "cssmaze-prepared-transport@1",
-    encoding: "gzip",
-    startup: "selected-scene-and-snapshot-first",
-    selection: "page-load-only",
-    runtimeArchiveDownload: false,
-    runtimeGeometryPayload: false,
-  });
+  assert.equal(manifest.transport.schema, "cssmaze-prepared-transport@1");
+  assert.equal(manifest.transport.encoding, "gzip");
+  assert.equal(manifest.transport.startup, "selected-scene-and-snapshot-first");
+  assert.equal(manifest.transport.selection, "page-load-only");
+  assert.equal(manifest.transport.runtimeArchiveDownload, false);
+  assert.equal(manifest.transport.runtimeGeometryPayload, false);
+  assert.equal(manifest.transport.sharedSnapshotAtlases.length, 2);
+  assert.deepEqual(
+    manifest.transport.sharedSnapshotAtlases.map((atlas) => atlas.id).sort(),
+    ["snapshot-atlas:surfaces", "snapshot-atlas:walls"],
+  );
+  for (const atlas of manifest.transport.sharedSnapshotAtlases) {
+    assert.equal(atlas.encoding, "identity");
+    assert.ok(atlas.byteLength > 0);
+    assert.match(atlas.sha256, /^[a-f0-9]{64}$/u);
+    const bytes = await readFile(join(generated, atlas.url.slice("/cssmaze/".length)));
+    assert.equal(bytes.length, atlas.byteLength);
+    assert.equal(createHash("sha256").update(bytes).digest("hex"), atlas.sha256);
+  }
   for (let index = 1; index < manifest.preparedBank.rotationScores.length; index += 1) {
     assert.ok(compareRotationScores(
       manifest.preparedBank.rotationScores[index - 1],
       manifest.preparedBank.rotationScores[index],
     ) <= 0);
+  }
+  for (const score of manifest.preparedBank.rotationScores) {
+    assert.equal(score.schema, "cssmaze-prepared-rotation-score@2");
+    assert.ok(score.maximumConsecutiveQuarterTurnCount <= 2);
+    assert.ok(score.longestTurningRunDegrees <= 180.01);
+    assert.ok(score.longestTurningRunFrameCount <= 64);
+    assert.equal(score.loopOrientationChangeDegrees, 0);
+    assert.equal(score.loopOrientationQuarterTurnCount, 0);
+    assert.equal(score.loopOrientationDegrees, 180);
   }
   assert.equal(manifest.artifactMode, "prepared-polycss-snapshot");
   assert.equal(scene.schema, "cssmaze-prepared-scene@1");
@@ -90,6 +115,13 @@ test("generated manifest exposes 24 source-backed low-rotation prepared scenes",
     assert.match(entry.sceneUrl, /^\/cssmaze\/scenes\/[a-z0-9._-]+\.json\.gz$/u);
     assert.match(entry.snapshotUrl, /^\/cssmaze\/scenes\/[a-z0-9._-]+\.polycss\.html\.gz$/u);
     const prepared = await readGzipJson(join(generated, `scenes/${entry.id}.json.gz`));
+    const firstPose = prepared.playback.sourceCameraPoses[0];
+    const lastPose = prepared.playback.sourceCameraPoses.at(-1);
+    assert.equal(Math.abs(((lastPose[2] - firstPose[2] + 540) % 360) - 180), 0);
+    assert.equal(firstPose[2], 180);
+    assert.equal(lastPose[2], 180);
+    assert.equal(Number.isInteger(lastPose[0] - firstPose[0]), true);
+    assert.equal(Number.isInteger(lastPose[1] - firstPose[1]), true);
     assert.equal(prepared.playback.leafVisibilityChangeRows.length, prepared.playback.stateCount);
     assert.equal(
       prepared.metrics.preparedLeafVisibilityDeltaOperationCount,
@@ -133,16 +165,21 @@ test("every prepared snapshot is retained DOM without an alternate renderer", as
     assert.match(html, /\.cssmaze-surfaces>s\{width:600px;height:600px;background-size:/u);
     assert.match(html, /\.cssmaze-walls>s\{width:50px;height:50px;background-size:/u);
     assert.match(html, /\.cssmaze-world s\{-webkit-backface-visibility:visible;backface-visibility:visible\}/u);
+    assert.doesNotMatch(html, /data:image\//u);
+    for (const atlas of manifest.transport.sharedSnapshotAtlases) {
+      assert.equal(html.split(atlas.url).length - 1, 1);
+    }
     assert.doesNotMatch(html, /<script\b|<canvas\b|<svg\b/iu);
     assert.doesNotMatch(html, /\/(?:Users|home)\//u);
   }
 });
 
 test("prepared wall atlas preserves source texture brightness", async () => {
-  const html = gunzipSync(await readFile(join(generated, "scenes/default-maze.polycss.html.gz"))).toString("utf8");
-  const match = html.match(/\.cssmaze-walls>s\s*\{\s*background-image:\s*url\("data:image\/png;base64,([A-Za-z0-9+/=]+)"\)/u);
-  assert.ok(match, "prepared wall atlas must remain embedded in the snapshot");
-  const atlas = PNG.sync.read(Buffer.from(match[1], "base64"));
+  const manifest = await readJson(join(generated, "manifest.json"));
+  const descriptor = manifest.transport.sharedSnapshotAtlases.find((atlas) =>
+    atlas.id === "snapshot-atlas:walls");
+  assert.ok(descriptor, "prepared wall atlas must be distributed once");
+  const atlas = PNG.sync.read(await readFile(join(generated, descriptor.url.slice("/cssmaze/".length))));
   const source = PNG.sync.read(await readFile(join(generated, "assets/brick1.png")));
   const atlasMean = meanRgb(atlas, { x: 1, y: 1, width: 50, height: 50 });
   const sourceMean = meanRgb(source, { x: 0, y: 0, width: source.width, height: source.height });

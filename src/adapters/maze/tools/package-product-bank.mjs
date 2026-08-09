@@ -44,6 +44,9 @@ async function copyProductClosure(source, target) {
     "assets/brick2.png",
     "assets/wood2.png",
   ]);
+  for (const atlas of manifest.transport?.sharedSnapshotAtlases ?? []) {
+    paths.add(productPath(atlas.url));
+  }
   for (const entry of manifest.scenes ?? []) {
     paths.add(productPath(entry.sceneUrl));
     paths.add(productPath(entry.snapshotUrl));

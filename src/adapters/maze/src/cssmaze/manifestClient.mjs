@@ -11,8 +11,12 @@ export async function loadPreparedManifest(route, fetchImpl = globalThis.fetch.b
       manifest.defaultScene?.id !== "default-maze" ||
       !Array.isArray(manifest.scenes) || manifest.scenes.length !== 24 ||
       bank?.schema !== "cssmaze-prepared-bank@1" ||
-      bank.selection !== "startup-crypto-random-low-rotation-prepared-scene" ||
-      bank.ranking?.algorithm !== "lowest-turning-frame-ratio-then-quarter-turn-count" ||
+      bank.selection !== "startup-crypto-random-common-loop-low-consecutive-turn-prepared-scene" ||
+      bank.ranking?.algorithm !== "common-loop-orientation-then-lowest-maximum-consecutive-quarter-turns" ||
+      bank.ranking?.maximumConsecutiveQuarterTurnCount !== 2 ||
+      bank.ranking?.maximumLoopOrientationChangeDegrees !== 0 ||
+      bank.ranking?.requiredLoopOrientationDegrees !== 180 ||
+      bank.ranking?.loopTexturePhaseAligned !== true ||
       bank.ranking?.selectedSceneCount !== 24 || bank.ranking?.runtimeScoring !== false ||
       bank.runtimeSceneGeneration !== false || bank.runtimeGeometryConstruction !== false ||
       bank.runtimeRotationScoring !== false || bank.mountedSceneCount !== 1 ||
@@ -22,11 +26,27 @@ export async function loadPreparedManifest(route, fetchImpl = globalThis.fetch.b
       manifest.transport.selection !== "page-load-only" ||
       manifest.transport.runtimeArchiveDownload !== false ||
       manifest.transport.runtimeGeometryPayload !== false ||
+      !validSharedSnapshotAtlases(manifest.transport.sharedSnapshotAtlases) ||
       !Array.isArray(bank.sceneIds) || bank.sceneIds.length !== 24 ||
       !Array.isArray(bank.seeds) || bank.seeds.length !== 24 ||
       !Array.isArray(bank.rotationScores) || bank.rotationScores.length !== 24 ||
       manifest.scenes.some((entry, index) => entry?.id !== bank.sceneIds[index] ||
         entry?.nativeSeed !== bank.seeds[index] || entry?.rotationScore?.seed !== bank.seeds[index] ||
+        entry?.rotationScore?.schema !== "cssmaze-prepared-rotation-score@2" ||
+        !Number.isSafeInteger(entry?.rotationScore?.maximumConsecutiveQuarterTurnCount) ||
+        entry.rotationScore.maximumConsecutiveQuarterTurnCount < 0 ||
+        entry.rotationScore.maximumConsecutiveQuarterTurnCount >
+          bank.ranking.maximumConsecutiveQuarterTurnCount ||
+        !Number.isFinite(entry?.rotationScore?.loopOrientationChangeDegrees) ||
+        entry.rotationScore.loopOrientationChangeDegrees < 0 ||
+        entry.rotationScore.loopOrientationChangeDegrees >
+          bank.ranking.maximumLoopOrientationChangeDegrees ||
+        entry.rotationScore.loopOrientationQuarterTurnCount !== 0 ||
+        entry.rotationScore.loopOrientationDegrees !== bank.ranking.requiredLoopOrientationDegrees ||
+        !Number.isFinite(entry?.rotationScore?.longestTurningRunDegrees) ||
+        entry.rotationScore.longestTurningRunDegrees < 0 ||
+        !Number.isSafeInteger(entry?.rotationScore?.longestTurningRunFrameCount) ||
+        entry.rotationScore.longestTurningRunFrameCount < 0 ||
         !Number.isSafeInteger(entry?.rotationScore?.quarterTurnCount) ||
         !(entry?.rotationScore?.fullRotationEquivalentCount >= 0) ||
         !validPreparedUrl(entry.sceneUrl, ".json.gz") || entry.sceneEncoding !== "gzip" ||
@@ -120,4 +140,13 @@ async function fetchPrepared(fetchImpl, url, label) {
 function validPreparedUrl(url, suffix) {
   return typeof url === "string" && url.startsWith("/cssmaze/") &&
     url.endsWith(suffix) && !url.includes("..");
+}
+
+function validSharedSnapshotAtlases(atlases) {
+  return Array.isArray(atlases) && atlases.length === 2 &&
+    atlases.map((atlas) => atlas?.id).sort().join("\n") === "snapshot-atlas:surfaces\nsnapshot-atlas:walls" &&
+    atlases.every((atlas) => atlas.encoding === "identity" &&
+      validPreparedUrl(atlas.url, ".png") &&
+      Number.isSafeInteger(atlas.byteLength) && atlas.byteLength > 0 &&
+      /^[a-f0-9]{64}$/u.test(atlas.sha256));
 }

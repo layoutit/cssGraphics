@@ -1,4 +1,4 @@
-import { cp, mkdir } from "node:fs/promises";
+import { cp, mkdir, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
@@ -19,6 +19,7 @@ export default defineConfig({
     name: "cssmaze-netlify-assets",
     async closeBundle() {
       await mkdir(resolve(repositoryRoot, "dist/site"), { recursive: true });
+      await rm(resolve(repositoryRoot, "dist/site/cssmaze"), { recursive: true, force: true });
       await cp(
         resolve(generatedPublicDir, "cssmaze"),
         resolve(repositoryRoot, "dist/site/cssmaze"),

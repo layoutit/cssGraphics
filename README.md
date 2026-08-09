@@ -92,6 +92,8 @@ maze at a time and publishes prepared camera, wall-height, and visibility-delta
 rows over 171 stable polygon leaves; it performs no maze generation, route
 solving, geometry construction, camera math, visibility calculation, or DOM
 growth.
+The common surface and wall atlas pages are distributed once across all 24
+snapshots.
 
 ```sh
 pnpm prepare:maze:artifact

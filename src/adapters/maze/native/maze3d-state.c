@@ -18,9 +18,12 @@
  * special, indirect and consequential damages.
  */
 
+#include <errno.h>
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define LOGICAL_ROWS 12
 #define LOGICAL_COLUMNS 12
@@ -414,7 +417,110 @@ static char cell_character(unsigned char cell) {
   return '.';
 }
 
+static void initialize_seed(Maze *maze, long seed) {
+  *maze = (Maze){0};
+  srandom((unsigned)seed);
+  initialize_grid(maze);
+  build_maze(maze);
+  place_start_and_finish(maze);
+  maze->camera.state = STARTING;
+  maze->wall_height = 0;
+}
+
+static double wrapped_angular_delta(double current, double previous) {
+  double wrapped = fmod(current - previous + 540.0, 360.0);
+  if (wrapped < 0) wrapped += 360.0;
+  return wrapped - 180.0;
+}
+
+static int emit_rotation_summary(long seed) {
+  Maze maze;
+  initialize_seed(&maze, seed);
+  int frame_count = 0;
+  int complete = 0;
+  int turning_frame_count = 0;
+  int turn_event_count = 0;
+  int turning_run_frame_count = 0;
+  int longest_turning_run_frame_count = 0;
+  int was_turning = 0;
+  double total_angular_travel_degrees = 0;
+  double turning_run_degrees = 0;
+  double longest_turning_run_degrees = 0;
+  double initial_rotation_degrees = maze.camera.rotation;
+  double previous_rotation_degrees = maze.camera.rotation;
+  double final_rotation_degrees = maze.camera.rotation;
+
+  for (int tick = 0; tick < MAX_FRAMES; tick++) {
+    double rotation_degrees = maze.camera.rotation;
+    if (tick > 0) {
+      double delta = wrapped_angular_delta(rotation_degrees, previous_rotation_degrees);
+      int turning = fabs(delta) > 0.000001;
+      total_angular_travel_degrees += fabs(delta);
+      if (turning) {
+        turning_frame_count++;
+        turning_run_frame_count++;
+        turning_run_degrees += fabs(delta);
+        if (turning_run_frame_count > longest_turning_run_frame_count) {
+          longest_turning_run_frame_count = turning_run_frame_count;
+        }
+        if (turning_run_degrees > longest_turning_run_degrees) {
+          longest_turning_run_degrees = turning_run_degrees;
+        }
+      } else {
+        turning_run_frame_count = 0;
+        turning_run_degrees = 0;
+      }
+      if (turning && !was_turning) turn_event_count++;
+      was_turning = turning;
+    }
+    previous_rotation_degrees = rotation_degrees;
+    final_rotation_degrees = rotation_degrees;
+    frame_count++;
+    if (maze.camera.state == FINISHING && maze.wall_height <= 0) {
+      complete = 1;
+      break;
+    }
+    maze.camera.remaining_distance = SOURCE_SPEED * 1.6f *
+      (FRAME_DELAY_MICROSECONDS / 1000000.0f);
+    step_camera(&maze);
+  }
+
+  printf("{\"schema\":\"cssmaze-native-rotation-summary@1\",\"seed\":%ld,", seed);
+  printf("\"stateCount\":%d,\"frameDelayMicroseconds\":%d,", frame_count, FRAME_DELAY_MICROSECONDS);
+  printf("\"totalAngularTravelDegrees\":%.9g,\"turningFrameCount\":%d,", total_angular_travel_degrees, turning_frame_count);
+  printf("\"turnEventCount\":%d,\"longestTurningRunFrameCount\":%d,", turn_event_count, longest_turning_run_frame_count);
+  printf("\"longestTurningRunDegrees\":%.9g,", longest_turning_run_degrees);
+  printf("\"initialRotationDegrees\":%.9g,\"finalRotationDegrees\":%.9g,", initial_rotation_degrees, final_rotation_degrees);
+  printf("\"completeTraversal\":%s}", complete ? "true" : "false");
+  return complete;
+}
+
 int main(int argc, char **argv) {
+  if (argc == 4 && strcmp(argv[1], "--rotation-summary-range") == 0) {
+    char *start_end = NULL;
+    char *count_end = NULL;
+    errno = 0;
+    long seed_start = strtol(argv[2], &start_end, 10);
+    int start_errno = errno;
+    errno = 0;
+    long seed_count = strtol(argv[3], &count_end, 10);
+    int count_errno = errno;
+    if (!start_end || *start_end != '\0' || !count_end || *count_end != '\0' ||
+        start_errno == ERANGE || count_errno == ERANGE ||
+        seed_start <= 0 || seed_count <= 0 || seed_count > LONG_MAX - seed_start + 1) {
+      fprintf(stderr, "rotation summary range requires positive start and count\n");
+      return 2;
+    }
+    int complete = 1;
+    printf("{\"schema\":\"cssmaze-native-rotation-summary-range@1\",\"seedStart\":%ld,\"seedCount\":%ld,\"summaries\":[", seed_start, seed_count);
+    for (long offset = 0; offset < seed_count; offset++) {
+      if (offset) putchar(',');
+      if (!emit_rotation_summary(seed_start + offset)) complete = 0;
+    }
+    printf("]}\n");
+    return complete ? 0 : 3;
+  }
+
   long seed = 26080701;
   if (argc > 1) {
     char *end = NULL;
@@ -425,13 +531,8 @@ int main(int argc, char **argv) {
     }
   }
 
-  Maze maze = {0};
-  srandom((unsigned)seed);
-  initialize_grid(&maze);
-  build_maze(&maze);
-  place_start_and_finish(&maze);
-  maze.camera.state = STARTING;
-  maze.wall_height = 0;
+  Maze maze;
+  initialize_seed(&maze, seed);
 
   printf("{\"schema\":\"cssmaze-native-state@1\",\"seed\":%ld,", seed);
   printf("\"logicalRows\":%d,\"logicalColumns\":%d,", LOGICAL_ROWS, LOGICAL_COLUMNS);

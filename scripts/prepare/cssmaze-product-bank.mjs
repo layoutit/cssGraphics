@@ -16,7 +16,8 @@ if (lock.schema !== "cssmaze-prepared-bank-lock@1" ||
     lock.sceneCount !== 24 || lock.retainedWorldRootCount !== 1 ||
     lock.retainedWallRootCount !== 1 || lock.retainedSurfaceRootCount !== 1 ||
     lock.preparedLeavesPerScene !== 171 || lock.totalPreparedLeaves !== 4_104 ||
-    lock.textureCount !== 3) {
+    lock.textureCount !== 3 || lock.snapshotAtlasCount !== 2 ||
+    lock.snapshotAtlasBytes !== 233_713) {
   throw new Error("cssMaze prepared-bank lock does not bind the retained 24-maze product");
 }
 const generatedRoot = resolve(
@@ -111,7 +112,13 @@ function matchesArchiveLock(bytes) {
 }
 
 async function downloadReleaseArchive() {
-  const response = await fetch(lock.url, { redirect: "follow" });
-  if (!response.ok) throw new Error(`cssMaze product bank download failed: ${response.status}`);
-  return Buffer.from(await response.arrayBuffer());
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
+  try {
+    const response = await fetch(lock.url, { redirect: "follow", signal: controller.signal });
+    if (!response.ok) throw new Error(`cssMaze product bank download failed: ${response.status}`);
+    return Buffer.from(await response.arrayBuffer());
+  } finally {
+    clearTimeout(timeout);
+  }
 }

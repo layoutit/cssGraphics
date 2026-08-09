@@ -27,6 +27,37 @@ export async function captureNativeMazeState({ seed }) {
   });
 }
 
+export async function captureNativeMazeRotationSummaries({ seedStart, seedCount }) {
+  if (!Number.isSafeInteger(seedStart) || seedStart <= 0 ||
+      !Number.isSafeInteger(seedCount) || seedCount <= 0 ||
+      seedCount > Number.MAX_SAFE_INTEGER - seedStart + 1) {
+    throw new RangeError("Headless cssMaze rotation summary range requires positive safe integers");
+  }
+  const sourcePath = join(CSSMAZE_REPO_ROOT, "native/maze3d-state.c");
+  const { binaryPath } = await compileNativeMazeStateHelper(sourcePath);
+  const capture = spawnSync(binaryPath, ["--rotation-summary-range", String(seedStart), String(seedCount)], {
+    cwd: CSSMAZE_REPO_ROOT,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+    timeout: 300_000,
+  });
+  if (capture.status !== 0) {
+    throw new Error(`Headless cssMaze rotation summary failed:\n${capture.stderr || capture.stdout}`);
+  }
+  const result = JSON.parse(capture.stdout);
+  if (result?.schema !== "cssmaze-native-rotation-summary-range@1" ||
+      result.seedStart !== seedStart || result.seedCount !== seedCount ||
+      !Array.isArray(result.summaries) || result.summaries.length !== seedCount ||
+      result.summaries.some((summary, index) =>
+        summary?.schema !== "cssmaze-native-rotation-summary@1" ||
+        summary.seed !== seedStart + index || summary.completeTraversal !== true ||
+        !Number.isSafeInteger(summary.stateCount) || summary.stateCount < 100 ||
+        summary.frameDelayMicroseconds !== 20_000)) {
+    throw new Error("Headless cssMaze rotation summary failed its exact range contract");
+  }
+  return Object.freeze(result.summaries.map((summary) => Object.freeze(summary)));
+}
+
 async function compileNativeMazeStateHelper(sourcePath) {
   if (compiledHelper) return compiledHelper;
   const binaryDirectory = join(localBuildRoot(), "bin");

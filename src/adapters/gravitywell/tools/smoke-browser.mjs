@@ -96,9 +96,15 @@ try {
     const leaves = [...document.querySelectorAll(".polycss-morph-leaf")];
     const blockBoundary = debug.scene().playback.blockFrameCount;
     const targetFrame = blockBoundary + 7;
-    const styles = () => leaves.map((leaf) => `${leaf.style.transform}\n${leaf.style.color}`);
+    const styles = () => leaves.map((leaf) => ({
+      style: `${leaf.style.transform}\n${leaf.style.color}`,
+      visibility: leaf.style.visibility,
+    }));
     const compare = (left, right) => left.reduce(
-      (count, value, index) => count + Number(value !== right[index]),
+      (count, value, index) => count + Number(
+        value.visibility !== right[index].visibility ||
+        (value.visibility !== "hidden" && value.style !== right[index].style),
+      ),
       0,
     );
     await debug.seek(blockBoundary - 1);

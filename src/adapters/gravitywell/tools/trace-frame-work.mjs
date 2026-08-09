@@ -10,6 +10,11 @@ const routeUrl = new URL(process.env.CSSGRAVITYWELL_TRACE_URL ?? "http://127.0.0
 routeUrl.searchParams.set("bank", String(preparedWorstTransition.bankIndex));
 routeUrl.searchParams.set("cycle", "0");
 const route = routeUrl.href;
+const viewport = Object.freeze({
+  width: positiveIntegerEnvironment("CSSGRAVITYWELL_TRACE_WIDTH", 960),
+  height: positiveIntegerEnvironment("CSSGRAVITYWELL_TRACE_HEIGHT", 600),
+  deviceScaleFactor: positiveNumberEnvironment("CSSGRAVITYWELL_TRACE_DPR", 1),
+});
 const outputRoot = resolve(repositoryRoot, "bench/results/cssgravitywell/performance");
 const tracePath = resolve(outputRoot, "worst-frame-chrome-trace.json");
 const summaryPath = resolve(outputRoot, "worst-frame-summary.json");
@@ -17,7 +22,10 @@ await mkdir(outputRoot, { recursive: true });
 
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 try {
-  const context = await browser.newContext({ viewport: { width: 960, height: 600 }, deviceScaleFactor: 1 });
+  const context = await browser.newContext({
+    viewport: { width: viewport.width, height: viewport.height },
+    deviceScaleFactor: viewport.deviceScaleFactor,
+  });
   const page = await context.newPage();
   const cdp = await context.newCDPSession(page);
   const errors = [];
@@ -234,7 +242,7 @@ try {
     capturedAt: new Date().toISOString(),
     route,
     browser: { name: "Google Chrome", version: browser.version(), headless: true },
-    viewport: { width: 960, height: 600, deviceScaleFactor: 1 },
+    viewport,
     preparedWorstTransition,
     worstTransitionPublication,
     steadyStatePublication,
@@ -266,10 +274,14 @@ try {
       noRedundantColorAttempts:
         publication.delta.leafColorAttempts === publication.delta.leafColorWrites,
       noEmptySchedulerCallbacks: schedulerTrial.emptyCallbackCount === 0,
-      exactPreparedTransformSchedule:
-        worstTransitionPublication.actualTransformChanges === preparedWorstTransition.transformWrites,
-      exactPreparedColorSchedule:
-        worstTransitionPublication.actualColorChanges === preparedWorstTransition.colorWrites,
+      exactPreparedSelectedTransformPublication:
+        worstTransitionPublication.actualTransformChanges === worstTransitionPublication.samples[0].transformWrites,
+      exactPreparedSelectedColorPublication:
+        worstTransitionPublication.actualColorChanges === worstTransitionPublication.samples[0].colorWrites,
+      selectedTransformPublicationDoesNotExceedSourceSchedule:
+        worstTransitionPublication.actualTransformChanges <= preparedWorstTransition.transformWrites,
+      selectedColorPublicationDoesNotExceedSourceSchedule:
+        worstTransitionPublication.actualColorChanges <= preparedWorstTransition.colorWrites,
       noWorstTransitionBlockLoad: worstTransitionPublication.transformBlockLoads === 0,
       allRetainedLeavesKeepPreparedBackfaceVisibility:
         worstTransitionPublication.visibleBackfaceLeafCount === worstTransitionPublication.retainedLeafCount,
@@ -376,4 +388,16 @@ function summarizeCosts(events, windowStart = -Infinity, windowEnd = Infinity) {
     totals.set(event.name, row);
   }
   return [...totals.values()].sort((left, right) => right.totalDurationMilliseconds - left.totalDurationMilliseconds);
+}
+
+function positiveIntegerEnvironment(name, fallback) {
+  const value = Number(process.env[name] ?? fallback);
+  if (!Number.isSafeInteger(value) || value < 1) throw new TypeError(`${name} must be a positive integer`);
+  return value;
+}
+
+function positiveNumberEnvironment(name, fallback) {
+  const value = Number(process.env[name] ?? fallback);
+  if (!Number.isFinite(value) || value <= 0) throw new TypeError(`${name} must be positive`);
+  return value;
 }

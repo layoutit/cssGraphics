@@ -25,6 +25,9 @@ export function mountGravityWellClient(host) {
   installGravityWellDebugApi(state);
   window.addEventListener("error", (event) => recordError(event.message || String(event.error || "error")));
   window.addEventListener("unhandledrejection", (event) => recordError(String(event.reason?.stack || event.reason || "unhandled rejection")));
+  window.addEventListener("resize", () => {
+    state.player?.setViewportMaxAxis(Math.max(window.innerWidth, window.innerHeight));
+  }, { passive: true });
   main().catch((error) => recordError(error.stack || error.message || String(error)));
 
   async function main() {

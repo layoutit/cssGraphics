@@ -56,6 +56,8 @@ export async function inspectCssgravitywellProductBank(root, { verifyDescriptor 
   let transformEncodedBytes = 0;
   let colorAssetCount = 0;
   let changeAssetCount = 0;
+  let visibilityAssetCount = 0;
+  let visibilityEncodedBytes = 0;
   const jsonTexts = [catalogBytes, modelCatalogBytes, modelManifestBytes, modelBytes]
     .map((bytes) => bytes.toString("utf8"));
 
@@ -131,6 +133,20 @@ export async function inspectCssgravitywellProductBank(root, { verifyDescriptor 
       changes.decodedByteLength > 0,
     `bank ${bankIndex} changes`);
     changeAssetCount += 1;
+    const visibility = scene.playback.visibilityAsset;
+    assert(visibility?.schema === "cssgravitywell-prepared-viewport-visibility@1" &&
+      visibility.distribution === "embedded-prepared-bank-scene" &&
+      visibility.encoding === "gzip-cgwv1-square-profile-sparse-visibility-assignments" &&
+      visibility.selection === "smallest-square-profile-covering-maximum-css-viewport-axis-or-disabled" &&
+      visibility.frameCount === scene.playback.frameCount &&
+      visibility.leafCount === RETAINED_LEAF_COUNT &&
+      visibility.marginPixels === 8 && visibility.dilationFrames === 1 &&
+      JSON.stringify(visibility.profileSizes) === JSON.stringify([1024, 1536, 1920, 2560, 3840]) &&
+      visibility.profiles?.length === visibility.profileSizes.length,
+    `bank ${bankIndex} viewport visibility`);
+    verifyEmbeddedAsset(visibility, `bank ${bankIndex} viewport visibility`);
+    visibilityAssetCount += 1;
+    visibilityEncodedBytes += visibility.byteLength;
   }
 
   assert(!/(?:\/Users\/|\\Users\\|file:\/\/|\.local\/)/u.test(jsonTexts.join("\n")),
@@ -162,6 +178,8 @@ export async function inspectCssgravitywellProductBank(root, { verifyDescriptor 
     transformEncodedBytes,
     colorAssetCount,
     changeAssetCount,
+    visibilityAssetCount,
+    visibilityEncodedBytes,
     flatStateSha256: catalog.flatStateSha256,
   });
 
@@ -199,6 +217,7 @@ export async function writeCssgravitywellProductBankDescriptor(root, summary) {
       deployUnpacksStaticFiles: true,
       preparedTransformEncoding: "content-addressed-gzip-field-major-delta-varint-fixed2-matrix-color-and-index-schedules",
       preparedScheduleEncoding: "selected-bank-transform-block-zero-shared-gzip-container",
+      preparedVisibilityEncoding: "embedded-gzip-cgwv1-square-profile-sparse-visibility-assignments",
       preparedModelEncoding: "content-addressed-brotli-json-expanded-by-http-content-encoding",
       startupFetch: "selected-bank-first-next-bank-prefetch",
     },

@@ -1,0 +1,161 @@
+export const CSSGRAVITYWELL_VIEWPORT_PROFILE_SIZES = Object.freeze([1_024, 1_536, 1_920, 2_560, 3_840]);
+export const CSSGRAVITYWELL_VIEWPORT_MARGIN_PIXELS = 8;
+export const CSSGRAVITYWELL_VIEWPORT_DILATION_FRAMES = 1;
+export const CSSGRAVITYWELL_VISIBILITY_SCHEMA = "cssgravitywell-prepared-viewport-visibility@1";
+export const CSSGRAVITYWELL_VISIBILITY_ENCODING = "gzip-cgwv1-square-profile-sparse-visibility-assignments";
+
+const MAGIC = "CGWV";
+const HEADER_BYTES = 8;
+const PROFILE_HEADER_BYTES = 16;
+const PERSPECTIVE = 600 / (2 * Math.tan(20 * Math.PI / 180));
+
+export function prepareGravityWellViewportVisibility(quadsByFrame, {
+  profileSizes = CSSGRAVITYWELL_VIEWPORT_PROFILE_SIZES,
+  marginPixels = CSSGRAVITYWELL_VIEWPORT_MARGIN_PIXELS,
+  dilationFrames = CSSGRAVITYWELL_VIEWPORT_DILATION_FRAMES,
+} = {}) {
+  const frameCount = quadsByFrame?.length ?? 0;
+  const leafCount = quadsByFrame?.[0]?.length ?? 0;
+  if (!Array.isArray(quadsByFrame) || frameCount < 2 || leafCount < 1 ||
+      quadsByFrame.some((quads) => !Array.isArray(quads) || quads.length !== leafCount) ||
+      !Array.isArray(profileSizes) || profileSizes.length < 1 ||
+      profileSizes.some((size, index) => !Number.isSafeInteger(size) || size < 1 ||
+        (index > 0 && size <= profileSizes[index - 1])) ||
+      !Number.isSafeInteger(marginPixels) || marginPixels < 0 ||
+      !Number.isSafeInteger(dilationFrames) || dilationFrames < 0 || dilationFrames > 4) {
+    throw new TypeError("Complete prepared Gravity Well viewport visibility inputs are required");
+  }
+  const profiles = profileSizes.map((size) => {
+    const rawFrames = quadsByFrame.map((quads) => Uint8Array.from(
+      quads,
+      (quad) => preparedQuadIntersectsSquareViewport(quad, size, marginPixels) ? 1 : 0,
+    ));
+    const frames = rawFrames.map((frame, frameIndex) => Uint8Array.from(frame, (selected, leafIndex) => {
+      if (selected === 1 || dilationFrames === 0) return selected;
+      for (let offset = 1; offset <= dilationFrames; offset += 1) {
+        const previous = (frameIndex - offset + frameCount) % frameCount;
+        const next = (frameIndex + offset) % frameCount;
+        if (rawFrames[previous][leafIndex] === 1 || rawFrames[next][leafIndex] === 1) return 1;
+      }
+      return 0;
+    }));
+    const initialVisibleIndices = [];
+    for (let leafIndex = 0; leafIndex < leafCount; leafIndex += 1) {
+      if (frames[0][leafIndex] === 1) initialVisibleIndices.push(leafIndex);
+    }
+    const changeOffsets = new Uint32Array(frameCount + 1);
+    const assignments = [];
+    let totalVisibleCount = 0;
+    let minimumVisibleCount = leafCount;
+    let maximumVisibleCount = 0;
+    for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+      changeOffsets[frameIndex] = assignments.length;
+      let visibleCount = 0;
+      for (let leafIndex = 0; leafIndex < leafCount; leafIndex += 1) {
+        const selected = frames[frameIndex][leafIndex];
+        visibleCount += selected;
+        if (frameIndex > 0 && selected !== frames[frameIndex - 1][leafIndex]) {
+          assignments.push((leafIndex << 1) | selected);
+        }
+      }
+      totalVisibleCount += visibleCount;
+      minimumVisibleCount = Math.min(minimumVisibleCount, visibleCount);
+      maximumVisibleCount = Math.max(maximumVisibleCount, visibleCount);
+    }
+    changeOffsets[frameCount] = assignments.length;
+    return Object.freeze({
+      size,
+      frameCount,
+      leafCount,
+      initialVisibleIndices: Uint16Array.from(initialVisibleIndices),
+      changeOffsets,
+      assignments: Uint16Array.from(assignments),
+      meanVisibleCount: totalVisibleCount / frameCount,
+      minimumVisibleCount,
+      maximumVisibleCount,
+    });
+  });
+  return Object.freeze({
+    schema: CSSGRAVITYWELL_VISIBILITY_SCHEMA,
+    encoding: CSSGRAVITYWELL_VISIBILITY_ENCODING,
+    selection: "smallest-square-profile-covering-maximum-css-viewport-axis-or-disabled",
+    frameCount,
+    leafCount,
+    marginPixels,
+    dilationFrames,
+    profiles: Object.freeze(profiles),
+  });
+}
+
+export function encodeGravityWellViewportVisibility(schedule) {
+  if (schedule?.schema !== CSSGRAVITYWELL_VISIBILITY_SCHEMA ||
+      schedule.encoding !== CSSGRAVITYWELL_VISIBILITY_ENCODING ||
+      !Array.isArray(schedule.profiles) || schedule.profiles.length < 1 || schedule.profiles.length > 255) {
+    throw new TypeError("Prepared Gravity Well viewport visibility schedule is incomplete");
+  }
+  const byteLength = HEADER_BYTES + schedule.profiles.reduce((sum, profile) => sum +
+    PROFILE_HEADER_BYTES +
+    profile.initialVisibleIndices.byteLength +
+    profile.changeOffsets.byteLength +
+    profile.assignments.byteLength, 0);
+  const bytes = new Uint8Array(byteLength);
+  const view = new DataView(bytes.buffer);
+  for (let index = 0; index < MAGIC.length; index += 1) bytes[index] = MAGIC.charCodeAt(index);
+  bytes[4] = 1;
+  bytes[5] = schedule.profiles.length;
+  let offset = HEADER_BYTES;
+  for (const profile of schedule.profiles) {
+    view.setUint16(offset, profile.size, true);
+    view.setUint16(offset + 2, schedule.marginPixels, true);
+    bytes[offset + 4] = schedule.dilationFrames;
+    bytes[offset + 5] = 0;
+    view.setUint16(offset + 6, profile.frameCount, true);
+    view.setUint16(offset + 8, profile.leafCount, true);
+    view.setUint16(offset + 10, profile.initialVisibleIndices.length, true);
+    view.setUint32(offset + 12, profile.assignments.length, true);
+    offset += PROFILE_HEADER_BYTES;
+    offset = writeUint16Rows(bytes, offset, profile.initialVisibleIndices);
+    for (const value of profile.changeOffsets) {
+      view.setUint32(offset, value, true);
+      offset += Uint32Array.BYTES_PER_ELEMENT;
+    }
+    offset = writeUint16Rows(bytes, offset, profile.assignments);
+  }
+  if (offset !== bytes.byteLength) throw new Error("Prepared viewport visibility byte count drifted");
+  return bytes;
+}
+
+function preparedQuadIntersectsSquareViewport(quad, size, marginPixels) {
+  if (!Array.isArray(quad?.points) || quad.points.length !== 4) {
+    throw new TypeError("Prepared Gravity Well line quad is incomplete");
+  }
+  let minimumX = Infinity;
+  let maximumX = -Infinity;
+  let minimumY = Infinity;
+  let maximumY = -Infinity;
+  for (const point of quad.points) {
+    if (!Array.isArray(point) || point.length !== 3 || !point.every(Number.isFinite)) {
+      throw new TypeError("Prepared Gravity Well line quad is incomplete");
+    }
+    if (point[2] >= 0) return true;
+    const divisor = -point[2];
+    const x = PERSPECTIVE * point[0] / divisor;
+    const y = PERSPECTIVE * point[1] / divisor;
+    minimumX = Math.min(minimumX, x);
+    maximumX = Math.max(maximumX, x);
+    minimumY = Math.min(minimumY, y);
+    maximumY = Math.max(maximumY, y);
+  }
+  const halfExtent = size / 2 + marginPixels;
+  return maximumX >= -halfExtent && minimumX <= halfExtent &&
+    maximumY >= -halfExtent && minimumY <= halfExtent;
+}
+
+function writeUint16Rows(target, offset, values) {
+  const view = new DataView(target.buffer, target.byteOffset, target.byteLength);
+  for (const value of values) {
+    view.setUint16(offset, value, true);
+    offset += Uint16Array.BYTES_PER_ELEMENT;
+  }
+  return offset;
+}

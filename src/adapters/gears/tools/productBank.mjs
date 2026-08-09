@@ -57,6 +57,16 @@ export async function inspectCssgearsProductBank(root, { verifyDescriptor = true
       scene.showreel?.runtimeEasingCalculation === false &&
       scene.showreel?.runtimeEdgeSelection === false,
     `scene ${entry.id} showreel`);
+    assert(scene.showreel?.responsivePresentation?.schema === "cssgears-responsive-presentation@2" &&
+      scene.showreel.responsivePresentation.mobile?.scaleMode === "prepared-bounds-contain" &&
+      scene.showreel.responsivePresentation.mobile?.preparedBounds?.schema ===
+        "cssgears-prepared-projection-bounds@1" &&
+      scene.showreel.responsivePresentation.mobile.preparedBounds.geometry ===
+        "exact-captured-source-vertices-all-prepared-spin-states" &&
+      scene.showreel.responsivePresentation.mobile.preparedBounds.sourceStateCount === 500 &&
+      scene.showreel.responsivePresentation.runtimeOrientationCalculation === false &&
+      scene.showreel.responsivePresentation.runtimeGeometryBoundsCalculation === false,
+    `scene ${entry.id} responsive bounds`);
     assert(scene.renderer?.stableDom === true &&
       scene.renderer?.runtimeGeometryConstruction === false &&
       scene.renderer?.runtimeLightingCalculation === false &&

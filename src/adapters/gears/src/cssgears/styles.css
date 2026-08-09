@@ -146,7 +146,7 @@ body:not(.ready):not(.error)::after {
   top: 50% !important;
   width: 720px !important;
   height: 720px !important;
-  translate: -50% calc(-50% + var(--cssgears-presentation-y, 0px));
+  translate: calc(-50% + var(--cssgears-presentation-x, 0px)) calc(-50% + var(--cssgears-presentation-y, 0px));
   rotate: var(--cssgears-presentation-rotation, 0deg);
   scale: var(--cssgears-presentation-scale, 1);
   transform-origin: 50% 50%;

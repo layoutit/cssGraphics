@@ -15,6 +15,9 @@ const SHOWREEL_EDGE_DIRECTIONS = Object.freeze([
 const PRESENTATION_X_TILT_DEGREES = Object.freeze([16, 32]);
 const PRESENTATION_Y_TILT_DEGREES = Object.freeze([22, 38]);
 const MOBILE_BREAKPOINT_PIXELS = 600;
+const MOBILE_SAFE_INSET_PIXELS = 12;
+const MOBILE_VERTICAL_BIAS_VIEWPORT_FRACTION = -0.06;
+const PREPARED_PROJECTION_PADDING_PIXELS = 4;
 
 export function buildSourceBoundSceneProfile(nativeCapture) {
   const nativeState = nativeCapture?.state ?? nativeCapture;
@@ -213,12 +216,18 @@ export function buildPreparedPlayback(assembly, sourceProfile) {
   });
 }
 
-export function buildPreparedShowreel(playback, assembly, sourceProfile) {
+export function buildPreparedShowreel(playback, assembly, sourceProfile, geometryMeshes = null) {
   if (playback?.schema !== "cssgears-prepared-playback@3" || playback.retainedGearRootCount !== 3) {
     throw new TypeError("Prepared cssGears source playback is required for the showreel");
   }
   const edgeSelection = prepareShowreelEdgeSelection(assembly, sourceProfile);
-  const responsivePresentation = prepareResponsivePresentation(edgeSelection);
+  const responsivePresentation = prepareResponsivePresentation(
+    edgeSelection,
+    playback,
+    assembly,
+    sourceProfile,
+    geometryMeshes,
+  );
   const entryOffsets = edgeSelection.offsets;
   const exitOffsets = edgeSelection.offsets;
   const stateCount = SHOWREEL_ENTRY_STATE_COUNT + SHOWREEL_SPIN_STATE_COUNT + SHOWREEL_EXIT_STATE_COUNT;
@@ -295,27 +304,147 @@ export function buildPreparedShowreel(playback, assembly, sourceProfile) {
   });
 }
 
-function prepareResponsivePresentation(edgeSelection) {
+function prepareResponsivePresentation(edgeSelection, playback, assembly, sourceProfile, geometryMeshes) {
   const xs = edgeSelection.projectedCenters.map(([x]) => x);
   const ys = edgeSelection.projectedCenters.map(([, y]) => y);
   const width = Math.max(...xs) - Math.min(...xs);
   const height = Math.max(...ys) - Math.min(...ys);
   const quarterTurns = width >= height ? 1 : 0;
+  const spinBounds = prepareSpinProjectionBounds(playback, assembly, sourceProfile, geometryMeshes);
+  const mobileBounds = rotateProjectionBounds(spinBounds, quarterTurns);
   return deepFreeze({
-    schema: "cssgears-responsive-presentation@1",
-    selection: "under-600px-selects-prepared-portrait-orientation",
+    schema: "cssgears-responsive-presentation@2",
+    selection: "under-600px-selects-prepared-portrait-orientation-and-bounded-fit",
     breakpointPixels: MOBILE_BREAKPOINT_PIXELS,
     desktop: { id: "desktop", quarterTurns: 0, rotationDegrees: 0, scaleMode: "contain" },
     mobile: {
       id: "mobile",
       quarterTurns,
       rotationDegrees: quarterTurns * 90,
-      scaleMode: "cover",
+      scaleMode: "prepared-bounds-contain",
       preparedProjectedCenterWidth: width,
       preparedProjectedCenterHeight: height,
+      preparedBounds: mobileBounds,
+      safeInsetPixels: MOBILE_SAFE_INSET_PIXELS,
+      verticalBiasViewportFraction: MOBILE_VERTICAL_BIAS_VIEWPORT_FRACTION,
     },
     runtimeOrientationCalculation: false,
+    runtimeGeometryBoundsCalculation: false,
   });
+}
+
+function prepareSpinProjectionBounds(playback, assembly, sourceProfile, geometryMeshes) {
+  const meshPoints = prepareGearGeometryPoints(assembly, geometryMeshes);
+  const bounds = emptyBounds();
+  for (let stateIndex = 0; stateIndex < SHOWREEL_SPIN_STATE_COUNT; stateIndex += 1) {
+    for (let gearIndex = 0; gearIndex < assembly.gears.length; gearIndex += 1) {
+      const transform = playback.transforms[stateIndex * assembly.gears.length + gearIndex];
+      const theta = preparedTransformTheta(transform);
+      const gear = assembly.gears[gearIndex];
+      for (const localPoint of meshPoints[gearIndex]) {
+        let point = rotateZ(localPoint, theta);
+        const position = sourcePositionToPolyCss(gear, assembly);
+        point = [point[0] + position[0], point[1] + position[1], point[2] + position[2]];
+        const projected = projectPreparedPoint(point, sourceProfile, assembly);
+        includePoint(bounds, projected.x, projected.y);
+      }
+    }
+  }
+  return finalizeBounds(bounds, {
+    paddingPixels: PREPARED_PROJECTION_PADDING_PIXELS,
+    sourceStateCount: SHOWREEL_SPIN_STATE_COUNT,
+    geometry: geometryMeshes
+      ? "exact-captured-source-vertices-all-prepared-spin-states"
+      : "source-parameter-envelope-all-prepared-spin-states",
+  });
+}
+
+function prepareGearGeometryPoints(assembly, geometryMeshes) {
+  if (Array.isArray(geometryMeshes) && geometryMeshes.length === assembly.gears.length) {
+    return geometryMeshes.map((mesh, gearIndex) => {
+      if (mesh?.gearIndex !== gearIndex || !Array.isArray(mesh.polygons)) {
+        throw new TypeError("Ordered captured cssGears geometry is required for prepared responsive bounds");
+      }
+      const points = new Map();
+      for (const polygon of mesh.polygons) {
+        for (const vertex of polygon.vertices) {
+          const point = vertex.map((value) => value * POLYCSS_SOURCE_UNIT_PIXELS);
+          points.set(point.map(number).join(","), point);
+        }
+      }
+      if (points.size === 0) throw new Error(`Gear ${gearIndex} has no captured responsive-bound vertices`);
+      return [...points.values()];
+    });
+  }
+  return assembly.gears.map((gear) => {
+    const scale = assembly.sourceFitScale * POLYCSS_SOURCE_UNIT_PIXELS;
+    const radialScale = 1 + Math.max(gear.thickness, gear.thickness2, gear.thickness3) *
+      Math.abs(gear.toothSlope) / 2;
+    const radius = (gear.radius + gear.toothH) * radialScale * scale;
+    const halfDepth = Math.max(gear.thickness, gear.thickness2, gear.thickness3) * scale / 2;
+    const points = [];
+    for (const z of [-halfDepth, halfDepth]) {
+      for (let step = 0; step < 64; step += 1) {
+        const radians = step * Math.PI * 2 / 64;
+        points.push([Math.cos(radians) * radius, -Math.sin(radians) * radius, z]);
+      }
+    }
+    return points;
+  });
+}
+
+function rotateProjectionBounds(bounds, quarterTurns) {
+  if (quarterTurns === 0) return bounds;
+  if (quarterTurns !== 1) throw new RangeError(`Unsupported prepared quarter-turn count ${quarterTurns}`);
+  return deepFreeze({
+    ...bounds,
+    minX: -bounds.maxY,
+    minY: bounds.minX,
+    maxX: -bounds.minY,
+    maxY: bounds.maxX,
+    width: bounds.height,
+    height: bounds.width,
+  });
+}
+
+function emptyBounds() {
+  return { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+}
+
+function includePoint(bounds, x, y) {
+  bounds.minX = Math.min(bounds.minX, x);
+  bounds.minY = Math.min(bounds.minY, y);
+  bounds.maxX = Math.max(bounds.maxX, x);
+  bounds.maxY = Math.max(bounds.maxY, y);
+}
+
+function finalizeBounds(bounds, metadata) {
+  if (![bounds.minX, bounds.minY, bounds.maxX, bounds.maxY].every(Number.isFinite)) {
+    throw new Error("Prepared cssGears responsive projection bounds are empty");
+  }
+  const padding = metadata.paddingPixels;
+  const minX = bounds.minX - padding;
+  const minY = bounds.minY - padding;
+  const maxX = bounds.maxX + padding;
+  const maxY = bounds.maxY + padding;
+  return deepFreeze({
+    schema: "cssgears-prepared-projection-bounds@1",
+    minX,
+    minY,
+    maxX,
+    maxY,
+    width: maxX - minX,
+    height: maxY - minY,
+    paddingPixels: padding,
+    sourceStateCount: metadata.sourceStateCount,
+    geometry: metadata.geometry,
+  });
+}
+
+function preparedTransformTheta(transform) {
+  const match = /rotateZ\(([-+0-9.eE]+)deg\)$/u.exec(transform);
+  if (!match) throw new Error(`Prepared cssGears transform has no terminal gear angle: ${transform}`);
+  return Number(match[1]);
 }
 
 export function sourceVertexToPolyCss(vertex, assembly) {
@@ -457,8 +586,12 @@ function prepareShowreelEdgeSelection(assembly, sourceProfile) {
 }
 
 function projectPreparedGearCenter(gear, assembly, sourceProfile) {
+  return projectPreparedPoint(sourcePositionToPolyCss(gear, assembly), sourceProfile, assembly);
+}
+
+function projectPreparedPoint(inputPoint, sourceProfile, assembly) {
   const [rx, ry, rz] = sourceProfile.presentation.rotationDegrees;
-  let point = sourcePositionToPolyCss(gear, assembly);
+  let point = inputPoint;
   point = rotateZ(point, -rz);
   point = rotateY(point, ry);
   point = rotateX(point, -rx);

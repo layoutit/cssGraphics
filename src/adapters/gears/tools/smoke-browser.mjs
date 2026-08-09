@@ -4,6 +4,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { chromium } from "playwright";
+import { PNG } from "pngjs";
 import { adapterRoot, repositoryRoot } from "../src/prepare/cssgears/paths.mjs";
 
 const requireReady = process.argv.includes("--require-ready");
@@ -110,11 +111,15 @@ try {
     }));
     await page.setViewportSize({ width: 390, height: 844 });
     await page.evaluate(() => new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame))));
-    const mobile = await page.evaluate(() => ({
-      stats: window.__cssGearsDebug.stats(),
-      sceneId: window.__cssGearsDebug.scene.id,
-      responsivePresentation: window.__cssGearsDebug.scene.showreel.responsivePresentation,
-    }));
+    const mobilePaintBounds = await captureMobilePaintBounds(page);
+    const mobile = {
+      ...await page.evaluate(() => ({
+        stats: window.__cssGearsDebug.stats(),
+        sceneId: window.__cssGearsDebug.scene.id,
+        responsivePresentation: window.__cssGearsDebug.scene.showreel.responsivePresentation,
+      })),
+      paintBounds: mobilePaintBounds,
+    };
     await page.screenshot({ path: mobileScreenshotPath });
     const state = { ...browserState, segment };
     await writeFile(statePath, JSON.stringify({
@@ -180,9 +185,12 @@ try {
       throw new Error("Prepared cssGears showreel did not enter, lock, spin, exit, and switch banks.");
     }
     if (state.status === "ready" && (
-      mobile.sceneId !== state.scene.id || mobile.stats?.profile !== "mobile" ||
+      mobile.stats?.profile !== "mobile" ||
       mobile.stats?.rotationDegrees !== mobile.responsivePresentation?.mobile?.rotationDegrees ||
-      mobile.stats?.scale <= 1 || mobile.stats?.runtimeOrientationCalculationCount !== 0
+      mobile.stats?.scale <= 0 || mobile.stats?.runtimeOrientationCalculationCount !== 0 ||
+      mobile.stats?.runtimeGeometryBoundsCalculationCount !== 0 ||
+      mobile.paintBounds?.length !== 24 || new Set(mobile.paintBounds.map(({ id }) => id)).size !== 24 ||
+      mobile.paintBounds.some(({ id, clipped }) => clipped || !state.bank.sceneIds.includes(id))
     )) {
       throw new Error("Prepared cssGears mobile portrait presentation regressed: " + JSON.stringify(mobile));
     }
@@ -196,6 +204,70 @@ try {
   }
 } finally {
   server.kill("SIGTERM");
+}
+
+async function captureMobilePaintBounds(page) {
+  const viewport = page.viewportSize();
+  await page.evaluate(() => {
+    window.__cssGearsDebug.pause();
+    document.querySelectorAll("#scene .g").forEach((root) => { root.style.visibility = "hidden"; });
+  });
+  const background = PNG.sync.read(await page.screenshot());
+  await page.evaluate(() => {
+    document.querySelectorAll("#scene .g").forEach((root) => { root.style.removeProperty("visibility"); });
+  });
+  const rows = [];
+  const seenSceneIds = new Set();
+  let transitionCount = 0;
+  while (rows.length < 24 && transitionCount < 48) {
+    const scene = await page.evaluate(() => ({
+      id: window.__cssGearsDebug.scene.id,
+      safeInsetPixels: window.__cssGearsDebug.scene.showreel.responsivePresentation.mobile.safeInsetPixels,
+    }));
+    if (!seenSceneIds.has(scene.id)) {
+      seenSceneIds.add(scene.id);
+      const bounds = { minX: Infinity, minY: Infinity, maxX: -1, maxY: -1 };
+      for (const tick of [39, 40, 140, 240, 340, 440, 539]) {
+        await page.evaluate((preparedTick) => window.__cssGearsDebug.setTick(preparedTick), tick);
+        includePaintedPixels(bounds, PNG.sync.read(await page.screenshot()), background);
+      }
+      const inset = scene.safeInsetPixels;
+      rows.push({
+        ...scene,
+        bounds,
+        clipped: bounds.minX < inset || bounds.minY < inset ||
+          bounds.maxX > viewport.width - 1 - inset || bounds.maxY > viewport.height - 1 - inset,
+      });
+    }
+    await page.evaluate(() => {
+      window.__cssGearsDebug.setTick(579);
+      window.__cssGearsDebug.step(1);
+    });
+    transitionCount += 1;
+  }
+  await page.evaluate(() => window.__cssGearsDebug.setTick(39));
+  return rows;
+}
+
+function includePaintedPixels(bounds, frame, background) {
+  if (frame.width !== background.width || frame.height !== background.height) {
+    throw new Error("cssGears mobile paint oracle dimensions drifted");
+  }
+  for (let y = 0; y < frame.height; y += 1) {
+    for (let x = 0; x < frame.width; x += 1) {
+      const offset = (y * frame.width + x) * 4;
+      const difference = Math.max(
+        Math.abs(frame.data[offset] - background.data[offset]),
+        Math.abs(frame.data[offset + 1] - background.data[offset + 1]),
+        Math.abs(frame.data[offset + 2] - background.data[offset + 2]),
+      );
+      if (difference <= 4) continue;
+      bounds.minX = Math.min(bounds.minX, x);
+      bounds.minY = Math.min(bounds.minY, y);
+      bounds.maxX = Math.max(bounds.maxX, x);
+      bounds.maxY = Math.max(bounds.maxY, y);
+    }
+  }
 }
 
 async function freePort() {

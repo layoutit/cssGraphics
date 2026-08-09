@@ -31,6 +31,37 @@ try {
   });
   const browser = await chromium.launch({ channel: "chrome", headless: true });
   try {
+    const startupPage = await browser.newPage({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 });
+    await startupPage.addInitScript(() => {
+      const requestFrame = globalThis.requestAnimationFrame.bind(globalThis);
+      let droppedBeforeDomReady = 0;
+      globalThis.requestAnimationFrame = (callback) => {
+        if (document.readyState === "loading") {
+          droppedBeforeDomReady += 1;
+          return 2147483646;
+        }
+        return requestFrame(callback);
+      };
+      globalThis.__cssGearsDroppedStartupFrames = () => droppedBeforeDomReady;
+    });
+    await startupPage.goto("http://127.0.0.1:" + port + "/", { waitUntil: "networkidle" });
+    await startupPage.waitForFunction(
+      () => document.body.classList.contains("error") || window.__cssGearsDebug?.ready,
+      null,
+      { timeout: 30_000 },
+    );
+    const startupTick = await startupPage.evaluate(() => window.__cssGearsDebug.stats().globalTick);
+    await startupPage.waitForTimeout(250);
+    const startup = await startupPage.evaluate((initialTick) => ({
+      droppedBeforeDomReady: window.__cssGearsDroppedStartupFrames(),
+      initialTick,
+      finalTick: window.__cssGearsDebug.stats().globalTick,
+      paused: window.__cssGearsDebug.stats().paused,
+    }), startupTick);
+    await startupPage.close();
+    if (startup.droppedBeforeDomReady !== 0 || startup.paused || startup.finalTick <= startup.initialTick) {
+      throw new Error("cssGears reload startup depends on a pre-DOM-ready animation frame: " + JSON.stringify(startup));
+    }
     const page = await browser.newPage({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 });
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
@@ -198,7 +229,7 @@ try {
     if (state.status === "error" && !/Run pnpm prepare:cssgears first/.test(state.message)) {
       throw new Error("Unexpected browser error: " + JSON.stringify({ state, pageErrors }));
     }
-    console.log(JSON.stringify({ ...state, mobile, smokeDir, screenshotPath, mobileScreenshotPath, statePath }, null, 2));
+    console.log(JSON.stringify({ ...state, startup, mobile, smokeDir, screenshotPath, mobileScreenshotPath, statePath }, null, 2));
   } finally {
     await browser.close();
   }

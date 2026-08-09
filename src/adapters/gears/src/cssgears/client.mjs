@@ -143,7 +143,7 @@ export function mountCssgearsClient() {
       },
     });
     setBodyState("ready");
-    requestAnimationFrame(() => player.resume());
+    player.resume();
     const unloadedIndices = entries.map((_, index) => index)
       .filter((index) => index !== selection.bankIndex);
     if (unloadedIndices.length === 0) {

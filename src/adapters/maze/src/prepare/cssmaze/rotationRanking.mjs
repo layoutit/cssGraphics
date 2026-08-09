@@ -18,6 +18,7 @@ export function scoreNativeCameraRotation(state) {
   }
   const stateCount = state.frames.length;
   const durationMilliseconds = stateCount * (state.frameDelayMicroseconds / 1000);
+  const quarterTurnCount = Math.round(totalAngularTravelDegrees / 90);
   return Object.freeze({
     schema: "cssmaze-prepared-rotation-score@1",
     seed: state.seed,
@@ -27,6 +28,8 @@ export function scoreNativeCameraRotation(state) {
     turningFrameCount,
     turningFrameRatio: rounded(turningFrameCount / stateCount),
     turnEventCount,
+    quarterTurnCount,
+    fullRotationEquivalentCount: rounded(quarterTurnCount / 4),
     angularDegreesPerSecond: rounded(totalAngularTravelDegrees / (durationMilliseconds / 1000)),
     runtimeScoring: false,
   });
@@ -34,6 +37,7 @@ export function scoreNativeCameraRotation(state) {
 
 export function compareRotationScores(left, right) {
   return left.turningFrameRatio - right.turningFrameRatio ||
+    left.quarterTurnCount - right.quarterTurnCount ||
     left.angularDegreesPerSecond - right.angularDegreesPerSecond ||
     left.totalAngularTravelDegrees - right.totalAngularTravelDegrees ||
     left.seed - right.seed;

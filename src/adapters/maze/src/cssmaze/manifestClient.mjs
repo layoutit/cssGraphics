@@ -12,7 +12,7 @@ export async function loadPreparedManifest(route, fetchImpl = globalThis.fetch.b
       !Array.isArray(manifest.scenes) || manifest.scenes.length !== 24 ||
       bank?.schema !== "cssmaze-prepared-bank@1" ||
       bank.selection !== "startup-crypto-random-low-rotation-prepared-scene" ||
-      bank.ranking?.algorithm !== "lowest-turning-frame-ratio-then-angular-rate" ||
+      bank.ranking?.algorithm !== "lowest-turning-frame-ratio-then-quarter-turn-count" ||
       bank.ranking?.selectedSceneCount !== 24 || bank.ranking?.runtimeScoring !== false ||
       bank.runtimeSceneGeneration !== false || bank.runtimeGeometryConstruction !== false ||
       bank.runtimeRotationScoring !== false || bank.mountedSceneCount !== 1 ||
@@ -27,6 +27,8 @@ export async function loadPreparedManifest(route, fetchImpl = globalThis.fetch.b
       !Array.isArray(bank.rotationScores) || bank.rotationScores.length !== 24 ||
       manifest.scenes.some((entry, index) => entry?.id !== bank.sceneIds[index] ||
         entry?.nativeSeed !== bank.seeds[index] || entry?.rotationScore?.seed !== bank.seeds[index] ||
+        !Number.isSafeInteger(entry?.rotationScore?.quarterTurnCount) ||
+        !(entry?.rotationScore?.fullRotationEquivalentCount >= 0) ||
         !validPreparedUrl(entry.sceneUrl, ".json.gz") || entry.sceneEncoding !== "gzip" ||
         !validPreparedUrl(entry.snapshotUrl, ".html.gz") || entry.snapshotEncoding !== "gzip")) {
     throw new Error("Generated cssMaze manifest is invalid. Run pnpm prepare:cssmaze.");

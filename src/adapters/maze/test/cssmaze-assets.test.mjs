@@ -23,8 +23,8 @@ test("generated manifest exposes 24 source-backed low-rotation prepared scenes",
   assert.equal(manifest.preparedBank.sceneIds.length, 24);
   assert.deepEqual(manifest.scenes.map((entry) => entry.id), manifest.preparedBank.sceneIds);
   assert.deepEqual(manifest.scenes.map((entry) => entry.nativeSeed), manifest.preparedBank.seeds);
-  assert.equal(manifest.preparedBank.ranking.algorithm, "lowest-turning-frame-ratio-then-angular-rate");
-  assert.equal(manifest.preparedBank.ranking.candidateSeedCount, 512);
+  assert.equal(manifest.preparedBank.ranking.algorithm, "lowest-turning-frame-ratio-then-quarter-turn-count");
+  assert.equal(manifest.preparedBank.ranking.candidateSeedCount, 4096);
   assert.equal(manifest.preparedBank.ranking.minimumStateCount, 600);
   assert.equal(manifest.preparedBank.ranking.runtimeScoring, false);
   assert.equal(manifest.preparedBank.runtimeSceneGeneration, false);
@@ -146,7 +146,7 @@ test("prepared wall atlas preserves source texture brightness", async () => {
 test("product runtime CSS stays on the fast browser path", async () => {
   const css = await readFile(join(root, "src/cssmaze/styles.css"), "utf8");
   const shellGradient = "linear-gradient(180deg, #0b1119 0%, #000 100%)";
-  assert.equal(css.split(shellGradient).length - 1, 2);
+  assert.equal(css.split(shellGradient).length - 1, 3);
   assert.doesNotMatch(css.replaceAll(shellGradient, "none"), /(?:clip-path|mask(?:-image)?|backdrop-filter|box-shadow|text-shadow|(?:linear|radial|conic)-gradient|mix-blend-mode|background-blend-mode)\s*:/iu);
 });
 

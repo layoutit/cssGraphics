@@ -1,4 +1,4 @@
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import {
   generatedProductRoot,
@@ -17,6 +17,7 @@ export async function writeCssmazePreparedOutput({ scenes, defaultSceneId = "def
       preparedBank.rotationScores?.length !== scenes.length) {
     throw new Error("cssMaze preparation requires a complete prepared scene bank");
   }
+  await rm(dirname(generatedScenePath(scenes[0].id)), { recursive: true, force: true });
   await mkdir(generatedProductRoot(), { recursive: true });
   for (const scene of scenes) await writeJsonAtomic(generatedScenePath(scene.id), scene);
   const scene = scenes.find((candidate) => candidate.id === defaultSceneId);

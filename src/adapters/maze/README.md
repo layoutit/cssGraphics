@@ -1,9 +1,10 @@
 # cssMaze
 
 A source-backed retained-DOM PolyCSS port of the pinned XScreenSaver
-`maze3d` implementation. Preparation ranks 512 deterministic candidate seeds by
-source-camera rotation and emits the 24 lowest-rotation eligible mazes. Refresh
-selects one prepared entry. There is no product scene-change control.
+`maze3d` implementation. Preparation ranks 4096 deterministic candidate seeds by
+turning-frame ratio and then absolute quarter-turn count, and emits the 24
+lowest-rotation eligible mazes. Refresh selects one prepared entry. There is no
+product scene-change control.
 
 The css.graphics shell is mounted at `/maze/`. The product contains one stable
 world root, wall root, surface root, and 171 retained polygon leaves. Startup

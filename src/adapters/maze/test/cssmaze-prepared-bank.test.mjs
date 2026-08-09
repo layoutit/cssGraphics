@@ -19,6 +19,21 @@ test("rotation ranking favors traces that spend less time turning", () => {
   assert.equal(lowRotation.runtimeScoring, false);
 });
 
+test("rotation ranking breaks equal turning ratios with fewer quarter turns", () => {
+  const oneQuarterTurn = scoreNativeCameraRotation(fixtureTrace(103, [0, 0, 90, 90]));
+  const twoQuarterTurns = scoreNativeCameraRotation(fixtureTrace(104, [0, 0, 180, 180]));
+  assert.equal(oneQuarterTurn.turningFrameRatio, twoQuarterTurns.turningFrameRatio);
+  assert.ok(compareRotationScores(oneQuarterTurn, twoQuarterTurns) < 0);
+});
+
+test("rotation scoring counts quarter-turn and full-rotation equivalents at preparation", () => {
+  const score = scoreNativeCameraRotation(fixtureTrace(105, [0, 90, 180, 270, 0]));
+  assert.equal(score.quarterTurnCount, 4);
+  assert.equal(score.fullRotationEquivalentCount, 1);
+  assert.equal(score.turnEventCount, 1);
+  assert.equal(score.runtimeScoring, false);
+});
+
 function fixtureManifest() {
   const scenes = ["scene-a", "scene-b", "scene-c"].map((id) => ({ id }));
   return {

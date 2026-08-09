@@ -20,8 +20,8 @@ test("css.graphics/maze uses the shipped cssGraphics product shell", () => {
   assert.match(css, /\.site-action-icon \{/u);
   assert.equal(
     (css.match(/background: linear-gradient\(180deg, #0b1119 0%, #000 100%\);/gu) ?? []).length,
-    2,
+    3,
   );
-  assert.match(css, /\.site-header \{[\s\S]*background: #0b1119;/u);
+  assert.match(css, /\.site-header \{[^}]*background: linear-gradient\(180deg, #0b1119 0%, #000 100%\);[^}]*background-size: 100% 100vh;/u);
   assert.doesNotMatch(css, /@keyframes|will-change/u);
 });

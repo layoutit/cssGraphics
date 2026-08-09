@@ -19,8 +19,8 @@ source closure is separately identified, lawfully held, and qualified.
 
 The first product prepares a 24-scene seed bank from a byte-verified checkout.
 A headless C extraction of the pinned generation and camera routines emits exact
-state, preparation ranks 512 deterministic candidate seeds by lowest turning-
-frame ratio and then angular rate, and the browser adopts one stable snapshot at
+state, preparation ranks 4096 deterministic candidate seeds by lowest turning-
+frame ratio and then absolute quarter-turn count, and the browser adopts one stable snapshot at
 a time. Candidates shorter than 600 states are excluded. This does not qualify
 the full native build or pixel parity.
 The generated product transport is a selected-first gzip manifest. Each public

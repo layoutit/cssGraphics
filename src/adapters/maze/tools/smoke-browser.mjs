@@ -71,7 +71,7 @@ const result = await withCssmazeBrowser(async ({ page }) => {
       statusScaffolding: document.querySelectorAll("#app, #status, nav, section, output").length,
       rootBackground: getComputedStyle(document.documentElement).backgroundImage,
       sceneBackground: getComputedStyle(document.getElementById("scene")).backgroundImage,
-      headerBackground: getComputedStyle(document.querySelector(".site-header")).backgroundColor,
+      headerBackground: getComputedStyle(document.querySelector(".site-header")).backgroundImage,
     },
   }));
   if (!evidence.stable || evidence.forbiddenElements !== 0 ||
@@ -98,7 +98,7 @@ const result = await withCssmazeBrowser(async ({ page }) => {
       evidence.shell.changeControlCount !== 0 || evidence.shell.statusScaffolding !== 0 ||
       !evidence.shell.rootBackground.startsWith("linear-gradient(rgb(11, 17, 25)") ||
       !evidence.shell.sceneBackground.startsWith("linear-gradient(rgb(11, 17, 25)") ||
-      evidence.shell.headerBackground !== "rgb(11, 17, 25)" ||
+      !evidence.shell.headerBackground.startsWith("linear-gradient(rgb(11, 17, 25)") ||
       evidence.cameraRect.left > 0 || evidence.cameraRect.top > 0 ||
       evidence.cameraRect.right < evidence.viewport.width ||
       evidence.cameraRect.bottom < evidence.viewport.height ||

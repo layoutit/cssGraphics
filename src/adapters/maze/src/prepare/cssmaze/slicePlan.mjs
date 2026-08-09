@@ -1,7 +1,7 @@
 export const CSSMAZE_SCENE_ID = "default-maze";
 export const CSSMAZE_SEED = 26080701;
 export const CSSMAZE_PREPARED_BANK_COUNT = 24;
-export const CSSMAZE_CANDIDATE_SEED_COUNT = 512;
+export const CSSMAZE_CANDIDATE_SEED_COUNT = 4096;
 export const CSSMAZE_MINIMUM_BANK_STATE_COUNT = 600;
 
 export const cssmazeSlicePlan = Object.freeze({

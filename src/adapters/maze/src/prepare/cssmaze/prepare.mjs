@@ -69,7 +69,7 @@ function buildPreparedBank(scenes, ranked) {
     schema: "cssmaze-prepared-bank@1",
     selection: "startup-crypto-random-low-rotation-prepared-scene",
     ranking: Object.freeze({
-      algorithm: "lowest-turning-frame-ratio-then-angular-rate",
+      algorithm: "lowest-turning-frame-ratio-then-quarter-turn-count",
       candidateSeedStart: CSSMAZE_SEED,
       candidateSeedCount: CSSMAZE_CANDIDATE_SEED_COUNT,
       minimumStateCount: CSSMAZE_MINIMUM_BANK_STATE_COUNT,

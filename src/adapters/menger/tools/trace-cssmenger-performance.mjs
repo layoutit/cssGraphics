@@ -111,7 +111,7 @@ try {
       firstPaintMilliseconds: paints["first-paint"] ?? null,
       firstContentfulPaintMilliseconds: paints["first-contentful-paint"] ?? null,
       domElementCount: document.querySelectorAll("*").length,
-      retainedLeafCount: document.querySelectorAll(".cssmenger-model b, .cssmenger-model i, .cssmenger-model s, .cssmenger-model u").length,
+      retainedLeafCount: document.querySelectorAll(".polycss-camera > .polycss-scene > b, .polycss-camera > .polycss-scene > i, .polycss-camera > .polycss-scene > s").length,
       transfer: performance.getEntriesByType("resource").map((entry) => ({
         name: new URL(entry.name).pathname,
         durationMilliseconds: entry.duration,

@@ -37,47 +37,54 @@ try {
     await page.waitForTimeout(250);
     const evidence = await page.evaluate(() => {
       const debug = window.__cssMengerDebug;
-      const leaves = [...document.querySelectorAll(".cssmenger-model b, .cssmenger-model i, .cssmenger-model s, .cssmenger-model u")];
+      const scene = document.querySelector(".polycss-camera > .polycss-scene");
+      const leaves = [...document.querySelectorAll(".polycss-camera > .polycss-scene > b, .polycss-camera > .polycss-scene > i, .polycss-camera > .polycss-scene > s")];
       const visibleSampleCount = leaves.filter((leaf, index) => {
         const rect = leaf.getBoundingClientRect();
         const style = getComputedStyle(leaf);
         return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0 &&
           rect.left < innerWidth && rect.top < innerHeight && style.backgroundImage !== "none";
       }).length;
-      const expectedProbe = document.createElement("div");
-      expectedProbe.style.transform = debug.scene.playback.transforms[420];
       return {
         status: document.body.dataset.portStatus,
-        message: document.getElementById("status")?.textContent ?? "",
+        message: document.querySelector(".cssmenger-error-message")?.textContent ?? "",
         ready: debug.ready,
         state: debug.state(),
         stats: debug.stats(),
         stable: debug.assertStableDomIdentity(),
         retainedLeaves: leaves.length,
-        retainedAxisRoots: document.querySelectorAll(".cssmenger-model > .cssmenger-axis").length,
-        forbiddenElements: document.querySelectorAll("#scene canvas, #scene svg").length,
+        retainedRenderWrappers: document.querySelectorAll("body > .polycss-camera, body > .polycss-camera > .polycss-scene").length,
+        retainedModelRoots: document.querySelectorAll(".cssmenger-model").length,
+        retainedAxisRoots: document.querySelectorAll(".cssmenger-axis").length,
+        forbiddenElements: document.querySelectorAll(".polycss-camera canvas, .polycss-camera svg").length,
         shellWordmarkPath: document.querySelector(".site-wordmark-path")?.textContent ?? "",
         shellHomeHref: document.querySelector(".site-wordmark")?.href ?? "",
         shellGithubHref: document.querySelector(".site-action-icon-only")?.href ?? "",
         visibleSampleCount,
         backfaceVisibility: getComputedStyle(leaves[0]).backfaceVisibility,
-        axisAtlasPositions: [...document.querySelectorAll(".cssmenger-axis")].map((root) => root.style.getPropertyValue("--axis-atlas-y")),
+        axisAtlasPositions: ["--x", "--y", "--z"].map((property) => scene?.style.getPropertyValue(property) ?? ""),
         expectedAxisAtlasPositions: debug.scene.playback.colorRows[420].map((paletteIndex) =>
           debug.scene.planeAtlas.paletteBackgroundPositionYs[paletteIndex]),
-        modelTransform: document.querySelector(".cssmenger-model")?.style.transform ?? "",
-        expectedTransform: expectedProbe.style.transform,
+        modelTransform: scene?.style.getPropertyValue("--m") ?? "",
+        expectedTransform: debug.scene.playback.transforms[420],
         geometryPayload: Array.isArray(debug.scene.meshes),
         pageMetadataCount: document.querySelectorAll("[data-poly-index], [data-polycss-leaf]").length,
+        renderLeafAttributeCounts: leaves.map((leaf) => leaf.attributes.length),
+        shellScaffoldingCount: document.querySelectorAll("#app, #scene, #status, main, section, output").length,
+        sceneElementCount: document.querySelectorAll(".polycss-camera, .polycss-camera *").length,
       };
     });
     if (pageErrors.length || evidence.status !== "ready" || !evidence.ready || !evidence.stable ||
         evidence.state.tick !== 420 || !evidence.state.paused || evidence.retainedLeaves !== 84 ||
-        evidence.retainedAxisRoots !== 3 || evidence.forbiddenElements !== 0 || evidence.visibleSampleCount < 10 ||
+        evidence.retainedRenderWrappers !== 2 || evidence.retainedModelRoots !== 0 ||
+        evidence.retainedAxisRoots !== 0 || evidence.forbiddenElements !== 0 || evidence.visibleSampleCount < 10 ||
         evidence.shellWordmarkPath !== "/menger" || evidence.shellHomeHref !== "https://css.graphics/" ||
         evidence.shellGithubHref !== "https://github.com/layoutit/cssGraphics" ||
         evidence.backfaceVisibility !== "hidden" ||
         evidence.axisAtlasPositions.some((value, index) => value !== evidence.expectedAxisAtlasPositions[index]) ||
         evidence.modelTransform !== evidence.expectedTransform || evidence.geometryPayload || evidence.pageMetadataCount !== 0 ||
+        evidence.renderLeafAttributeCounts.some((count) => count !== 1) ||
+        evidence.shellScaffoldingCount !== 0 || evidence.sceneElementCount !== 86 ||
         evidence.stats.runtimeInstrumentationEnabled || evidence.stats.preparedStatesApplied !== null ||
         evidence.stats.runtimeHotPathDomStyleReadCount !== 0 ||
         evidence.stats.runtimeAdjacentPublicationComparisonCount !== 0 ||

@@ -5,8 +5,8 @@ export function timelineStateIndexForTick(tick, playback) {
     : Math.min(playback.segmentEndState, Math.max(playback.segmentStartState, tick));
 }
 
-export function createCssmengerPreparedPlayer({ playback, planeAtlas, modelRoot, axisRoots, ...overrides }) {
-  validatePlayback(playback, planeAtlas, modelRoot, axisRoots);
+export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicationRoot, ...overrides }) {
+  validatePlayback(playback, planeAtlas, publicationRoot);
   const requestFrame = overrides.requestFrame ?? globalThis.requestAnimationFrame.bind(globalThis);
   const cancelFrame = overrides.cancelFrame ?? globalThis.cancelAnimationFrame.bind(globalThis);
   const requestDelay = overrides.requestDelay ?? globalThis.setTimeout.bind(globalThis);
@@ -22,11 +22,11 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, modelRoot,
 
   function publishAdjacentFast(stateIndex) {
     const transform = playback.transforms[stateIndex];
-    modelRoot.style.transform = transform;
+    publicationRoot.style.setProperty("--m", transform);
     const colorRow = playback.colorRows[stateIndex];
-    axisRoots[0].style.setProperty("--axis-atlas-y", planeAtlas.paletteBackgroundPositionYs[colorRow[0]]);
-    axisRoots[1].style.setProperty("--axis-atlas-y", planeAtlas.paletteBackgroundPositionYs[colorRow[1]]);
-    axisRoots[2].style.setProperty("--axis-atlas-y", planeAtlas.paletteBackgroundPositionYs[colorRow[2]]);
+    publicationRoot.style.setProperty("--x", planeAtlas.paletteBackgroundPositionYs[colorRow[0]]);
+    publicationRoot.style.setProperty("--y", planeAtlas.paletteBackgroundPositionYs[colorRow[1]]);
+    publicationRoot.style.setProperty("--z", planeAtlas.paletteBackgroundPositionYs[colorRow[2]]);
     tick = stateIndex;
     return tick;
   }
@@ -39,21 +39,21 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, modelRoot,
     const transformComparedAt = profile ? readNow() : 0;
     const transformChanged = adjacentState || previousTransform !== transform;
     if (transformChanged) {
-      modelRoot.style.transform = transform;
+      publicationRoot.style.setProperty("--m", transform);
     }
     const transformPublishedAt = profile ? readNow() : 0;
     const colorRow = playback.colorRows[stateIndex];
     const colorRowResolvedAt = profile ? readNow() : 0;
     const axisPublications = profile ? [] : null;
     let lastAxisPublishedAt = colorRowResolvedAt;
-    for (let axis = 0; axis < axisRoots.length; axis += 1) {
+    for (let axis = 0; axis < 3; axis += 1) {
       const axisStartedAt = profile ? readNow() : 0;
       const backgroundPositionY = planeAtlas.paletteBackgroundPositionYs[colorRow[axis]];
       const previousBackgroundPositionY = planeAtlas.paletteBackgroundPositionYs[playback.colorRows[tick][axis]];
       const axisComparedAt = profile ? readNow() : 0;
       const axisChanged = adjacentState || previousBackgroundPositionY !== backgroundPositionY;
       if (axisChanged) {
-        axisRoots[axis].style.setProperty("--axis-atlas-y", backgroundPositionY);
+        publicationRoot.style.setProperty(`--${"xyz"[axis]}`, backgroundPositionY);
       }
       const axisPublishedAt = profile ? readNow() : 0;
       lastAxisPublishedAt = axisPublishedAt;
@@ -218,10 +218,9 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, modelRoot,
   });
 }
 
-function validatePlayback(playback, planeAtlas, modelRoot, axisRoots) {
+function validatePlayback(playback, planeAtlas, publicationRoot) {
   if (playback?.schema !== "cssmenger-prepared-playback@1" ||
-      !(modelRoot instanceof HTMLElement) || !Array.isArray(axisRoots) || axisRoots.length !== 3 ||
-      axisRoots.some((root) => !(root instanceof HTMLElement)) ||
+      !(publicationRoot instanceof HTMLElement) ||
       !Array.isArray(playback.transforms) || playback.transforms.length !== playback.stateCount ||
       !Array.isArray(playback.colorRows) || playback.colorRows.length !== playback.stateCount ||
       playback.colorRows.some((row) => !Array.isArray(row) || row.length !== 3) ||

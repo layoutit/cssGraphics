@@ -7,8 +7,9 @@ the pinned XScreenSaver 6.15 source semantics. Preparation generates the exact
 18,048 visible source-face census, proves the 9,528-leaf minimum rectangular
 fallback, then prebakes its holes into 84 coverage-proven directional-plane
 atlas bundles. It prepares 1,440 rotator/palette states and exports one stable
-PolyCSS snapshot. The browser adopts that snapshot and publishes prepared root
-transform and axis-atlas rows only.
+PolyCSS snapshot with only camera/scene projection roots and 84 direct leaves.
+The browser adopts that snapshot and publishes four prepared scene custom
+properties: one model transform and three axis-atlas rows.
 
 ```sh
 pnpm install

@@ -75,9 +75,12 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
   "prepared atlas identity");
 
   const snapshot = await readFile(join(root, snapshotPath), "utf8");
-  assert(count(snapshot, /<b\b/gu) === 84 &&
-    count(snapshot, /<div\b/gu) === 6 &&
-    count(snapshot, /class="cssmenger-axis cssmenger-axis-/gu) === 3,
+  assert(count(snapshot, /<b\b/gu) === 28 &&
+    count(snapshot, /<i\b/gu) === 28 &&
+    count(snapshot, /<s\b/gu) === 28 &&
+    count(snapshot, /<div\b/gu) === 2 &&
+    count(snapshot, /style="/gu) === 85 &&
+    !/cssmenger-(?:model|axis)/u.test(snapshot),
   "retained DOM");
   assert(!/\sdata-[\w-]+=/u.test(snapshot) && !/<(?:script|canvas|svg)\b/iu.test(snapshot),
     "lean DOM");
@@ -104,8 +107,9 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     closureBytes,
     fileCount: files.length,
     sceneCount: 1,
-    retainedModelRootCount: 1,
-    retainedAxisRootCount: 3,
+    retainedRenderWrapperCount: 2,
+    retainedModelRootCount: 0,
+    retainedAxisRootCount: 0,
     preparedLeafCount: 84,
     sourceFaceCount: 18_048,
     mergedSourceFaceCount: 17_964,

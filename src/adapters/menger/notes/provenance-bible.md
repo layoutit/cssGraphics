@@ -51,7 +51,7 @@ is reference-only and is not vendored.
 The canonical product prepares one deterministic depth-3 sponge with the exact
 `menger_recurs_1` face-mask traversal. Its 18,048 source quads are preserved in
 the coverage ledger and emitted as 84 directional-plane alpha-atlas bundles across
-three retained axis roots. The coverage hash is
+three semantic `b`/`i`/`s` leaf bands directly under the retained scene root. The coverage hash is
 `5bb98301f900af4b1b15ae73ffbd7338836b67bb0bd48b26da6017b1874b60ea`.
 
 Seed `26080801` drives the prepared `yarandom.c`, `rotator.c`, `colors.c`, and
@@ -98,8 +98,8 @@ Proven now:
 - exact-first native/browser pixel evidence with native, browser, and absolute
   difference images; the pixel result is honestly recorded as diverged rather
   than qualified;
-- a retained PolyCSS snapshot with one model root, three axis roots, and 84
-  stable leaves;
+- a retained PolyCSS snapshot with only the camera and scene projection roots
+  plus 84 stable leaves; model and axis wrapper counts are zero;
 - headless browser evidence with zero runtime DOM mutations and zero runtime
   geometry, recursion, merge, color-generation, rotation-calculation, or
   camera-calculation work.

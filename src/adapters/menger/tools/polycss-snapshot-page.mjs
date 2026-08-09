@@ -76,8 +76,11 @@ async function main() {
     title: "cssMenger — prepared XScreenSaver depth-3 sponge",
   });
   const html = sanitizeSnapshot(exported, sceneData.planeAtlas);
-  if (!html.includes("cssmenger-model") || !html.includes("cssmenger-axis-x") ||
-      /<script\b|<canvas\b|<svg\b/iu.test(html) || /\/(?:Users|home)\//u.test(html)) {
+  if ((html.match(/<b\b/gu) ?? []).length !== 28 ||
+      (html.match(/<i\b/gu) ?? []).length !== 28 ||
+      (html.match(/<s\b/gu) ?? []).length !== 28 ||
+      /cssmenger-(?:model|axis)|<script\b|<canvas\b|<svg\b/iu.test(html) ||
+      /\/(?:Users|home)\//u.test(html)) {
     throw new Error("Prepared cssMenger snapshot failed retained-root sanitization");
   }
   window.__cssMengerDebugSnapshot = { status: "ready", sceneUrl, html, mountedLeaves, stats };
@@ -86,21 +89,54 @@ async function main() {
 function sanitizeSnapshot(html, planeAtlas) {
   const parsed = new DOMParser().parseFromString(html, "text/html");
   const stylesheet = parsed.querySelector("style");
+  const camera = parsed.querySelector(".polycss-camera");
+  const scene = camera?.querySelector(":scope > .polycss-scene");
   const model = parsed.querySelector(".cssmenger-model");
   const axes = ["x", "y", "z"].map((axis) => parsed.querySelector(`.cssmenger-axis-${axis}`));
-  if (!(stylesheet instanceof HTMLStyleElement) || !(model instanceof HTMLElement) ||
+  if (!(stylesheet instanceof HTMLStyleElement) || !(camera instanceof HTMLElement) ||
+      !(scene instanceof HTMLElement) || !(model instanceof HTMLElement) ||
       axes.some((axis) => !(axis instanceof HTMLElement))) {
     throw new Error("Exported cssMenger retained graph is incomplete");
   }
+  const perspective = camera.style.perspective;
+  const viewTransform = scene.style.transform;
+  const modelTransform = model.style.transform;
+  if (!perspective || !viewTransform || !modelTransform) {
+    throw new Error("Exported cssMenger transform graph is incomplete");
+  }
   stylesheet.textContent +=
-    `.cssmenger-model,.cssmenger-axis{position:absolute;transform-style:preserve-3d;transform-origin:0 0 0}` +
-    `.cssmenger-model{--a:url("${planeAtlas.assetUrl}")}` +
-    `.cssmenger-axis>b,.cssmenger-axis>i,.cssmenger-axis>s,.cssmenger-axis>u{` +
+    `.polycss-camera{perspective:${perspective}}` +
+    `.polycss-scene>b,.polycss-scene>i,.polycss-scene>s{position:absolute;display:block;` +
+    `transform-origin:0 0;transform-style:preserve-3d;margin:0;padding:0;font:inherit;` +
+    `font-weight:normal;font-style:normal;line-height:0;text-decoration:none;` +
     `width:${planeAtlas.tileWidth}px;height:${planeAtlas.tileHeight}px;color:transparent!important;` +
     `background-color:transparent!important;background-image:var(--a)!important;background-repeat:no-repeat!important;` +
-    `background-position-y:var(--axis-atlas-y)!important;background-size:${planeAtlas.backgroundSize}!important;` +
-    `image-rendering:pixelated;backface-visibility:hidden!important}`;
-  model.style.removeProperty("--a");
+    `background-size:${planeAtlas.backgroundSize}!important;image-rendering:pixelated;backface-visibility:hidden!important}` +
+    `.polycss-scene>b{background-position-y:var(--x)!important}` +
+    `.polycss-scene>i{background-position-y:var(--y)!important}` +
+    `.polycss-scene>s{background-position-y:var(--z)!important}`;
+  camera.removeAttribute("style");
+  scene.style.transform = `${viewTransform} var(--m)`;
+  scene.style.setProperty("--m", modelTransform);
+  const fragment = parsed.createDocumentFragment();
+  for (let axis = 0; axis < axes.length; axis += 1) {
+    const axisRoot = axes[axis];
+    const palettePosition = axisRoot.style.getPropertyValue("--axis-atlas-y");
+    if (!palettePosition) throw new Error(`Exported cssMenger axis ${axis} has no prepared palette row`);
+    scene.style.setProperty(`--${"xyz"[axis]}`, palettePosition);
+    const tagName = ["b", "i", "s"][axis];
+    for (const leaf of axisRoot.querySelectorAll(":scope > b")) {
+      const flattened = parsed.createElement(tagName);
+      flattened.style.transform = leaf.style.transform;
+      flattened.style.backgroundPositionX = leaf.style.backgroundPositionX;
+      if (!flattened.style.transform || !flattened.style.backgroundPositionX) {
+        throw new Error("Exported cssMenger leaf is missing prepared placement");
+      }
+      fragment.append(flattened);
+    }
+  }
+  model.remove();
+  scene.append(fragment);
   for (const element of parsed.querySelectorAll("*")) {
     for (const attribute of [...element.attributes]) {
       if (attribute.name.startsWith("data-")) element.removeAttribute(attribute.name);

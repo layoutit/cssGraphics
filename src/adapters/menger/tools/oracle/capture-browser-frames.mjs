@@ -10,8 +10,8 @@ import { cssmengerOracleRoot, writeJson } from "./oracle-support.mjs";
 import { resolveCssmengerOracleTicks } from "./cssmenger-frame-schedule.mjs";
 
 const CAPTURE_ONLY_CSS = `
-  :root, html, body, #app, #scene { background: #000 !important; }
-  .site-header, #status { display: none !important; }
+  :root, html, body { background: #000 !important; }
+  .site-header, .cssmenger-error-message { display: none !important; }
 `;
 
 export async function captureBrowserMengerFrames(options = {}) {
@@ -54,7 +54,7 @@ export async function captureBrowserMengerFrames(options = {}) {
         sceneId: window.__cssMengerDebug?.scene?.id ?? null,
         oracle: window.__cssMengerDebug?.scene?.oracle ?? null,
         stats: window.__cssMengerDebug?.stats?.() ?? null,
-        forbiddenRendererElements: document.querySelectorAll("#scene canvas, #scene svg").length,
+        forbiddenRendererElements: document.querySelectorAll(".polycss-camera canvas, .polycss-camera svg").length,
       }));
       if (pageErrors.length || initial.status !== "ready" || !initial.ready ||
           initial.sceneId !== "depth-3" || initial.forbiddenRendererElements !== 0) {
@@ -70,21 +70,19 @@ export async function captureBrowserMengerFrames(options = {}) {
           debug.seek(tick);
           await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
           const playback = debug.scene.playback;
-          const model = document.querySelector(".cssmenger-model");
-          const axes = [...document.querySelectorAll(".cssmenger-model > .cssmenger-axis")];
-          const transformProbe = document.createElement("div");
-          transformProbe.style.transform = playback.transforms[tick];
+          const publicationRoot = document.querySelector(".polycss-camera > .polycss-scene");
           return {
             tick: debug.state().tick,
             paused: debug.state().paused,
             preparedTransform: playback.transforms[tick],
-            expectedPublishedTransform: transformProbe.style.transform,
-            publishedTransform: model?.style.transform ?? null,
+            expectedPublishedTransform: playback.transforms[tick],
+            publishedTransform: publicationRoot?.style.getPropertyValue("--m") ?? null,
             paletteIndices: playback.colorRows[tick],
             paletteSource16: playback.colorRows[tick].map((paletteIndex) => playback.palette[paletteIndex].source16),
             preparedAxisAtlasPositions: playback.colorRows[tick].map((paletteIndex) =>
               debug.scene.planeAtlas.paletteBackgroundPositionYs[paletteIndex]),
-            publishedAxisAtlasPositions: axes.map((axis) => axis.style.getPropertyValue("--axis-atlas-y")),
+            publishedAxisAtlasPositions: ["--x", "--y", "--z"].map((property) =>
+              publicationRoot?.style.getPropertyValue(property) ?? null),
             stableDom: debug.assertStableDomIdentity(),
           };
         }, sourceTick);
@@ -94,7 +92,7 @@ export async function captureBrowserMengerFrames(options = {}) {
           throw new Error(`Browser oracle state publication drifted at tick ${sourceTick}: ${JSON.stringify(row)}`);
         }
         rows.push(row);
-        await page.locator("#scene").screenshot({ path: join(framesDir, frameName(index)) });
+        await page.locator(".polycss-camera").screenshot({ path: join(framesDir, frameName(index)) });
       }
       const final = await page.evaluate(() => ({
         state: window.__cssMengerDebug.state(),
@@ -114,7 +112,7 @@ export async function captureBrowserMengerFrames(options = {}) {
         frameCount: ticks.length,
         viewport: { width, height, deviceScaleFactor: 1 },
         captureMode: "deterministic-prepared-state-seek",
-        scenePixelBoundary: "#scene at the native viewport; shell chrome hidden and background forced to native black for oracle capture only",
+        scenePixelBoundary: ".polycss-camera at the native viewport; shell chrome hidden and background forced to native black for oracle capture only",
         captureOnlyCss: CAPTURE_ONLY_CSS.trim(),
         initial,
         final,

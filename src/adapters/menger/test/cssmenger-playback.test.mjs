@@ -34,11 +34,12 @@ test("steady playback uses prepared direct writes without DOM style reads or adj
   let axisColorWrites = 0;
   class FakeHTMLElement {
     constructor() {
-      let transform = "";
       this.style = {
-        get transform() { return transform; },
-        set transform(value) { transform = value; modelTransformWrites += 1; },
-        setProperty: (name, value) => { this.style[name] = value; axisColorWrites += 1; },
+        setProperty: (name, value) => {
+          this.style[name] = value;
+          if (name === "--m") modelTransformWrites += 1;
+          else axisColorWrites += 1;
+        },
         getPropertyValue: () => { throw new Error("runtime DOM style read"); },
       };
     }
@@ -46,8 +47,7 @@ test("steady playback uses prepared direct writes without DOM style reads or adj
   globalThis.HTMLElement = FakeHTMLElement;
   try {
     const playback = buildPreparedMengerPlayback({ stateCount: 4 });
-    const modelRoot = new FakeHTMLElement();
-    const axisRoots = [new FakeHTMLElement(), new FakeHTMLElement(), new FakeHTMLElement()];
+    const publicationRoot = new FakeHTMLElement();
     const planeAtlas = {
       schema: "cssmenger-prepared-coplanar-plane-atlas@1",
       paletteStateCount: 128,
@@ -56,8 +56,7 @@ test("steady playback uses prepared direct writes without DOM style reads or adj
     const player = createCssmengerPreparedPlayer({
       playback,
       planeAtlas,
-      modelRoot,
-      axisRoots,
+      publicationRoot,
       requestFrame: () => 1,
       cancelFrame: () => {},
       requestDelay: () => 1,

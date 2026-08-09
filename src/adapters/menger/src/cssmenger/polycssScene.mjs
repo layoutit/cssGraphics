@@ -1,7 +1,7 @@
 let mountedStyles = [];
 
 export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, planeAtlasAsset }) {
-  if (!(host instanceof HTMLElement)) throw new Error("Missing #scene host");
+  if (!(host instanceof HTMLElement)) throw new Error("Missing cssMenger host");
   if (typeof snapshotHtml !== "string") throw new Error("Prepared cssMenger snapshot is required");
   const snapshot = new DOMParser().parseFromString(snapshotHtml, "text/html");
   if (snapshot.querySelector("script, canvas, svg")) {
@@ -10,39 +10,36 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, pl
   const styles = [...snapshot.querySelectorAll("style")];
   const camera = snapshot.querySelector(".polycss-camera");
   const scene = camera?.querySelector(".polycss-scene");
-  const model = scene?.querySelector(":scope > .cssmenger-model");
-  const axisRoots = ["x", "y", "z"].map((axis) => model?.querySelector(`:scope > .cssmenger-axis-${axis}`));
+  const axisLeaves = ["b", "i", "s"].map((tag) => [...(scene?.querySelectorAll(`:scope > ${tag}`) ?? [])]);
   if (styles.length === 0 || !(camera instanceof HTMLElement) || !(scene instanceof HTMLElement) ||
-      !(model instanceof HTMLElement) || axisRoots.some((root) => !(root instanceof HTMLElement))) {
+      axisLeaves.some((leaves) => leaves.length === 0)) {
     throw new Error("Prepared cssMenger snapshot is missing its retained PolyCSS graph");
   }
   removePreparedSnapshotStyles();
   for (const style of styles) {
     const imported = document.importNode(style, true);
-    imported.setAttribute("data-cssmenger-snapshot-style", "1");
     document.head.append(imported);
     mountedStyles.push(imported);
   }
   const mountedCamera = document.importNode(camera, true);
-  host.replaceChildren(mountedCamera);
+  for (const existing of host.querySelectorAll(":scope > .polycss-camera")) existing.remove();
+  host.append(mountedCamera);
   const mountedScene = mountedCamera.querySelector(".polycss-scene");
-  const mountedModel = mountedScene?.querySelector(":scope > .cssmenger-model");
-  const mountedAxes = ["x", "y", "z"].map((axis) =>
-    mountedModel?.querySelector(`:scope > .cssmenger-axis-${axis}`));
-  const leaves = [...(mountedModel?.querySelectorAll("b, i, s, u") ?? [])];
-  if (!(mountedScene instanceof HTMLElement) || !(mountedModel instanceof HTMLElement) ||
-      mountedAxes.some((root) => !(root instanceof HTMLElement)) ||
+  const mountedAxisLeaves = ["b", "i", "s"].map((tag) =>
+    [...(mountedScene?.querySelectorAll(`:scope > ${tag}`) ?? [])]);
+  const leaves = mountedAxisLeaves.flat();
+  if (!(mountedScene instanceof HTMLElement) || mountedAxisLeaves.some((group) => group.length !== 28) ||
       leaves.length !== sceneData.metrics.preparedLeafCount) {
     throw new Error("Prepared cssMenger retained target census drifted");
   }
   if (planeAtlasAsset?.sha256 !== sceneData.planeAtlas?.assetSha256 || typeof planeAtlasAsset.url !== "string") {
     throw new Error("Prepared cssMenger plane atlas asset is missing or unverified");
   }
-  mountedModel.style.setProperty("--a", `url("${planeAtlasAsset.url}")`);
+  mountedScene.style.setProperty("--a", `url("${planeAtlasAsset.url}")`);
   if (!getComputedStyle(leaves[0]).backgroundImage.includes(planeAtlasAsset.url)) {
     throw new Error("Prepared cssMenger plane atlas binding drifted");
   }
-  const stableNodes = Object.freeze([mountedScene, mountedModel, ...mountedAxes, ...leaves]);
+  const stableNodes = Object.freeze([mountedCamera, mountedScene, ...leaves]);
   let runtimeDomCreationCount = 0;
   let runtimeDomRemovalCount = 0;
   const observer = new MutationObserver((records) => {
@@ -51,14 +48,13 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, pl
       runtimeDomRemovalCount += record.removedNodes.length;
     }
   });
-  observer.observe(host, { childList: true, subtree: true });
+  observer.observe(mountedCamera, { childList: true, subtree: true });
 
   function assertStableDomIdentity() {
     const current = [
-      host.querySelector(".polycss-scene"),
-      host.querySelector(".cssmenger-model"),
-      ...["x", "y", "z"].map((axis) => host.querySelector(`.cssmenger-axis-${axis}`)),
-      ...host.querySelectorAll(".cssmenger-model b, .cssmenger-model i, .cssmenger-model s, .cssmenger-model u"),
+      host.querySelector(":scope > .polycss-camera"),
+      host.querySelector(":scope > .polycss-camera > .polycss-scene"),
+      ...host.querySelectorAll(":scope > .polycss-camera > .polycss-scene > b, :scope > .polycss-camera > .polycss-scene > i, :scope > .polycss-camera > .polycss-scene > s"),
     ];
     if (current.length !== stableNodes.length || current.some((node, index) => node !== stableNodes[index])) {
       throw new Error("Prepared cssMenger retained DOM identity changed");
@@ -69,16 +65,19 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, pl
   return Object.freeze({
     camera: mountedCamera,
     scene: mountedScene,
-    modelRoot: mountedModel,
-    axisRoots: Object.freeze(mountedAxes),
+    publicationRoot: mountedScene,
+    axisLeaves: Object.freeze(mountedAxisLeaves.map((group) => Object.freeze(group))),
     leaves: Object.freeze(leaves),
     assertStableDomIdentity,
     stats() {
       assertStableDomIdentity();
       return Object.freeze({
         mode: "prepared-snapshot",
-        retainedModelRootCount: 1,
-        retainedAxisRootCount: mountedAxes.length,
+        retainedCameraRootCount: 1,
+        retainedSceneRootCount: 1,
+        retainedRenderWrapperCount: 2,
+        retainedModelRootCount: 0,
+        retainedAxisRootCount: 0,
         retainedPolygonLeafCount: leaves.length,
         preparedPlaneAtlasTextureLeafCount: leaves.length,
         preparedPlaneAtlasUniqueUrlCount: 1,
@@ -92,7 +91,7 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, pl
     },
     destroy() {
       observer.disconnect();
-      host.replaceChildren();
+      mountedCamera.remove();
       removePreparedSnapshotStyles();
     },
   });

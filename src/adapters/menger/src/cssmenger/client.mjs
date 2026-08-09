@@ -5,18 +5,16 @@ import { mountPreparedPolycssSnapshot } from "./polycssScene.mjs";
 import { loadPreparedMengerPlaneAtlasAsset } from "./preparedPlaneAtlasAsset.mjs";
 import { createRouteState } from "./routeState.mjs";
 
-export function mountCssmengerClient() {
-  const host = document.getElementById("scene");
-  const status = document.getElementById("status");
+export function mountCssmengerClient(host) {
   const state = { ready: false, route: null, manifest: null, sceneData: null, mount: null, errors: [] };
   installCssmengerDebugApi(state);
-  window.addEventListener("error", (event) => recordError(state, event.message || String(event.error || "error"), status));
-  window.addEventListener("unhandledrejection", (event) => recordError(state, String(event.reason?.message || event.reason || "unhandled rejection"), status));
-  main().catch((error) => recordError(state, error.stack || error.message || String(error), status));
+  window.addEventListener("error", (event) => recordError(state, event.message || String(event.error || "error"), host));
+  window.addEventListener("unhandledrejection", (event) => recordError(state, String(event.reason?.message || event.reason || "unhandled rejection"), host));
+  main().catch((error) => recordError(state, error.stack || error.message || String(error), host));
 
   async function main() {
-    if (!(host instanceof HTMLElement)) throw new Error("Missing #scene host");
-    setStatus(status, "Loading prepared Menger source state…", "loading");
+    if (!(host instanceof HTMLElement)) throw new Error("Missing cssMenger host");
+    setStatus("loading");
     const route = createRouteState();
     state.route = route;
     state.manifest = await loadPreparedManifest(route);
@@ -24,13 +22,12 @@ export function mountCssmengerClient() {
     const planeAtlasAsset = await loadPreparedMengerPlaneAtlasAsset(sceneData.planeAtlas);
     state.sceneData = sceneData;
     state.route = Object.freeze({ ...route, selectedScene: entry.id });
-    setStatus(status, "Adopting retained PolyCSS sponge…", "loading");
+    setStatus("loading");
     const snapshot = mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, planeAtlasAsset });
     const player = createCssmengerPreparedPlayer({
       playback: sceneData.playback,
       planeAtlas: sceneData.planeAtlas,
-      modelRoot: snapshot.modelRoot,
-      axisRoots: snapshot.axisRoots,
+      publicationRoot: snapshot.publicationRoot,
     });
     state.mount = Object.freeze({
       ...snapshot,
@@ -55,17 +52,22 @@ export function mountCssmengerClient() {
     document.body.dataset.gameView = "polycss";
     document.body.dataset.portSlug = "cssmenger";
     document.body.dataset.scene = entry.id;
-    setStatus(status, `Ready — ${sceneData.metrics.preparedLeafCount} retained face bundles`, "ready");
+    setStatus("ready");
     requestAnimationFrame(() => player.resume());
   }
 }
 
-function recordError(state, message, status) {
+function recordError(state, message, host) {
   state.errors.push(message);
-  setStatus(status, message, "error");
+  setStatus("error");
+  if (!(host instanceof HTMLElement) || host.querySelector(":scope > .cssmenger-error-message")) return;
+  const output = document.createElement("p");
+  output.className = "cssmenger-error-message";
+  output.setAttribute("role", "alert");
+  output.textContent = message;
+  host.append(output);
 }
 
-function setStatus(status, message, kind) {
+function setStatus(kind) {
   document.body.dataset.portStatus = kind;
-  if (status) status.textContent = message;
 }

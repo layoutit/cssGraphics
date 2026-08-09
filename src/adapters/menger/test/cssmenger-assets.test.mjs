@@ -45,11 +45,16 @@ test("generated manifest and scene expose one source-backed default path", async
 test("prepared snapshot is retained DOM without an alternate renderer", async () => {
   const html = await readFile(join(generated, "scenes/depth-3.polycss.txt"), "utf8");
   assert.match(html, /class="[^"]*polycss-scene/u);
-  assert.match(html, /cssmenger-model/u);
-  assert.match(html, /cssmenger-axis-x/u);
-  assert.match(html, /cssmenger-axis-y/u);
-  assert.match(html, /cssmenger-axis-z/u);
-  assert.equal((html.match(/<b(?:\s|>)/gu) ?? []).length, 84);
+  assert.equal((html.match(/<b(?:\s|>)/gu) ?? []).length, 28);
+  assert.equal((html.match(/<i(?:\s|>)/gu) ?? []).length, 28);
+  assert.equal((html.match(/<s(?:\s|>)/gu) ?? []).length, 28);
+  assert.equal((html.match(/<div(?:\s|>)/gu) ?? []).length, 2);
+  assert.equal((html.match(/style="/gu) ?? []).length, 85);
+  assert.doesNotMatch(html, /cssmenger-(?:model|axis)/u);
+  const leafStyles = [...html.matchAll(/<[bis] style="([^"]+)"><\/[bis]>/gu)].map((match) => match[1]);
+  assert.equal(leafStyles.length, 84);
+  assert.equal(leafStyles.every((style) =>
+    /^transform: matrix3d\([^)]+\); background-position-x: -\d+px;$/u.test(style)), true);
   assert.match(html, /backface-visibility:hidden!important/u);
   assert.match(html, /image-rendering:pixelated/u);
   assert.doesNotMatch(html, /<script\b|<canvas\b|<svg\b/iu);

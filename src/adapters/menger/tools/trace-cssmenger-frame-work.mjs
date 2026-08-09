@@ -83,9 +83,8 @@ try {
   const result = await page.evaluate(async (tick) => {
     const debug = globalThis.__cssMengerDebug;
     const scene = debug.scene;
-    const model = document.querySelector(".cssmenger-model");
-    const axes = [...document.querySelectorAll(".cssmenger-model > .cssmenger-axis")];
-    if (!(model instanceof HTMLElement) || axes.length !== 3 ||
+    const publicationRoot = document.querySelector(".polycss-camera > .polycss-scene");
+    if (!(publicationRoot instanceof HTMLElement) ||
         scene?.playback?.transforms?.length <= tick + 1 ||
         scene?.playback?.colorRows?.length <= tick + 1) {
       throw new Error("Single-frame work probe could not bind the prepared runtime graph");
@@ -102,20 +101,20 @@ try {
     await settle();
 
     const transformOnly = await measuredCase("cssmenger-transform-only", () => {
-      model.style.transform = nextTransform;
-      return { writeCount: 1, property: "transform", targetCount: 1 };
+      publicationRoot.style.setProperty("--m", nextTransform);
+      return { writeCount: 1, property: "--m", targetCount: 1 };
     });
-    model.style.transform = originalTransform;
+    publicationRoot.style.setProperty("--m", originalTransform);
     await settle();
 
     const paletteOnly = await measuredCase("cssmenger-palette-only", () => {
-      for (let axis = 0; axis < axes.length; axis += 1) {
-        axes[axis].style.setProperty("--axis-atlas-y", atlasPositions[nextColorRow[axis]]);
+      for (let axis = 0; axis < 3; axis += 1) {
+        publicationRoot.style.setProperty(`--${"xyz"[axis]}`, atlasPositions[nextColorRow[axis]]);
       }
-      return { writeCount: 3, property: "--axis-atlas-y", targetCount: 3 };
+      return { writeCount: 3, property: "--x/--y/--z", targetCount: 1 };
     });
-    for (let axis = 0; axis < axes.length; axis += 1) {
-      axes[axis].style.setProperty("--axis-atlas-y", atlasPositions[originalColorRow[axis]]);
+    for (let axis = 0; axis < 3; axis += 1) {
+      publicationRoot.style.setProperty(`--${"xyz"[axis]}`, atlasPositions[originalColorRow[axis]]);
     }
     await settle();
 

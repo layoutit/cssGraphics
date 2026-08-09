@@ -25,6 +25,12 @@ test("generated manifest and scene expose one source-backed default path", async
   assert.equal(scene.metrics.coplanarPartitionOptimal, true);
   assert.equal(scene.metrics.exactRectanglePartitionLeafCount, 9528);
   assert.equal(scene.metrics.preparedPlaneTexturePatternCount, 8);
+  assert.equal(scene.metrics.preparedRenderWrapperCount, 2);
+  assert.equal(scene.metrics.preparedModelRootCount, 0);
+  assert.equal(scene.metrics.preparedAxisRootCount, 0);
+  assert.equal(manifest.scenes[0].metrics.preparedRenderWrapperCount, 2);
+  assert.equal(manifest.scenes[0].metrics.preparedModelRootCount, 0);
+  assert.equal(manifest.scenes[0].metrics.preparedAxisRootCount, 0);
   assert.equal(scene.planeAtlas.leafCount, 84);
   assert.equal(scene.planeAtlas.sourceFaceCoverageExact, true);
   assert.equal(scene.metrics.sourceFaceCoverageExact, true);

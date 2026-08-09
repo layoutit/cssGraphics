@@ -67,7 +67,10 @@ export async function inspectCssmazeProductBank(root, { verifyDescriptor = true 
     assert(count(snapshot, /class="[^"]*cssmaze-world/gu) === 1 &&
       count(snapshot, /class="[^"]*cssmaze-walls/gu) === 1 &&
       count(snapshot, /class="[^"]*cssmaze-surfaces/gu) === 1 &&
-      count(snapshot, /data-polycss-leaf="polygon"/gu) === 171,
+      count(snapshot, /<s\b[^>]*><\/s>/gu) === 171 &&
+      !/\sdata-[a-z0-9-]+=/iu.test(snapshot) &&
+      /\.cssmaze-surfaces>s\s*\{\s*background-image:/u.test(snapshot) &&
+      /\.cssmaze-walls>s\s*\{\s*background-image:/u.test(snapshot),
     `scene ${entry.id} retained DOM`);
     assert(!/<(?:script|canvas|svg)\b/iu.test(snapshot), `scene ${entry.id} renderer boundary`);
 

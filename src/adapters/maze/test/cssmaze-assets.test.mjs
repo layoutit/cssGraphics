@@ -121,9 +121,18 @@ test("every prepared snapshot is retained DOM without an alternate renderer", as
     assert.match(html, /cssmaze-surfaces/u);
     assert.match(html, /transform: scale3d\(4\.8, 4\.8, 4\.8\)/u);
     assert.doesNotMatch(html, /transform: scale\(4\.8\)/u);
-    assert.doesNotMatch(html, /data-polycss-texture-leaf-sizing="canonical"/u);
-    assert.equal((html.match(/data-polycss-texture-leaf-sizing="raster"/gu) ?? []).length, 171);
-    assert.equal((html.match(/data-polycss-texture-image-rendering="pixelated"/gu) ?? []).length, 171);
+    assert.doesNotMatch(html, /\sdata-[a-z0-9-]+=/iu);
+    const leaves = html.match(/<s\b[^>]*><\/s>/gu) ?? [];
+    assert.equal(leaves.length, 171);
+    for (const leaf of leaves) {
+      assert.match(leaf, /style="[^"]*transform: matrix3d\(/u);
+      assert.match(leaf, /background-position:/u);
+      assert.doesNotMatch(leaf, /(?:image-rendering|background-repeat|background-size|width|height):/u);
+    }
+    assert.match(html, /\.cssmaze-world s\{image-rendering:pixelated;background-repeat:no-repeat\}/u);
+    assert.match(html, /\.cssmaze-surfaces>s\{width:600px;height:600px;background-size:/u);
+    assert.match(html, /\.cssmaze-walls>s\{width:50px;height:50px;background-size:/u);
+    assert.match(html, /\.cssmaze-world s\{-webkit-backface-visibility:visible;backface-visibility:visible\}/u);
     assert.doesNotMatch(html, /<script\b|<canvas\b|<svg\b/iu);
     assert.doesNotMatch(html, /\/(?:Users|home)\//u);
   }
@@ -131,7 +140,7 @@ test("every prepared snapshot is retained DOM without an alternate renderer", as
 
 test("prepared wall atlas preserves source texture brightness", async () => {
   const html = gunzipSync(await readFile(join(generated, "scenes/default-maze.polycss.html.gz"))).toString("utf8");
-  const match = html.match(/\[data-polycss-snapshot-bg="a1"\]\s*\{\s*background-image:\s*url\("data:image\/png;base64,([A-Za-z0-9+/=]+)"\)/u);
+  const match = html.match(/\.cssmaze-walls>s\s*\{\s*background-image:\s*url\("data:image\/png;base64,([A-Za-z0-9+/=]+)"\)/u);
   assert.ok(match, "prepared wall atlas must remain embedded in the snapshot");
   const atlas = PNG.sync.read(Buffer.from(match[1], "base64"));
   const source = PNG.sync.read(await readFile(join(generated, "assets/brick1.png")));

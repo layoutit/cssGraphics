@@ -88,11 +88,6 @@ export function mountCssmazeClient() {
       selection,
     });
     state.ready = true;
-    document.body.dataset.productView = "1";
-    document.body.dataset.gameView = "polycss";
-    document.body.dataset.portSlug = "cssmaze";
-    document.body.dataset.scene = entry.id;
-    document.body.dataset.seed = String(entry.nativeSeed);
     setBodyState(host, "ready");
     requestAnimationFrame(() => player.resume());
   }
@@ -112,6 +107,5 @@ function recordError(state, message, host) {
 function setBodyState(host, kind) {
   document.body.classList.remove("loading", "ready", "error");
   document.body.classList.add(kind);
-  document.body.dataset.portStatus = kind;
   host?.setAttribute("aria-busy", kind === "loading" ? "true" : "false");
 }

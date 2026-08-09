@@ -97,12 +97,13 @@ async function main() {
   if (mountedLeaves !== sceneData.metrics.preparedLeafCount) {
     throw new Error(`Prepared cssMaze leaf census drifted: ${mountedLeaves}`);
   }
-  const html = await exportPolySceneSnapshot(host, {
+  const exported = await exportPolySceneSnapshot(host, {
     title: "cssMaze — prepared XScreenSaver Maze3D source slice",
   });
+  const html = prepareExportedSnapshot(exported, sceneData);
   if (!html.includes("cssmaze-world") || !html.includes("cssmaze-walls") ||
       !html.includes("cssmaze-surfaces") || /<script\b|<canvas\b|<svg\b/iu.test(html) ||
-      /\/(?:Users|home)\//u.test(html)) {
+      /\sdata-[a-z0-9-]+=/iu.test(html) || /\/(?:Users|home)\//u.test(html)) {
     throw new Error("Prepared cssMaze snapshot failed retained-root sanitization");
   }
   window.__cssMazeSnapshot = {
@@ -112,6 +113,100 @@ async function main() {
     mountedLeaves,
     stats,
   };
+}
+
+function prepareExportedSnapshot(html, sceneData) {
+  const parsed = new DOMParser().parseFromString(html, "text/html");
+  const stylesheet = parsed.querySelector("style");
+  const camera = parsed.querySelector(".polycss-camera");
+  const scene = camera?.querySelector(":scope > .polycss-scene");
+  const world = scene?.querySelector(":scope > .cssmaze-world");
+  const surfaces = world?.querySelector(":scope > .cssmaze-surfaces");
+  const walls = world?.querySelector(":scope > .cssmaze-walls");
+  const surfaceLeaves = [...(surfaces?.children ?? [])];
+  const wallLeaves = [...(walls?.children ?? [])];
+  const leaves = [...surfaceLeaves, ...wallLeaves];
+  if (!(stylesheet instanceof HTMLStyleElement) || !(camera instanceof HTMLElement) ||
+      !(scene instanceof HTMLElement) || !(world instanceof HTMLElement) ||
+      !(surfaces instanceof HTMLElement) || !(walls instanceof HTMLElement) ||
+      surfaceLeaves.length !== 2 || wallLeaves.length !== sceneData.metrics.sourceWallSegmentCount ||
+      leaves.length !== sceneData.metrics.preparedLeafCount ||
+      leaves.some((leaf) => !(leaf instanceof HTMLElement) || leaf.localName !== "s")) {
+    throw new Error("Exported cssMaze retained hierarchy is incomplete");
+  }
+
+  const surfaceAtlas = uniformAttribute(surfaceLeaves, "data-polycss-snapshot-bg");
+  const wallAtlas = uniformAttribute(wallLeaves, "data-polycss-snapshot-bg");
+  if (!surfaceAtlas || !wallAtlas || surfaceAtlas === wallAtlas) {
+    throw new Error("Exported cssMaze atlas groups are not structurally separable");
+  }
+  stylesheet.textContent = stylesheet.textContent
+    .replaceAll(`[data-polycss-snapshot-bg="${surfaceAtlas}"]`, ".cssmaze-surfaces>s")
+    .replaceAll(`[data-polycss-snapshot-bg="${wallAtlas}"]`, ".cssmaze-walls>s");
+  if (stylesheet.textContent.includes("data-polycss-snapshot-bg")) {
+    throw new Error("Exported cssMaze atlas selectors were not fully structuralized");
+  }
+
+  const rules = [];
+  moveSharedStylesToRule(leaves, ".cssmaze-world s", rules, [
+    "image-rendering",
+    "background-repeat",
+  ]);
+  moveSharedStylesToRule(surfaceLeaves, ".cssmaze-surfaces>s", rules, [
+    "width",
+    "height",
+    "background-size",
+  ]);
+  moveSharedStylesToRule(wallLeaves, ".cssmaze-walls>s", rules, [
+    "width",
+    "height",
+    "background-size",
+  ]);
+  rules.push(
+    ".cssmaze-world,.cssmaze-walls,.cssmaze-surfaces{position:absolute;transform-style:preserve-3d;transform-origin:0 0 0}",
+    ".cssmaze-world s{-webkit-backface-visibility:visible;backface-visibility:visible}",
+  );
+  stylesheet.textContent += rules.join("");
+  for (const element of [world, surfaces, walls]) {
+    element.style.removeProperty("position");
+    element.style.removeProperty("transform-style");
+    element.style.removeProperty("transform-origin");
+  }
+  stripPreparedDomMetadata(parsed.documentElement);
+  for (const element of parsed.querySelectorAll("[style]")) {
+    if (!element.getAttribute("style")?.trim()) element.removeAttribute("style");
+  }
+  return `<!doctype html>${parsed.documentElement.outerHTML}\n`;
+}
+
+function uniformAttribute(elements, name) {
+  const value = elements[0]?.getAttribute(name);
+  if (!value || elements.some((element) => element.getAttribute(name) !== value)) return null;
+  return value;
+}
+
+function moveSharedStylesToRule(elements, selector, rules, propertyNames) {
+  const declarations = [];
+  for (const name of propertyNames) {
+    const value = elements[0]?.style.getPropertyValue(name);
+    const priority = elements[0]?.style.getPropertyPriority(name);
+    if (!value || elements.some((element) =>
+      element.style.getPropertyValue(name) !== value ||
+      element.style.getPropertyPriority(name) !== priority)) {
+      throw new Error(`Exported cssMaze shared style ${name} drifted for ${selector}`);
+    }
+    declarations.push(`${name}:${value}${priority ? ` !${priority}` : ""}`);
+    for (const element of elements) element.style.removeProperty(name);
+  }
+  rules.push(`${selector}{${declarations.join(";")}}`);
+}
+
+function stripPreparedDomMetadata(root) {
+  for (const element of root.querySelectorAll("*")) {
+    for (const attribute of [...element.attributes]) {
+      if (attribute.name.startsWith("data-")) element.removeAttribute(attribute.name);
+    }
+  }
 }
 
 function applyUniformCameraScale(sceneRoot, expectedScale) {

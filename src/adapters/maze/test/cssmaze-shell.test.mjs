@@ -10,6 +10,7 @@ const css = readFileSync(resolve(root, "src/cssmaze/styles.css"), "utf8");
 test("css.graphics/maze uses the shipped cssGraphics product shell", () => {
   assert.match(html, /<title>css\.graphics\/maze<\/title>/u);
   assert.match(html, /rel="canonical" href="https:\/\/css\.graphics\/maze\/"/u);
+  assert.match(html, /rel="icon" href="\/favicon\.ico" sizes="any"/u);
   assert.match(html, /class="site-header"/u);
   assert.match(html, /class="site-wordmark" href="https:\/\/css\.graphics\/maze\/"/u);
   assert.match(html, /class="site-wordmark-path">\/maze<\/tspan>/u);

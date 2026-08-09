@@ -50,6 +50,10 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml }) 
     mountedSurfaces,
     ...leaves,
   ]);
+  let preparedSceneTransitionCount = 0;
+  let preparedWallTransformWrites = 0;
+  let preparedVisibilityWrites = 0;
+  let preparedRootTransformWrites = 0;
   function assertStableDomIdentity() {
     const current = [
       host.querySelector(".polycss-scene"),
@@ -64,6 +68,42 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml }) 
     return true;
   }
 
+  function applyPreparedSceneTransition(sceneData) {
+    assertStableDomIdentity();
+    const transition = sceneData?.preparedSceneTransition;
+    const wallTransforms = transition?.retainedWallTransforms;
+    const visibilityOperations = transition?.initialVisibilityOperations;
+    const playback = sceneData?.playback;
+    const initial = playback?.initial;
+    if (transition?.schema !== "cssmaze-prepared-scene-transition@1" ||
+        !Array.isArray(wallTransforms) || wallTransforms.length !== wallLeaves.length ||
+        wallTransforms.some((transform) =>
+          typeof transform !== "string" || !transform.startsWith("matrix3d(")) ||
+        !validAbsoluteVisibilityOperations(visibilityOperations, wallLeaves.length) ||
+        !Array.isArray(playback?.cameraTransforms) || !Array.isArray(playback?.wallTransforms) ||
+        !Number.isSafeInteger(initial?.cameraTransformIndex) ||
+        !Number.isSafeInteger(initial?.wallTransformIndex)) {
+      throw new Error("Prepared cssMaze retained scene transition drifted");
+    }
+    const previousTransitionProperty = mountedWorld.style.transitionProperty;
+    mountedWorld.style.transitionProperty = "none";
+    for (let index = 0; index < wallTransforms.length; index += 1) {
+      wallLeaves[index].style.transform = wallTransforms[index];
+      preparedWallTransformWrites += 1;
+    }
+    for (const operation of visibilityOperations) {
+      wallLeaves[Math.abs(operation) - 1].style.visibility = operation > 0 ? "" : "hidden";
+      preparedVisibilityWrites += 1;
+    }
+    mountedWorld.style.transform = playback.cameraTransforms[initial.cameraTransformIndex];
+    mountedWalls.style.transform = playback.wallTransforms[initial.wallTransformIndex];
+    preparedRootTransformWrites += 2;
+    preparedSceneTransitionCount += 1;
+    return function restorePreparedCameraTransition() {
+      mountedWorld.style.transitionProperty = previousTransitionProperty;
+    };
+  }
+
   return Object.freeze({
     camera: mountedCamera,
     scene: mountedScene,
@@ -72,6 +112,7 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml }) 
     surfaceRoot: mountedSurfaces,
     leaves: Object.freeze(leaves),
     wallLeaves: Object.freeze(wallLeaves),
+    applyPreparedSceneTransition,
     assertStableDomIdentity,
     stats() {
       assertStableDomIdentity();
@@ -87,6 +128,13 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml }) 
         runtimeDomMutationCount: 0,
         runtimeDomMutationObserverInstalled: false,
         runtimeDomGrowth: false,
+        runtimePreparedSceneTransitionCount: preparedSceneTransitionCount,
+        runtimePreparedWallTransformWrites: preparedWallTransformWrites,
+        runtimePreparedTransitionVisibilityWrites: preparedVisibilityWrites,
+        runtimePreparedTransitionRootTransformWrites: preparedRootTransformWrites,
+        runtimePreparedGeometryCalculationCount: 0,
+        runtimePreparedVisibilityComparisonCount: 0,
+        runtimeSnapshotRemountCount: 0,
       });
     },
     destroy() {
@@ -94,6 +142,12 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml }) 
       removePreparedSnapshotStyles();
     },
   });
+}
+
+function validAbsoluteVisibilityOperations(operations, leafCount) {
+  return Array.isArray(operations) && operations.length === leafCount && operations.every(
+    (operation, index) => Number.isSafeInteger(operation) && Math.abs(operation) === index + 1,
+  );
 }
 
 function hasPreparedMetadata(doc) {

@@ -1,5 +1,6 @@
 import { installCssmazeDebugApi } from "./debugApi.mjs";
-import { loadPreparedManifest, loadPreparedScene } from "./manifestClient.mjs";
+import { loadPreparedManifest, loadPreparedScene, loadPreparedSceneData } from "./manifestClient.mjs";
+import { createPreparedSceneShuffledBag } from "./preparedBankSelection.mjs";
 import { mountPreparedPolycssSnapshot } from "./polycssScene.mjs";
 import { createCssmazePreparedPlayer } from "./preparedPlayback.mjs";
 import { createRouteState } from "./routeState.mjs";
@@ -12,9 +13,18 @@ export function mountCssmazeClient() {
     route: null,
     manifest: null,
     sceneData: null,
+    player: null,
     mount: null,
     errors: [],
   };
+  let shuffledBag = null;
+  let pendingNextScene = null;
+  let snapshot = null;
+  let presentation = null;
+  let preparedSceneSwitchCount = 0;
+  let preparedScenePrefetchCount = 0;
+  let preparedTransitionFrameCallbackCount = 0;
+  let destroyed = false;
   installCssmazeDebugApi(state);
 
   window.addEventListener("error", (event) => {
@@ -34,51 +44,122 @@ export function mountCssmazeClient() {
     const route = createRouteState();
     state.route = route;
     state.manifest = await loadPreparedManifest(route);
-    const prepared = await loadPreparedScene(state.manifest, route);
-    await adoptPreparedScene(prepared, route.selection);
+    const entry = route.explicitScene
+      ? null
+      : (shuffledBag = createPreparedSceneShuffledBag(state.manifest)).nextEntry();
+    const prepared = await loadPreparedScene(state.manifest, route, { entry });
+    await mountInitialPreparedScene(prepared, route.selection);
   }
 
-  async function adoptPreparedScene({ entry, sceneData, snapshotHtml }, selection) {
+  async function mountInitialPreparedScene({ entry, sceneData, snapshotHtml }, selection) {
     setBodyState(host, "loading");
-    state.mount?.destroy();
-    const snapshot = mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml });
-    const presentation = installCssmazeStagePresentation(
+    snapshot = mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml });
+    presentation = installCssmazeStagePresentation(
       host,
       snapshot.camera,
       sceneData.camera.sourceViewport,
     );
-    const player = await createCssmazePreparedPlayer({
-      playback: sceneData.playback,
-      worldRoot: snapshot.worldRoot,
-      wallRoot: snapshot.wallRoot,
-      visibilityLeaves: snapshot.wallLeaves,
-    });
+    state.sceneData = sceneData;
+    state.route = selectedRoute(entry, selection);
+    state.player = await createPlayer(sceneData, false);
     state.mount = Object.freeze({
       ...snapshot,
-      player,
+      get player() { return state.player; },
       stats() {
+        const bagStats = shuffledBag?.stats();
         return Object.freeze({
           ...snapshot.stats(),
-          ...player.stats(),
+          ...state.player.stats(),
           ...presentation.stats(),
-          preparedSourceWallCoverageExact: sceneData.metrics.sourceWallCoverageExact,
-          preparedMergeCount: sceneData.metrics.preparedMergeCount,
+          preparedSourceWallCoverageExact: state.sceneData.metrics.sourceWallCoverageExact,
+          preparedMergeCount: state.sceneData.metrics.preparedMergeCount,
           preparedBankSceneCount: state.manifest.preparedBank.sceneIds.length,
-          preparedBankRank: entry.bankRank,
-          preparedSceneSeed: entry.nativeSeed,
+          preparedBankRank: state.route.selectedBankRank,
+          preparedSceneSeed: state.route.selectedSeed,
+          preparedBankRemainingSceneCount: bagStats?.remainingSceneCount ?? 0,
+          runtimePreparedSceneSwitchCount: preparedSceneSwitchCount,
+          runtimePreparedScenePrefetchCount: preparedScenePrefetchCount,
+          runtimePreparedTransitionFrameCallbackCount: preparedTransitionFrameCallbackCount,
+          runtimeRandomUint32Count: bagStats?.randomUint32Count ?? 0,
+          runtimeRandomSelectionPurpose: shuffledBag ? "prepared-bank-shuffled-index-only" : "none",
+          automaticPreparedSceneChange: Boolean(shuffledBag),
           runtimeRotationScoringCount: 0,
           runtimeSceneGenerationCount: 0,
           mountedSceneCount: 1,
         });
       },
       destroy() {
+        destroyed = true;
         presentation.destroy();
-        player.destroy();
+        state.player?.destroy();
         snapshot.destroy();
       },
     });
+    state.ready = true;
+    setBodyState(host, "ready");
+    requestAnimationFrame(() => state.player.resume());
+    queueNextPreparedScene();
+  }
+
+  function createPlayer(sceneData, initialVisibilityApplied) {
+    return createCssmazePreparedPlayer({
+      playback: sceneData.playback,
+      worldRoot: snapshot.worldRoot,
+      wallRoot: snapshot.wallRoot,
+      visibilityLeaves: snapshot.wallLeaves,
+      initialVisibilityApplied,
+      onPlaybackEnd: shuffledBag ? switchPreparedScene : null,
+      onError: (error) => recordError(state, error.stack || error.message || String(error), host),
+    });
+  }
+
+  function queueNextPreparedScene() {
+    if (!shuffledBag || pendingNextScene || destroyed) return;
+    const entry = shuffledBag.peekEntry();
+    preparedScenePrefetchCount += 1;
+    pendingNextScene = Object.freeze({
+      entry,
+      result: loadPreparedSceneData(state.manifest, entry).then(
+        (sceneData) => Object.freeze({ sceneData, error: null }),
+        (error) => Object.freeze({ sceneData: null, error }),
+      ),
+    });
+  }
+
+  async function switchPreparedScene() {
+    if (!shuffledBag || !pendingNextScene || destroyed) return;
+    const queued = pendingNextScene;
+    pendingNextScene = null;
+    const entry = shuffledBag.nextEntry();
+    if (entry.id !== queued.entry.id) {
+      throw new Error("cssMaze shuffled-bank prefetch order drifted");
+    }
+    const { sceneData, error } = await queued.result;
+    if (error) throw error;
+    state.player.destroy();
+    const restoreCameraTransition = snapshot.applyPreparedSceneTransition(sceneData);
     state.sceneData = sceneData;
-    state.route = Object.freeze({
+    state.route = selectedRoute(entry, "session-shuffled-prepared-scene");
+    state.player = await createPlayer(sceneData, true);
+    preparedSceneSwitchCount += 1;
+    try {
+      await new Promise((resolveTransition) => requestAnimationFrame(() => {
+        preparedTransitionFrameCallbackCount += 1;
+        requestAnimationFrame(() => {
+          preparedTransitionFrameCallbackCount += 1;
+          resolveTransition();
+        });
+      }));
+    } finally {
+      restoreCameraTransition();
+    }
+    if (destroyed) return;
+    state.player.resume();
+    queueNextPreparedScene();
+  }
+
+  function selectedRoute(entry, selection) {
+    return Object.freeze({
       requestedScene: selection === "explicit-prepared-scene" ? entry.id : null,
       scene: entry.id,
       selectedScene: entry.id,
@@ -87,9 +168,6 @@ export function mountCssmazeClient() {
       explicitScene: selection === "explicit-prepared-scene",
       selection,
     });
-    state.ready = true;
-    setBodyState(host, "ready");
-    requestAnimationFrame(() => player.resume());
   }
 }
 

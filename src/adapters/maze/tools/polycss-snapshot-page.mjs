@@ -100,7 +100,8 @@ async function main() {
   const exported = await exportPolySceneSnapshot(host, {
     title: "cssMaze — prepared XScreenSaver Maze3D source slice",
   });
-  const html = prepareExportedSnapshot(exported, sceneData);
+  const preparedSnapshot = prepareExportedSnapshot(exported, sceneData);
+  const html = preparedSnapshot.html;
   if (!html.includes("cssmaze-world") || !html.includes("cssmaze-walls") ||
       !html.includes("cssmaze-surfaces") || /<script\b|<canvas\b|<svg\b/iu.test(html) ||
       /\sdata-[a-z0-9-]+=/iu.test(html) || /\/(?:Users|home)\//u.test(html)) {
@@ -111,6 +112,9 @@ async function main() {
     sceneUrl,
     html: `${html.trimEnd()}\n`,
     mountedLeaves,
+    retainedWallTransforms: preparedSnapshot.retainedWallTransforms,
+    retainedWallBackgroundPositions: preparedSnapshot.retainedWallBackgroundPositions,
+    retainedSurfaceStyles: preparedSnapshot.retainedSurfaceStyles,
     stats,
   };
 }
@@ -133,6 +137,18 @@ function prepareExportedSnapshot(html, sceneData) {
       leaves.length !== sceneData.metrics.preparedLeafCount ||
       leaves.some((leaf) => !(leaf instanceof HTMLElement) || leaf.localName !== "s")) {
     throw new Error("Exported cssMaze retained hierarchy is incomplete");
+  }
+  const retainedWallTransforms = wallLeaves.map((leaf) => leaf.style.transform);
+  const retainedWallBackgroundPositions = wallLeaves.map((leaf) => leaf.style.backgroundPosition);
+  const retainedSurfaceStyles = surfaceLeaves.map((leaf) => Object.freeze({
+    transform: leaf.style.transform,
+    backgroundPosition: leaf.style.backgroundPosition,
+  }));
+  if (retainedWallTransforms.some((transform) => !transform.startsWith("matrix3d(")) ||
+      retainedWallBackgroundPositions.some((position) => !position) ||
+      retainedSurfaceStyles.some(({ transform, backgroundPosition }) =>
+        !transform.startsWith("matrix3d(") || !backgroundPosition)) {
+    throw new Error("Exported cssMaze retained transition styles are incomplete");
   }
 
   const surfaceAtlas = uniformAttribute(surfaceLeaves, "data-polycss-snapshot-bg");
@@ -176,7 +192,12 @@ function prepareExportedSnapshot(html, sceneData) {
   for (const element of parsed.querySelectorAll("[style]")) {
     if (!element.getAttribute("style")?.trim()) element.removeAttribute("style");
   }
-  return `<!doctype html>${parsed.documentElement.outerHTML}\n`;
+  return Object.freeze({
+    html: `<!doctype html>${parsed.documentElement.outerHTML}\n`,
+    retainedWallTransforms: Object.freeze(retainedWallTransforms),
+    retainedWallBackgroundPositions: Object.freeze(retainedWallBackgroundPositions),
+    retainedSurfaceStyles: Object.freeze(retainedSurfaceStyles),
+  });
 }
 
 function uniformAttribute(elements, name) {

@@ -1,0 +1,29 @@
+{
+  "schema": "cssmaze-prepared-bank-lock@1",
+  "tag": "cssmaze-product-bank-v1",
+  "asset": "cssmaze-product-bank-v1.tar.gz",
+  "url": "https://github.com/layoutit/cssGraphics/releases/download/cssmaze-product-bank-v1/cssmaze-product-bank-v1.tar.gz",
+  "archiveByteLength": 6484990,
+  "archiveSha256": "b96c97fa06f10f46c65f813e0e5e369d13a18c491482d052c0ea3d3082ef3dea",
+  "productClosureBytes": 6617598,
+  "productClosureSha256": "03a8ee943568b0d0f3fc5d07a20b757ceb292131dbfa5c39aebb292767545c17",
+  "productFileCount": 52,
+  "productDescriptorByteLength": 1844,
+  "productDescriptorSha256": "33586d69781cbcf4fb8b2a874aec832089a0d311a008df315bb50ce8d6d99038",
+  "sceneCount": 24,
+  "retainedWorldRootCount": 1,
+  "retainedWallRootCount": 1,
+  "retainedSurfaceRootCount": 1,
+  "preparedLeavesPerScene": 171,
+  "totalPreparedLeaves": 4104,
+  "totalTimelineStates": 33264,
+  "totalVisibilityDeltaOperations": 56370,
+  "textureCount": 3,
+  "publicBoundary": {
+    "xscreensaverSourceIncluded": false,
+    "xscreensaverTextureFileCount": 3,
+    "nativeBinaryIncluded": false,
+    "nativeCaptureIncluded": false,
+    "oraclePacketIncluded": false
+  }
+}

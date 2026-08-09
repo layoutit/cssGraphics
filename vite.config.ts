@@ -20,6 +20,12 @@ function distributionFiles(): readonly DistributionFile[] {
   const files: DistributionFile[] = [
     { path: "catalog.json", mediaType: "application/json" },
     { path: "favicon.ico", mediaType: "image/x-icon" },
+    { path: "landing/flowerbox.webp", mediaType: "image/webp" },
+    { path: "landing/gears.webp", mediaType: "image/webp" },
+    { path: "landing/gravitywell.webp", mediaType: "image/webp" },
+    { path: "landing/maze.webp", mediaType: "image/webp" },
+    { path: "landing/menger.webp", mediaType: "image/webp" },
+    { path: "landing/pipes.webp", mediaType: "image/webp" },
     { path: "robots.txt", mediaType: "text/plain" },
     { path: "sitemap.xml", mediaType: "application/xml" },
   ];
@@ -87,6 +93,7 @@ function distributionPlugin(): Plugin {
 }
 
 function siteConfig(): UserConfig {
+  const deployBuild = process.env.CSSGRAPHICS_DEPLOY_BUILD === "1";
   return {
     root: resolve(repoRoot, "site"),
     publicDir: false,
@@ -99,7 +106,7 @@ function siteConfig(): UserConfig {
     },
     build: {
       outDir: resolve(repoRoot, "dist/site"),
-      emptyOutDir: true,
+      emptyOutDir: !deployBuild,
       rollupOptions: {
         input: resolve(repoRoot, "site/index.html"),
       },

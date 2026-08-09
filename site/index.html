@@ -5,62 +5,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Interactive 3D assets rendered entirely with HTML and CSS."
+      content="3D scenes rendered entirely with HTML and CSS."
     />
-    <meta name="theme-color" content="#0d0d0d" />
+    <meta name="theme-color" content="#0b1119" />
+    <link rel="canonical" href="https://css.graphics/" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <title>css.graphics</title>
   </head>
   <body>
     <header class="site-header">
-      <a href="/" aria-label="Load another random asset">css.graphics</a>
+      <a class="site-wordmark" href="/" aria-label="css.graphics home">
+        <svg
+          class="site-wordmark-svg"
+          viewBox="0 0 260 30"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <text x="0" y="23"><tspan class="site-wordmark-css">css.</tspan><tspan class="site-wordmark-graphics">graphics</tspan></text>
+        </svg>
+      </a>
+
+      <nav class="site-actions" aria-label="Site actions">
+        <a
+          class="site-action-icon-only"
+          href="https://github.com/layoutit/cssGraphics"
+          aria-label="View css.graphics on GitHub"
+        >
+          <svg class="site-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3.3-.4 6.8-1.6 6.8-7A5.4 5.4 0 0 0 19.4 4 5 5 0 0 0 19.3.5S18.2.1 15 1.8a13.4 13.4 0 0 0-7 0C4.8.1 3.7.5 3.7.5A5 5 0 0 0 3.6 4a5.4 5.4 0 0 0-1.4 3.5c0 5.4 3.5 6.6 6.8 7A4.8 4.8 0 0 0 8 18v4"></path>
+            <path d="M9 19c-3 .9-3-1.5-4.2-2"></path>
+          </svg>
+        </a>
+      </nav>
     </header>
 
-    <section class="code-panel" aria-label="Copy-paste code">
-      <pre tabindex="0"><code id="code-source" class="language-markup"></code></pre>
-    </section>
-
-    <aside class="assets-sidebar" id="panel" aria-label="Assets">
-      <button class="panel-close" type="button" aria-label="Close assets">×</button>
-
-      <label class="search">
-        <span class="visually-hidden">Search assets</span>
-        <input id="filter" type="search" placeholder="Search assets" autocomplete="off" />
-        <kbd aria-hidden="true">/</kbd>
-      </label>
-
-      <nav aria-label="Assets">
-        <div id="asset-list"></div>
-        <p class="no-results" role="status" hidden>No matches.</p>
-      </nav>
-    </aside>
-
-    <button class="scrim" type="button" aria-label="Close assets" tabindex="-1"></button>
-
-    <main id="viewer">
-      <header class="viewer-header">
-        <button
-          class="panel-open"
-          type="button"
-          aria-label="Open assets"
-          aria-controls="panel"
-          aria-expanded="false"
-        >
-          ☰
-        </button>
-        <div class="asset-heading">
-          <span id="asset-name">Asset</span>
-          <p class="asset-info" aria-label="Asset details">
-            <a id="asset-source" href="">Source</a>
-            <a id="asset-license" href="">MIT</a>
-            <span><span id="asset-polygons">0</span> polygons</span>
-          </p>
-        </div>
-      </header>
-
-      <div class="asset-stage" id="asset-stage" aria-label="Interactive asset viewer">
-        <div class="prepared-asset-host" id="asset-scene"></div>
-      </div>
+    <main class="thumbnail-gallery" aria-label="css.graphics projects">
+      <nav id="asset-list" aria-label="Projects"></nav>
     </main>
 
     <script type="module" src="/main.ts"></script>

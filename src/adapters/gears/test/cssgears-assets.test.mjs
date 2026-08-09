@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { gunzipSync } from "node:zlib";
 import { PNG } from "pngjs";
+import { resolvePreparedFit } from "../src/cssgears/stagePresentation.mjs";
 import { CSSGEARS_PREPARED_BANK } from "../src/prepare/cssgears/prepare.mjs";
 
 const generatedRoot = "build/generated/public/cssgears";
@@ -152,10 +153,18 @@ function assertPreparedScene(entry) {
   assert.equal(sceneData.showreel.runtimeInterpolation, false);
   assert.equal(sceneData.showreel.runtimeEasingCalculation, false);
   assert.equal(sceneData.showreel.runtimeEdgeSelection, false);
-  assert.equal(sceneData.showreel.responsivePresentation.schema, "cssgears-responsive-presentation@1");
+  assert.equal(sceneData.showreel.responsivePresentation.schema, "cssgears-responsive-presentation@2");
   assert.equal(sceneData.showreel.responsivePresentation.breakpointPixels, 600);
-  assert.equal(sceneData.showreel.responsivePresentation.mobile.scaleMode, "cover");
+  assert.equal(sceneData.showreel.responsivePresentation.mobile.scaleMode, "prepared-bounds-contain");
+  assert.equal(sceneData.showreel.responsivePresentation.mobile.preparedBounds.schema, "cssgears-prepared-projection-bounds@1");
+  assert.equal(sceneData.showreel.responsivePresentation.mobile.preparedBounds.geometry,
+    "exact-captured-source-vertices-all-prepared-spin-states");
+  assert.equal(sceneData.showreel.responsivePresentation.mobile.preparedBounds.sourceStateCount, 500);
   assert.equal(sceneData.showreel.responsivePresentation.runtimeOrientationCalculation, false);
+  assert.equal(sceneData.showreel.responsivePresentation.runtimeGeometryBoundsCalculation, false);
+  for (const [width, height] of [[320, 568], [390, 844], [430, 932]]) {
+    assertPreparedMobileFit(sceneData.showreel.responsivePresentation.mobile, width, height);
+  }
   assert.equal(sceneData.showreel.edgeSelection.seed, entry.nativeSeed);
   assert.equal(sceneData.showreel.edgeSelection.candidatesEvaluated, 24);
   assert.equal(sceneData.showreel.edgeSelection.crossingPairCount, 0);
@@ -244,6 +253,24 @@ function assertPreparedScene(entry) {
     mesh.polygons.flatMap((polygon) => polygon.sourceFaceIndices)).sort((left, right) => left - right);
   assert.equal(coverage.length, lighting.faceCount);
   assert.ok(coverage.every((sourceFaceIndex, index) => sourceFaceIndex === index));
+}
+
+function assertPreparedMobileFit(mobile, width, height) {
+  const fit = resolvePreparedFit({
+    width,
+    height,
+    sourceWidth: 720,
+    sourceHeight: 720,
+    profile: "mobile",
+    preparedProfile: mobile,
+  });
+  const bounds = mobile.preparedBounds;
+  const inset = mobile.safeInsetPixels;
+  assert.ok(fit.scale > 0);
+  assert.ok(width / 2 + fit.horizontalOffset + fit.scale * bounds.minX >= inset - 1e-7);
+  assert.ok(width / 2 + fit.horizontalOffset + fit.scale * bounds.maxX <= width - inset + 1e-7);
+  assert.ok(height / 2 + fit.verticalOffset + fit.scale * bounds.minY >= inset - 1e-7);
+  assert.ok(height / 2 + fit.verticalOffset + fit.scale * bounds.maxY <= height - inset + 1e-7);
 }
 
 function assertPreparedShowreelBank(manifest) {

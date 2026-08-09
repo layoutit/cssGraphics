@@ -5,6 +5,7 @@ import { buildPreparedGearsRenderBundles } from "./preparedRenderBundles.mjs";
 import { sourceProvenanceFor } from "./provenance.mjs";
 import { cssgearsSlicePlan, describeFirstSlice } from "./slicePlan.mjs";
 import {
+  buildPreparedShowreel,
   buildSourceBoundSceneProfile,
   sourcePolygonToPolyCss,
 } from "./sourceProfile.mjs";
@@ -17,7 +18,6 @@ export async function buildCssgearsFirstSliceScene({ dataSource, nativeCapture, 
     sourceProfile,
     assembly,
     playback,
-    showreel,
     camera,
   } = buildSourceBoundSceneProfile(nativeCapture);
   const capturedMeshes = [];
@@ -50,6 +50,12 @@ export async function buildCssgearsFirstSliceScene({ dataSource, nativeCapture, 
       polygons: Object.freeze(polygons),
     }));
   }
+  const showreel = buildPreparedShowreel(
+    playback,
+    assembly,
+    sourceProfile,
+    capturedMeshes,
+  );
 
   if (sourceTriangleCount !== 0 || sourceQuadCount !== sourcePolygonCount) {
     throw new Error(`Prepared cssGears bank seed ${sourceProfile.seed} is outside the quad-only retained renderer contract`);

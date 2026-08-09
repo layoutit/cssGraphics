@@ -27,6 +27,9 @@ importers:
       '@types/prismjs':
         specifier: 1.26.5
         version: 1.26.5
+      glpk.js:
+        specifier: 4.0.2
+        version: 4.0.2
       playwright:
         specifier: 1.60.0
         version: 1.60.0
@@ -553,10 +556,16 @@ packages:
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
 
+  glpk.js@4.0.2:
+    resolution: {integrity: sha512-GADfTGaExp7C6JfBnBdx7SF80hxPO30VvLP9wpA6EhXgDj5/Oapm+gyF0EFEC7RrPX4JpfRI3TmAtlLckeQIXw==}
+
   nanoid@3.3.16:
     resolution: {integrity: sha512-bzlKTyNJ7+LdGIIwy8ijFpIqEQIvafahV7eYykJ8Cvh42EdJeODoJ6gUJXpQJvej1BddH8OqTXZNE/KfbWAu8Q==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
+
+  pako@2.2.0:
+    resolution: {integrity: sha512-zJq6RP/5q+TO2OpFV3FHzlPnFjmkb7Nc99a5SNjJE+uu/PkpChs+NIZSSzbBoD+6kjiISXjfYdwj1ZRQ81dz/w==}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -992,7 +1001,13 @@ snapshots:
   fsevents@2.3.3:
     optional: true
 
+  glpk.js@4.0.2:
+    dependencies:
+      pako: 2.2.0
+
   nanoid@3.3.16: {}
+
+  pako@2.2.0: {}
 
   picocolors@1.1.1: {}
 

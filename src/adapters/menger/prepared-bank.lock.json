@@ -1,0 +1,33 @@
+{
+  "schema": "cssmenger-prepared-bank-lock@1",
+  "tag": "cssmenger-product-bank-v1",
+  "asset": "cssmenger-product-bank-v1.tar.gz",
+  "url": "https://github.com/layoutit/cssGraphics/releases/download/cssmenger-product-bank-v1/cssmenger-product-bank-v1.tar.gz",
+  "archiveByteLength": 61645,
+  "archiveSha256": "82f15757c510a504946a634304aa70fd2f57e60ba1e918ef4d3ce3219957a544",
+  "productClosureBytes": 475938,
+  "productClosureSha256": "263c99d4d6f01e388219626d4d46c4c499f24e94f3608866e17c8c112eb83919",
+  "productFileCount": 4,
+  "productDescriptorByteLength": 1073,
+  "productDescriptorSha256": "064da0177b9de634f4088a7c10b022021bf37688a2aa2581ed3b0648baf3ab51",
+  "sceneCount": 1,
+  "retainedRenderWrapperCount": 2,
+  "retainedModelRootCount": 0,
+  "retainedAxisRootCount": 0,
+  "preparedLeafCount": 84,
+  "sourceFaceCount": 18048,
+  "mergedSourceFaceCount": 17964,
+  "timelineStateCount": 1440,
+  "paletteStateCount": 128,
+  "atlasAssetCount": 1,
+  "nativeAlignment": {
+    "sourceSemantics": "aligned-for-fixed-depth-3-slice",
+    "visualParity": "unqualified"
+  },
+  "publicBoundary": {
+    "xscreensaverSourceIncluded": false,
+    "nativeBinaryIncluded": false,
+    "nativeCaptureIncluded": false,
+    "oraclePacketIncluded": false
+  }
+}

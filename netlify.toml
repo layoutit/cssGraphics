@@ -25,3 +25,8 @@
   for = "/cssgears/scenes/*.gz"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/cssmenger/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

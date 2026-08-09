@@ -67,6 +67,30 @@ pnpm dev:gears
 The pinned XScreenSaver checkout, native binaries, captures, and generated
 browser assets are not committed.
 
+### Menger
+
+[`src/adapters/menger`](src/adapters/menger) is a source-backed PolyCSS port of
+XScreenSaver Menger. Its fixed depth-3 slice preserves the seeded recursive
+cell and face census, palette rows, rotator states, 30 ms cadence, and prepared
+camera. Prepare time merges 18,048 source faces into 84 retained coplanar plane
+bundles with exact source-face coverage; runtime retains one model root and
+three axis roots and performs no geometry, recursion, merging, color,
+rotation, camera, or DOM construction.
+
+```sh
+pnpm prepare:menger:artifact
+pnpm build:menger
+pnpm dev:menger
+```
+
+Native visual parity remains unqualified: the fixed slice does not yet include
+depth changes, wander or trackball input, or prepared native moving
+fixed-function highlights. Its local exact-first oracle proves 46 matching
+source states plus bit-exact native A/A and browser A/A frame sequences, then
+records the native/browser pixel result as diverged with absolute-difference
+artifacts. The pinned XScreenSaver checkout, native binaries, captures, and
+generated browser assets are not committed.
+
 ## License
 
 cssGraphics source code is [MIT licensed](LICENSE). Third-party models retain

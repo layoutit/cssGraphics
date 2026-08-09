@@ -79,7 +79,7 @@ function snapshotEntryForScene(scene) {
   }
   if ("prepared-polycss-snapshot" !== "prepared-polycss-snapshot") return {};
   return {
-    snapshotUrl: "/cssmenger/scenes/" + scene.id + ".polycss.html",
+    snapshotUrl: "/cssmenger/scenes/" + scene.id + ".polycss.txt",
     snapshotKind: "polycss-exported-html",
     artifactKind: "prepared-polycss-snapshot",
   };

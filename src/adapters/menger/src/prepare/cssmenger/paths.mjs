@@ -22,9 +22,9 @@ export function generatedSceneUrl(sceneId) {
 }
 
 export function generatedSnapshotPath(sceneId) {
-  return join(generatedSceneDir, sceneId + ".polycss.html");
+  return join(generatedSceneDir, sceneId + ".polycss.txt");
 }
 
 export function generatedSnapshotUrl(sceneId) {
-  return "/cssmenger/scenes/" + sceneId + ".polycss.html";
+  return "/cssmenger/scenes/" + sceneId + ".polycss.txt";
 }

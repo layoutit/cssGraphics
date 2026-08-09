@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { dirname, join } from "node:path";
 import { chromium } from "playwright";
@@ -15,8 +15,8 @@ const sceneId = "depth-3";
 const sceneUrl = `/cssmenger/scenes/${sceneId}.json`;
 const scenePath = join(generatedPublicRoot, "scenes", `${sceneId}.json`);
 const privateScenePath = join(generatedPrivateRoot, "scenes", `${sceneId}.prepared.json`);
-const snapshotPath = join(generatedPublicRoot, "scenes", `${sceneId}.polycss.html`);
-const snapshotUrl = `/cssmenger/scenes/${sceneId}.polycss.html`;
+const snapshotPath = join(generatedPublicRoot, "scenes", `${sceneId}.polycss.txt`);
+const snapshotUrl = `/cssmenger/scenes/${sceneId}.polycss.txt`;
 await stagePreparedScene();
 const port = await freePort();
 let output = "";
@@ -44,6 +44,7 @@ try {
     if (snapshot.status !== "ready") throw new Error(snapshot.error || "cssMenger snapshot failed");
     await mkdir(dirname(snapshotPath), { recursive: true });
     await writeFile(snapshotPath, snapshot.html);
+    await rm(join(dirname(snapshotPath), `${sceneId}.polycss.html`), { force: true });
     await publishRuntimeScene();
     console.log(JSON.stringify({ snapshotPath, snapshotUrl, mountedLeaves: snapshot.mountedLeaves, stats: snapshot.stats }, null, 2));
   } finally {

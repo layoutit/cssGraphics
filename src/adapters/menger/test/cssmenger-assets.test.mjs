@@ -43,7 +43,7 @@ test("generated manifest and scene expose one source-backed default path", async
 });
 
 test("prepared snapshot is retained DOM without an alternate renderer", async () => {
-  const html = await readFile(join(generated, "scenes/depth-3.polycss.html"), "utf8");
+  const html = await readFile(join(generated, "scenes/depth-3.polycss.txt"), "utf8");
   assert.match(html, /class="[^"]*polycss-scene/u);
   assert.match(html, /cssmenger-model/u);
   assert.match(html, /cssmenger-axis-x/u);

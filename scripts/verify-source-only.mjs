@@ -37,6 +37,12 @@ const DISTRIBUTION_PREFIXES = Object.freeze([
 ]);
 const README_MEDIA_PATHS = new Set([
   "site/public/favicon.ico",
+  "site/public/landing/flowerbox.webp",
+  "site/public/landing/gears.webp",
+  "site/public/landing/gravitywell.webp",
+  "site/public/landing/maze.webp",
+  "site/public/landing/menger.webp",
+  "site/public/landing/pipes.webp",
   "site/readme/animated-morph-sphere.gif",
   "site/readme/cube-to-sphere.gif",
   "site/readme/pipes.gif",

@@ -1,0 +1,27 @@
+{
+  "schema": "cssgravitywell-prepared-bank-lock@1",
+  "tag": "cssgravitywell-product-bank-v1",
+  "asset": "cssgravitywell-product-bank-v1.tar.gz",
+  "url": "https://github.com/layoutit/cssGraphics/releases/download/cssgravitywell-product-bank-v1/cssgravitywell-product-bank-v1.tar.gz",
+  "archiveByteLength": 28639334,
+  "archiveSha256": "90352c688a45cf8c33d89d5eb7e4eef15a32a139edfd67221315f45c4843dc8e",
+  "productClosureBytes": 28802224,
+  "productClosureSha256": "0095490ba8d890ca751c888f63cc680c423cf6ec5710d55a681994b01d0560ee",
+  "productFileCount": 100,
+  "productDescriptorByteLength": 1519,
+  "productDescriptorSha256": "c727492afefc3fff5dd7aba6246c9899eb7e2d131724072ebc6b773c9292f597",
+  "bankCount": 24,
+  "retainedShapeRootCount": 1,
+  "retainedLeafCount": 1922,
+  "preparedFrameCount": 7665,
+  "transformAssetCount": 72,
+  "transformEncodedBytes": 28339450,
+  "colorAssetCount": 24,
+  "changeAssetCount": 24,
+  "publicBoundary": {
+    "xscreensaverSourceIncluded": false,
+    "nativeBinaryIncluded": false,
+    "nativeCaptureIncluded": false,
+    "oraclePacketIncluded": false
+  }
+}

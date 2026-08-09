@@ -71,24 +71,40 @@ export async function captureBrowserMengerFrames(options = {}) {
           await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
           const playback = debug.scene.playback;
           const publicationRoot = document.querySelector(".polycss-camera > .polycss-scene");
+          const leaves = [...document.querySelectorAll(".polycss-camera > .polycss-scene > b, .polycss-camera > .polycss-scene > i, .polycss-camera > .polycss-scene > s")];
+          const frontFacingSchedule = playback.frontFacingSchedule;
+          const preparedAxisAtlasPositions = playback.colorRows[tick].map((paletteIndex) =>
+            debug.scene.planeAtlas.paletteBackgroundPositionYs[paletteIndex]);
+          const publishedTransform = publicationRoot?.style.transform ?? null;
+          const expectedTransformMatrix = new DOMMatrix(playback.transforms[tick]).toFloat64Array();
+          const publishedTransformMatrix = new DOMMatrix(publishedTransform).toFloat64Array();
           return {
             tick: debug.state().tick,
             paused: debug.state().paused,
             preparedTransform: playback.transforms[tick],
             expectedPublishedTransform: playback.transforms[tick],
-            publishedTransform: publicationRoot?.style.getPropertyValue("--m") ?? null,
+            publishedTransform,
+            publishedTransformMatrixMaxDelta: Math.max(...publishedTransformMatrix.map((value, index) =>
+              Math.abs(value - expectedTransformMatrix[index]))),
             paletteIndices: playback.colorRows[tick],
             paletteSource16: playback.colorRows[tick].map((paletteIndex) => playback.palette[paletteIndex].source16),
-            preparedAxisAtlasPositions: playback.colorRows[tick].map((paletteIndex) =>
-              debug.scene.planeAtlas.paletteBackgroundPositionYs[paletteIndex]),
-            publishedAxisAtlasPositions: ["--x", "--y", "--z"].map((property) =>
-              publicationRoot?.style.getPropertyValue(property) ?? null),
+            preparedAxisAtlasPositions,
+            publishedSelectedLeafAtlasPositions: [0, 1, 2].map((axis) => {
+              const segmentIndex = tick * frontFacingSchedule.axisCount + axis;
+              const start = frontFacingSchedule.offsets[segmentIndex];
+              const end = frontFacingSchedule.offsets[segmentIndex + 1];
+              return frontFacingSchedule.leafIndices
+                .slice(start, end)
+                .map((leafIndex) =>
+                leaves[leafIndex]?.style.backgroundPositionY ?? null);
+            }),
             stableDom: debug.assertStableDomIdentity(),
           };
         }, sourceTick);
         if (row.tick !== sourceTick || !row.paused || !row.stableDom ||
-            row.publishedTransform !== row.expectedPublishedTransform ||
-            row.publishedAxisAtlasPositions.some((value, axis) => value !== row.preparedAxisAtlasPositions[axis])) {
+            row.publishedTransformMatrixMaxDelta > 1e-5 ||
+            row.publishedSelectedLeafAtlasPositions.some((values, axis) =>
+              values.some((value) => value !== row.preparedAxisAtlasPositions[axis]))) {
           throw new Error(`Browser oracle state publication drifted at tick ${sourceTick}: ${JSON.stringify(row)}`);
         }
         rows.push(row);

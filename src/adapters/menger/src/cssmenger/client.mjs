@@ -28,6 +28,7 @@ export function mountCssmengerClient(host) {
       playback: sceneData.playback,
       planeAtlas: sceneData.planeAtlas,
       publicationRoot: snapshot.publicationRoot,
+      leaves: snapshot.leaves,
     });
     state.mount = Object.freeze({
       ...snapshot,

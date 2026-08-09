@@ -193,7 +193,8 @@ try {
       tickEnd: afterState.state.tick,
       preparedStateAdvanceCount: afterState.state.tick - beforeState.state.tick,
       modelTransformWriteCount: afterState.state.tick - beforeState.state.tick,
-      axisColorWriteCount: (afterState.state.tick - beforeState.state.tick) * 3,
+      frontFacingLeafPaletteWriteEstimate: (afterState.state.tick - beforeState.state.tick) *
+        afterState.stats.preparedFrontFacingLeafWritesPerScheduledTick.average,
       schedulerCallbackCount: afterState.state.tick - beforeState.state.tick,
       runtimeInstrumentationEnabled: afterState.stats.runtimeInstrumentationEnabled,
       runtimeHotPathDomStyleReadCount: afterState.stats.runtimeHotPathDomStyleReadCount,

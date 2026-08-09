@@ -84,6 +84,7 @@ try {
     const debug = globalThis.__cssMengerDebug;
     const scene = debug.scene;
     const publicationRoot = document.querySelector(".polycss-camera > .polycss-scene");
+    const leaves = [...document.querySelectorAll(".polycss-camera > .polycss-scene > b, .polycss-camera > .polycss-scene > i, .polycss-camera > .polycss-scene > s")];
     if (!(publicationRoot instanceof HTMLElement) ||
         scene?.playback?.transforms?.length <= tick + 1 ||
         scene?.playback?.colorRows?.length <= tick + 1) {
@@ -101,21 +102,17 @@ try {
     await settle();
 
     const transformOnly = await measuredCase("cssmenger-transform-only", () => {
-      publicationRoot.style.setProperty("--m", nextTransform);
-      return { writeCount: 1, property: "--m", targetCount: 1 };
+      publicationRoot.style.transform = nextTransform;
+      return { writeCount: 1, property: "transform", targetCount: 1 };
     });
-    publicationRoot.style.setProperty("--m", originalTransform);
+    publicationRoot.style.transform = originalTransform;
     await settle();
 
     const paletteOnly = await measuredCase("cssmenger-palette-only", () => {
-      for (let axis = 0; axis < 3; axis += 1) {
-        publicationRoot.style.setProperty(`--${"xyz"[axis]}`, atlasPositions[nextColorRow[axis]]);
-      }
-      return { writeCount: 3, property: "--x/--y/--z", targetCount: 1 };
+      const writeCount = writeSelectedColors(tick + 1, nextColorRow);
+      return { writeCount, property: "background-position-y", targetCount: writeCount };
     });
-    for (let axis = 0; axis < 3; axis += 1) {
-      publicationRoot.style.setProperty(`--${"xyz"[axis]}`, atlasPositions[originalColorRow[axis]]);
-    }
+    writeSelectedColors(tick, originalColorRow);
     await settle();
 
     performance.mark("cssmenger-frame-work-start");
@@ -130,7 +127,7 @@ try {
       statsDelta: Object.freeze({
         preparedStatesApplied: publication.after.tick - publication.before.tick,
         runtimeModelTransformWrites: Number(publication.modelTransform.changed),
-        runtimeAxisColorWrites: publication.axes.filter((axis) => axis.changed).length,
+        runtimeAxisColorWrites: publication.axes.reduce((count, axis) => count + axis.targetCount, 0),
         runtimeSchedulerCallbackCount: 0,
         runtimeDomMutationCount: afterStats.runtimeDomMutationCount - beforeStats.runtimeDomMutationCount,
         runtimeGeometryConstructionCount: afterStats.runtimeGeometryConstructionCount - beforeStats.runtimeGeometryConstructionCount,
@@ -139,6 +136,22 @@ try {
       stableDom: debug.assertStableDomIdentity(),
       finalState: debug.state(),
     };
+
+    function writeSelectedColors(stateIndex, colorRow) {
+      const schedule = scene.playback.frontFacingSchedule;
+      let writeCount = 0;
+      for (let axis = 0; axis < 3; axis += 1) {
+        const backgroundPositionY = atlasPositions[colorRow[axis]];
+        const segmentIndex = stateIndex * schedule.axisCount + axis;
+        const start = schedule.offsets[segmentIndex];
+        const end = schedule.offsets[segmentIndex + 1];
+        for (let index = start; index < end; index += 1) {
+          leaves[schedule.leafIndices[index]].style.backgroundPositionY = backgroundPositionY;
+          writeCount += 1;
+        }
+      }
+      return writeCount;
+    }
 
     async function measuredCase(prefix, publish) {
       performance.mark(`${prefix}-start`);

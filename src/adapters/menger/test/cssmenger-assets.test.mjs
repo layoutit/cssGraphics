@@ -32,6 +32,15 @@ test("generated manifest and scene expose one source-backed default path", async
   assert.equal(manifest.scenes[0].metrics.preparedModelRootCount, 0);
   assert.equal(manifest.scenes[0].metrics.preparedAxisRootCount, 0);
   assert.equal(scene.planeAtlas.leafCount, 84);
+  assert.equal(scene.playback.frontFacingSchedule.schema, "cssmenger-prepared-front-facing-leaf-schedule@1");
+  assert.equal(scene.playback.frontFacingSchedule.offsets.length, 1440 * 3 + 1);
+  assert.equal(scene.playback.frontFacingSchedule.offsets.at(-1), scene.playback.frontFacingSchedule.leafIndices.length);
+  assert.equal(scene.playback.frontFacingSchedule.frontFaceDilationTicks, 1);
+  assert.deepEqual(scene.metrics.preparedFrontFacingLeafCountPerState, {
+    minimum: 41,
+    maximum: 50,
+    average: 42.725,
+  });
   assert.equal(scene.planeAtlas.sourceFaceCoverageExact, true);
   assert.equal(scene.metrics.sourceFaceCoverageExact, true);
   assert.equal(scene.metrics.preparedTimelineStateCount, 1440);
@@ -60,7 +69,9 @@ test("prepared snapshot is retained DOM without an alternate renderer", async ()
   const leafStyles = [...html.matchAll(/<[bis] style="([^"]+)"><\/[bis]>/gu)].map((match) => match[1]);
   assert.equal(leafStyles.length, 84);
   assert.equal(leafStyles.every((style) =>
-    /^transform: matrix3d\([^)]+\); background-position-x: -\d+px;$/u.test(style)), true);
+    /^transform: matrix3d\([^)]+\); background-position: -\d+px -\d+px;$/u.test(style)), true);
+  assert.match(html, /translate: 0px 0px -980\.385px; scale: 1\.4/u);
+  assert.doesNotMatch(html, /var\(--[mxyz]\)|--[mxyz]:/u);
   assert.match(html, /backface-visibility:hidden!important/u);
   assert.match(html, /image-rendering:pixelated/u);
   assert.doesNotMatch(html, /<script\b|<canvas\b|<svg\b/iu);

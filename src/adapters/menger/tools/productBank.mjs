@@ -43,6 +43,10 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     scene.playback?.stateCount === 1_440 &&
     scene.playback?.transforms?.length === 1_440 &&
     scene.playback?.colorRows?.length === 1_440 &&
+    scene.playback?.frontFacingSchedule?.schema === "cssmenger-prepared-front-facing-leaf-schedule@1" &&
+    scene.playback?.frontFacingSchedule?.offsets?.length === 1_440 * 3 + 1 &&
+    scene.playback.frontFacingSchedule.offsets.at(-1) === scene.playback.frontFacingSchedule.leafIndices?.length &&
+    scene.playback.frontFacingSchedule.frontFaceDilationTicks === 1 &&
     scene.playback?.sourceFrameDelayMilliseconds === 30 &&
     scene.playback?.adjacentPublicationMode === "all-fields-change" &&
     scene.playback?.runtimeInterpolation === false &&
@@ -80,7 +84,8 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     count(snapshot, /<s\b/gu) === 28 &&
     count(snapshot, /<div\b/gu) === 2 &&
     count(snapshot, /style="/gu) === 85 &&
-    !/cssmenger-(?:model|axis)/u.test(snapshot),
+    !/cssmenger-(?:model|axis)/u.test(snapshot) &&
+    !/var\(--[mxyz]\)|--[mxyz]:/u.test(snapshot),
   "retained DOM");
   assert(!/\sdata-[\w-]+=/u.test(snapshot) && !/<(?:script|canvas|svg)\b/iu.test(snapshot),
     "lean DOM");

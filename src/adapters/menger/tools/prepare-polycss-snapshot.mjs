@@ -46,7 +46,7 @@ try {
     await mkdir(dirname(snapshotPath), { recursive: true });
     await writeFile(snapshotPath, snapshot.html);
     await rm(join(dirname(snapshotPath), `${sceneId}.polycss.html`), { force: true });
-    await publishRuntimeScene();
+    await publishRuntimeScene(snapshot.frontFacingSchedule);
     console.log(JSON.stringify({ snapshotPath, snapshotUrl, mountedLeaves: snapshot.mountedLeaves, stats: snapshot.stats }, null, 2));
   } finally {
     await browser.close();
@@ -66,15 +66,27 @@ async function stagePreparedScene() {
   await writeFile(privateScenePath, `${JSON.stringify(scene, null, 2)}\n`);
 }
 
-async function publishRuntimeScene() {
+async function publishRuntimeScene(frontFacingSchedule) {
   const scene = JSON.parse(await readFile(privateScenePath, "utf8"));
+  if (frontFacingSchedule?.schema !== "cssmenger-prepared-front-facing-leaf-schedule@1" ||
+      frontFacingSchedule.stateCount !== scene.playback?.stateCount ||
+      frontFacingSchedule.offsets?.length !== scene.playback.stateCount * 3 + 1 ||
+      frontFacingSchedule.offsets.at(-1) !== frontFacingSchedule.leafIndices?.length) {
+    throw new Error("Prepared cssMenger front-facing schedule is invalid");
+  }
   const runtimeScene = {
     ...scene,
+    playback: { ...scene.playback, frontFacingSchedule },
     metrics: {
       ...scene.metrics,
       preparedRenderWrapperCount: 2,
       preparedModelRootCount: 0,
       preparedAxisRootCount: 0,
+      preparedFrontFacingLeafCountPerState: Object.freeze({
+        minimum: frontFacingSchedule.minimumSelectedLeafCountPerState,
+        maximum: frontFacingSchedule.maximumSelectedLeafCountPerState,
+        average: frontFacingSchedule.averageSelectedLeafCountPerState,
+      }),
     },
     renderer: { ...scene.renderer, runtimeGeometryPayload: false },
     meshDescriptors: scene.meshes.map((mesh) => ({

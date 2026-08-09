@@ -8,8 +8,9 @@ the pinned XScreenSaver 6.15 source semantics. Preparation generates the exact
 fallback, then prebakes its holes into 84 coverage-proven directional-plane
 atlas bundles. It prepares 1,440 rotator/palette states and exports one stable
 PolyCSS snapshot with only camera/scene projection roots and 84 direct leaves.
-The browser adopts that snapshot and publishes four prepared scene custom
-properties: one model transform and three axis-atlas rows.
+The browser writes the prepared model transform directly to the scene and uses
+the prepared front-facing leaf schedule to publish each exact palette row only
+to the roughly half of the leaves that can face the camera in that state.
 
 ```sh
 pnpm install

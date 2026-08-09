@@ -41,11 +41,24 @@ const result = await withCssmazeBrowser(async ({ page }) => {
     retainedLeaves: document.querySelectorAll(".cssmaze-world b, .cssmaze-world i, .cssmaze-world s, .cssmaze-world u").length,
     forbiddenElements: document.querySelectorAll("#scene canvas, #scene svg").length,
     externalNodeMutations: { ...window.__cssMazeSmokeNodeMutations.nodeMutations },
-    visibleWallLeaves: [...document.querySelectorAll(".cssmaze-walls > [data-polycss-leaf=polygon]")]
+    visibleWallLeaves: [...document.querySelectorAll(".cssmaze-walls > b, .cssmaze-walls > i, .cssmaze-walls > s, .cssmaze-walls > u")]
       .filter((leaf) => getComputedStyle(leaf).visibility !== "hidden").length,
+    preparedMetadataCount: [...document.querySelectorAll("#scene *")].reduce(
+      (count, element) => count + [...element.attributes]
+        .filter((attribute) => attribute.name.startsWith("data-")).length,
+      0,
+    ),
+    pageMetadata: (() => {
+      const names = [...document.querySelectorAll("*")].flatMap((element) =>
+        [...element.attributes]
+          .map((attribute) => attribute.name)
+          .filter((name) => name.startsWith("data-")));
+      const tooling = names.filter((name) => name === "data-vite-dev-id").length;
+      return { total: names.length, tooling, product: names.length - tooling };
+    })(),
     backfaceVisibility: {
-      wall: getComputedStyle(document.querySelector('[data-group^="wall-"]')).backfaceVisibility,
-      ceiling: getComputedStyle(document.querySelector('[data-group="ceiling"]')).backfaceVisibility,
+      wall: getComputedStyle(document.querySelector(".cssmaze-walls > s")).backfaceVisibility,
+      ceiling: getComputedStyle(document.querySelector(".cssmaze-surfaces > s:last-child")).backfaceVisibility,
     },
     preparedCameraSmoothing: {
       property: getComputedStyle(document.querySelector(".cssmaze-world")).transitionProperty,
@@ -53,26 +66,48 @@ const result = await withCssmazeBrowser(async ({ page }) => {
       timing: getComputedStyle(document.querySelector(".cssmaze-world")).transitionTimingFunction,
     },
     atlasLeafSizing: {
-      raster: document.querySelectorAll('[data-polycss-texture-leaf-sizing="raster"]').length,
-      canonical: document.querySelectorAll('[data-polycss-texture-leaf-sizing="canonical"]').length,
-      floor: Number(document.querySelector('[data-group="floor"]').dataset.polycssTextureLeafWidth),
-      wall: Number(document.querySelector('[data-group^="wall-"]').dataset.polycssTextureLeafWidth),
+      sizing: window.__cssMazeDebug.scene.renderer.textureLeafSizing,
+      backend: window.__cssMazeDebug.scene.renderer.textureBackend,
+      imageRendering: getComputedStyle(document.querySelector(".cssmaze-walls > s")).imageRendering,
+      floor: Number.parseFloat(getComputedStyle(document.querySelector(".cssmaze-surfaces > s:first-child")).width),
+      wall: Number.parseFloat(getComputedStyle(document.querySelector(".cssmaze-walls > s")).width),
     },
     viewport: { width: innerWidth, height: innerHeight },
     cameraRect: (() => {
       const rect = document.querySelector("#scene > .polycss-camera").getBoundingClientRect();
       return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
     })(),
-    shell: {
-      wordmarkPath: document.querySelector(".site-wordmark-path")?.textContent ?? "",
-      homeHref: document.querySelector(".site-wordmark")?.href ?? "",
-      githubHref: document.querySelector(".site-action-icon-only")?.href ?? "",
-      changeControlCount: document.querySelectorAll("#change-maze, button").length,
-      statusScaffolding: document.querySelectorAll("#app, #status, nav, section, output").length,
-      rootBackground: getComputedStyle(document.documentElement).backgroundImage,
-      sceneBackground: getComputedStyle(document.getElementById("scene")).backgroundImage,
-      headerBackground: getComputedStyle(document.querySelector(".site-header")).backgroundImage,
-    },
+    shell: (() => {
+      const scene = document.getElementById("scene");
+      const header = document.querySelector(".site-header");
+      const wordmark = document.querySelector(".site-wordmark");
+      const action = document.querySelector(".site-action-icon-only");
+      const wordmarkText = document.querySelector(".site-wordmark-svg text");
+      const logoOutline = document.querySelector(".site-action-icon-outline");
+      const sceneRect = scene.getBoundingClientRect();
+      const wordmarkRect = wordmark.getBoundingClientRect();
+      return {
+        wordmarkPath: document.querySelector(".site-wordmark-path")?.textContent ?? "",
+        homeHref: wordmark?.href ?? "",
+        githubHref: action?.href ?? "",
+        changeControlCount: document.querySelectorAll("#change-maze, button").length,
+        statusScaffolding: document.querySelectorAll("#app, #status, nav, section, output").length,
+        rootBackground: getComputedStyle(document.documentElement).backgroundImage,
+        sceneBackground: getComputedStyle(scene).backgroundImage,
+        headerBackground: getComputedStyle(header).backgroundImage,
+        headerPosition: getComputedStyle(header).position,
+        headerPointerEvents: getComputedStyle(header).pointerEvents,
+        wordmarkPointerEvents: getComputedStyle(wordmark).pointerEvents,
+        actionPointerEvents: getComputedStyle(action).pointerEvents,
+        wordmarkStrokeWidth: getComputedStyle(wordmarkText).strokeWidth,
+        wordmarkPaintOrder: getComputedStyle(wordmarkText).paintOrder,
+        logoOutlineCount: document.querySelectorAll(".site-action-icon-outline").length,
+        logoOutlineStrokeWidth: getComputedStyle(logoOutline).strokeWidth,
+        sceneRect: { left: sceneRect.left, top: sceneRect.top, right: sceneRect.right, bottom: sceneRect.bottom },
+        wordmarkOverScene: wordmarkRect.left < sceneRect.right && wordmarkRect.right > sceneRect.left &&
+          wordmarkRect.top < sceneRect.bottom && wordmarkRect.bottom > sceneRect.top,
+      };
+    })(),
   }));
   if (!evidence.stable || evidence.forbiddenElements !== 0 ||
       evidence.retainedLeaves !== evidence.stats.retainedPolygonLeafCount ||
@@ -81,8 +116,11 @@ const result = await withCssmazeBrowser(async ({ page }) => {
       evidence.preparedCameraSmoothing.property !== "transform" ||
       evidence.preparedCameraSmoothing.duration !== "0.02s" ||
       evidence.preparedCameraSmoothing.timing !== "linear" ||
-      evidence.atlasLeafSizing.raster !== evidence.retainedLeaves ||
-      evidence.atlasLeafSizing.canonical !== 0 ||
+      evidence.preparedMetadataCount !== 0 ||
+      evidence.pageMetadata.product !== 0 ||
+      evidence.atlasLeafSizing.sizing !== "raster" ||
+      evidence.atlasLeafSizing.backend !== "atlas" ||
+      evidence.atlasLeafSizing.imageRendering !== "pixelated" ||
       evidence.atlasLeafSizing.floor !== 600 ||
       evidence.atlasLeafSizing.wall !== 50 ||
       evidence.stats.runtimeGeometryConstructionCount !== 0 ||
@@ -98,7 +136,19 @@ const result = await withCssmazeBrowser(async ({ page }) => {
       evidence.shell.changeControlCount !== 0 || evidence.shell.statusScaffolding !== 0 ||
       !evidence.shell.rootBackground.startsWith("linear-gradient(rgb(11, 17, 25)") ||
       !evidence.shell.sceneBackground.startsWith("linear-gradient(rgb(11, 17, 25)") ||
-      !evidence.shell.headerBackground.startsWith("linear-gradient(rgb(11, 17, 25)") ||
+      evidence.shell.headerBackground !== "none" ||
+      evidence.shell.headerPosition !== "fixed" ||
+      evidence.shell.headerPointerEvents !== "none" ||
+      evidence.shell.wordmarkPointerEvents !== "auto" ||
+      evidence.shell.actionPointerEvents !== "auto" ||
+      evidence.shell.wordmarkStrokeWidth !== "1.5px" ||
+      !evidence.shell.wordmarkPaintOrder.startsWith("stroke") ||
+      evidence.shell.logoOutlineCount !== 2 ||
+      evidence.shell.logoOutlineStrokeWidth !== "4px" ||
+      !evidence.shell.wordmarkOverScene ||
+      evidence.shell.sceneRect.left !== 0 || evidence.shell.sceneRect.top !== 0 ||
+      evidence.shell.sceneRect.right !== evidence.viewport.width ||
+      evidence.shell.sceneRect.bottom !== evidence.viewport.height ||
       evidence.cameraRect.left > 0 || evidence.cameraRect.top > 0 ||
       evidence.cameraRect.right < evidence.viewport.width ||
       evidence.cameraRect.bottom < evidence.viewport.height ||
@@ -122,8 +172,6 @@ const result = await withCssmazeBrowser(async ({ page }) => {
   let redWallPixels = 0;
   let upperCeilingPixels = 0;
   let lowerFloorPixels = 0;
-  let shellHeaderPixels = 0;
-  const shellHeaderPixelCount = png.width * 50;
   const upperPixelCount = png.width * Math.floor(png.height * 0.4);
   const lowerPixelCount = png.width * (png.height - Math.ceil(png.height * 0.6));
   for (let y = 0; y < png.height; y += 1) {
@@ -147,7 +195,6 @@ const result = await withCssmazeBrowser(async ({ page }) => {
           red > 55 && green > 30 && red > green * 1.2 && green > blue * 1.15) {
         lowerFloorPixels += 1;
       }
-      if (y < 50 && red + green + blue < 150) shellHeaderPixels += 1;
     }
   }
   const visual = {
@@ -156,11 +203,10 @@ const result = await withCssmazeBrowser(async ({ page }) => {
     redWallRatio: redWallPixels / (png.width * png.height),
     upperCeilingRatio: upperCeilingPixels / upperPixelCount,
     lowerFloorRatio: lowerFloorPixels / lowerPixelCount,
-    shellHeaderBackgroundRatio: shellHeaderPixels / shellHeaderPixelCount,
   };
   if (visual.visibleRatio < 0.45 || visual.upperVisibleRatio < 0.35 ||
       visual.redWallRatio < 0.15 || visual.upperCeilingRatio < 0.15 ||
-      visual.lowerFloorRatio < 0.15 || visual.shellHeaderBackgroundRatio < 0.9) {
+      visual.lowerFloorRatio < 0.15) {
     throw new Error(`cssMaze visual smoke contract failed: ${JSON.stringify(visual)}`);
   }
   return { initial, evidence, path: expectedPath, visual };

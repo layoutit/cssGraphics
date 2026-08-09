@@ -15,14 +15,14 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml }) 
   const surfaces = world?.querySelector(":scope > .cssmaze-surfaces");
   if (styles.length === 0 || !(camera instanceof HTMLElement) ||
       !(scene instanceof HTMLElement) || !(world instanceof HTMLElement) ||
-      !(walls instanceof HTMLElement) || !(surfaces instanceof HTMLElement)) {
+      !(walls instanceof HTMLElement) || !(surfaces instanceof HTMLElement) ||
+      hasPreparedMetadata(documentSnapshot)) {
     throw new Error("Prepared cssMaze snapshot is missing its retained PolyCSS graph");
   }
 
   removePreparedSnapshotStyles();
   for (const style of styles) {
     const imported = document.importNode(style, true);
-    imported.setAttribute("data-cssmaze-snapshot-style", "1");
     document.head.append(imported);
     mountedStyles.push(imported);
   }
@@ -34,11 +34,12 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml }) 
   const mountedSurfaces = mountedWorld?.querySelector(":scope > .cssmaze-surfaces");
   const leaves = [...(mountedWorld?.querySelectorAll("b, i, s, u") ?? [])];
   const wallLeaves = [...(mountedWalls?.querySelectorAll(":scope > b, :scope > i, :scope > s, :scope > u") ?? [])];
+  const surfaceLeaves = [...(mountedSurfaces?.querySelectorAll(":scope > b, :scope > i, :scope > s, :scope > u") ?? [])];
   if (!(mountedScene instanceof HTMLElement) || !(mountedWorld instanceof HTMLElement) ||
       !(mountedWalls instanceof HTMLElement) || !(mountedSurfaces instanceof HTMLElement) ||
       leaves.length !== sceneData.metrics.preparedLeafCount ||
       wallLeaves.length !== sceneData.metrics.sourceWallSegmentCount ||
-      wallLeaves.some((leaf, index) => leaf.dataset.polyIndex !== String(index))) {
+      surfaceLeaves.length !== 2 || leaves.some((leaf) => leaf.localName !== "s")) {
     throw new Error("Prepared cssMaze retained target census drifted");
   }
 
@@ -80,6 +81,7 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml }) 
         retainedWallRootCount: 1,
         retainedSurfaceRootCount: 1,
         retainedPolygonLeafCount: leaves.length,
+        retainedDataAttributeCount: 0,
         runtimeDomCreationCount: 0,
         runtimeDomRemovalCount: 0,
         runtimeDomMutationCount: 0,
@@ -92,6 +94,11 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml }) 
       removePreparedSnapshotStyles();
     },
   });
+}
+
+function hasPreparedMetadata(doc) {
+  return [...doc.querySelectorAll("*")].some((element) =>
+    [...element.attributes].some((attribute) => attribute.name.startsWith("data-")));
 }
 
 function removePreparedSnapshotStyles() {

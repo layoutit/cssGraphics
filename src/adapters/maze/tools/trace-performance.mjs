@@ -52,22 +52,26 @@ const summary = await withCssmazeBrowser(async ({ page, port }) => {
     const sample = window.__cssMazePerformanceSample;
     cancelAnimationFrame(sample.rafId);
     sample.observer?.disconnect();
+    const leaves = [...document.querySelectorAll(".cssmaze-world b, .cssmaze-world i, .cssmaze-world s, .cssmaze-world u")];
+    const widths = leaves.map((leaf) => Number.parseFloat(getComputedStyle(leaf).width));
+    const heights = leaves.map((leaf) => Number.parseFloat(getComputedStyle(leaf).height));
     return {
       frameIntervals: sample.frameIntervals,
       longTasks: sample.longTasks,
       stats: window.__cssMazeDebug.stats(),
       state: window.__cssMazeDebug.state(),
       atlas: {
-        raster: document.querySelectorAll('[data-polycss-texture-leaf-sizing="raster"]').length,
-        canonical: document.querySelectorAll('[data-polycss-texture-leaf-sizing="canonical"]').length,
-        minWidth: Math.min(...[...document.querySelectorAll("[data-polycss-texture-leaf-width]")]
-          .map((leaf) => Number(leaf.dataset.polycssTextureLeafWidth))),
-        maxWidth: Math.max(...[...document.querySelectorAll("[data-polycss-texture-leaf-width]")]
-          .map((leaf) => Number(leaf.dataset.polycssTextureLeafWidth))),
-        minHeight: Math.min(...[...document.querySelectorAll("[data-polycss-texture-leaf-height]")]
-          .map((leaf) => Number(leaf.dataset.polycssTextureLeafHeight))),
-        maxHeight: Math.max(...[...document.querySelectorAll("[data-polycss-texture-leaf-height]")]
-          .map((leaf) => Number(leaf.dataset.polycssTextureLeafHeight))),
+        backend: window.__cssMazeDebug.scene.renderer.textureBackend,
+        sizing: window.__cssMazeDebug.scene.renderer.textureLeafSizing,
+        metadataCount: [...document.querySelectorAll("#scene *")].reduce(
+          (count, element) => count + [...element.attributes]
+            .filter((attribute) => attribute.name.startsWith("data-")).length,
+          0,
+        ),
+        minWidth: Math.min(...widths),
+        maxWidth: Math.max(...widths),
+        minHeight: Math.min(...heights),
+        maxHeight: Math.max(...heights),
       },
     };
   });

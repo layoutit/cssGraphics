@@ -19,16 +19,18 @@ source closure is separately identified, lawfully held, and qualified.
 
 The first product prepares a 24-scene seed bank from a byte-verified checkout.
 A headless C extraction of the pinned generation and camera routines emits exact
-state, preparation ranks 4096 deterministic candidate seeds by lowest turning-
-frame ratio and then absolute quarter-turn count, and the browser adopts one stable snapshot at
-a time. Candidates shorter than 600 states are excluded. This does not qualify
+state, preparation ranks 131072 deterministic candidate seeds after requiring a
+common 180-degree loop heading, then prefers the lowest uninterrupted turn streak
+and turning-frame ratio. The browser adopts one stable snapshot at a time.
+Candidates shorter than 600 states are excluded. This does not qualify
 the full native build or pixel parity.
 The generated product transport is a selected-first gzip manifest. Each public
 scene omits geometry and references one gzip retained snapshot; the full
 geometry-bearing scene remains in ignored prepare-only output. The verified
 product bank contains exactly the manifest, 24 scene files, 24 snapshot files,
-and three texture files. The pinned repository-wide notice permits distribution
-of that used closure when its copyright and permission notice accompanies it.
+three source texture files, and two content-hashed PolyCSS atlas files shared by
+every snapshot. The pinned repository-wide notice permits distribution of that
+used closure when its copyright and permission notice accompanies it.
 The browser snapshot retains the source floor and ceiling as one quad each and
 selects prepared wall visibility sets to approximate OpenGL near-plane
 rejection. Walls with any vertex in front remain admitted so Chromium can clip
@@ -95,8 +97,9 @@ The first slice is a deterministic bank of 24 prepared 12 by 12 mazes, each with
 one prepared route, brick walls, floor, ceiling, and the source camera cadence.
 Generation, start and finish placement, wall rise/descent, and camera rows come
 from headless C source-state dumps. The candidate interval begins at seed
-`26080701`; preparation selects the lowest-rotation 24 eligible traces rather
-than generating or scoring on page load. Rats, inverters, overlay, acid modes,
+`26080701`; preparation selects 24 traces with the same 180-degree start/end heading and
+no uninterrupted turn beyond 180 degrees, rather than generating or scoring on
+page load. Rats, inverters, overlay, acid modes,
 floating images, and user-supplied textures remain outside the first slice until
 their source and asset dependencies are qualified.
 
@@ -107,6 +110,9 @@ work, route solving, camera poses, turn timing, visibility sets, lighting,
 ids, metrics, manifest writing, and the retained snapshot. Adjacent coplanar
 same-material walls should have an explicit prepare-time merge seam with source
 counts retained for audit.
+The two exported atlas data URLs must be byte-identical across all 24 prepared
+seeds, extracted once into content-hashed PNGs, and referenced by every retained
+snapshot. Inline atlas copies are forbidden in the public snapshot bank.
 
 Runtime may load the canonical manifest, randomly select or change to a prepared
 bank entry, adopt stable retained leaves, select prepared camera/visibility rows,

@@ -28,7 +28,8 @@ test("css.graphics/maze uses the shipped cssGraphics product shell", () => {
   assert.match(css, /#scene \{[^}]*position: absolute;[^}]*inset: 0;/u);
   assert.match(css, /\.site-wordmark \{[^}]*pointer-events: auto;/u);
   assert.match(css, /\.site-action-icon-only \{[^}]*pointer-events: auto;/u);
-  assert.match(css, /\.site-wordmark-svg text \{[^}]*stroke: rgb\(0 0 0 \/ 65%\);[^}]*stroke-width: 1\.5px;[^}]*paint-order: stroke fill;/u);
+  assert.match(css, /\.site-wordmark \{[^}]*color: #aeb4bc;/u);
+  assert.doesNotMatch(css, /\.site-wordmark-svg text \{[^}]*(?:stroke|paint-order):/u);
   assert.match(css, /\.site-action-icon-outline \{[^}]*stroke: rgb\(0 0 0 \/ 60%\);[^}]*stroke-width: 4;/u);
   assert.doesNotMatch(css, /@keyframes|will-change/u);
 });

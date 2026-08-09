@@ -5,7 +5,9 @@ export function createRouteState(url = globalThis.location?.href ?? "http://loca
     requestedScene: validSceneId(requestedScene) ? requestedScene : null,
     scene: validSceneId(requestedScene) ? requestedScene : null,
     explicitScene: validSceneId(requestedScene),
-    selection: validSceneId(requestedScene) ? "explicit-prepared-scene" : "startup-random-low-rotation-prepared-scene",
+    selection: validSceneId(requestedScene)
+      ? "explicit-prepared-scene"
+      : "startup-random-common-loop-low-consecutive-turn-prepared-scene",
   });
 }
 

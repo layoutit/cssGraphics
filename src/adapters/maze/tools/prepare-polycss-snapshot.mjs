@@ -1,13 +1,15 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
 import { createServer } from "node:net";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { chromium } from "playwright";
 import {
   generatedCompressedScenePath,
   generatedCompressedSnapshotPath,
+  generatedProductRoot,
   generatedPreparedScenePath,
   generatedScenePath,
   generatedSourceSceneUrl,
@@ -18,10 +20,16 @@ import {
   repositoryRoot,
 } from "../src/prepare/cssmaze/paths.mjs";
 
+const SNAPSHOT_ATLAS_GROUPS = Object.freeze([
+  Object.freeze({ id: "snapshot-atlas:surfaces", name: "surfaces", selector: ".cssmaze-surfaces>s" }),
+  Object.freeze({ id: "snapshot-atlas:walls", name: "walls", selector: ".cssmaze-walls>s" }),
+]);
+
 const manifest = JSON.parse(await readFile(manifestPath(), "utf8"));
 if (!Array.isArray(manifest.scenes) || manifest.scenes.length < 1) {
   throw new Error("cssMaze snapshot preparation requires a generated scene bank");
 }
+await clearSnapshotAtlasAssets();
 const port = await freePort();
 let output = "";
 const server = spawn("pnpm", [
@@ -43,6 +51,7 @@ try {
   const browser = await chromium.launch({ headless: true });
   try {
     const snapshots = [];
+    const sharedSnapshotAtlases = new Map();
     for (const entry of manifest.scenes) {
       const sceneId = entry.id;
       const sceneUrl = generatedSourceSceneUrl(sceneId);
@@ -60,8 +69,9 @@ try {
         );
         const snapshot = await page.evaluate(() => window.__cssMazeSnapshot);
         if (snapshot.status !== "ready") throw new Error(snapshot.error || `cssMaze snapshot failed for ${sceneId}`);
+        const externalized = await externalizeSnapshotAtlases(snapshot.html, sharedSnapshotAtlases);
         await mkdir(dirname(snapshotPath), { recursive: true });
-        await writeFile(snapshotPath, snapshot.html);
+        await writeFile(snapshotPath, externalized);
         snapshots.push(Object.freeze({
           sceneId,
           snapshotPath: generatedCompressedSnapshotPath(sceneId),
@@ -72,7 +82,11 @@ try {
         await page.close();
       }
     }
-    await publishCompressedRuntimeAssets(manifest.scenes.map((entry) => entry.id));
+    const atlasDescriptors = SNAPSHOT_ATLAS_GROUPS.map(({ id }) => sharedSnapshotAtlases.get(id));
+    if (atlasDescriptors.some((descriptor) => !descriptor)) {
+      throw new Error("cssMaze shared snapshot atlases are incomplete");
+    }
+    await publishCompressedRuntimeAssets(manifest, atlasDescriptors);
     console.log(JSON.stringify({ status: "prepared", snapshotCount: snapshots.length, snapshots }, null, 2));
   } finally {
     await browser.close();
@@ -98,8 +112,8 @@ async function stagePreparedScene(sceneId) {
   }
 }
 
-async function publishCompressedRuntimeAssets(sceneIds) {
-  for (const sceneId of sceneIds) {
+async function publishCompressedRuntimeAssets(manifest, sharedSnapshotAtlases) {
+  for (const { id: sceneId } of manifest.scenes) {
     const sourceScenePath = generatedScenePath(sceneId);
     const snapshotPath = generatedSnapshotPath(sceneId);
     const scene = JSON.parse(await readFile(sourceScenePath, "utf8"));
@@ -130,6 +144,63 @@ async function publishCompressedRuntimeAssets(sceneIds) {
     ]);
     await Promise.all([unlink(sourceScenePath), unlink(snapshotPath)]);
   }
+  manifest.transport.sharedSnapshotAtlases = sharedSnapshotAtlases;
+  await writeJsonAtomic(manifestPath(), manifest);
+}
+
+async function externalizeSnapshotAtlases(snapshotHtml, sharedSnapshotAtlases) {
+  let html = snapshotHtml;
+  for (const group of SNAPSHOT_ATLAS_GROUPS) {
+    const expression = new RegExp(
+      `(${escapeRegExp(group.selector)}\\s*\\{\\s*background-image:\\s*url\\(\")data:image\\/png;base64,([A-Za-z0-9+/=]+)(\"\\))`,
+      "u",
+    );
+    const match = expression.exec(html);
+    if (!match) throw new Error(`cssMaze exported ${group.name} atlas data URL is missing`);
+    const bytes = Buffer.from(match[2], "base64");
+    if (!bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"))) {
+      throw new Error(`cssMaze exported ${group.name} atlas is not PNG`);
+    }
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    const fileName = `polycss-${group.name}-${sha256}.png`;
+    const descriptor = Object.freeze({
+      id: group.id,
+      url: `/cssmaze/assets/${fileName}`,
+      encoding: "identity",
+      byteLength: bytes.length,
+      sha256,
+    });
+    const existing = sharedSnapshotAtlases.get(group.id);
+    if (existing && (existing.sha256 !== descriptor.sha256 ||
+        existing.byteLength !== descriptor.byteLength || existing.url !== descriptor.url)) {
+      throw new Error(`cssMaze ${group.name} atlas drifted across prepared seeds`);
+    }
+    if (!existing) {
+      const assetPath = join(generatedProductRoot(), "assets", fileName);
+      await mkdir(dirname(assetPath), { recursive: true });
+      await writeFile(assetPath, bytes);
+      sharedSnapshotAtlases.set(group.id, descriptor);
+    }
+    html = html.replace(expression, `$1${descriptor.url}$3`);
+  }
+  if (/data:image\//u.test(html)) {
+    throw new Error("cssMaze snapshot retained an inline image after atlas externalization");
+  }
+  return html;
+}
+
+async function clearSnapshotAtlasAssets() {
+  const assetRoot = join(generatedProductRoot(), "assets");
+  let entries;
+  try {
+    entries = await readdir(assetRoot, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return;
+    throw error;
+  }
+  await Promise.all(entries
+    .filter((entry) => entry.isFile() && /^polycss-(?:surfaces|walls)-[a-f0-9]{64}\.png$/u.test(entry.name))
+    .map((entry) => unlink(join(assetRoot, entry.name))));
 }
 
 async function writeGzipAtomic(path, bytes) {
@@ -137,6 +208,17 @@ async function writeGzipAtomic(path, bytes) {
   const temporary = `${path}.tmp`;
   await writeFile(temporary, gzipSync(bytes, { level: 9 }));
   await rename(temporary, path);
+}
+
+async function writeJsonAtomic(path, value) {
+  await mkdir(dirname(path), { recursive: true });
+  const temporary = `${path}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`);
+  await rename(temporary, path);
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 async function freePort() {

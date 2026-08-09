@@ -28,10 +28,34 @@ test("rotation ranking breaks equal turning ratios with fewer quarter turns", ()
 
 test("rotation scoring counts quarter-turn and full-rotation equivalents at preparation", () => {
   const score = scoreNativeCameraRotation(fixtureTrace(105, [0, 90, 180, 270, 0]));
+  assert.equal(score.schema, "cssmaze-prepared-rotation-score@2");
   assert.equal(score.quarterTurnCount, 4);
   assert.equal(score.fullRotationEquivalentCount, 1);
   assert.equal(score.turnEventCount, 1);
+  assert.equal(score.longestTurningRunFrameCount, 4);
+  assert.equal(score.longestTurningRunDurationMilliseconds, 80);
+  assert.equal(score.longestTurningRunDegrees, 360);
+  assert.equal(score.maximumConsecutiveQuarterTurnCount, 4);
+  assert.equal(score.loopOrientationChangeDegrees, 0);
+  assert.equal(score.loopOrientationQuarterTurnCount, 0);
+  assert.equal(score.loopOrientationDegrees, 0);
   assert.equal(score.runtimeScoring, false);
+});
+
+test("rotation scoring exposes a non-seamless prepared loop heading", () => {
+  const score = scoreNativeCameraRotation(fixtureTrace(108, [270, 270, 180, 90]));
+  assert.equal(score.loopOrientationChangeDegrees, 180);
+  assert.equal(score.loopOrientationQuarterTurnCount, 2);
+  assert.equal(score.loopOrientationDegrees, 270);
+});
+
+test("rotation ranking rejects long uninterrupted turn streaks before aggregate ratio", () => {
+  const longStreak = scoreNativeCameraRotation(fixtureTrace(106, [0, 90, 180, 180, 180, 180, 180]));
+  const separatedTurns = scoreNativeCameraRotation(fixtureTrace(107, [0, 90, 90, 180, 180, 270, 270]));
+  assert.ok(longStreak.turningFrameRatio < separatedTurns.turningFrameRatio);
+  assert.equal(longStreak.maximumConsecutiveQuarterTurnCount, 2);
+  assert.equal(separatedTurns.maximumConsecutiveQuarterTurnCount, 1);
+  assert.ok(compareRotationScores(separatedTurns, longStreak) < 0);
 });
 
 function fixtureManifest() {

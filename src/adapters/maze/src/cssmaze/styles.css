@@ -52,7 +52,7 @@ body.loading::after {
 .site-wordmark {
   display: inline-flex;
   align-items: center;
-  color: #f0f0f0;
+  color: #aeb4bc;
   opacity: 0.72;
   pointer-events: auto;
   text-decoration: none;
@@ -67,10 +67,6 @@ body.loading::after {
 
 .site-wordmark-svg text {
   fill: currentColor;
-  stroke: rgb(0 0 0 / 65%);
-  stroke-width: 1.5px;
-  stroke-linejoin: round;
-  paint-order: stroke fill;
   font-family: inherit;
   font-size: 24px;
   font-weight: 400;

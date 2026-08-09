@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { captureNativeMazeState } from "../src/prepare/cssmaze/nativeState.mjs";
+import {
+  captureNativeMazeRotationSummaries,
+  captureNativeMazeState,
+} from "../src/prepare/cssmaze/nativeState.mjs";
+import {
+  scoreNativeCameraRotation,
+  scoreNativeCameraRotationSummary,
+} from "../src/prepare/cssmaze/rotationRanking.mjs";
 import { buildCssmazeFirstSliceScene } from "../src/prepare/cssmaze/sceneBuilder.mjs";
 
 test("headless source-state dump reproduces the fixed first slice", async () => {
@@ -11,6 +18,85 @@ test("headless source-state dump reproduces the fixed first slice", async () => 
   assert.deepEqual(nativeCapture.state.finish, [1, 5]);
   assert.deepEqual(nativeCapture.state.frames[0], [0, 9, 9.5, 270, 0, 0]);
   assert.deepEqual(nativeCapture.state.frames.at(-1), [1168, 2.5, 1, 0, 0, 6]);
+});
+
+test("native ranking summaries match full source-state rotation evidence", async () => {
+  const [summary] = await captureNativeMazeRotationSummaries({ seedStart: 26080701, seedCount: 1 });
+  const nativeCapture = await captureNativeMazeState({ seed: 26080701 });
+  const summarized = scoreNativeCameraRotationSummary(summary);
+  const exact = scoreNativeCameraRotation(nativeCapture.state);
+  for (const key of [
+    "seed",
+    "stateCount",
+    "turningFrameCount",
+    "turnEventCount",
+    "longestTurningRunFrameCount",
+    "maximumConsecutiveQuarterTurnCount",
+    "loopOrientationChangeDegrees",
+    "loopOrientationQuarterTurnCount",
+    "loopOrientationDegrees",
+    "quarterTurnCount",
+  ]) {
+    assert.equal(summarized[key], exact[key], key);
+  }
+  assert.ok(Math.abs(summarized.totalAngularTravelDegrees - exact.totalAngularTravelDegrees) < 0.00001);
+  assert.ok(Math.abs(summarized.longestTurningRunDegrees - exact.longestTurningRunDegrees) < 0.00001);
+});
+
+test("native ranking summary validation rejects impossible metrics", () => {
+  const valid = {
+    schema: "cssmaze-native-rotation-summary@1",
+    seed: 1,
+    stateCount: 10,
+    frameDelayMicroseconds: 20_000,
+    totalAngularTravelDegrees: 90,
+    turningFrameCount: 2,
+    turnEventCount: 1,
+    longestTurningRunFrameCount: 2,
+    longestTurningRunDegrees: 90,
+    initialRotationDegrees: 0,
+    finalRotationDegrees: 90,
+    completeTraversal: true,
+  };
+  for (const invalid of [
+    { totalAngularTravelDegrees: -1 },
+    { longestTurningRunDegrees: -1 },
+    { initialRotationDegrees: -1 },
+    { finalRotationDegrees: -1 },
+    { turningFrameCount: 10 },
+    { longestTurningRunFrameCount: 3 },
+    { turnEventCount: 3 },
+    { longestTurningRunDegrees: 91 },
+    { turningFrameCount: 0 },
+    { turnEventCount: 0 },
+  ]) {
+    assert.throws(() => scoreNativeCameraRotationSummary({ ...valid, ...invalid }), /valid native summary/u);
+  }
+});
+
+test("native ranking summary normalization never publishes 360 degrees", () => {
+  const score = scoreNativeCameraRotationSummary({
+    schema: "cssmaze-native-rotation-summary@1",
+    seed: 1,
+    stateCount: 10,
+    frameDelayMicroseconds: 20_000,
+    totalAngularTravelDegrees: 0,
+    turningFrameCount: 0,
+    turnEventCount: 0,
+    longestTurningRunFrameCount: 0,
+    longestTurningRunDegrees: 0,
+    initialRotationDegrees: 359.9999999996,
+    finalRotationDegrees: 359.9999999996,
+    completeTraversal: true,
+  });
+  assert.equal(score.loopOrientationDegrees, 0);
+});
+
+test("native ranking range validation rejects seed overflow", async () => {
+  await assert.rejects(
+    captureNativeMazeRotationSummaries({ seedStart: Number.MAX_SAFE_INTEGER, seedCount: 2 }),
+    /positive safe integers/u,
+  );
 });
 
 test("scene builder preserves exact wall coverage and prepared-only playback", async () => {

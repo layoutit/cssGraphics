@@ -1,10 +1,11 @@
 # cssMaze
 
 A source-backed retained-DOM PolyCSS port of the pinned XScreenSaver
-`maze3d` implementation. Preparation ranks 4096 deterministic candidate seeds by
-turning-frame ratio and then absolute quarter-turn count, and emits the 24
-lowest-rotation eligible mazes. Refresh selects one prepared entry. There is no
-product scene-change control.
+`maze3d` implementation. Preparation scans 131072 deterministic candidate seeds,
+requires a common 180-degree loop heading, ranks uninterrupted turn streaks
+before aggregate turning time, and emits 24 mazes whose longest continuous turn
+is 180 degrees. Refresh selects one prepared entry. There is no product
+scene-change control.
 
 The css.graphics shell is mounted at `/maze/`. The product contains one stable
 world root, wall root, surface root, and 171 retained polygon leaves. Startup
@@ -14,6 +15,8 @@ prepared camera, wall-height, and signed visibility-delta rows. It does not
 generate or solve mazes, score rotation, construct geometry, rasterize textures,
 calculate camera or visibility state, scan every wall during normal playback,
 grow the DOM, or schedule animation-frame playback.
+The two identical PolyCSS atlas pages are externalized from every snapshot and
+distributed once for the whole bank.
 
 ## Run the prepared product
 

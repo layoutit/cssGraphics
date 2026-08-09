@@ -28,8 +28,28 @@ export async function inspectCssmazeProductBank(root, { verifyDescriptor = true 
     manifest.transport.runtimeArchiveDownload === false &&
     manifest.transport.runtimeGeometryPayload === false,
   "prepared transport");
+  const sharedSnapshotAtlases = manifest.transport.sharedSnapshotAtlases;
+  assert(Array.isArray(sharedSnapshotAtlases) && sharedSnapshotAtlases.length === 2 &&
+    sharedSnapshotAtlases.map((atlas) => atlas?.id).sort().join("\n") ===
+      "snapshot-atlas:surfaces\nsnapshot-atlas:walls",
+  "shared snapshot atlas contract");
 
-  const expectedFiles = new Set(["manifest.json", ...Object.keys(TEXTURE_HASHES)]);
+  const expectedFiles = new Set([
+    "manifest.json",
+    ...Object.keys(TEXTURE_HASHES),
+    ...sharedSnapshotAtlases.map((atlas) => productPath(atlas.url)),
+  ]);
+  let snapshotAtlasBytes = 0;
+  for (const atlas of sharedSnapshotAtlases) {
+    const path = productPath(atlas.url);
+    const bytes = await readFile(join(root, path));
+    assert(atlas.encoding === "identity" && Number.isSafeInteger(atlas.byteLength) &&
+      atlas.byteLength === bytes.length && /^[a-f0-9]{64}$/u.test(atlas.sha256) &&
+      sha256(bytes) === atlas.sha256 &&
+      bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")),
+    `shared snapshot atlas ${atlas.id}`);
+    snapshotAtlasBytes += bytes.length;
+  }
   let totalTimelineStates = 0;
   let totalPreparedLeaves = 0;
   let totalVisibilityDeltaOperations = 0;
@@ -70,7 +90,9 @@ export async function inspectCssmazeProductBank(root, { verifyDescriptor = true 
       count(snapshot, /<s\b[^>]*><\/s>/gu) === 171 &&
       !/\sdata-[a-z0-9-]+=/iu.test(snapshot) &&
       /\.cssmaze-surfaces>s\s*\{\s*background-image:/u.test(snapshot) &&
-      /\.cssmaze-walls>s\s*\{\s*background-image:/u.test(snapshot),
+      /\.cssmaze-walls>s\s*\{\s*background-image:/u.test(snapshot) &&
+      !/data:image\//u.test(snapshot) &&
+      sharedSnapshotAtlases.every((atlas) => count(snapshot, new RegExp(escapeRegExp(atlas.url), "gu")) === 1),
     `scene ${entry.id} retained DOM`);
     assert(!/<(?:script|canvas|svg)\b/iu.test(snapshot), `scene ${entry.id} renderer boundary`);
 
@@ -111,6 +133,8 @@ export async function inspectCssmazeProductBank(root, { verifyDescriptor = true 
     totalTimelineStates,
     totalVisibilityDeltaOperations,
     textureCount: Object.keys(TEXTURE_HASHES).length,
+    snapshotAtlasCount: sharedSnapshotAtlases.length,
+    snapshotAtlasBytes,
   });
 
   if (verifyDescriptor) {
@@ -189,6 +213,10 @@ function sha256(bytes) {
 
 function count(text, expression) {
   return (text.match(expression) ?? []).length;
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function assert(condition, label) {

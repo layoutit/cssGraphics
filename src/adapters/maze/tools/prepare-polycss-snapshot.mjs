@@ -52,6 +52,8 @@ try {
   try {
     const snapshots = [];
     const sharedSnapshotAtlases = new Map();
+    const snapshotMetadataByScene = new Map();
+    let sharedStructuralStyles = null;
     for (const entry of manifest.scenes) {
       const sceneId = entry.id;
       const sceneUrl = generatedSourceSceneUrl(sceneId);
@@ -69,6 +71,17 @@ try {
         );
         const snapshot = await page.evaluate(() => window.__cssMazeSnapshot);
         if (snapshot.status !== "ready") throw new Error(snapshot.error || `cssMaze snapshot failed for ${sceneId}`);
+        const structuralStyles = JSON.stringify({
+          retainedWallBackgroundPositions: snapshot.retainedWallBackgroundPositions,
+          retainedSurfaceStyles: snapshot.retainedSurfaceStyles,
+        });
+        if (sharedStructuralStyles !== null && structuralStyles !== sharedStructuralStyles) {
+          throw new Error(`cssMaze retained non-geometry styles drifted for ${sceneId}`);
+        }
+        sharedStructuralStyles ??= structuralStyles;
+        snapshotMetadataByScene.set(sceneId, Object.freeze({
+          retainedWallTransforms: Object.freeze([...snapshot.retainedWallTransforms]),
+        }));
         const externalized = await externalizeSnapshotAtlases(snapshot.html, sharedSnapshotAtlases);
         await mkdir(dirname(snapshotPath), { recursive: true });
         await writeFile(snapshotPath, externalized);
@@ -86,7 +99,7 @@ try {
     if (atlasDescriptors.some((descriptor) => !descriptor)) {
       throw new Error("cssMaze shared snapshot atlases are incomplete");
     }
-    await publishCompressedRuntimeAssets(manifest, atlasDescriptors);
+    await publishCompressedRuntimeAssets(manifest, atlasDescriptors, snapshotMetadataByScene);
     console.log(JSON.stringify({ status: "prepared", snapshotCount: snapshots.length, snapshots }, null, 2));
   } finally {
     await browser.close();
@@ -112,7 +125,7 @@ async function stagePreparedScene(sceneId) {
   }
 }
 
-async function publishCompressedRuntimeAssets(manifest, sharedSnapshotAtlases) {
+async function publishCompressedRuntimeAssets(manifest, sharedSnapshotAtlases, snapshotMetadataByScene) {
   for (const { id: sceneId } of manifest.scenes) {
     const sourceScenePath = generatedScenePath(sceneId);
     const snapshotPath = generatedSnapshotPath(sceneId);
@@ -132,6 +145,7 @@ async function publishCompressedRuntimeAssets(manifest, sharedSnapshotAtlases) {
         sourceId: mesh.sourceId,
         polygonCount: mesh.polygons.length,
       })),
+      preparedSceneTransition: buildPreparedSceneTransition(scene, snapshotMetadataByScene.get(sceneId)),
     };
     delete runtimeScene.meshes;
     const snapshotBytes = await readFile(snapshotPath);
@@ -146,6 +160,38 @@ async function publishCompressedRuntimeAssets(manifest, sharedSnapshotAtlases) {
   }
   manifest.transport.sharedSnapshotAtlases = sharedSnapshotAtlases;
   await writeJsonAtomic(manifestPath(), manifest);
+}
+
+function buildPreparedSceneTransition(scene, snapshotMetadata) {
+  const retainedWallTransforms = snapshotMetadata?.retainedWallTransforms;
+  if (!Array.isArray(retainedWallTransforms) ||
+      retainedWallTransforms.length !== scene.metrics.sourceWallSegmentCount ||
+      retainedWallTransforms.some((transform) =>
+        typeof transform !== "string" || !transform.startsWith("matrix3d("))) {
+    throw new Error(`cssMaze retained wall transition transforms drifted for ${scene.id}`);
+  }
+  const initialVisibility = visibilityAtState(scene, scene.playback.segmentStartState);
+  const initialVisibilityOperations = Object.freeze(
+    [...initialVisibility].map((visible, index) => visible === "1" ? index + 1 : -(index + 1)),
+  );
+  return Object.freeze({
+    schema: "cssmaze-prepared-scene-transition@1",
+    retainedWallTransforms,
+    initialVisibilityOperations,
+    runtimeGeometryCalculation: false,
+    runtimeVisibilityComparison: false,
+    runtimeDomRemount: false,
+  });
+}
+
+function visibilityAtState(scene, stateIndex) {
+  const visibilityIndex = scene.playback.frameRows[stateIndex][2];
+  const visibility = scene.playback.leafVisibilitySets[visibilityIndex];
+  if (typeof visibility !== "string" ||
+      visibility.length !== scene.metrics.sourceWallSegmentCount || /[^01]/u.test(visibility)) {
+    throw new Error(`cssMaze prepared transition visibility drifted for ${scene.id}`);
+  }
+  return visibility;
 }
 
 async function externalizeSnapshotAtlases(snapshotHtml, sharedSnapshotAtlases) {

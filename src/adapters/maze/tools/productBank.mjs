@@ -24,7 +24,9 @@ export async function inspectCssmazeProductBank(root, { verifyDescriptor = true 
   assert(manifest.transport?.schema === "cssmaze-prepared-transport@1" &&
     manifest.transport.encoding === "gzip" &&
     manifest.transport.startup === "selected-scene-and-snapshot-first" &&
-    manifest.transport.selection === "page-load-only" &&
+    manifest.transport.selection === "session-shuffled-bag-no-repeat" &&
+    manifest.transport.subsequentSceneTransport === "scene-only-prefetched-before-prepared-end-switch" &&
+    manifest.transport.runtimeSnapshotRemount === false &&
     manifest.transport.runtimeArchiveDownload === false &&
     manifest.transport.runtimeGeometryPayload === false,
   "prepared transport");
@@ -53,6 +55,7 @@ export async function inspectCssmazeProductBank(root, { verifyDescriptor = true 
   let totalTimelineStates = 0;
   let totalPreparedLeaves = 0;
   let totalVisibilityDeltaOperations = 0;
+  let totalPreparedTransitionVisibilityOperations = 0;
   for (const entry of manifest.scenes) {
     const scenePath = productPath(entry.sceneUrl);
     const snapshotPath = productPath(entry.snapshotUrl);
@@ -80,6 +83,16 @@ export async function inspectCssmazeProductBank(root, { verifyDescriptor = true 
       scene.playback?.preparedCompositorInterpolation === true &&
       scene.playback?.runtimeInterpolation === false,
     `scene ${entry.id} prepared playback`);
+    const transition = scene.preparedSceneTransition;
+    assert(transition?.schema === "cssmaze-prepared-scene-transition@1" &&
+      transition.runtimeGeometryCalculation === false &&
+      transition.runtimeVisibilityComparison === false &&
+      transition.runtimeDomRemount === false &&
+      transition.retainedWallTransforms?.length === 169 &&
+      transition.retainedWallTransforms.every((transform) =>
+        typeof transform === "string" && transform.startsWith("matrix3d(")) &&
+      validAbsoluteVisibilityOperations(transition.initialVisibilityOperations, 169),
+    `scene ${entry.id} prepared transitions`);
     assert(!/(?:\/Users\/|\\Users\\|file:\/\/|\.local\/)/u.test(JSON.stringify(scene)),
       `scene ${entry.id} public paths`);
 
@@ -99,6 +112,7 @@ export async function inspectCssmazeProductBank(root, { verifyDescriptor = true 
     totalTimelineStates += scene.playback.stateCount;
     totalPreparedLeaves += scene.metrics.preparedLeafCount;
     totalVisibilityDeltaOperations += scene.metrics.preparedLeafVisibilityDeltaOperationCount;
+    totalPreparedTransitionVisibilityOperations += transition.initialVisibilityOperations.length;
   }
 
   for (const [path, hash] of Object.entries(TEXTURE_HASHES)) {
@@ -132,6 +146,7 @@ export async function inspectCssmazeProductBank(root, { verifyDescriptor = true 
     totalPreparedLeaves,
     totalTimelineStates,
     totalVisibilityDeltaOperations,
+    totalPreparedTransitionVisibilityOperations,
     textureCount: Object.keys(TEXTURE_HASHES).length,
     snapshotAtlasCount: sharedSnapshotAtlases.length,
     snapshotAtlasBytes,
@@ -170,7 +185,9 @@ export async function writeCssmazeProductBankDescriptor(root, summary) {
       deployUnpacksStaticFiles: true,
       preparedAssetEncoding: "gzip",
       startupFetch: "selected-scene-and-snapshot-first",
-      selection: "page-load-only",
+      selection: "session-shuffled-bag-no-repeat",
+      subsequentSceneTransport: "scene-only-prefetched-before-prepared-end-switch",
+      runtimeSnapshotRemount: false,
     },
     license: {
       sourceNoticePath: "debian/copyright",
@@ -213,6 +230,12 @@ function sha256(bytes) {
 
 function count(text, expression) {
   return (text.match(expression) ?? []).length;
+}
+
+function validAbsoluteVisibilityOperations(operations, leafCount) {
+  return Array.isArray(operations) && operations.length === leafCount && operations.every(
+    (operation, index) => Number.isSafeInteger(operation) && Math.abs(operation) === index + 1,
+  );
 }
 
 function escapeRegExp(value) {

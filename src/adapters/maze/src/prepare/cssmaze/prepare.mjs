@@ -1,20 +1,21 @@
 import { copyFile, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { CSSMAZE_TEXTURE_FILES, resolveCssmazeDataSource } from "./dataSource.mjs";
-import { captureNativeMazeRotationSummaries, captureNativeMazeState } from "./nativeState.mjs";
+import { captureNativeMazeState } from "./nativeState.mjs";
 import { generatedProductRoot } from "./paths.mjs";
 import {
   compareRotationScores,
   scoreNativeCameraRotation,
-  scoreNativeCameraRotationSummary,
 } from "./rotationRanking.mjs";
 import { buildCssmazeFirstSliceScene } from "./sceneBuilder.mjs";
 import {
   CSSMAZE_CANDIDATE_SEED_COUNT,
   CSSMAZE_MAXIMUM_CONSECUTIVE_QUARTER_TURN_COUNT,
+  CSSMAZE_MAXIMUM_TOTAL_QUARTER_TURN_COUNT,
   CSSMAZE_MAXIMUM_LOOP_ORIENTATION_CHANGE_DEGREES,
   CSSMAZE_MINIMUM_BANK_STATE_COUNT,
   CSSMAZE_PREPARED_BANK_COUNT,
+  CSSMAZE_PREPARED_BANK_SEEDS,
   CSSMAZE_REQUIRED_LOOP_ORIENTATION_DEGREES,
   CSSMAZE_SCENE_ID,
   CSSMAZE_SEED,
@@ -25,15 +26,14 @@ export async function prepareCssmaze({ sourceRoot, seed } = {}) {
   const dataSource = await resolveCssmazeDataSource({ sourceRoot });
   const isRankedBank = seed === undefined;
   const ranked = seed === undefined
-    ? await rankPreparedBankCandidates()
-    : [await captureExplicitSeed(seed)];
+    ? CSSMAZE_PREPARED_BANK_SEEDS.map((selectedSeed) => Object.freeze({ seed: selectedSeed }))
+    : [captureExplicitSeed(seed)];
   const scenes = [];
   const exactRanked = [];
   for (let rank = 0; rank < ranked.length; rank += 1) {
     const selected = ranked[rank];
     const nativeCapture = await captureNativeMazeState({ seed: selected.seed });
     const rotationScore = scoreNativeCameraRotation(nativeCapture.state);
-    assertRankingSummaryMatchesCapture(selected.rotationScore, rotationScore);
     const loopTexturePhaseAligned = hasLoopTexturePhaseAlignment(nativeCapture.state);
     if (isRankedBank && !loopTexturePhaseAligned) {
       throw new Error("cssMaze selected loop changed the floor/ceiling texture phase");
@@ -46,6 +46,7 @@ export async function prepareCssmaze({ sourceRoot, seed } = {}) {
       sceneId: rank === 0 ? CSSMAZE_SCENE_ID : `seed-${selected.seed}`,
     }));
   }
+  if (isRankedBank) validatePreparedBankRanking(exactRanked);
   await copyPreparedTextures(dataSource.root);
   return writeCssmazePreparedOutput({
     scenes,
@@ -54,58 +55,45 @@ export async function prepareCssmaze({ sourceRoot, seed } = {}) {
   });
 }
 
-async function rankPreparedBankCandidates() {
-  const eligible = [];
-  const summaries = await captureNativeMazeRotationSummaries({
-    seedStart: CSSMAZE_SEED,
-    seedCount: CSSMAZE_CANDIDATE_SEED_COUNT,
-  });
-  for (const summary of summaries) {
-    const rotationScore = scoreNativeCameraRotationSummary(summary);
-    if (rotationScore.stateCount >= CSSMAZE_MINIMUM_BANK_STATE_COUNT &&
-        rotationScore.loopOrientationChangeDegrees <= CSSMAZE_MAXIMUM_LOOP_ORIENTATION_CHANGE_DEGREES &&
-        rotationScore.loopOrientationDegrees === CSSMAZE_REQUIRED_LOOP_ORIENTATION_DEGREES) {
-      eligible.push(Object.freeze({ seed: summary.seed, rotationScore }));
-    }
-  }
-  eligible.sort((left, right) => compareRotationScores(left.rotationScore, right.rotationScore));
-  if (eligible.length < CSSMAZE_PREPARED_BANK_COUNT) {
-    throw new Error(`cssMaze low-rotation candidate pool produced only ${eligible.length} eligible seeds`);
-  }
-  const selected = eligible.slice(0, CSSMAZE_PREPARED_BANK_COUNT);
-  if (selected.at(-1)?.rotationScore.maximumConsecutiveQuarterTurnCount >
-      CSSMAZE_MAXIMUM_CONSECUTIVE_QUARTER_TURN_COUNT) {
-    throw new Error("cssMaze candidate pool did not satisfy the consecutive-turn ceiling");
-  }
-  if (selected.some(({ rotationScore }) =>
-    rotationScore.loopOrientationChangeDegrees > CSSMAZE_MAXIMUM_LOOP_ORIENTATION_CHANGE_DEGREES ||
-    rotationScore.loopOrientationDegrees !== CSSMAZE_REQUIRED_LOOP_ORIENTATION_DEGREES)) {
-    throw new Error("cssMaze candidate pool did not satisfy the loop-orientation ceiling");
-  }
-  return Object.freeze(selected);
-}
-
-async function captureExplicitSeed(value) {
+function captureExplicitSeed(value) {
   const seed = Number(value);
   if (!Number.isSafeInteger(seed) || seed <= 0) {
     throw new RangeError("cssMaze seed must be a positive safe integer");
   }
-  const capture = await captureNativeMazeState({ seed });
-  return Object.freeze({ seed, rotationScore: scoreNativeCameraRotation(capture.state) });
+  return Object.freeze({ seed });
+}
+
+function validatePreparedBankRanking(ranked) {
+  if (ranked.length !== CSSMAZE_PREPARED_BANK_COUNT ||
+      new Set(ranked.map(({ seed }) => seed)).size !== CSSMAZE_PREPARED_BANK_COUNT ||
+      ranked.some(({ rotationScore }) =>
+        rotationScore.stateCount < CSSMAZE_MINIMUM_BANK_STATE_COUNT ||
+        rotationScore.maximumConsecutiveQuarterTurnCount >
+          CSSMAZE_MAXIMUM_CONSECUTIVE_QUARTER_TURN_COUNT ||
+        rotationScore.quarterTurnCount > CSSMAZE_MAXIMUM_TOTAL_QUARTER_TURN_COUNT ||
+        rotationScore.loopOrientationChangeDegrees >
+          CSSMAZE_MAXIMUM_LOOP_ORIENTATION_CHANGE_DEGREES ||
+        rotationScore.loopOrientationDegrees !== CSSMAZE_REQUIRED_LOOP_ORIENTATION_DEGREES) ||
+      ranked.some((entry, index) => index > 0 &&
+        compareRotationScores(ranked[index - 1].rotationScore, entry.rotationScore) > 0)) {
+    throw new Error("cssMaze pinned prepared bank failed its native rotation contract");
+  }
 }
 
 function buildPreparedBank(scenes, ranked, { isRankedBank }) {
   return Object.freeze({
     schema: "cssmaze-prepared-bank@1",
     selection: isRankedBank
-      ? "startup-crypto-random-common-loop-low-consecutive-turn-prepared-scene"
+      ? "session-shuffled-bag-no-repeat-common-loop-low-total-turn-prepared-scene"
       : "explicit-prepared-scene",
     ranking: Object.freeze(isRankedBank ? {
-      algorithm: "common-loop-orientation-then-lowest-maximum-consecutive-quarter-turns",
+      algorithm: "common-loop-orientation-then-lowest-consecutive-and-total-quarter-turns",
+      selectionPreparation: "pinned-results-of-native-summary-scan",
       candidateSeedStart: CSSMAZE_SEED,
       candidateSeedCount: CSSMAZE_CANDIDATE_SEED_COUNT,
       minimumStateCount: CSSMAZE_MINIMUM_BANK_STATE_COUNT,
       maximumConsecutiveQuarterTurnCount: CSSMAZE_MAXIMUM_CONSECUTIVE_QUARTER_TURN_COUNT,
+      maximumTotalQuarterTurnCount: CSSMAZE_MAXIMUM_TOTAL_QUARTER_TURN_COUNT,
       maximumLoopOrientationChangeDegrees: CSSMAZE_MAXIMUM_LOOP_ORIENTATION_CHANGE_DEGREES,
       requiredLoopOrientationDegrees: CSSMAZE_REQUIRED_LOOP_ORIENTATION_DEGREES,
       loopTexturePhaseAligned: true,
@@ -125,25 +113,6 @@ function buildPreparedBank(scenes, ranked, { isRankedBank }) {
     runtimeRotationScoring: false,
     mountedSceneCount: 1,
   });
-}
-
-function assertRankingSummaryMatchesCapture(summaryScore, captureScore) {
-  for (const key of [
-    "seed",
-    "stateCount",
-    "turningFrameCount",
-    "turnEventCount",
-    "longestTurningRunFrameCount",
-    "maximumConsecutiveQuarterTurnCount",
-    "loopOrientationChangeDegrees",
-    "loopOrientationQuarterTurnCount",
-    "loopOrientationDegrees",
-    "quarterTurnCount",
-  ]) {
-    if (summaryScore[key] !== captureScore[key]) {
-      throw new Error(`cssMaze native ranking summary drifted at ${key}`);
-    }
-  }
 }
 
 function hasLoopTexturePhaseAlignment(state) {

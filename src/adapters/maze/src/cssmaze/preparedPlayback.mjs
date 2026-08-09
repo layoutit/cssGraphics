@@ -12,6 +12,10 @@ export async function createCssmazePreparedPlayer({ playback, worldRoot, wallRoo
   const requestDelay = overrides.requestDelay ?? globalThis.setTimeout.bind(globalThis);
   const cancelDelay = overrides.cancelDelay ?? globalThis.clearTimeout.bind(globalThis);
   const readNow = overrides.readNow ?? globalThis.performance.now.bind(globalThis.performance);
+  const queueTask = overrides.queueTask ?? globalThis.queueMicrotask.bind(globalThis);
+  const onPlaybackEnd = overrides.onPlaybackEnd ?? null;
+  const onError = overrides.onError ?? ((error) => { throw error; });
+  const initialVisibilityApplied = overrides.initialVisibilityApplied === true;
   const frameMilliseconds = playback.sourceFrameDelayMilliseconds;
   let paused = true;
   let tick = playback.initial.stateIndex;
@@ -31,6 +35,8 @@ export async function createCssmazePreparedPlayer({ playback, worldRoot, wallRoo
   let loopCount = 0;
   let preparedLoopSnapCount = 0;
   let runtimeForcedStyleReadCount = 0;
+  let preparedEndNotificationCount = 0;
+  let endNotificationQueued = false;
 
   const target = createPolyMorphPreparedDomTarget({
     model: {
@@ -93,8 +99,18 @@ export async function createCssmazePreparedPlayer({ playback, worldRoot, wallRoo
     return tick;
   }
 
-  function advanceOne() {
+  function advanceOne(notifyEnd = false) {
     if (tick >= playback.segmentEndState) {
+      if (onPlaybackEnd) {
+        paused = true;
+        nextFrameAt = null;
+        if (notifyEnd && !endNotificationQueued) {
+          endNotificationQueued = true;
+          preparedEndNotificationCount += 1;
+          queueTask(() => Promise.resolve(onPlaybackEnd()).catch(onError));
+        }
+        return tick;
+      }
       if (!playback.loop) {
         paused = true;
         return tick;
@@ -122,15 +138,17 @@ export async function createCssmazePreparedPlayer({ playback, worldRoot, wallRoo
     delay = null;
     schedulerCallbackCount += 1;
     if (paused) return;
-    advanceOne();
+    advanceOne(true);
     nextFrameAt += frameMilliseconds;
     const now = readNow();
     if (nextFrameAt <= now) nextFrameAt = now + frameMilliseconds;
     scheduleNextDraw();
   }
 
-  applyPreparedVisibilityOperations(playback.initialLeafVisibilityChanges);
-  if (playback.initialLeafVisibilityChanges.length > 0) leafVisibilitySelections += 1;
+  if (!initialVisibilityApplied) {
+    applyPreparedVisibilityOperations(playback.initialLeafVisibilityChanges);
+    if (playback.initialLeafVisibilityChanges.length > 0) leafVisibilitySelections += 1;
+  }
   preparedStatesApplied += 1;
   return Object.freeze({
     get tick() { return tick; },
@@ -153,7 +171,7 @@ export async function createCssmazePreparedPlayer({ playback, worldRoot, wallRoo
       this.pause();
       const amount = Math.trunc(Number(count));
       if (!Number.isSafeInteger(amount) || amount < 1) throw new RangeError("cssMaze step count must be positive");
-      for (let index = 0; index < amount; index += 1) advanceOne();
+      for (let index = 0; index < amount; index += 1) advanceOne(false);
       return tick;
     },
     setTick(value) {
@@ -193,6 +211,9 @@ export async function createCssmazePreparedPlayer({ playback, worldRoot, wallRoo
         runtimeTimerCallbackCount: schedulerCallbackCount,
         runtimeAnimationFrameCallbackCount: 0,
         deterministicSeedReplayLoopCount: loopCount,
+        preparedEndNotificationCount,
+        automaticPreparedSceneChangeEnabled: Boolean(onPlaybackEnd),
+        preparedInitialVisibilityAdopted: initialVisibilityApplied,
         runtimeGeometryConstructionCount: 0,
         runtimeMazeGenerationCount: 0,
         runtimeCameraCalculationCount: 0,

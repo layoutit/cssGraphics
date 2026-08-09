@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { selectPreparedSceneEntry } from "../src/cssmaze/manifestClient.mjs";
+import { createPreparedSceneShuffledBag } from "../src/cssmaze/preparedBankSelection.mjs";
 import { compareRotationScores, scoreNativeCameraRotation } from "../src/prepare/cssmaze/rotationRanking.mjs";
 
 test("prepared-bank selection uses a supplied uint32 once per page load", () => {
@@ -9,6 +10,24 @@ test("prepared-bank selection uses a supplied uint32 once per page load", () => 
   assert.equal(selectPreparedSceneEntry(manifest, { requestedScene: null }, { randomUint32: 1 }).id, "scene-b");
   assert.equal(selectPreparedSceneEntry(manifest, { requestedScene: "scene-c" }, { randomUint32: 0 }).id, "scene-c");
   assert.throws(() => selectPreparedSceneEntry(manifest, { requestedScene: null }, { randomUint32: -1 }), /uint32/u);
+});
+
+test("session shuffle visits all 24 prepared scenes before repeating across reloads", () => {
+  const manifest = fixtureManifest(24);
+  const storage = fixtureStorage();
+  let randomValue = 0;
+  const options = { storage, randomUint32: () => randomValue++ };
+  let bag = createPreparedSceneShuffledBag(manifest, options);
+  const firstCycle = Array.from({ length: 7 }, () => bag.nextEntry().id);
+  bag = createPreparedSceneShuffledBag(manifest, options);
+  firstCycle.push(...Array.from({ length: 17 }, () => bag.nextEntry().id));
+  assert.equal(new Set(firstCycle).size, 24);
+
+  const secondCycle = Array.from({ length: 24 }, () => bag.nextEntry().id);
+  assert.equal(new Set(secondCycle).size, 24);
+  assert.notEqual(secondCycle[0], firstCycle.at(-1));
+  assert.equal([...firstCycle, ...secondCycle].some((id, index, ids) =>
+    index > 0 && id === ids[index - 1]), false);
 });
 
 test("rotation ranking favors traces that spend less time turning", () => {
@@ -24,6 +43,17 @@ test("rotation ranking breaks equal turning ratios with fewer quarter turns", ()
   const twoQuarterTurns = scoreNativeCameraRotation(fixtureTrace(104, [0, 0, 180, 180]));
   assert.equal(oneQuarterTurn.turningFrameRatio, twoQuarterTurns.turningFrameRatio);
   assert.ok(compareRotationScores(oneQuarterTurn, twoQuarterTurns) < 0);
+});
+
+test("rotation ranking prioritizes fewer total turns before aggregate turning ratio", () => {
+  const twoTurns = scoreNativeCameraRotation(fixtureTrace(109, [0, 90, 90, 180, 180]));
+  const threeTurns = scoreNativeCameraRotation(
+    fixtureTrace(110, [0, 90, 90, 180, 180, 270, 270, 270, 270, 270, 270]),
+  );
+  assert.equal(twoTurns.maximumConsecutiveQuarterTurnCount, 1);
+  assert.equal(threeTurns.maximumConsecutiveQuarterTurnCount, 1);
+  assert.ok(twoTurns.turningFrameRatio > threeTurns.turningFrameRatio);
+  assert.ok(compareRotationScores(twoTurns, threeTurns) < 0);
 });
 
 test("rotation scoring counts quarter-turn and full-rotation equivalents at preparation", () => {
@@ -58,11 +88,21 @@ test("rotation ranking rejects long uninterrupted turn streaks before aggregate 
   assert.ok(compareRotationScores(separatedTurns, longStreak) < 0);
 });
 
-function fixtureManifest() {
-  const scenes = ["scene-a", "scene-b", "scene-c"].map((id) => ({ id }));
+function fixtureManifest(count = 3) {
+  const scenes = Array.from({ length: count }, (_, index) => ({
+    id: count === 3 ? `scene-${String.fromCharCode(97 + index)}` : `scene-${index + 1}`,
+  }));
   return {
     scenes,
     preparedBank: { sceneIds: scenes.map(({ id }) => id) },
+  };
+}
+
+function fixtureStorage() {
+  const values = new Map();
+  return {
+    getItem(key) { return values.get(key) ?? null; },
+    setItem(key, value) { values.set(key, value); },
   };
 }
 

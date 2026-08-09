@@ -127,8 +127,8 @@ export function scoreNativeCameraRotationSummary(summary) {
 
 export function compareRotationScores(left, right) {
   return left.maximumConsecutiveQuarterTurnCount - right.maximumConsecutiveQuarterTurnCount ||
-    left.turningFrameRatio - right.turningFrameRatio ||
     left.quarterTurnCount - right.quarterTurnCount ||
+    left.turningFrameRatio - right.turningFrameRatio ||
     left.angularDegreesPerSecond - right.angularDegreesPerSecond ||
     left.totalAngularTravelDegrees - right.totalAngularTravelDegrees ||
     left.seed - right.seed;

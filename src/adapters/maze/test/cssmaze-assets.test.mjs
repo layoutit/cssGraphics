@@ -24,10 +24,11 @@ test("generated manifest exposes 24 source-backed low-rotation prepared scenes",
   assert.deepEqual(manifest.scenes.map((entry) => entry.id), manifest.preparedBank.sceneIds);
   assert.deepEqual(manifest.scenes.map((entry) => entry.nativeSeed), manifest.preparedBank.seeds);
   assert.equal(manifest.preparedBank.ranking.algorithm,
-    "common-loop-orientation-then-lowest-maximum-consecutive-quarter-turns");
-  assert.equal(manifest.preparedBank.ranking.candidateSeedCount, 131_072);
+    "common-loop-orientation-then-lowest-consecutive-and-total-quarter-turns");
+  assert.equal(manifest.preparedBank.ranking.candidateSeedCount, 1_048_576);
   assert.equal(manifest.preparedBank.ranking.minimumStateCount, 600);
   assert.equal(manifest.preparedBank.ranking.maximumConsecutiveQuarterTurnCount, 2);
+  assert.equal(manifest.preparedBank.ranking.maximumTotalQuarterTurnCount, 6);
   assert.equal(manifest.preparedBank.ranking.maximumLoopOrientationChangeDegrees, 0);
   assert.equal(manifest.preparedBank.ranking.requiredLoopOrientationDegrees, 180);
   assert.equal(manifest.preparedBank.ranking.loopTexturePhaseAligned, true);
@@ -38,7 +39,10 @@ test("generated manifest exposes 24 source-backed low-rotation prepared scenes",
   assert.equal(manifest.transport.schema, "cssmaze-prepared-transport@1");
   assert.equal(manifest.transport.encoding, "gzip");
   assert.equal(manifest.transport.startup, "selected-scene-and-snapshot-first");
-  assert.equal(manifest.transport.selection, "page-load-only");
+  assert.equal(manifest.transport.selection, "session-shuffled-bag-no-repeat");
+  assert.equal(manifest.transport.subsequentSceneTransport,
+    "scene-only-prefetched-before-prepared-end-switch");
+  assert.equal(manifest.transport.runtimeSnapshotRemount, false);
   assert.equal(manifest.transport.runtimeArchiveDownload, false);
   assert.equal(manifest.transport.runtimeGeometryPayload, false);
   assert.equal(manifest.transport.sharedSnapshotAtlases.length, 2);
@@ -63,6 +67,7 @@ test("generated manifest exposes 24 source-backed low-rotation prepared scenes",
   for (const score of manifest.preparedBank.rotationScores) {
     assert.equal(score.schema, "cssmaze-prepared-rotation-score@2");
     assert.ok(score.maximumConsecutiveQuarterTurnCount <= 2);
+    assert.ok(score.quarterTurnCount <= 6);
     assert.ok(score.longestTurningRunDegrees <= 180.01);
     assert.ok(score.longestTurningRunFrameCount <= 64);
     assert.equal(score.loopOrientationChangeDegrees, 0);
@@ -128,6 +133,15 @@ test("generated manifest exposes 24 source-backed low-rotation prepared scenes",
       prepared.playback.leafVisibilityChangeRows.reduce((sum, row) => sum + row.length, 0),
     );
     assert.equal(prepared.metrics.runtimeLeafVisibilityComparisonCount, 0);
+    assert.equal(prepared.preparedSceneTransition.schema, "cssmaze-prepared-scene-transition@1");
+    assert.equal(prepared.preparedSceneTransition.retainedWallTransforms.length, 169);
+    assert.equal(prepared.preparedSceneTransition.initialVisibilityOperations.length, 169);
+    assert.equal(prepared.preparedSceneTransition.initialVisibilityOperations.every(
+      (operation, index) => Math.abs(operation) === index + 1,
+    ), true);
+    assert.equal(prepared.preparedSceneTransition.runtimeGeometryCalculation, false);
+    assert.equal(prepared.preparedSceneTransition.runtimeVisibilityComparison, false);
+    assert.equal(prepared.preparedSceneTransition.runtimeDomRemount, false);
   }
 });
 

@@ -1,7 +1,6 @@
 import { readPreparedJson, readPreparedText } from "./preparedResponse.mjs";
 
 const MANIFEST_URL = "/cssmaze/manifest.json";
-const preparedSceneCache = new Map();
 
 export async function loadPreparedManifest(route, fetchImpl = globalThis.fetch.bind(globalThis)) {
   const manifest = await fetchJson(fetchImpl, MANIFEST_URL, "cssMaze manifest");
@@ -11,9 +10,10 @@ export async function loadPreparedManifest(route, fetchImpl = globalThis.fetch.b
       manifest.defaultScene?.id !== "default-maze" ||
       !Array.isArray(manifest.scenes) || manifest.scenes.length !== 24 ||
       bank?.schema !== "cssmaze-prepared-bank@1" ||
-      bank.selection !== "startup-crypto-random-common-loop-low-consecutive-turn-prepared-scene" ||
-      bank.ranking?.algorithm !== "common-loop-orientation-then-lowest-maximum-consecutive-quarter-turns" ||
+      bank.selection !== "session-shuffled-bag-no-repeat-common-loop-low-total-turn-prepared-scene" ||
+      bank.ranking?.algorithm !== "common-loop-orientation-then-lowest-consecutive-and-total-quarter-turns" ||
       bank.ranking?.maximumConsecutiveQuarterTurnCount !== 2 ||
+      bank.ranking?.maximumTotalQuarterTurnCount !== 6 ||
       bank.ranking?.maximumLoopOrientationChangeDegrees !== 0 ||
       bank.ranking?.requiredLoopOrientationDegrees !== 180 ||
       bank.ranking?.loopTexturePhaseAligned !== true ||
@@ -23,7 +23,9 @@ export async function loadPreparedManifest(route, fetchImpl = globalThis.fetch.b
       manifest.transport?.schema !== "cssmaze-prepared-transport@1" ||
       manifest.transport.encoding !== "gzip" ||
       manifest.transport.startup !== "selected-scene-and-snapshot-first" ||
-      manifest.transport.selection !== "page-load-only" ||
+      manifest.transport.selection !== "session-shuffled-bag-no-repeat" ||
+      manifest.transport.subsequentSceneTransport !== "scene-only-prefetched-before-prepared-end-switch" ||
+      manifest.transport.runtimeSnapshotRemount !== false ||
       manifest.transport.runtimeArchiveDownload !== false ||
       manifest.transport.runtimeGeometryPayload !== false ||
       !validSharedSnapshotAtlases(manifest.transport.sharedSnapshotAtlases) ||
@@ -48,6 +50,7 @@ export async function loadPreparedManifest(route, fetchImpl = globalThis.fetch.b
         !Number.isSafeInteger(entry?.rotationScore?.longestTurningRunFrameCount) ||
         entry.rotationScore.longestTurningRunFrameCount < 0 ||
         !Number.isSafeInteger(entry?.rotationScore?.quarterTurnCount) ||
+        entry.rotationScore.quarterTurnCount > bank.ranking.maximumTotalQuarterTurnCount ||
         !(entry?.rotationScore?.fullRotationEquivalentCount >= 0) ||
         !validPreparedUrl(entry.sceneUrl, ".json.gz") || entry.sceneEncoding !== "gzip" ||
         !validPreparedUrl(entry.snapshotUrl, ".html.gz") || entry.snapshotEncoding !== "gzip")) {
@@ -61,20 +64,33 @@ export async function loadPreparedManifest(route, fetchImpl = globalThis.fetch.b
 
 export async function loadPreparedScene(manifest, route, options = {}) {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
-  const entry = selectPreparedSceneEntry(manifest, route, options);
+  const entry = options.entry ?? selectPreparedSceneEntry(manifest, route, options);
   if (!entry || typeof entry.sceneUrl !== "string" || typeof entry.snapshotUrl !== "string") {
     throw new Error("Generated cssMaze prepared scene is missing. Run pnpm prepare:cssmaze.");
   }
-  const cacheKey = `${entry.sceneUrl}\n${entry.snapshotUrl}`;
-  let prepared = preparedSceneCache.get(cacheKey);
-  if (!prepared) {
-    prepared = Promise.all([
-      fetchPreparedJson(fetchImpl, entry.sceneUrl, `cssMaze scene ${entry.id}`),
-      fetchPreparedText(fetchImpl, entry.snapshotUrl, `cssMaze snapshot ${entry.id}`),
-    ]);
-    preparedSceneCache.set(cacheKey, prepared);
+  const [sceneData, snapshotHtml] = await Promise.all([
+    loadPreparedSceneData(manifest, entry, { fetchImpl }),
+    loadPreparedSnapshot(entry, fetchImpl),
+  ]);
+  return Object.freeze({ entry, sceneData, snapshotHtml });
+}
+
+export async function loadPreparedSceneData(manifest, entry, options = {}) {
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
+  if (!entry || typeof entry.sceneUrl !== "string") {
+    throw new Error("Generated cssMaze prepared scene data is missing. Run pnpm prepare:cssmaze.");
   }
-  const [sceneData, snapshotHtml] = await prepared;
+  const sceneData = await fetchPreparedJson(fetchImpl, entry.sceneUrl, `cssMaze scene ${entry.id}`);
+  validatePreparedScene(manifest, entry, sceneData);
+  return sceneData;
+}
+
+async function loadPreparedSnapshot(entry, fetchImpl) {
+  return fetchPreparedText(fetchImpl, entry.snapshotUrl, `cssMaze snapshot ${entry.id}`);
+}
+
+function validatePreparedScene(manifest, entry, sceneData) {
+  const transition = sceneData?.preparedSceneTransition;
   if (sceneData?.schema !== "cssmaze-prepared-scene@1" || sceneData.id !== entry.id ||
       sceneData.sourceProfile?.seed !== entry.nativeSeed ||
       sceneData.sourceProfile?.rotationScore?.seed !== entry.nativeSeed ||
@@ -89,10 +105,27 @@ export async function loadPreparedScene(manifest, route, options = {}) {
       sceneData.playback.leafVisibilityChangeRows.length !== sceneData.playback.stateCount ||
       sceneData.renderer?.textureBackend !== "atlas" ||
       sceneData.renderer?.textureLeafSizing !== "raster" ||
-      sceneData.renderer?.textureProjection !== "affine") {
+      sceneData.renderer?.textureProjection !== "affine" ||
+      transition?.schema !== "cssmaze-prepared-scene-transition@1" ||
+      transition.runtimeGeometryCalculation !== false ||
+      transition.runtimeVisibilityComparison !== false ||
+      transition.runtimeDomRemount !== false ||
+      !Array.isArray(transition.retainedWallTransforms) ||
+      transition.retainedWallTransforms.length !== sceneData.metrics.sourceWallSegmentCount ||
+      transition.retainedWallTransforms.some((transform) =>
+        typeof transform !== "string" || !transform.startsWith("matrix3d(")) ||
+      !validAbsoluteVisibilityOperations(
+        transition.initialVisibilityOperations,
+        sceneData.metrics.sourceWallSegmentCount,
+      )) {
     throw new Error("Generated cssMaze scene contract drifted. Run pnpm prepare:cssmaze.");
   }
-  return Object.freeze({ entry, sceneData, snapshotHtml });
+}
+
+function validAbsoluteVisibilityOperations(operations, leafCount) {
+  return Array.isArray(operations) && operations.length === leafCount && operations.every(
+    (operation, index) => Number.isSafeInteger(operation) && Math.abs(operation) === index + 1,
+  );
 }
 
 export function selectPreparedSceneEntry(manifest, route, options = {}) {

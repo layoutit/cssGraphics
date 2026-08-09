@@ -13,6 +13,7 @@ export async function createGravityWellPreparedPlayer({
   setDelay = globalThis.setTimeout.bind(globalThis),
   clearDelay = globalThis.clearTimeout.bind(globalThis),
   readNow = globalThis.performance.now.bind(globalThis.performance),
+  viewportMaxAxis = defaultViewportMaxAxis(),
 }) {
   const leaves = mounted.model.render.leaves.map((leaf) => mounted.leafHandles.get(leaf.id)?.element);
   const shapes = mounted.model.render.shapes.map((shape) => mounted.shapeElements.get(shape.id));
@@ -35,11 +36,23 @@ export async function createGravityWellPreparedPlayer({
     leaves: leaves.map((element) => ({ element })),
   });
   const leafStyles = leaves.map((element) => element.style);
+  const leafTargets = target.leaves;
+  const cachedTransforms = new Array(leaves.length);
+  const cachedColorValues = new Uint16Array(leaves.length);
+  const selectedVisibilityByLeaf = new Uint8Array(leaves.length);
+  const newlyVisibleFlags = new Uint8Array(leaves.length);
+  const newlyVisibleLeaves = [];
   let activeBankIndex = initialBankIndex;
   let activeBank = validateBank(bank, activeBankIndex, leaves.length);
   let playback = activeBank.playback;
   let transformBlocks = activeBank.transformBlocks;
   let changeSchedule = activeBank.changeSchedule;
+  let selectedViewportMaxAxis = validateViewportMaxAxis(viewportMaxAxis);
+  let visibilitySchedule = playback.visibilitySchedule;
+  let selectedVisibilityProfile = selectVisibilityProfile(visibilitySchedule, selectedViewportMaxAxis);
+  let presentedVisibilityFrameIndex = -1;
+  let visibilityInitialized = false;
+  let currentVisibleLeafCount = 0;
   let firstBlockLookaheadFrameIndex = Math.max(1, Math.floor(playback.blockFrameCount / 2));
   const frameMilliseconds = playback.frameMilliseconds;
   let paused = true;
@@ -51,6 +64,14 @@ export async function createGravityWellPreparedPlayer({
   let preparedFramesApplied = 0;
   let leafTransformWrites = 0;
   let leafColorWrites = 0;
+  let preparedTransformValueReads = 0;
+  let preparedColorValueReads = 0;
+  let leafVisibilityWrites = 0;
+  let preparedVisibilityAssignmentReads = 0;
+  let visibilityCatchupTransformWrites = 0;
+  let visibilityCatchupColorWrites = 0;
+  let viewportProfileSwitchCount = 0;
+  let viewportProfileRebuildLeafScanCount = 0;
   let schedulerCallbacks = 0;
   let schedulerTimerSchedules = 0;
   let bankSwitchCount = 0;
@@ -72,35 +93,143 @@ export async function createGravityWellPreparedPlayer({
     return publishFrame(nextFrameIndex, previousFrameIndex);
   }
 
+  function setLeafVisibility(leafIndex, visible) {
+    if (leafTargets[leafIndex].writeVisibility(visible)) leafVisibilityWrites += 1;
+  }
+
+  function markVisibility(leafIndex, visible) {
+    const selected = visible ? 1 : 0;
+    if (selectedVisibilityByLeaf[leafIndex] === selected) return;
+    selectedVisibilityByLeaf[leafIndex] = selected;
+    currentVisibleLeafCount += selected === 1 ? 1 : -1;
+    if (selected === 0) {
+      setLeafVisibility(leafIndex, false);
+      return;
+    }
+    newlyVisibleFlags[leafIndex] = 1;
+    newlyVisibleLeaves.push(leafIndex);
+  }
+
+  function rebuildVisibilityFrame(profile, nextFrameIndex) {
+    const selected = new Uint8Array(leaves.length);
+    if (profile === null) {
+      selected.fill(1);
+      return selected;
+    }
+    for (const leafIndex of profile.initialVisibleIndices) selected[leafIndex] = 1;
+    for (let frameIndex = 1; frameIndex <= nextFrameIndex; frameIndex += 1) {
+      const start = profile.changeOffsets[frameIndex];
+      const end = profile.changeOffsets[frameIndex + 1];
+      for (let index = start; index < end; index += 1) {
+        const assignment = profile.assignments[index];
+        selected[assignment >> 1] = assignment & 1;
+        preparedVisibilityAssignmentReads += 1;
+      }
+    }
+    return selected;
+  }
+
+  function selectVisibilityFrame(nextFrameIndex, previousFrameIndex) {
+    newlyVisibleLeaves.length = 0;
+    if (!visibilityInitialized) {
+      const selected = rebuildVisibilityFrame(selectedVisibilityProfile, nextFrameIndex);
+      viewportProfileRebuildLeafScanCount += leaves.length;
+      for (let leafIndex = 0; leafIndex < leaves.length; leafIndex += 1) {
+        selectedVisibilityByLeaf[leafIndex] = selected[leafIndex];
+        currentVisibleLeafCount += selected[leafIndex];
+        if (selected[leafIndex] === 0) setLeafVisibility(leafIndex, false);
+      }
+      visibilityInitialized = true;
+      presentedVisibilityFrameIndex = nextFrameIndex;
+      return;
+    }
+    if (selectedVisibilityProfile === null && currentVisibleLeafCount === leaves.length) {
+      presentedVisibilityFrameIndex = nextFrameIndex;
+      return;
+    }
+    if (selectedVisibilityProfile !== null &&
+        previousFrameIndex === presentedVisibilityFrameIndex &&
+        nextFrameIndex === previousFrameIndex + 1) {
+      const start = selectedVisibilityProfile.changeOffsets[nextFrameIndex];
+      const end = selectedVisibilityProfile.changeOffsets[nextFrameIndex + 1];
+      for (let index = start; index < end; index += 1) {
+        const assignment = selectedVisibilityProfile.assignments[index];
+        preparedVisibilityAssignmentReads += 1;
+        markVisibility(assignment >> 1, (assignment & 1) === 1);
+      }
+      presentedVisibilityFrameIndex = nextFrameIndex;
+      return;
+    }
+    const selected = rebuildVisibilityFrame(selectedVisibilityProfile, nextFrameIndex);
+    viewportProfileRebuildLeafScanCount += leaves.length;
+    for (let leafIndex = 0; leafIndex < leaves.length; leafIndex += 1) {
+      markVisibility(leafIndex, selected[leafIndex] === 1);
+    }
+    presentedVisibilityFrameIndex = nextFrameIndex;
+  }
+
+  function publishNewlyVisibleLeaves() {
+    for (const leafIndex of newlyVisibleLeaves) {
+      const transform = cachedTransforms[leafIndex];
+      if (typeof transform !== "string") throw new Error(`Prepared visible transform ${leafIndex} is missing`);
+      leafStyles[leafIndex].transform = transform;
+      leafStyles[leafIndex].color = playback.colorAsset.palette[cachedColorValues[leafIndex]];
+      leafTransformWrites += 1;
+      leafColorWrites += 1;
+      visibilityCatchupTransformWrites += 1;
+      visibilityCatchupColorWrites += 1;
+      setLeafVisibility(leafIndex, true);
+      newlyVisibleFlags[leafIndex] = 0;
+    }
+    newlyVisibleLeaves.length = 0;
+  }
+
   function publishFrame(nextFrameIndex, previousFrameIndex) {
+    selectVisibilityFrame(nextFrameIndex, previousFrameIndex);
     const changes = changeSchedule.selectFrame(nextFrameIndex, previousFrameIndex);
     const transformView = transformBlocks.selectFrame(nextFrameIndex, changes !== null);
     const colorView = transformBlocks.selectColorFrame(nextFrameIndex, changes !== null);
     const transforms = transformView.transforms;
     const transformStart = transformView.start;
-    let transformWriteCount = playback.leafCount;
-    let colorWriteCount = playback.leafCount;
+    let transformWriteCount = 0;
+    let colorWriteCount = 0;
     if (changes) {
-      transformWriteCount = changes.transformEnd - changes.transformStart;
-      colorWriteCount = changes.colorEnd - changes.colorStart;
       for (let index = changes.transformStart; index < changes.transformEnd; index += 1) {
         const leafIndex = changes.transformIndices[index];
-        leafStyles[leafIndex].transform = transforms[transformStart + index - changes.transformStart];
+        const transform = transforms[transformStart + index - changes.transformStart];
+        cachedTransforms[leafIndex] = transform;
+        preparedTransformValueReads += 1;
+        if (selectedVisibilityByLeaf[leafIndex] === 0 || newlyVisibleFlags[leafIndex] === 1) continue;
+        leafStyles[leafIndex].transform = transform;
+        transformWriteCount += 1;
       }
       for (let index = changes.colorStart; index < changes.colorEnd; index += 1) {
         const leafIndex = changes.colorIndices[index];
-        leafStyles[leafIndex].color = playback.colorAsset.palette[
-          colorView.values[colorView.start + index - changes.colorStart]
-        ];
+        const colorValue = colorView.values[colorView.start + index - changes.colorStart];
+        cachedColorValues[leafIndex] = colorValue;
+        preparedColorValueReads += 1;
+        if (selectedVisibilityByLeaf[leafIndex] === 0 || newlyVisibleFlags[leafIndex] === 1) continue;
+        leafStyles[leafIndex].color = playback.colorAsset.palette[colorValue];
+        colorWriteCount += 1;
       }
     } else {
       for (let leafIndex = 0; leafIndex < playback.leafCount; leafIndex += 1) {
-        leafStyles[leafIndex].transform = transforms[transformStart + leafIndex];
-        leafStyles[leafIndex].color = playback.colorAsset.palette[colorView.values[colorView.start + leafIndex]];
+        const transform = transforms[transformStart + leafIndex];
+        const colorValue = colorView.values[colorView.start + leafIndex];
+        cachedTransforms[leafIndex] = transform;
+        cachedColorValues[leafIndex] = colorValue;
+        preparedTransformValueReads += 1;
+        preparedColorValueReads += 1;
+        if (selectedVisibilityByLeaf[leafIndex] === 0 || newlyVisibleFlags[leafIndex] === 1) continue;
+        leafStyles[leafIndex].transform = transform;
+        leafStyles[leafIndex].color = playback.colorAsset.palette[colorValue];
+        transformWriteCount += 1;
+        colorWriteCount += 1;
       }
     }
     leafTransformWrites += transformWriteCount;
     leafColorWrites += colorWriteCount;
+    publishNewlyVisibleLeaves();
     frameIndex = nextFrameIndex;
     preparedFramesApplied += 1;
     if (nextFrameIndex === firstBlockLookaheadFrameIndex) {
@@ -156,8 +285,12 @@ export async function createGravityWellPreparedPlayer({
     playback = activeBank.playback;
     transformBlocks = activeBank.transformBlocks;
     changeSchedule = activeBank.changeSchedule;
+    visibilitySchedule = playback.visibilitySchedule;
+    selectedVisibilityProfile = selectVisibilityProfile(visibilitySchedule, selectedViewportMaxAxis);
     firstBlockLookaheadFrameIndex = Math.max(1, Math.floor(playback.blockFrameCount / 2));
     frameIndex = 0;
+    selectVisibilityFrame(frameIndex, -1);
+    publishNewlyVisibleLeaves();
     pendingBank = null;
     pendingBankIndex = null;
     bankSwitchCount += 1;
@@ -252,6 +385,17 @@ export async function createGravityWellPreparedPlayer({
       }
       return this.setTick(activeBank.scene.timeline.sourceFrameStartIndex + sourceTick);
     },
+    setViewportMaxAxis(value) {
+      const nextViewportMaxAxis = validateViewportMaxAxis(value);
+      const nextProfile = selectVisibilityProfile(visibilitySchedule, nextViewportMaxAxis);
+      selectedViewportMaxAxis = nextViewportMaxAxis;
+      if (nextProfile === selectedVisibilityProfile) return nextProfile?.size ?? null;
+      selectedVisibilityProfile = nextProfile;
+      viewportProfileSwitchCount += 1;
+      selectVisibilityFrame(frameIndex, -1);
+      publishNewlyVisibleLeaves();
+      return nextProfile?.size ?? null;
+    },
     assertStableDomIdentity() {
       target.assertStableDomIdentity();
       mounted.assertStableDomIdentity();
@@ -276,6 +420,17 @@ export async function createGravityWellPreparedPlayer({
         leafTransformWrites,
         leafColorAttempts: leafColorWrites,
         leafColorWrites,
+        preparedTransformValueReads,
+        preparedColorValueReads,
+        leafVisibilityWrites,
+        preparedVisibilityAssignmentReads,
+        visibilityCatchupTransformWrites,
+        visibilityCatchupColorWrites,
+        viewportProfileSwitchCount,
+        viewportProfileRebuildLeafScanCount,
+        selectedViewportMaxAxis,
+        selectedViewportProfileSize: selectedVisibilityProfile?.size ?? null,
+        currentVisibleLeafCount,
         schedulerCallbacks,
         schedulerTimerCallbacks: schedulerCallbacks,
         schedulerTimerSchedules,
@@ -285,6 +440,8 @@ export async function createGravityWellPreparedPlayer({
         runtimeTopologyConstructionCount: 0,
         runtimeAffineEvaluationCount: 0,
         runtimeColorCalculationCount: 0,
+        runtimeViewportProjectionCount: 0,
+        runtimePerFrameViewportLeafScanCount: 0,
         runtimeDomCreationCount: 0,
         runtimeDomRemovalCount: 0,
         runtimeApplyStableDomIdentityChecks: 0,
@@ -307,11 +464,38 @@ function validateBank(bank, bankIndex, leafCount) {
       typeof bank.transformBlocks?.activate !== "function" ||
       typeof bank.transformBlocks?.selectColorFrame !== "function" ||
       typeof bank.changeSchedule?.selectFrame !== "function" ||
+      bank.playback.visibilitySchedule?.schema !== "cssgravitywell-prepared-viewport-visibility@1" ||
+      bank.playback.visibilitySchedule.frameCount !== bank.playback.frameCount ||
+      bank.playback.visibilitySchedule.leafCount !== leafCount ||
       bank.scene.timeline?.firstAndLastGroundFlat !== true ||
       bank.scene.timeline?.allWellsCompleteBeforeSwitch !== true) {
     throw new Error(`Gravity Well prepared bank ${bankIndex} is incomplete`);
   }
   return bank;
+}
+
+function defaultViewportMaxAxis() {
+  const width = Number(globalThis.innerWidth);
+  const height = Number(globalThis.innerHeight);
+  return Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0
+    ? Math.max(width, height)
+    : Infinity;
+}
+
+function validateViewportMaxAxis(value) {
+  const axis = Number(value);
+  if (axis !== Infinity && (!Number.isFinite(axis) || axis <= 0)) {
+    throw new RangeError("Gravity Well viewport maximum axis must be positive");
+  }
+  return axis;
+}
+
+function selectVisibilityProfile(schedule, viewportMaxAxis) {
+  if (schedule?.schema !== "cssgravitywell-prepared-viewport-visibility@1" ||
+      !Array.isArray(schedule.profiles) || schedule.profiles.length < 1) {
+    throw new Error("Gravity Well prepared viewport visibility schedule is incomplete");
+  }
+  return schedule.profiles.find((profile) => profile.size >= viewportMaxAxis) ?? null;
 }
 
 function cryptoRandomUint32() {

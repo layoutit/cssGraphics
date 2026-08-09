@@ -23,6 +23,14 @@ import {
   inspectCssgravitywellProductBank,
   writeCssgravitywellProductBankDescriptor,
 } from "./productBank.mjs";
+import {
+  CSSGRAVITYWELL_VIEWPORT_DILATION_FRAMES,
+  CSSGRAVITYWELL_VIEWPORT_MARGIN_PIXELS,
+  CSSGRAVITYWELL_VISIBILITY_ENCODING,
+  CSSGRAVITYWELL_VISIBILITY_SCHEMA,
+  encodeGravityWellViewportVisibility,
+  prepareGravityWellViewportVisibility,
+} from "../src/prepare/cssgravitywell/visibilitySchedule.mjs";
 
 const adapterRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(adapterRoot, "..", "..", "..");
@@ -232,6 +240,7 @@ console.log(JSON.stringify({
   deltaIndexBytes: bankMetrics.reduce((sum, metrics) => sum + metrics.deltaIndexBytes, 0),
   meanSequentialTransformWriteCount: bankMetrics.reduce((sum, metrics) => sum + metrics.meanTransformWrites, 0) / bankMetrics.length,
   meanSequentialColorWriteCount: bankMetrics.reduce((sum, metrics) => sum + metrics.meanColorWrites, 0) / bankMetrics.length,
+  viewportVisibilityEncodedBytes: bankMetrics.reduce((sum, metrics) => sum + metrics.viewportVisibilityEncodedBytes, 0),
   modelManifestSha256: packedManifestSha256,
   productClosureSha256: productBank.closureSha256,
   productClosureBytes: productBank.closureBytes,
@@ -250,6 +259,9 @@ async function prepareBank({ bankIndex, seed, fixedViewQuaternion }) {
   if (quadsByFrame.some((quads) => quads.length !== preparedLeafCount)) {
     throw new Error(`Gravity Well bank ${bankId} topology drifted`);
   }
+  const viewportVisibility = prepareGravityWellViewportVisibility(quadsByFrame);
+  const viewportVisibilityDecoded = encodeGravityWellViewportVisibility(viewportVisibility);
+  const viewportVisibilityEncoded = gzipSync(viewportVisibilityDecoded, { level: 9, mtime: 0 });
   const formattedTransformsByFrame = quadsByFrame.map((quads, frameIndex) => quads.map((quad, index) =>
     `matrix3d(${formatMatrix3dValues(quadMatrix(quad, index, frameIndex), MATRIX_DECIMAL_PLACES)})`));
   const colorRows = new Uint16Array(timeline.frameCount * preparedLeafCount);
@@ -437,6 +449,29 @@ async function prepareBank({ bankIndex, seed, fixedViewQuaternion }) {
         transformChangedLeafIndexCount: transformChangeIndices.length,
         colorChangedLeafIndexCount: colorChangeIndices.length,
       }),
+      visibilityAsset: Object.freeze({
+        schema: CSSGRAVITYWELL_VISIBILITY_SCHEMA,
+        distribution: "embedded-prepared-bank-scene",
+        byteLength: viewportVisibilityEncoded.byteLength,
+        sha256: sha256(viewportVisibilityEncoded),
+        decodedByteLength: viewportVisibilityDecoded.byteLength,
+        encodedBase64: viewportVisibilityEncoded.toString("base64"),
+        encoding: CSSGRAVITYWELL_VISIBILITY_ENCODING,
+        selection: viewportVisibility.selection,
+        frameCount: viewportVisibility.frameCount,
+        leafCount: viewportVisibility.leafCount,
+        marginPixels: CSSGRAVITYWELL_VIEWPORT_MARGIN_PIXELS,
+        dilationFrames: CSSGRAVITYWELL_VIEWPORT_DILATION_FRAMES,
+        profileSizes: Object.freeze(viewportVisibility.profiles.map((profile) => profile.size)),
+        profiles: Object.freeze(viewportVisibility.profiles.map((profile) => Object.freeze({
+          size: profile.size,
+          initialVisibleCount: profile.initialVisibleIndices.length,
+          visibilityChangeCount: profile.assignments.length,
+          meanVisibleCount: profile.meanVisibleCount,
+          minimumVisibleCount: profile.minimumVisibleCount,
+          maximumVisibleCount: profile.maximumVisibleCount,
+        }))),
+      }),
     }),
     metrics: Object.freeze({
       sourceVertexCount: sourceStates.gridWidth ** 2,
@@ -450,6 +485,9 @@ async function prepareBank({ bankIndex, seed, fixedViewQuaternion }) {
       runtimeColorCalculationCount: 0,
       runtimeAffineEvaluationCount: 0,
       runtimeDomGrowth: false,
+      preparedViewportProfileCount: viewportVisibility.profiles.length,
+      preparedMinimumMeanVisibleLeafCount: Math.min(...viewportVisibility.profiles.map((profile) => profile.meanVisibleCount)),
+      preparedMaximumMeanVisibleLeafCount: Math.max(...viewportVisibility.profiles.map((profile) => profile.meanVisibleCount)),
     }),
     proof: Object.freeze({
       stableTopology: true,
@@ -465,6 +503,8 @@ async function prepareBank({ bankIndex, seed, fixedViewQuaternion }) {
       transformBlocksExpandFinalCssStringsOnlyAtBlockLoad: true,
       colorAndChangeAssetsShareSelectedBankTransformBlockZero: true,
       colorsPreparedBySourceDepth: true,
+      viewportVisibilityIsPrepared: true,
+      viewportVisibilityHasNoRuntimeProjection: true,
     }),
   });
   const sceneBytes = Buffer.from(`${JSON.stringify(scene)}\n`);
@@ -488,6 +528,7 @@ async function prepareBank({ bankIndex, seed, fixedViewQuaternion }) {
       deltaIndexBytes: encodedTransformIndices.byteLength + encodedColorIndices.byteLength,
       meanTransformWrites: transformChangeIndices.length / timeline.frameCount,
       meanColorWrites: colorChangeIndices.length / timeline.frameCount,
+      viewportVisibilityEncodedBytes: viewportVisibilityEncoded.byteLength,
     }),
   });
 }

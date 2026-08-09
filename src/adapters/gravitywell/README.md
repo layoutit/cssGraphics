@@ -27,4 +27,8 @@ zero also carries the selected bank's sparse write indices. The shared prepared
 palette is stored once in the catalog: 100 hash-bound
 closure files, or 101 on disk including the self-describing product descriptor,
 with one-time block expansion and no per-frame decoding, transform formatting,
-or block reconstruction.
+or block reconstruction. Each bank also embeds one small viewport-visibility
+schedule with five conservative profiles. Playback consumes its sparse assignments,
+publishes transforms and colors only to selected leaves, and catches a leaf up
+from its exact prepared state before making it visible again. Projection and
+leaf visibility scans remain prepare-time work.

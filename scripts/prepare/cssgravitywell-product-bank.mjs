@@ -18,7 +18,8 @@ const lock = JSON.parse(await readFile(
 if (lock.schema !== "cssgravitywell-prepared-bank-lock@1" || lock.bankCount !== 24 ||
     lock.retainedShapeRootCount !== 1 || lock.retainedLeafCount !== 1_922 ||
     lock.preparedFrameCount !== 7_665 || lock.transformAssetCount !== 72 ||
-    lock.productFileCount !== 100 || lock.colorAssetCount !== 24 || lock.changeAssetCount !== 24) {
+    lock.productFileCount !== 100 || lock.colorAssetCount !== 24 || lock.changeAssetCount !== 24 ||
+    lock.visibilityAssetCount !== 24 || lock.visibilityEncodedBytes !== 109_999) {
   throw new Error("cssGravityWell prepared-bank lock does not bind the retained 24-bank product");
 }
 const generatedRoot = resolve(

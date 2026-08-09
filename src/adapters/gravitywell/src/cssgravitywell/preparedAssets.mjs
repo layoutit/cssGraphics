@@ -1,3 +1,10 @@
+import {
+  CSSGRAVITYWELL_VIEWPORT_DILATION_FRAMES,
+  CSSGRAVITYWELL_VIEWPORT_MARGIN_PIXELS,
+  CSSGRAVITYWELL_VISIBILITY_ENCODING,
+  CSSGRAVITYWELL_VISIBILITY_SCHEMA,
+} from "../prepare/cssgravitywell/visibilitySchedule.mjs";
+
 const MATRIX_DECIMAL_PLACES = 2;
 const MATRIX_COMPONENTS = Object.freeze([0, 1, 2, 4, 5, 8, 9, 10, 12, 13, 14]);
 const MATRIX_DATA_STREAM_COUNT = MATRIX_COMPONENTS.length * 2 + 1;
@@ -61,18 +68,21 @@ export async function loadPreparedGravityWellBankScene(catalog, bankIndex) {
   const encoded = new Uint8Array(await fetchBytes(entry.sceneUrl));
   await verifyBytes(encoded, entry.sceneByteLength, entry.sceneSha256, `bank scene ${bankIndex}`);
   const sourceScene = JSON.parse(new TextDecoder().decode(encoded));
+  const visibilitySchedule = await decodePreparedViewportVisibility(sourceScene.playback?.visibilityAsset);
   const playback = Object.freeze({
     ...sourceScene.playback,
     colorAsset: Object.freeze({
       ...sourceScene.playback?.colorAsset,
       palette: catalog.colorPalette,
     }),
+    visibilitySchedule,
   });
   const scene = Object.freeze({ ...sourceScene, playback });
   if (scene?.schema !== "cssgravitywell-prepared-bank@1" || scene.bankIndex !== bankIndex ||
       scene.seed !== entry.seed || scene.playback?.schema !== "cssgravitywell-sparse-transform-block-playback@1" ||
       scene.playback.leafCount !== scene.metrics?.preparedLeafCount || scene.playback.loop !== false ||
       scene.playback.blockCount !== 3 || scene.playback.blocks?.length !== 3 ||
+      scene.playback.visibilitySchedule?.schema !== CSSGRAVITYWELL_VISIBILITY_SCHEMA ||
       scene.playback.runtimeLookaheadBlockCount !== 1 ||
       scene.timeline?.firstAndLastGroundFlat !== true ||
       scene.timeline?.allWellsCompleteBeforeSwitch !== true ||
@@ -404,6 +414,137 @@ function decodeBase64(value) {
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
   return bytes;
+}
+
+async function decodePreparedViewportVisibility(descriptor) {
+  if (descriptor?.schema !== CSSGRAVITYWELL_VISIBILITY_SCHEMA ||
+      descriptor.distribution !== "embedded-prepared-bank-scene" ||
+      descriptor.encoding !== CSSGRAVITYWELL_VISIBILITY_ENCODING ||
+      descriptor.selection !== "smallest-square-profile-covering-maximum-css-viewport-axis-or-disabled" ||
+      descriptor.marginPixels !== CSSGRAVITYWELL_VIEWPORT_MARGIN_PIXELS ||
+      descriptor.dilationFrames !== CSSGRAVITYWELL_VIEWPORT_DILATION_FRAMES ||
+      !Array.isArray(descriptor.profileSizes) || descriptor.profileSizes.length < 1 ||
+      descriptor.profiles?.length !== descriptor.profileSizes.length) {
+    throw new Error("Gravity Well prepared viewport visibility descriptor drifted");
+  }
+  const encoded = decodeBase64(descriptor.encodedBase64);
+  await verifyBytes(encoded, descriptor.byteLength, descriptor.sha256, "prepared viewport visibility");
+  const bytes = await decompressGzip(encoded);
+  if (bytes.byteLength !== descriptor.decodedByteLength || bytes.byteLength < 8 ||
+      String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) !== "CGWV" ||
+      bytes[4] !== 1 || bytes[5] !== descriptor.profileSizes.length || bytes[6] !== 0 || bytes[7] !== 0) {
+    throw new Error("Gravity Well prepared viewport visibility header drifted");
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const profiles = [];
+  let offset = 8;
+  for (let profileIndex = 0; profileIndex < descriptor.profileSizes.length; profileIndex += 1) {
+    if (offset + 16 > bytes.byteLength) throw new Error("Gravity Well viewport visibility profile is truncated");
+    const size = view.getUint16(offset, true);
+    const marginPixels = view.getUint16(offset + 2, true);
+    const dilationFrames = bytes[offset + 4];
+    const reserved = bytes[offset + 5];
+    const frameCount = view.getUint16(offset + 6, true);
+    const leafCount = view.getUint16(offset + 8, true);
+    const initialVisibleCount = view.getUint16(offset + 10, true);
+    const visibilityChangeCount = view.getUint32(offset + 12, true);
+    offset += 16;
+    if (size !== descriptor.profileSizes[profileIndex] || marginPixels !== descriptor.marginPixels ||
+        dilationFrames !== descriptor.dilationFrames || reserved !== 0 ||
+        frameCount !== descriptor.frameCount || leafCount !== descriptor.leafCount ||
+        initialVisibleCount !== descriptor.profiles[profileIndex].initialVisibleCount ||
+        visibilityChangeCount !== descriptor.profiles[profileIndex].visibilityChangeCount) {
+      throw new Error(`Gravity Well viewport visibility profile ${profileIndex} drifted`);
+    }
+    const initialVisibleIndices = readPreparedUint16Rows(bytes, offset, initialVisibleCount);
+    offset += initialVisibleIndices.byteLength;
+    const changeOffsets = new Uint32Array(frameCount + 1);
+    for (let frameIndex = 0; frameIndex <= frameCount; frameIndex += 1) {
+      if (offset + Uint32Array.BYTES_PER_ELEMENT > bytes.byteLength) {
+        throw new Error(`Gravity Well viewport visibility offsets ${profileIndex} are truncated`);
+      }
+      changeOffsets[frameIndex] = view.getUint32(offset, true);
+      offset += Uint32Array.BYTES_PER_ELEMENT;
+    }
+    const assignments = readPreparedUint16Rows(bytes, offset, visibilityChangeCount);
+    offset += assignments.byteLength;
+    validatePreparedVisibilityProfile({
+      size,
+      frameCount,
+      leafCount,
+      initialVisibleIndices,
+      changeOffsets,
+      assignments,
+    });
+    profiles.push(Object.freeze({
+      size,
+      frameCount,
+      leafCount,
+      initialVisibleIndices,
+      changeOffsets,
+      assignments,
+    }));
+  }
+  if (offset !== bytes.byteLength) throw new Error("Gravity Well viewport visibility payload has trailing bytes");
+  return Object.freeze({
+    schema: descriptor.schema,
+    selection: descriptor.selection,
+    frameCount: descriptor.frameCount,
+    leafCount: descriptor.leafCount,
+    marginPixels: descriptor.marginPixels,
+    dilationFrames: descriptor.dilationFrames,
+    profiles: Object.freeze(profiles),
+  });
+}
+
+function readPreparedUint16Rows(bytes, offset, count) {
+  const byteLength = count * Uint16Array.BYTES_PER_ELEMENT;
+  if (offset + byteLength > bytes.byteLength) throw new Error("Gravity Well viewport visibility rows are truncated");
+  const view = new DataView(bytes.buffer, bytes.byteOffset + offset, byteLength);
+  const values = new Uint16Array(count);
+  for (let index = 0; index < count; index += 1) {
+    values[index] = view.getUint16(index * Uint16Array.BYTES_PER_ELEMENT, true);
+  }
+  return values;
+}
+
+function validatePreparedVisibilityProfile(profile) {
+  const selected = new Uint8Array(profile.leafCount);
+  let previous = -1;
+  for (const leafIndex of profile.initialVisibleIndices) {
+    if (leafIndex <= previous || leafIndex >= profile.leafCount) {
+      throw new Error("Gravity Well viewport initial visibility is outside source order");
+    }
+    selected[leafIndex] = 1;
+    previous = leafIndex;
+  }
+  const initialSelected = selected.slice();
+  if (profile.changeOffsets[0] !== 0 || profile.changeOffsets.at(-1) !== profile.assignments.length) {
+    throw new Error("Gravity Well viewport visibility offsets drifted");
+  }
+  for (let frameIndex = 0; frameIndex < profile.frameCount; frameIndex += 1) {
+    const start = profile.changeOffsets[frameIndex];
+    const end = profile.changeOffsets[frameIndex + 1];
+    if (start > end || end > profile.assignments.length || (frameIndex === 0 && end !== 0)) {
+      throw new Error("Gravity Well viewport visibility frame range drifted");
+    }
+    previous = -1;
+    for (let index = start; index < end; index += 1) {
+      const assignment = profile.assignments[index];
+      const leafIndex = assignment >> 1;
+      const visible = assignment & 1;
+      if (leafIndex <= previous || leafIndex >= profile.leafCount || selected[leafIndex] === visible) {
+        throw new Error("Gravity Well viewport visibility assignment drifted");
+      }
+      selected[leafIndex] = visible;
+      previous = leafIndex;
+    }
+  }
+  for (let leafIndex = 0; leafIndex < profile.leafCount; leafIndex += 1) {
+    if (selected[leafIndex] !== initialSelected[leafIndex]) {
+      throw new Error("Gravity Well terminal viewport visibility is not cyclic");
+    }
+  }
 }
 
 async function decompressGzip(encoded) {

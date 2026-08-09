@@ -64,7 +64,13 @@ prefetching only after the active bank's 240-frame source-authority window. The 
 bank retains only its current and one lookahead transform block. The shuffle
 visits the other 23 banks without replacement.
 Sequential frames visit only their independently prepared transform and color
-write indices. At the terminal flat frame, the player adopts the next bank at
+write indices. Five conservative square viewport profiles prepare visible-leaf
+membership for every bank frame, including one-frame temporal dilation and
+sparse visibility assignments. Runtime chooses one profile on load or resize,
+keeps exact prepared transform and color state for hidden leaves, publishes
+styles only to selected leaves, and catches each newly selected leaf up before
+showing it. It performs no per-frame projection or viewport leaf scan. At the
+terminal flat frame, the player adopts the next bank at
 its identical frame 0 without a style write or DOM mutation. The absolute timer
 publishes one prepared frame per callback.
 
@@ -73,6 +79,15 @@ random geometry, topology, polygon construction, normals, affine matrix
 evaluation, color generation, DOM growth, Canvas, SVG scene geometry, WebGL,
 WebGPU, masks, and clip paths are forbidden. Randomness selects only prepared
 bank indices.
+
+At 1,512 by 982 CSS pixels and DPR 2, the prepared worst transition contains
+1,922 transform and 1,299 color changes. The selected 1,536-pixel profile
+publishes 1,322 transforms and 971 colors. The final Chrome trace measures a
+`0.9 ms` worst-transition publication p95, `0.7 ms` steady-state publication
+p95, and `9.2 ms` display-interval p95, with a `17.6 ms` maximum, no long tasks,
+no empty scheduler callbacks, no transform-block load, and no DOM growth. The
+same four deterministic browser frames remain pixel-exact against the deployed
+pre-optimization product.
 
 ## Proof boundary
 

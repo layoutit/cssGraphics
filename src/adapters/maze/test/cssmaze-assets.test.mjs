@@ -155,7 +155,7 @@ test("prepared wall atlas preserves source texture brightness", async () => {
 test("product runtime CSS stays on the fast browser path", async () => {
   const css = await readFile(join(root, "src/cssmaze/styles.css"), "utf8");
   const shellGradient = "linear-gradient(180deg, #0b1119 0%, #000 100%)";
-  assert.equal(css.split(shellGradient).length - 1, 3);
+  assert.equal(css.split(shellGradient).length - 1, 2);
   assert.doesNotMatch(css.replaceAll(shellGradient, "none"), /(?:clip-path|mask(?:-image)?|backdrop-filter|box-shadow|text-shadow|(?:linear|radial|conic)-gradient|mix-blend-mode|background-blend-mode)\s*:/iu);
 });
 

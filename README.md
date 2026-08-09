@@ -83,6 +83,27 @@ pnpm build:menger
 pnpm dev:menger
 ```
 
+### Maze
+
+[`src/adapters/maze`](src/adapters/maze) is a source-backed PolyCSS port of
+XScreenSaver Maze3D. Preparation selects 24 low-rotation seeded
+mazes and emits gzip-bound retained snapshots. The browser loads one prepared
+maze at a time and publishes prepared camera, wall-height, and visibility-delta
+rows over 171 stable polygon leaves; it performs no maze generation, route
+solving, geometry construction, camera math, visibility calculation, or DOM
+growth.
+
+```sh
+pnpm prepare:maze:artifact
+pnpm build:maze
+pnpm dev:maze
+```
+
+The prepared product archive is hash-bound and includes the three pinned
+XScreenSaver textures under the upstream copyright and permission notice.
+The source checkout, native helpers, captures, and traces remain local and
+ignored.
+
 ## License
 
 cssGraphics source code is [MIT licensed](LICENSE). Third-party models retain

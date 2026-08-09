@@ -1,0 +1,86 @@
+{
+  "schema": "polycss-reference-lock@1",
+  "project": "cssMaze",
+  "target": {
+    "family": "XScreenSaver",
+    "hack": "maze3d",
+    "description": "A recreation of the old 3D maze screensaver from Windows 95"
+  },
+  "repository": {
+    "url": "https://github.com/Zygo/xscreensaver",
+    "role": "read-only mirror",
+    "commit": "906693799e4fb7581436590cf84ecb2d3c9186ba"
+  },
+  "references": [
+    {
+      "path": "debian/copyright",
+      "sha256": "354d67dfdb520f9e133102881e7bce90b48ca95aea0ef37042d8af4cfe48f8e9",
+      "role": "repository-wide copyright and redistribution notice"
+    },
+    {
+      "path": "hacks/glx/maze3d.c",
+      "sha256": "10d143873dcb7172c61111db329955613b46de208d10a315f117d8256eba3bcb",
+      "role": "primary behavior, generation, camera, geometry, and drawing source"
+    },
+    {
+      "path": "hacks/config/maze3d.xml",
+      "sha256": "35d6b3c3fa80b0154fe37219788035b11ca9a686eef86fb15cbcda7fbbf6226a",
+      "role": "configuration surface and documented defaults"
+    },
+    {
+      "path": "hacks/glx/maze3d.man",
+      "sha256": "483fd95a04af0e95be31c8ac06e002a88a3c13bbd7498c27f7c52fa47d0a07e6",
+      "role": "manual and behavior description"
+    },
+    {
+      "path": "hacks/images/brick1.png",
+      "sha256": "60190f318c521e43160cd8780a70e08117f4cc6d8bd839c304bcc30f312c300d",
+      "role": "default wall texture; admitted to the public prepared product"
+    },
+    {
+      "path": "hacks/images/brick2.png",
+      "sha256": "8829d69a3eb036ac97fbf5a3bf9ecdbc90fe9fe1a36775bd96fa57a46d481ef9",
+      "role": "default ceiling texture; admitted to the public prepared product"
+    },
+    {
+      "path": "hacks/images/wood2.png",
+      "sha256": "22e6111a207b6e1463641c583ea08a17cc6f89bc62276a3e14ad37ff3350f0a6",
+      "role": "default floor texture; admitted to the public prepared product"
+    }
+  ],
+  "productClosure": {
+    "status": "complete-for-public-first-slice",
+    "sourceStateHarness": "native/maze3d-state.c",
+    "inputs": [
+      "debian/copyright",
+      "hacks/glx/maze3d.c",
+      "hacks/config/maze3d.xml",
+      "hacks/glx/maze3d.man",
+      "hacks/images/brick1.png",
+      "hacks/images/brick2.png",
+      "hacks/images/wood2.png"
+    ],
+    "limit": "This qualifies the files consumed by the public first slice, not the complete native XScreenSaver executable or optional maze3d modes."
+  },
+  "dependencyClosure": {
+    "status": "pending",
+    "directLocalIncludes": [
+      "hacks/glx/xlockmore.h",
+      "hacks/glx/ximage-loader.h",
+      "hacks/images/gen/brick1_png.h",
+      "hacks/images/gen/brick2_png.h",
+      "hacks/images/gen/wood2_png.h",
+      "hacks/images/gen/start_png.h",
+      "hacks/images/gen/bob_png.h",
+      "hacks/images/gen/logo-32_png.h"
+    ],
+    "note": "The complete native executable and optional maze3d modes remain outside the public first slice."
+  },
+  "rights": {
+    "status": "qualified-for-public-first-slice",
+    "evidence": "The pinned XScreenSaver debian/copyright file applies a permissive permission-to-use-copy-modify-distribute-and-sell notice to Files: *, including the three byte-identified PNG textures.",
+    "redistribution": "The prepared product may include the three pinned textures when the XScreenSaver copyright and permission notice appears in supporting documentation.",
+    "limit": "No Microsoft binary, capture, logo, or separately sourced Microsoft asset is admitted."
+  },
+  "verifiedAt": "2026-08-09"
+}

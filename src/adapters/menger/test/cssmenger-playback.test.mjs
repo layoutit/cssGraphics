@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { createCssmengerPreparedPlayer, timelineStateIndexForTick } from "../src/cssmenger/preparedPlayback.mjs";
+import {
+  COLOR_PUBLICATION_INTERVAL_TICKS,
+  createCssmengerPreparedPlayer,
+  timelineStateIndexForTick,
+} from "../src/cssmenger/preparedPlayback.mjs";
 import { buildPreparedMengerPlayback } from "../src/prepare/cssmenger/sourcePlayback.mjs";
 
 test("prepared XScreenSaver random, palette, and rotator segment is deterministic", () => {
@@ -28,7 +32,7 @@ test("prepared XScreenSaver random, palette, and rotator segment is deterministi
   assert.equal(playback.runtimeRotationCalculation, false);
 });
 
-test("steady playback uses prepared direct writes without DOM style reads or adjacent comparisons", () => {
+test("steady playback holds prepared colors for three source ticks without DOM reads or adjacent comparisons", () => {
   const originalHTMLElement = globalThis.HTMLElement;
   let modelTransformWrites = 0;
   let axisColorWrites = 0;
@@ -56,7 +60,7 @@ test("steady playback uses prepared direct writes without DOM style reads or adj
   }
   globalThis.HTMLElement = FakeHTMLElement;
   try {
-    const sourcePlayback = buildPreparedMengerPlayback({ stateCount: 4 });
+    const sourcePlayback = buildPreparedMengerPlayback({ stateCount: 5 });
     const playback = {
       ...sourcePlayback,
       frontFacingSchedule: {
@@ -97,19 +101,32 @@ test("steady playback uses prepared direct writes without DOM style reads or adj
     assert.equal(defaultStats.runtimeInstrumentationEnabled, false);
     assert.equal(defaultStats.preparedStatesApplied, null);
     assert.equal(defaultStats.runtimeHotPathDebugCounterWritesPerScheduledTick, 0);
+    assert.equal(defaultStats.preparedColorPublicationIntervalTicks, COLOR_PUBLICATION_INTERVAL_TICKS);
+    assert.equal(defaultStats.preparedColorPublicationDelayMilliseconds, 90);
+    assert.deepEqual(defaultStats.preparedFrontFacingAxisSelectionsPerScheduledTick, {
+      minimum: 0,
+      maximum: 3,
+      nominalAverage: 1,
+    });
     assert.equal(modelTransformWrites, 1);
     assert.equal(axisColorWrites, 84);
     player.step();
-    const afterAdvance = player.stats();
     assert.equal(modelTransformWrites, 2);
+    assert.equal(axisColorWrites, 84);
+    player.step();
+    assert.equal(modelTransformWrites, 3);
+    assert.equal(axisColorWrites, 84);
+    player.step();
+    assert.equal(modelTransformWrites, 4);
+    const afterAdvance = player.stats();
     assert.equal(axisColorWrites, 126);
     assert.equal(afterAdvance.runtimeHotPathDomStyleReadCount, 0);
     assert.equal(afterAdvance.runtimeAdjacentPublicationComparisonCount, 0);
     assert.equal(afterAdvance.runtimeHotPathProfilingBranchCount, 0);
 
     player.setTick(1);
-    assert.equal(modelTransformWrites, 2);
-    assert.equal(axisColorWrites, 126);
+    assert.equal(modelTransformWrites, 5);
+    assert.equal(axisColorWrites, 168);
   } finally {
     if (originalHTMLElement === undefined) delete globalThis.HTMLElement;
     else globalThis.HTMLElement = originalHTMLElement;
@@ -151,7 +168,7 @@ test("late playback coalesces missed source ticks into one prepared publication"
   }
   globalThis.HTMLElement = FakeHTMLElement;
   try {
-    const sourcePlayback = buildPreparedMengerPlayback({ stateCount: 4 });
+    const sourcePlayback = buildPreparedMengerPlayback({ stateCount: 5 });
     const playback = {
       ...sourcePlayback,
       frontFacingSchedule: {

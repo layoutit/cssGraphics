@@ -118,10 +118,18 @@ try {
         evidence.stats.runtimeHotPathProfilingBranchCount !== 0 ||
         evidence.stats.runtimeHotPathDebugCounterWritesPerScheduledTick !== 0 ||
         evidence.stats.preparedSchedulerCatchUpMode !== "coalesced-latest-prepared-state" ||
-        evidence.stats.preparedFrontFacingAxisSelectionsPerScheduledTick !== 3 ||
-        evidence.stats.preparedFrontFacingLeafWritesPerScheduledTick.minimum !== 41 ||
+        evidence.stats.preparedColorPublicationIntervalTicks !== 3 ||
+        evidence.stats.preparedColorPublicationDelayMilliseconds !== 90 ||
+        evidence.stats.preparedColorPublicationMode !== "fixed-prepared-source-state-interval" ||
+        evidence.stats.preparedFrontFacingAxisSelectionsPerScheduledTick.minimum !== 0 ||
+        evidence.stats.preparedFrontFacingAxisSelectionsPerScheduledTick.maximum !== 3 ||
+        evidence.stats.preparedFrontFacingAxisSelectionsPerScheduledTick.nominalAverage !== 1 ||
+        evidence.stats.preparedFrontFacingLeafWritesPerScheduledTick.minimum !== 0 ||
         evidence.stats.preparedFrontFacingLeafWritesPerScheduledTick.maximum !== 50 ||
-        evidence.stats.preparedFrontFacingLeafWritesPerScheduledTick.average !== 42.725 ||
+        evidence.stats.preparedFrontFacingLeafWritesPerScheduledTick.nominalAverage !== 42.725 / 3 ||
+        evidence.stats.preparedFrontFacingLeafWritesPerColorPublication.minimum !== 41 ||
+        evidence.stats.preparedFrontFacingLeafWritesPerColorPublication.maximum !== 50 ||
+        evidence.stats.preparedFrontFacingLeafWritesPerColorPublication.average !== 42.725 ||
         evidence.stats.runtimeDomMutationCount !== 0 || evidence.stats.runtimeGeometryConstructionCount !== 0 ||
         evidence.stats.runtimeRecursionCount !== 0 || evidence.stats.runtimeMergeCount !== 0 ||
         evidence.stats.runtimeColorGenerationCount !== 0 || evidence.stats.runtimeRotationCalculationCount !== 0 ||

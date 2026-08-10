@@ -37,6 +37,7 @@ const DISTRIBUTION_PREFIXES = Object.freeze([
 ]);
 const README_MEDIA_PATHS = new Set([
   "site/public/favicon.ico",
+  "site/public/landing/electropaint.webp",
   "site/public/landing/flowerbox.webp",
   "site/public/landing/gears.webp",
   "site/public/landing/gravitywell.webp",

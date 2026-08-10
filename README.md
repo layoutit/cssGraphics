@@ -106,8 +106,39 @@ XScreenSaver textures under the upstream copyright and permission notice.
 The source checkout, native helpers, captures, and traces remain local and
 ignored.
 
+### ElectroPaint
+
+[`src/adapters/electropaint`](src/adapters/electropaint) is a source-backed
+PolyCSS preparation of the Kent/Ralph ElectroPaint motion model. It emits four
+visually separated, warm-started 64,000-state seed banks over 40 stable retained
+CSS quad roots at the source 60 Hz cadence. Each refresh selects one bank once
+with browser cryptographic randomness and fetches only that bank. Each 17:46.7
+timeline is split into 128 content-addressed binary gzip chunks with four parsed
+and decoded ahead. Preparation resolves the random walk, history ring, matrices,
+and colors. Runtime publishes 40 prepared
+transform assignments and at most one prepared color-class assignment per
+ordinary state, with no leaf scan, comparison, random generation, geometry,
+matrix, color, camera, or cadence calculation. Inner chunk boundaries continue
+the same prepared stream without a reset. Playback uses no CSS keyframes.
+
+```sh
+pnpm prepare:electropaint:source
+pnpm build:electropaint
+pnpm dev:electropaint
+```
+
+The three pinned authority checkouts are local and ignored. Source preparation
+verifies their commits and bound file bytes; deployment reproduces the same
+banks from that checked-in source lock. This adapter is
+GPL-2.0-only. See the adapter's
+[`NOTICE.md`](src/adapters/electropaint/NOTICE.md). It is not covered by the
+repository's blanket MIT statement. The prepared source parameters and update
+order are bound; native pixel parity is not yet claimed.
+
 ## License
 
-cssGraphics source code is [MIT licensed](LICENSE). Third-party models retain
-their original licenses and attribution, listed in
+The cssGraphics core and package are [MIT licensed](LICENSE). Scoped adapters
+and third-party models retain their own terms and attribution. In particular,
+the ElectroPaint adapter is not MIT licensed; see its local license and notice.
+Catalog model attribution is listed in
 [`site/public/catalog.json`](site/public/catalog.json).

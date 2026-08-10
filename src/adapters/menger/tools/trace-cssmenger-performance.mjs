@@ -205,8 +205,10 @@ try {
       tickEnd: afterState.state.tick,
       preparedStateAdvanceCount: afterState.state.tick - beforeState.state.tick,
       modelTransformWriteCount: null,
-      frontFacingLeafPaletteWriteUpperBound: (afterState.state.tick - beforeState.state.tick) *
-        afterState.stats.preparedFrontFacingLeafWritesPerScheduledTick.average,
+      frontFacingLeafPaletteWriteUpperBound: Math.ceil(
+        (afterState.state.tick - beforeState.state.tick) /
+          afterState.stats.preparedColorPublicationIntervalTicks,
+      ) * afterState.stats.preparedFrontFacingLeafWritesPerColorPublication.maximum,
       schedulerCallbackCount: null,
       runtimeInstrumentationEnabled: afterState.stats.runtimeInstrumentationEnabled,
       runtimeHotPathDomStyleReadCount: afterState.stats.runtimeHotPathDomStyleReadCount,

@@ -1,3 +1,5 @@
+export const COLOR_PUBLICATION_INTERVAL_TICKS = 3;
+
 export function timelineStateIndexForTick(tick, playback) {
   if (!Number.isSafeInteger(tick) || tick < 0) throw new RangeError("cssMenger tick must be a non-negative safe integer");
   return playback.loop
@@ -50,7 +52,9 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
   function publishAdjacentFast(stateIndex) {
     const transform = playback.transforms[stateIndex];
     publicationRoot.style.transform = transform;
-    for (let axis = 0; axis < 3; axis += 1) publishAxisColor(stateIndex, axis);
+    if ((stateIndex - playback.segmentStartState) % COLOR_PUBLICATION_INTERVAL_TICKS === 0) {
+      for (let axis = 0; axis < 3; axis += 1) publishAxisColor(stateIndex, axis);
+    }
     tick = stateIndex;
     return tick;
   }
@@ -243,8 +247,21 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
         runtimeHotPathProfilingBranchCount: 0,
         runtimeHotPathDebugCounterWritesPerScheduledTick: 0,
         preparedSchedulerCatchUpMode: "coalesced-latest-prepared-state",
-        preparedFrontFacingAxisSelectionsPerScheduledTick: 3,
+        preparedColorPublicationIntervalTicks: COLOR_PUBLICATION_INTERVAL_TICKS,
+        preparedColorPublicationDelayMilliseconds: frameMilliseconds * COLOR_PUBLICATION_INTERVAL_TICKS,
+        preparedColorPublicationMode: "fixed-prepared-source-state-interval",
+        preparedFrontFacingAxisSelectionsPerScheduledTick: Object.freeze({
+          minimum: 0,
+          maximum: 3,
+          nominalAverage: 3 / COLOR_PUBLICATION_INTERVAL_TICKS,
+        }),
         preparedFrontFacingLeafWritesPerScheduledTick: Object.freeze({
+          minimum: 0,
+          maximum: playback.frontFacingSchedule.maximumSelectedLeafCountPerState,
+          nominalAverage: playback.frontFacingSchedule.averageSelectedLeafCountPerState /
+            COLOR_PUBLICATION_INTERVAL_TICKS,
+        }),
+        preparedFrontFacingLeafWritesPerColorPublication: Object.freeze({
           minimum: playback.frontFacingSchedule.minimumSelectedLeafCountPerState,
           maximum: playback.frontFacingSchedule.maximumSelectedLeafCountPerState,
           average: playback.frontFacingSchedule.averageSelectedLeafCountPerState,

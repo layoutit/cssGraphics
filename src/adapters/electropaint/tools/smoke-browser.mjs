@@ -82,6 +82,7 @@ try {
       const wrapStepDelta = statDelta(statsBeforeWrapStep, api.stats().player);
       await api.setState(359);
       const rectangles = quads.map((quad) => quad.getBoundingClientRect());
+      const hostRectangle = document.querySelector("#scene").getBoundingClientRect();
       const visualBounds = {
         left: Math.min(...rectangles.map((rectangle) => rectangle.left)),
         top: Math.min(...rectangles.map((rectangle) => rectangle.top)),
@@ -97,6 +98,9 @@ try {
         svgInSceneCount: document.querySelectorAll("#scene svg").length,
         bodyBackgroundImage: getComputedStyle(document.body).backgroundImage,
         sceneBackgroundImage: getComputedStyle(document.querySelector("#scene")).backgroundImage,
+        headerBackgroundColor: getComputedStyle(document.querySelector(".site-header")).backgroundColor,
+        headerBackgroundImage: getComputedStyle(document.querySelector(".site-header")).backgroundImage,
+        headerPointerEvents: getComputedStyle(document.querySelector(".site-header")).pointerEvents,
         transformChanged: before !== after,
         colorfulLeafCount: quads.filter((quad) => {
           const color = getComputedStyle(quad).backgroundColor;
@@ -106,6 +110,7 @@ try {
         visibleLeafCount: rectangles.filter((rectangle) => rectangle.right > 0 && rectangle.bottom > 0 &&
           rectangle.left < innerWidth && rectangle.top < innerHeight).length,
         visualBounds,
+        hostBounds: hostRectangle.toJSON(),
         sparseStepDelta,
         longRunStepDelta,
         middleStepDelta,
@@ -121,7 +126,11 @@ try {
         !evidence.bodyBackgroundImage.includes("linear-gradient") ||
         !evidence.sceneBackgroundImage.includes("linear-gradient") || !evidence.transformChanged ||
         evidence.colorfulLeafCount !== 40 || evidence.outlinedLeafCount !== 40 ||
-        evidence.visibleLeafCount !== 40 || evidence.visualBounds.right - evidence.visualBounds.left < 25 ||
+        evidence.visibleLeafCount !== 40 || evidence.hostBounds.top !== 0 ||
+        evidence.hostBounds.bottom !== 540 ||
+        evidence.headerBackgroundColor !== "rgba(0, 0, 0, 0)" ||
+        evidence.headerBackgroundImage !== "none" || evidence.headerPointerEvents !== "none" ||
+        evidence.visualBounds.right - evidence.visualBounds.left < 25 ||
         evidence.visualBounds.right - evidence.visualBounds.left > 960 ||
         evidence.visualBounds.bottom - evidence.visualBounds.top < 25 ||
         evidence.visualBounds.bottom - evidence.visualBounds.top > 540 || !evidence.stable ||

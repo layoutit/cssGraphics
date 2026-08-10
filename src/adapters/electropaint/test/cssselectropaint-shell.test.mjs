@@ -19,5 +19,10 @@ test("product shell identifies the route and avoids alternate or paint-heavy ren
   assert.match(player, /createPolyMorphPreparedDomTarget/u);
   assert.match(player, /shapes:\s*\[\],\s*\n\s*leaves:\s*quads\.map/u);
   assert.match(css, /top:\s*calc\(50% \+ var\(--cssselectropaint-presentation-y, 0px\)\)/u);
+  assert.match(css, /\.site-header \{[^}]*pointer-events:\s*none;/u);
+  assert.doesNotMatch(css, /\.site-header \{[^}]*background:/u);
+  assert.match(css, /\.site-wordmark \{[^}]*pointer-events:\s*auto;/u);
+  assert.match(css, /\.site-action-icon-only \{[^}]*pointer-events:\s*auto;/u);
+  assert.match(css, /#scene \{[^}]*position:\s*absolute;[^}]*inset:\s*0;/u);
   assert.match(client, /PRESENTATION_VERTICAL_OFFSET_SOURCE_PIXELS = -45/u);
 });

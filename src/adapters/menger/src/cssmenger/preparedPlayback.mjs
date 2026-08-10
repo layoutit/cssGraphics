@@ -18,12 +18,14 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
   const schedulerLeadMilliseconds = Math.min(4, frameMilliseconds / 4);
   let paused = true;
   let tick = playback.initial.stateIndex;
+  let colorStateIndex = playback.initial.stateIndex;
+  let colorPublicationPhaseTicks = 0;
   let animationFrame = null;
   let delay = null;
   let nextFrameAt = null;
 
-  function publishAxisColor(stateIndex, axis) {
-    const backgroundPositionY = planeAtlas.paletteBackgroundPositionYs[playback.colorRows[stateIndex][axis]];
+  function publishAxisColor(stateIndex, axis, colorStateIndex = stateIndex) {
+    const backgroundPositionY = planeAtlas.paletteBackgroundPositionYs[playback.colorRows[colorStateIndex][axis]];
     const schedule = playback.frontFacingSchedule;
     const segmentIndex = stateIndex * schedule.axisCount + axis;
     const start = schedule.offsets[segmentIndex];
@@ -46,14 +48,21 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
       }
     }
     tick = stateIndex;
+    colorStateIndex = stateIndex;
+    colorPublicationPhaseTicks = 0;
     return tick;
   }
 
-  function publishAdjacentFast(stateIndex) {
+  function publishAdjacentFast(stateIndex, advancedTickCount) {
     const transform = playback.transforms[stateIndex];
     publicationRoot.style.transform = transform;
-    if ((stateIndex - playback.segmentStartState) % COLOR_PUBLICATION_INTERVAL_TICKS === 0) {
-      for (let axis = 0; axis < 3; axis += 1) publishAxisColor(stateIndex, axis);
+    const elapsedColorTicks = colorPublicationPhaseTicks + advancedTickCount;
+    colorPublicationPhaseTicks = elapsedColorTicks % COLOR_PUBLICATION_INTERVAL_TICKS;
+    if (elapsedColorTicks >= COLOR_PUBLICATION_INTERVAL_TICKS) {
+      colorStateIndex = colorStateIndex >= playback.segmentEndState
+        ? playback.segmentStartState
+        : colorStateIndex + 1;
+      for (let axis = 0; axis < 3; axis += 1) publishAxisColor(stateIndex, axis, colorStateIndex);
     }
     tick = stateIndex;
     return tick;
@@ -76,7 +85,7 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
     let lastAxisPublishedAt = colorRowResolvedAt;
     for (let axis = 0; axis < 3; axis += 1) {
       const axisStartedAt = profile ? readNow() : 0;
-      const previousBackgroundPositionY = planeAtlas.paletteBackgroundPositionYs[playback.colorRows[tick][axis]];
+      const previousBackgroundPositionY = planeAtlas.paletteBackgroundPositionYs[playback.colorRows[colorStateIndex][axis]];
       const axisComparedAt = profile ? readNow() : 0;
       const axisChanged = adjacentState || tick !== stateIndex;
       const publication = axisChanged
@@ -106,6 +115,8 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
       }
     }
     tick = stateIndex;
+    colorStateIndex = stateIndex;
+    colorPublicationPhaseTicks = 0;
     if (profile) {
       const publicationCompletedAt = readNow();
       Object.assign(profile, {
@@ -141,10 +152,12 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
       paused = true;
       return tick;
     }
+    const previousTick = tick;
     const stateIndex = playback.loop
       ? playback.segmentStartState + ((tick - playback.segmentStartState + count) % playback.stateCount)
       : Math.min(playback.segmentEndState, tick + count);
-    if (stateIndex !== tick) publishAdjacentFast(stateIndex);
+    const advancedTickCount = playback.loop ? count : stateIndex - previousTick;
+    if (advancedTickCount > 0) publishAdjacentFast(stateIndex, advancedTickCount);
     if (!playback.loop && tick >= playback.segmentEndState) paused = true;
     return tick;
   }
@@ -250,6 +263,10 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
         preparedColorPublicationIntervalTicks: COLOR_PUBLICATION_INTERVAL_TICKS,
         preparedColorPublicationDelayMilliseconds: frameMilliseconds * COLOR_PUBLICATION_INTERVAL_TICKS,
         preparedColorPublicationMode: "fixed-prepared-source-state-interval",
+        preparedColorPaletteStepPerPublication: 1,
+        preparedColorPaletteCycleMilliseconds: playback.palette.length * frameMilliseconds *
+          COLOR_PUBLICATION_INTERVAL_TICKS,
+        preparedColorAdvanceMode: "one-adjacent-prepared-palette-row-per-publication",
         preparedFrontFacingAxisSelectionsPerScheduledTick: Object.freeze({
           minimum: 0,
           maximum: 3,

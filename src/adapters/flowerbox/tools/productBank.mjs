@@ -6,9 +6,10 @@ import {
   CSSFLOWER_LIGHTING_ADDRESS_SCHEDULE_SCHEMA,
   CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT,
   CSSFLOWER_LIGHTING_ROW_SELECTION,
+  CSSFLOWER_VISIBLE_LIGHTING_PUBLICATION_SCHEDULE_SCHEMA,
 } from "../src/cssflower/renderContract.mjs";
 
-export const FLOWERBOX_PRODUCT_BANK_SCHEMA = "cssflower-product-bank@4";
+export const FLOWERBOX_PRODUCT_BANK_SCHEMA = "cssflower-product-bank@5";
 
 export async function inspectFlowerboxProductBank(root, { verifyDescriptor = true } = {}) {
   const manifestBytes = await readFile(join(root, "manifest.json"));
@@ -26,6 +27,7 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
   const playback = scene.playback;
   const transforms = playback?.transformAsset;
   const lighting = scene.lighting;
+  const lightingPublication = lighting?.visiblePublicationSchedule;
   const visibility = playback?.frontFacingSchedule;
 
   assert(scene.schema === "cssflower-prepared-scene@1", "scene schema");
@@ -108,6 +110,45 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
     !Object.hasOwn(lighting.addressSchedule, "heldStateCount") &&
     !Object.hasOwn(lighting.addressSchedule, "publication"),
   "exact unheld prepared lighting schedule");
+  assert(lightingPublication?.schema ===
+      CSSFLOWER_VISIBLE_LIGHTING_PUBLICATION_SCHEDULE_SCHEMA &&
+    lightingPublication.stateCount === 360 && lightingPublication.faceCount === 1_200 &&
+    lightingPublication.sourceLightingAddressUpdateCount ===
+      CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT &&
+    lightingPublication.publicationCount === 164_713 &&
+    lightingPublication.visibleAddressChangeCount === 164_552 &&
+    lightingPublication.newlyVisibleCatchupCount === 161 &&
+    lightingPublication.suppressedHiddenAddressWriteCount === 98_845 &&
+    lightingPublication.publicationCount ===
+      lightingPublication.visibleAddressChangeCount + lightingPublication.newlyVisibleCatchupCount &&
+    lightingPublication.visibleAddressChangeCount +
+      lightingPublication.suppressedHiddenAddressWriteCount ===
+      lightingPublication.sourceLightingAddressUpdateCount &&
+    validOffsets(lightingPublication.visibleAddressChangeOffsets, 361,
+      lightingPublication.visibleAddressChangeCount) &&
+    validPreparedPayload(
+      lightingPublication.visibleAddressChangeFaceIndicesBase64,
+      lightingPublication.visibleAddressChangeFaceIndicesByteLength,
+      lightingPublication.visibleAddressChangeFaceIndicesSha256,
+      lightingPublication.visibleAddressChangeCount * 2,
+    ) &&
+    validOffsets(lightingPublication.newlyVisibleCatchupOffsets, 361,
+      lightingPublication.newlyVisibleCatchupCount) &&
+    validPreparedPayload(
+      lightingPublication.newlyVisibleCatchupFaceIndicesBase64,
+      lightingPublication.newlyVisibleCatchupFaceIndicesByteLength,
+      lightingPublication.newlyVisibleCatchupFaceIndicesSha256,
+      lightingPublication.newlyVisibleCatchupCount * 2,
+    ) &&
+    validPreparedPayload(
+      lightingPublication.newlyVisibleCatchupAddressStateIndicesBase64,
+      lightingPublication.newlyVisibleCatchupAddressStateIndicesByteLength,
+      lightingPublication.newlyVisibleCatchupAddressStateIndicesSha256,
+      lightingPublication.newlyVisibleCatchupCount * 2,
+    ) &&
+    lightingPublication.runtimeSelection ===
+      "prepared-state-range-only-no-face-visibility-test-or-hidden-face-style-write",
+  "prepared visible lighting publication schedule");
   assert(!scene.meshes && !scene.oracle && !playback.stateEvidenceUrl && !transforms.sourceFloat32,
     "product-only scene");
   assert(!manifest.assets?.stateEvidence && !manifest.productionTransport?.assets?.some((asset) =>
@@ -194,6 +235,14 @@ export async function inspectFlowerboxProductBank(root, { verifyDescriptor = tru
     frontFacingSparsePayloadBytes: visibility.selectedFaceIndicesByteLength +
       visibility.visibilityChangeAssignmentsByteLength +
       visibility.initialVisibilityAssignmentsByteLength,
+    visibleLightingPublicationScheduleSchema: lightingPublication.schema,
+    visibleLightingPublicationCount: lightingPublication.publicationCount,
+    suppressedHiddenLightingAddressWriteCount:
+      lightingPublication.suppressedHiddenAddressWriteCount,
+    visibleLightingPublicationPayloadBytes:
+      lightingPublication.visibleAddressChangeFaceIndicesByteLength +
+      lightingPublication.newlyVisibleCatchupFaceIndicesByteLength +
+      lightingPublication.newlyVisibleCatchupAddressStateIndicesByteLength,
     sceneEncodedSha256: sha256(sceneEncoded),
     sceneDecodedSha256: sha256(sceneDecoded),
     snapshotEncodedSha256: sha256(snapshotEncoded),

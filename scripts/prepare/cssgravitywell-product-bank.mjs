@@ -9,16 +9,21 @@ import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { inspectCssgravitywellProductBank } from "../../src/adapters/gravitywell/tools/productBank.mjs";
+import { CSSGRAVITYWELL_TRANSFORM_BLOCK_COUNT } from "../../src/adapters/gravitywell/src/cssgravitywell/renderContract.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const lock = JSON.parse(await readFile(
   join(repositoryRoot, "src/adapters/gravitywell/prepared-bank.lock.json"),
   "utf8",
 ));
-if (lock.schema !== "cssgravitywell-prepared-bank-lock@1" || lock.bankCount !== 24 ||
+if (lock.schema !== "cssgravitywell-prepared-bank-lock@2" || lock.bankCount !== 24 ||
     lock.retainedShapeRootCount !== 1 || lock.retainedLeafCount !== 1_922 ||
-    lock.preparedFrameCount !== 7_665 || lock.transformAssetCount !== 72 ||
-    lock.productFileCount !== 100 || lock.colorAssetCount !== 24 || lock.changeAssetCount !== 24 ||
+    lock.preparedFrameCount !== 7_665 ||
+    lock.transformAssetCount !== 24 * CSSGRAVITYWELL_TRANSFORM_BLOCK_COUNT ||
+    lock.productFileCount !== 28 + lock.transformAssetCount ||
+    lock.maximumTransformBlockPreparedCssStringBytes >= 4_000_000 ||
+    lock.maximumResidentTransformPreparedCssStringBytes >= 8_000_000 ||
+    lock.colorAssetCount !== 24 || lock.changeAssetCount !== 24 ||
     lock.visibilityAssetCount !== 24 || lock.visibilityEncodedBytes !== 109_999) {
   throw new Error("cssGravityWell prepared-bank lock does not bind the retained 24-bank product");
 }

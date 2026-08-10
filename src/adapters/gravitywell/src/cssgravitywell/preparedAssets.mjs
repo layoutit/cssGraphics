@@ -4,6 +4,7 @@ import {
   CSSGRAVITYWELL_VISIBILITY_ENCODING,
   CSSGRAVITYWELL_VISIBILITY_SCHEMA,
 } from "../prepare/cssgravitywell/visibilitySchedule.mjs";
+import { CSSGRAVITYWELL_TRANSFORM_BLOCK_COUNT } from "./renderContract.mjs";
 
 const MATRIX_DECIMAL_PLACES = 2;
 const MATRIX_COMPONENTS = Object.freeze([0, 1, 2, 4, 5, 8, 9, 10, 12, 13, 14]);
@@ -81,7 +82,8 @@ export async function loadPreparedGravityWellBankScene(catalog, bankIndex) {
   if (scene?.schema !== "cssgravitywell-prepared-bank@1" || scene.bankIndex !== bankIndex ||
       scene.seed !== entry.seed || scene.playback?.schema !== "cssgravitywell-sparse-transform-block-playback@1" ||
       scene.playback.leafCount !== scene.metrics?.preparedLeafCount || scene.playback.loop !== false ||
-      scene.playback.blockCount !== 3 || scene.playback.blocks?.length !== 3 ||
+      scene.playback.blockCount !== CSSGRAVITYWELL_TRANSFORM_BLOCK_COUNT ||
+      scene.playback.blocks?.length !== CSSGRAVITYWELL_TRANSFORM_BLOCK_COUNT ||
       scene.playback.visibilitySchedule?.schema !== CSSGRAVITYWELL_VISIBILITY_SCHEMA ||
       scene.playback.runtimeLookaheadBlockCount !== 1 ||
       scene.timeline?.firstAndLastGroundFlat !== true ||

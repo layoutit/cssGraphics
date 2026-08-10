@@ -31,6 +31,7 @@ import {
   encodeGravityWellViewportVisibility,
   prepareGravityWellViewportVisibility,
 } from "../src/prepare/cssgravitywell/visibilitySchedule.mjs";
+import { CSSGRAVITYWELL_TRANSFORM_BLOCK_COUNT } from "../src/cssgravitywell/renderContract.mjs";
 
 const adapterRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(adapterRoot, "..", "..", "..");
@@ -318,7 +319,7 @@ async function prepareBank({ bankIndex, seed, fixedViewQuaternion }) {
   // old textual rows, this packet stores the already-rounded matrix components
   // as field-major fixed-point varints. The loader expands the final CSS strings
   // once per block; the frame loop still performs selection and publication only.
-  const blockCount = 3;
+  const blockCount = CSSGRAVITYWELL_TRANSFORM_BLOCK_COUNT;
   const blockFrameCount = Math.ceil(timeline.frameCount / blockCount);
   const blocks = [];
   const transformAssetRoot = join(stagingRoot, "assets/transforms");

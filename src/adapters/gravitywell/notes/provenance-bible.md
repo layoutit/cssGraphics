@@ -16,7 +16,7 @@ the source inner-radius cap and outer-radius cutoff, 240 source-timed states,
 depth-and-fog colors, every PolyCSS solid-quad leaf matrix, prepared blocks,
 and separate sparse transform and color write schedules. Transform
 storage follows the sibling cssPipes/cssFlower prepared-block pattern: each
-bank has three content-addressed blocks containing one exact random-access
+bank has sixteen content-addressed blocks containing one exact random-access
 keyframe followed only by frame-ordered prepared transform deltas. The same
 block owns its sparse prepared color values; block zero owns delta-varint leaf
 indices. The static Morph model uses transparent HTTP Brotli transport and the
@@ -88,6 +88,15 @@ p95, and `9.2 ms` display-interval p95, with a `17.6 ms` maximum, no long tasks,
 no empty scheduler callbacks, no transform-block load, and no DOM growth. The
 same four deterministic browser frames remain pixel-exact against the deployed
 pre-optimization product.
+
+At 960 by 600, a 5.5-second production/candidate streaming trace over the same
+bank reduces current-plus-lookahead prepared CSS string residency from
+25,746,023 to 4,816,407 bytes. The production trace records two 91–95 ms long
+tasks, a 129.719 ms maximum GC slice, and a 91.8 ms maximum display interval;
+the sixteen-block product records no long task, a 42.721 ms maximum GC slice,
+and a 33.6 ms maximum display interval. Both runs transfer approximately 1.5 MB
+of transform packets over the interval; the change bounds allocation size
+rather than shifting work onto the wire.
 
 ## Proof boundary
 

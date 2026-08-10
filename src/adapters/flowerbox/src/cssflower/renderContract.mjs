@@ -7,6 +7,8 @@ export const CSSFLOWER_LIGHTING_SCHEMA = "cssflower-prepared-space-texel-lightin
 export const CSSFLOWER_LIGHTING_ADDRESS_SCHEDULE_SCHEMA =
   "cssflower-prepared-exact-sparse-lighting-address-schedule@1";
 export const CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT = 263_397;
+export const CSSFLOWER_VISIBLE_LIGHTING_PUBLICATION_SCHEDULE_SCHEMA =
+  "cssflower-prepared-visible-lighting-publication-schedule@1";
 export const CSSFLOWER_LIGHTING_ROW_SELECTION =
   "prepared-exact-rgb8-sparse-leaf-address-schedule";
 export const CSSFLOWER_LIGHTING_LAYOUT = "guttered-leaf-raster-shelves-by-horizontal-page-grid-and-timeline-state-slices";

@@ -8,6 +8,8 @@ import {
   CSSFLOWER_LIGHTING_GRID_ROWS,
   CSSFLOWER_LIGHTING_GRID_WIDTH,
   CSSFLOWER_LIGHTING_PAGE_COUNT,
+  CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT,
+  CSSFLOWER_VISIBLE_LIGHTING_PUBLICATION_SCHEDULE_SCHEMA,
   CSSFLOWER_FRONT_FACE_DILATION_TICKS,
   CSSFLOWER_FRONT_FACE_SCHEDULE_ENCODING,
   CSSFLOWER_FRONT_FACE_SCHEDULE_SCHEMA,
@@ -19,6 +21,7 @@ import {
 export function validatePreparedMorphAssets(playback, lighting) {
   const transforms = playback?.transformAsset;
   const frontFacing = playback?.frontFacingSchedule;
+  const visibleLighting = lighting?.visiblePublicationSchedule;
   if (frontFacing?.schema !== CSSFLOWER_FRONT_FACE_SCHEDULE_SCHEMA ||
       frontFacing.stateCount !== playback?.cycle?.stateCount || frontFacing.stateCount !== 360 ||
       frontFacing.faceCount !== 1_200 ||
@@ -57,6 +60,29 @@ export function validatePreparedMorphAssets(playback, lighting) {
       typeof frontFacing.initialVisibilityAssignmentsBase64 !== "string" || frontFacing.initialVisibilityAssignmentsBase64.length < 1 ||
       frontFacing.runtimeSelection !== "prepared-sparse-state-ranges-only-no-face-wide-tests-or-geometry-projection-normal-lighting-calculation") {
     throw new Error("Complete prepared cssFlower owned-pixel visibility transform schedule is required");
+  }
+  if (visibleLighting?.schema !== CSSFLOWER_VISIBLE_LIGHTING_PUBLICATION_SCHEDULE_SCHEMA ||
+      visibleLighting.stateCount !== playback?.cycle?.stateCount || visibleLighting.stateCount !== 360 ||
+      visibleLighting.faceCount !== 1_200 ||
+      visibleLighting.sourceLightingAddressUpdateCount !== CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT ||
+      !Number.isSafeInteger(visibleLighting.publicationCount) || visibleLighting.publicationCount < 1 ||
+      visibleLighting.publicationCount !==
+        visibleLighting.visibleAddressChangeCount + visibleLighting.newlyVisibleCatchupCount ||
+      visibleLighting.visibleAddressChangeCount + visibleLighting.suppressedHiddenAddressWriteCount !==
+        visibleLighting.sourceLightingAddressUpdateCount ||
+      !validOffsets(visibleLighting.visibleAddressChangeOffsets, visibleLighting.stateCount + 1,
+        visibleLighting.visibleAddressChangeCount) ||
+      visibleLighting.visibleAddressChangeFaceIndicesByteLength !==
+        visibleLighting.visibleAddressChangeCount * 2 ||
+      !validOffsets(visibleLighting.newlyVisibleCatchupOffsets, visibleLighting.stateCount + 1,
+        visibleLighting.newlyVisibleCatchupCount) ||
+      visibleLighting.newlyVisibleCatchupFaceIndicesByteLength !==
+        visibleLighting.newlyVisibleCatchupCount * 2 ||
+      visibleLighting.newlyVisibleCatchupAddressStateIndicesByteLength !==
+        visibleLighting.newlyVisibleCatchupCount * 2 ||
+      visibleLighting.runtimeSelection !==
+        "prepared-state-range-only-no-face-visibility-test-or-hidden-face-style-write") {
+    throw new Error("Complete prepared cssFlower visible lighting publication schedule is required");
   }
   if (transforms?.schema !== CSSFLOWER_TRANSFORM_BLOCK_SCHEMA ||
       transforms.distribution !== "public-independent-prepared-transform-blocks" ||

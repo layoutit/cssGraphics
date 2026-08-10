@@ -21,13 +21,15 @@ boundary.
 
 Deployment consumes a deterministic, hash-bound prepared product archive through
 `prepared-bank.lock.json`; the browser downloads only the unpacked static files.
-The 24 selected-bank products use 72 content-addressed sparse transform blocks
-(three per bank). Each block carries its local transform and color rows; block
+The 24 selected-bank products use 384 content-addressed sparse transform blocks
+(sixteen per bank). Each block carries its local transform and color rows; block
 zero also carries the selected bank's sparse write indices. The shared prepared
-palette is stored once in the catalog: 100 hash-bound
-closure files, or 101 on disk including the self-describing product descriptor,
+palette is stored once in the catalog: 412 hash-bound
+closure files, or 413 on disk including the self-describing product descriptor,
 with one-time block expansion and no per-frame decoding, transform formatting,
-or block reconstruction. Each bank also embeds one small viewport-visibility
+or block reconstruction. A block expands to at most 3,449,674 bytes of final
+CSS strings, and every prepared current-plus-lookahead pair stays below
+6,754,392 bytes. Each bank also embeds one small viewport-visibility
 schedule with five conservative profiles. Playback consumes its sparse assignments,
 publishes transforms and colors only to selected leaves, and catches a leaf up
 from its exact prepared state before making it visible again. Projection and

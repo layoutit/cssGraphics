@@ -29,7 +29,7 @@ const sources = new Map(await Promise.all(runtimeFiles.map(async (path) => [
 
 const index = sources.get("index.html");
 if (!/<body>\s*<header class="site-header">[\s\S]*<\/header>\s*<\/body>/u.test(index) ||
-    !index.includes('class="site-wordmark" href="https://css.graphics/flowerbox/"') ||
+    !index.includes('class="site-wordmark" href="/"') ||
     !index.includes('class="site-actions" aria-label="Scene actions"') ||
     !index.includes('href="https://github.com/layoutit/cssGraphics"') ||
     /<(?:main|section|article|form|button|input|output|img|video|canvas|svg)\b/iu.test(index) ||
@@ -60,6 +60,11 @@ if (!playback.includes("forEachTransformAtIndices(") ||
     playback.includes("frontFacingSchedule.isSelected(leafIndex)")) {
   failures.push("Prepared playback does not use sparse transform and visibility ranges exclusively");
 }
+if (!playback.includes("lightingPublicationSchedule.visibleAddressChangeFaceIndices[update]") ||
+    !playback.includes("lightingPublicationSchedule.newlyVisibleCatchupFaceIndices[update]") ||
+    playback.includes("decodePreparedLightingAddressSchedule(")) {
+  failures.push("Prepared playback does not use the visible lighting publication ranges exclusively");
+}
 if (existsSync(join(adapterRoot, "src/cssflower/projectedPageStyles.mjs"))) {
   failures.push("Projected-page runtime module remains");
 }
@@ -72,7 +77,12 @@ if (bank.timelineStateCount !== 360 || bank.geometryStateCount !== 73 ||
     bank.frontFacingScheduleSchema !== "cssflower-prepared-front-face-transform-schedule@2" ||
     bank.frontFacingSelectedFaceCount !== 166_886 ||
     bank.frontFacingVisibilityChangeCount !== 8_310 ||
-    bank.frontFacingSparsePayloadBytes !== 352_792) {
+    bank.frontFacingSparsePayloadBytes !== 352_792 ||
+    bank.visibleLightingPublicationScheduleSchema !==
+      "cssflower-prepared-visible-lighting-publication-schedule@1" ||
+    bank.visibleLightingPublicationCount !== 164_713 ||
+    bank.suppressedHiddenLightingAddressWriteCount !== 98_845 ||
+    bank.visibleLightingPublicationPayloadBytes !== 329_748) {
   failures.push("Product bank is not the accepted rounded q83/min-8 closure with the negative cube lobe");
 }
 

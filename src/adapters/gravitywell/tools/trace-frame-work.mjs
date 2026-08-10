@@ -27,6 +27,7 @@ try {
     deviceScaleFactor: viewport.deviceScaleFactor,
   });
   const page = await context.newPage();
+  await page.route("**/favicon.ico", (faviconRoute) => faviconRoute.fulfill({ status: 204 }));
   const cdp = await context.newCDPSession(page);
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.stack || error.message));

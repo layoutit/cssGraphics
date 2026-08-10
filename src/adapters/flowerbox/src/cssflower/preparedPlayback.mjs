@@ -3,8 +3,8 @@ import {
   CSSFLOWER_FRONT_FACE_DILATION_TICKS,
   CSSFLOWER_FRONT_FACE_SCHEDULE_ENCODING,
   CSSFLOWER_FRONT_FACE_SCHEDULE_SCHEMA,
-  CSSFLOWER_LIGHTING_ADDRESS_SCHEDULE_SCHEMA,
   CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT,
+  CSSFLOWER_VISIBLE_LIGHTING_PUBLICATION_SCHEDULE_SCHEMA,
   CSSFLOWER_VISIBILITY_POLICY,
 } from "./renderContract.mjs";
 
@@ -70,7 +70,9 @@ export async function createCssflowerPreparedPlayer(options) {
   let runtimeSchedulerCallbacks = 0;
   let runtimeSchedulerTimerCallbacks = 0;
   let runtimeSchedulerTimerSchedules = 0;
-  const lightingAddressSchedule = decodePreparedLightingAddressSchedule(lighting.addressSchedule);
+  const lightingPublicationSchedule = decodePreparedVisibleLightingPublicationSchedule(
+    lighting.visiblePublicationSchedule,
+  );
   const frontFacingSchedule = decodePreparedFrontFacingSchedule(playback.frontFacingSchedule);
   const selectedFrontFacingByFace = new Uint8Array(leaves.length);
   selectedFrontFacingByFace.fill(255);
@@ -185,14 +187,25 @@ export async function createCssflowerPreparedPlayer(options) {
     }
     if (nextStateIndex === presentedLightingStateIndex) return;
     const advance = (
-      nextStateIndex - presentedLightingStateIndex + lightingAddressSchedule.stateCount
-    ) % lightingAddressSchedule.stateCount;
+      nextStateIndex - presentedLightingStateIndex + lightingPublicationSchedule.stateCount
+    ) % lightingPublicationSchedule.stateCount;
     if (advance > 1) preparedLightingSkippedStateSelections += advance - 1;
     if (advance === 1) {
-      const start = lightingAddressSchedule.offsets[nextStateIndex];
-      const end = lightingAddressSchedule.offsets[nextStateIndex + 1];
+      const start = lightingPublicationSchedule.visibleAddressChangeOffsets[nextStateIndex];
+      const end = lightingPublicationSchedule.visibleAddressChangeOffsets[nextStateIndex + 1];
       for (let update = start; update < end; update += 1) {
-        applyPreparedLightingAddress(lightingAddressSchedule.faceIndices[update], nextStateIndex);
+        applyPreparedLightingAddress(
+          lightingPublicationSchedule.visibleAddressChangeFaceIndices[update],
+          nextStateIndex,
+        );
+      }
+      const catchupStart = lightingPublicationSchedule.newlyVisibleCatchupOffsets[nextStateIndex];
+      const catchupEnd = lightingPublicationSchedule.newlyVisibleCatchupOffsets[nextStateIndex + 1];
+      for (let update = catchupStart; update < catchupEnd; update += 1) {
+        applyPreparedLightingAddress(
+          lightingPublicationSchedule.newlyVisibleCatchupFaceIndices[update],
+          lightingPublicationSchedule.newlyVisibleCatchupAddressStateIndices[update],
+        );
       }
       presentedLightingStateIndex = nextStateIndex;
       preparedLightingStateSelections += 1;
@@ -200,19 +213,29 @@ export async function createCssflowerPreparedPlayer(options) {
     }
     pendingLightingFaces.length = 0;
     for (let offset = 1; offset <= advance; offset += 1) {
-      const stateIndex = (presentedLightingStateIndex + offset) % lightingAddressSchedule.stateCount;
-      const start = lightingAddressSchedule.offsets[stateIndex];
-      const end = lightingAddressSchedule.offsets[stateIndex + 1];
+      const stateIndex = (presentedLightingStateIndex + offset) % lightingPublicationSchedule.stateCount;
+      const start = lightingPublicationSchedule.visibleAddressChangeOffsets[stateIndex];
+      const end = lightingPublicationSchedule.visibleAddressChangeOffsets[stateIndex + 1];
       for (let update = start; update < end; update += 1) {
-        const faceIndex = lightingAddressSchedule.faceIndices[update];
+        const faceIndex = lightingPublicationSchedule.visibleAddressChangeFaceIndices[update];
         if (pendingLightingStateByFace[faceIndex] < 0) pendingLightingFaces.push(faceIndex);
         pendingLightingStateByFace[faceIndex] = stateIndex;
+      }
+      const catchupStart = lightingPublicationSchedule.newlyVisibleCatchupOffsets[stateIndex];
+      const catchupEnd = lightingPublicationSchedule.newlyVisibleCatchupOffsets[stateIndex + 1];
+      for (let update = catchupStart; update < catchupEnd; update += 1) {
+        const faceIndex = lightingPublicationSchedule.newlyVisibleCatchupFaceIndices[update];
+        if (pendingLightingStateByFace[faceIndex] < 0) pendingLightingFaces.push(faceIndex);
+        pendingLightingStateByFace[faceIndex] =
+          lightingPublicationSchedule.newlyVisibleCatchupAddressStateIndices[update];
       }
     }
     for (const faceIndex of pendingLightingFaces) {
       const stateIndex = pendingLightingStateByFace[faceIndex];
       pendingLightingStateByFace[faceIndex] = -1;
-      applyPreparedLightingAddress(faceIndex, stateIndex);
+      if (selectedFrontFacingByFace[faceIndex] === 1) {
+        applyPreparedLightingAddress(faceIndex, stateIndex);
+      }
     }
     presentedLightingStateIndex = nextStateIndex;
     preparedLightingStateSelections += 1;
@@ -392,6 +415,9 @@ export async function createCssflowerPreparedPlayer(options) {
         preparedRootStateCount: playback.cycle.rootStateCount,
         preparedTransformBlockCount: playback.transformAsset.blockCount,
         preparedLightingPageCount: lighting.pageCount,
+        preparedVisibleLightingPublicationCount: lightingPublicationSchedule.publicationCount,
+        preparedHiddenLightingAddressWriteSuppressionCount:
+          lighting.visiblePublicationSchedule.suppressedHiddenAddressWriteCount,
         preparedStatesApplied,
         runtimePreparedGeometryStatePublishes: preparedGeometryStatePublishes,
         runtimeModelTransformWrites: modelTransformWrites,
@@ -503,35 +529,64 @@ function validatePlayback({ playback, lighting, transformBlocks, lightingPages, 
   }
 }
 
-function decodePreparedLightingAddressSchedule(schedule) {
-  if (schedule?.schema !== CSSFLOWER_LIGHTING_ADDRESS_SCHEDULE_SCHEMA ||
-      schedule.stateCount !== 360 || schedule.faceCount !== 1_200 || schedule.threshold !== 0 ||
-      schedule.updateCount !== CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT ||
-      Object.hasOwn(schedule, "heldStateCount") || Object.hasOwn(schedule, "publication") ||
-      schedule.faceIndicesEncoding !== "base64-u16le-state-major-updated-face-indices" ||
-      schedule.offsets?.length !== 361 || schedule.offsets[0] !== 0 ||
-      schedule.offsets.at(-1) !== schedule.updateCount ||
-      !schedule.offsets.every((value, index) => Number.isSafeInteger(value) && value >= 0 &&
-        (index === 0 || value >= schedule.offsets[index - 1])) ||
-      typeof schedule.faceIndicesBase64 !== "string") {
-    throw new Error("Prepared cssFlower exact sparse-lighting schedule is invalid");
+function decodePreparedVisibleLightingPublicationSchedule(schedule) {
+  if (schedule?.schema !== CSSFLOWER_VISIBLE_LIGHTING_PUBLICATION_SCHEDULE_SCHEMA ||
+      schedule.stateCount !== 360 || schedule.faceCount !== 1_200 ||
+      schedule.sourceLightingAddressUpdateCount !== CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT ||
+      !Number.isSafeInteger(schedule.publicationCount) || schedule.publicationCount < 1 ||
+      schedule.visibleAddressChangeOffsets?.length !== 361 ||
+      schedule.visibleAddressChangeOffsets[0] !== 0 ||
+      schedule.visibleAddressChangeOffsets.at(-1) !== schedule.visibleAddressChangeCount ||
+      !validMonotonicOffsets(schedule.visibleAddressChangeOffsets) ||
+      schedule.newlyVisibleCatchupOffsets?.length !== 361 ||
+      schedule.newlyVisibleCatchupOffsets[0] !== 0 ||
+      schedule.newlyVisibleCatchupOffsets.at(-1) !== schedule.newlyVisibleCatchupCount ||
+      !validMonotonicOffsets(schedule.newlyVisibleCatchupOffsets) ||
+      typeof schedule.visibleAddressChangeFaceIndicesBase64 !== "string" ||
+      typeof schedule.newlyVisibleCatchupFaceIndicesBase64 !== "string" ||
+      typeof schedule.newlyVisibleCatchupAddressStateIndicesBase64 !== "string") {
+    throw new Error("Prepared cssFlower visible lighting publication schedule is invalid");
   }
-  const encoded = atob(schedule.faceIndicesBase64);
-  if (encoded.length !== schedule.faceIndicesByteLength || encoded.length !== schedule.updateCount * 2) {
-    throw new Error("Prepared cssFlower sparse-lighting schedule byte length drifted");
+  const visibleAddressChangeFaceIndices = decodeUint16Le(
+    schedule.visibleAddressChangeFaceIndicesBase64,
+    schedule.visibleAddressChangeFaceIndicesByteLength,
+    "visible lighting address-change face indices",
+  );
+  const newlyVisibleCatchupFaceIndices = decodeUint16Le(
+    schedule.newlyVisibleCatchupFaceIndicesBase64,
+    schedule.newlyVisibleCatchupFaceIndicesByteLength,
+    "newly visible lighting catch-up face indices",
+  );
+  const newlyVisibleCatchupAddressStateIndices = decodeUint16Le(
+    schedule.newlyVisibleCatchupAddressStateIndicesBase64,
+    schedule.newlyVisibleCatchupAddressStateIndicesByteLength,
+    "newly visible lighting catch-up address-state indices",
+  );
+  if (visibleAddressChangeFaceIndices.length !== schedule.visibleAddressChangeCount ||
+      newlyVisibleCatchupFaceIndices.length !== schedule.newlyVisibleCatchupCount ||
+      newlyVisibleCatchupAddressStateIndices.length !== schedule.newlyVisibleCatchupCount) {
+    throw new Error("Prepared cssFlower visible lighting publication count drifted");
   }
-  const faceIndices = new Uint16Array(schedule.updateCount);
-  for (let index = 0; index < faceIndices.length; index += 1) {
-    faceIndices[index] = encoded.charCodeAt(index * 2) | (encoded.charCodeAt(index * 2 + 1) << 8);
-    if (faceIndices[index] >= schedule.faceCount) {
-      throw new Error(`Prepared cssFlower sparse-lighting face ${index} is out of range`);
+  for (let index = 0; index < visibleAddressChangeFaceIndices.length; index += 1) {
+    if (visibleAddressChangeFaceIndices[index] >= schedule.faceCount) {
+      throw new Error(`Prepared cssFlower visible lighting publication ${index} is out of range`);
+    }
+  }
+  for (let index = 0; index < newlyVisibleCatchupFaceIndices.length; index += 1) {
+    if (newlyVisibleCatchupFaceIndices[index] >= schedule.faceCount ||
+        newlyVisibleCatchupAddressStateIndices[index] >= schedule.stateCount) {
+      throw new Error(`Prepared cssFlower visible lighting catch-up ${index} is out of range`);
     }
   }
   return Object.freeze({
     stateCount: schedule.stateCount,
     faceCount: schedule.faceCount,
-    offsets: Object.freeze([...schedule.offsets]),
-    faceIndices,
+    publicationCount: schedule.publicationCount,
+    visibleAddressChangeOffsets: Object.freeze([...schedule.visibleAddressChangeOffsets]),
+    visibleAddressChangeFaceIndices,
+    newlyVisibleCatchupOffsets: Object.freeze([...schedule.newlyVisibleCatchupOffsets]),
+    newlyVisibleCatchupFaceIndices,
+    newlyVisibleCatchupAddressStateIndices,
   });
 }
 

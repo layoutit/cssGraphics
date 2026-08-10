@@ -3,6 +3,7 @@ import { sourceProvenanceFor } from "./provenance.mjs";
 import { cssflowerSlicePlan } from "./slicePlan.mjs";
 import { CSSFLOWER_CAMERA, CSSFLOWER_SIDE_MATERIALS, CSSFLOWER_SOURCE_PROFILE } from "./sourceProfile.mjs";
 import { buildCssflowerPreparedRoundedOcclusionSchedule } from "./projectedPixels.mjs";
+import { buildPreparedVisibleLightingPublicationSchedule } from "./lightingPublicationSchedule.mjs";
 import {
   CSSFLOWER_BOUNDARY_SEAM_BLEED,
   CSSFLOWER_FRONT_FACE_DILATION_TICKS,
@@ -46,6 +47,10 @@ export async function buildCssflowerFirstSliceScene({
     }),
     compiled.topology.triangleCount,
   );
+  const visibleLightingPublicationSchedule = buildPreparedVisibleLightingPublicationSchedule({
+    lighting: compiled.lighting.addressSchedule,
+    visibility: frontFacingSchedule,
+  });
   const scene = Object.freeze({
     schema: "cssflower-prepared-scene@1",
     id: "default-cube",
@@ -86,7 +91,11 @@ export async function buildCssflowerFirstSliceScene({
     textureLighting: "baked",
     textureQuality: 1,
     materials: CSSFLOWER_SIDE_MATERIALS.map(({ id, color }) => ({ id, color })),
-    lighting: publicLightingContract(compiled.lighting, preparedAssets.lighting),
+    lighting: publicLightingContract(
+      compiled.lighting,
+      preparedAssets.lighting,
+      visibleLightingPublicationSchedule,
+    ),
     playback: Object.freeze({
       schema: "cssflower-prepared-playback@1",
       target: "createPolyMorphPreparedDomTarget",
@@ -175,6 +184,9 @@ export async function buildCssflowerFirstSliceScene({
       preparedLightingMeanAddressUpdatesPerState: compiled.lighting.addressSchedule.meanUpdatesPerState,
       preparedLightingP95AddressUpdatesPerState: compiled.lighting.addressSchedule.p95UpdatesPerState,
       preparedLightingMaximumAddressUpdatesPerState: compiled.lighting.addressSchedule.maximumUpdatesPerState,
+      preparedVisibleLightingPublicationCount: visibleLightingPublicationSchedule.publicationCount,
+      preparedHiddenLightingAddressWriteSuppressionCount:
+        visibleLightingPublicationSchedule.suppressedHiddenAddressWriteCount,
       preparedSeamSharedEdgeCount: compiled.siblingSeamPlan.sharedEdgeCount,
       preparedSeamSharedEdgeIncidenceCount: compiled.siblingSeamPlan.sharedEdgeIncidenceCount,
       preparedSeamBoundaryEdgeCount: compiled.siblingSeamPlan.boundaryEdgeCount,
@@ -262,25 +274,36 @@ function prepareFrontFacingTransformSchedule(schedule, faceCount) {
         new Set(indices).size !== indices.length)) {
     throw new Error("Prepared cssFlower front-face transform schedule is invalid");
   }
-  const bytesPerState = Math.ceil(faceCount / 8);
-  const bytes = Buffer.alloc(schedule.length * bytesPerState);
+  const selectedFaceOffsets = new Uint32Array(schedule.length + 1);
+  const selectedFaceIndices = [];
   const selectedByState = schedule.map((indices, stateIndex) => {
-    for (const faceIndex of indices) {
-      bytes[stateIndex * bytesPerState + (faceIndex >> 3)] |= 1 << (faceIndex & 7);
-    }
+    selectedFaceOffsets[stateIndex] = selectedFaceIndices.length;
+    selectedFaceIndices.push(...indices);
     return indices.length;
   });
+  selectedFaceOffsets[schedule.length] = selectedFaceIndices.length;
   const selectedFaceCount = selectedByState.reduce((sum, count) => sum + count, 0);
-  let visibilityChangeCount = 0;
+  const visibilityChangeOffsets = new Uint32Array(schedule.length + 1);
+  const visibilityChangeAssignments = [];
   for (let stateIndex = 0; stateIndex < schedule.length; stateIndex += 1) {
     const previousStateIndex = (stateIndex + schedule.length - 1) % schedule.length;
-    for (let byteIndex = 0; byteIndex < bytesPerState; byteIndex += 1) {
-      visibilityChangeCount += popcount8(
-        bytes[stateIndex * bytesPerState + byteIndex] ^
-        bytes[previousStateIndex * bytesPerState + byteIndex],
-      );
+    visibilityChangeOffsets[stateIndex] = visibilityChangeAssignments.length;
+    const current = new Set(schedule[stateIndex]);
+    const previous = new Set(schedule[previousStateIndex]);
+    for (let faceIndex = 0; faceIndex < faceCount; faceIndex += 1) {
+      const selected = current.has(faceIndex);
+      if (selected === previous.has(faceIndex)) continue;
+      visibilityChangeAssignments.push((faceIndex << 1) | Number(selected));
     }
   }
+  visibilityChangeOffsets[schedule.length] = visibilityChangeAssignments.length;
+  const initialVisibilityAssignments = Uint16Array.from(
+    { length: faceCount },
+    (_, faceIndex) => (faceIndex << 1) | Number(schedule[0].includes(faceIndex)),
+  );
+  const selectedBytes = uint16LeBytes(selectedFaceIndices);
+  const visibilityBytes = uint16LeBytes(visibilityChangeAssignments);
+  const initialBytes = uint16LeBytes(initialVisibilityAssignments);
   const fieldCount = schedule.length * faceCount;
   return Object.freeze({
     schema: CSSFLOWER_FRONT_FACE_SCHEDULE_SCHEMA,
@@ -295,25 +318,40 @@ function prepareFrontFacingTransformSchedule(schedule, faceCount) {
     adjacencyRings: CSSFLOWER_VISIBILITY_POLICY.adjacencyRings,
     dilationPolicy: CSSFLOWER_VISIBILITY_POLICY.dilationPolicy,
     encoding: CSSFLOWER_FRONT_FACE_SCHEDULE_ENCODING,
-    bytesPerState,
-    byteLength: bytes.length,
     selectedFaceCount,
     suppressedFaceCount: fieldCount - selectedFaceCount,
     meanSelectedFacesPerState: selectedFaceCount / schedule.length,
     minimumSelectedFacesPerState: Math.min(...selectedByState),
     maximumSelectedFacesPerState: Math.max(...selectedByState),
     initialVisibilitySelectionCount: faceCount,
-    visibilityChangeCount,
-    dataSha256: createHash("sha256").update(bytes).digest("hex"),
-    dataBase64: bytes.toString("base64"),
-    runtimeSelection: "prepared-bit-test-only-no-geometry-projection-normal-or-lighting-calculation",
+    visibilityChangeCount: visibilityChangeAssignments.length,
+    selectedFaceOffsets: Object.freeze(Array.from(selectedFaceOffsets)),
+    selectedFaceIndicesEncoding: "base64-u16le-state-major-selected-face-indices",
+    selectedFaceIndicesByteLength: selectedBytes.length,
+    selectedFaceIndicesSha256: createHash("sha256").update(selectedBytes).digest("hex"),
+    selectedFaceIndicesBase64: selectedBytes.toString("base64"),
+    visibilityChangeOffsets: Object.freeze(Array.from(visibilityChangeOffsets)),
+    visibilityChangeAssignmentsEncoding:
+      "base64-u16le-state-major-face-index-shift-1-or-selected",
+    visibilityChangeAssignmentsByteLength: visibilityBytes.length,
+    visibilityChangeAssignmentsSha256: createHash("sha256").update(visibilityBytes).digest("hex"),
+    visibilityChangeAssignmentsBase64: visibilityBytes.toString("base64"),
+    initialVisibilityAssignmentsEncoding:
+      "base64-u16le-face-major-face-index-shift-1-or-selected",
+    initialVisibilityAssignmentsByteLength: initialBytes.length,
+    initialVisibilityAssignmentsSha256: createHash("sha256").update(initialBytes).digest("hex"),
+    initialVisibilityAssignmentsBase64: initialBytes.toString("base64"),
+    runtimeSelection:
+      "prepared-sparse-state-ranges-only-no-face-wide-tests-or-geometry-projection-normal-lighting-calculation",
   });
 }
 
-function popcount8(value) {
-  let count = 0;
-  for (let bits = value & 255; bits !== 0; bits &= bits - 1) count += 1;
-  return count;
+function uint16LeBytes(values) {
+  const bytes = Buffer.alloc(values.length * Uint16Array.BYTES_PER_ELEMENT);
+  for (let index = 0; index < values.length; index += 1) {
+    bytes.writeUInt16LE(values[index], index * Uint16Array.BYTES_PER_ELEMENT);
+  }
+  return bytes;
 }
 
 function nextDistinctPreparedState(states, stateIndex, cycleStartState, keyFor) {
@@ -331,7 +369,7 @@ export function createCssflowerSceneContract(value = {}) {
   return value;
 }
 
-function publicLightingContract(lighting, assets) {
+function publicLightingContract(lighting, assets, visiblePublicationSchedule) {
   if (assets?.encoding !== CSSFLOWER_LIGHTING_ATLAS_ENCODING ||
       assets.mimeType !== CSSFLOWER_LIGHTING_ATLAS_MIME_TYPE ||
       assets.quality !== CSSFLOWER_LIGHTING_ATLAS_QUALITY ||
@@ -345,6 +383,7 @@ function publicLightingContract(lighting, assets) {
   }
   return Object.freeze({
     ...lighting,
+    visiblePublicationSchedule,
     distribution: assets.distribution,
     assetUrl: assets.grid.assetUrl,
     assetSha256: assets.grid.sha256,

@@ -9,6 +9,7 @@ import {
   inspectFlowerboxProductBank,
   writeFlowerboxProductBankDescriptor,
 } from "./productBank.mjs";
+import { buildPreparedVisibleLightingPublicationSchedule } from "../src/prepare/cssflower/lightingPublicationSchedule.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.source) {
@@ -49,6 +50,15 @@ try {
   }
   if (scene.lighting?.encoder) delete scene.lighting.encoder.path;
   if (scene.playback?.transformAsset) delete scene.playback.transformAsset.sourceFloat32;
+  const visibleLightingPublicationSchedule = buildPreparedVisibleLightingPublicationSchedule({
+    lighting: scene.lighting?.addressSchedule,
+    visibility: scene.playback?.frontFacingSchedule,
+  });
+  scene.lighting.visiblePublicationSchedule = visibleLightingPublicationSchedule;
+  scene.metrics.preparedVisibleLightingPublicationCount =
+    visibleLightingPublicationSchedule.publicationCount;
+  scene.metrics.preparedHiddenLightingAddressWriteSuppressionCount =
+    visibleLightingPublicationSchedule.suppressedHiddenAddressWriteCount;
   delete scene.meshes;
   delete scene.oracle;
   delete scene.playback.stateEvidenceUrl;
@@ -118,7 +128,7 @@ try {
     sourceManifestSha256: sha256(sourceManifestBytes),
     sourceSceneEncodedSha256: sha256(sourceSceneEncoded),
     sourceSnapshotEncodedSha256: sha256(sourceSnapshotEncoded),
-    productPolicy: "rounded-360-state-positive-petals-omitted-negative-cube-retained-polycss-morph-q83-conjoined-through-sf-3f800001-side-boundary-half-plane-alpha-boundary-0.125-minimum-8-owned-pixels-sparse-runtime-ranges",
+    productPolicy: "rounded-360-state-positive-petals-omitted-negative-cube-retained-polycss-morph-q83-conjoined-through-sf-3f800001-side-boundary-half-plane-alpha-boundary-0.125-minimum-8-owned-pixels-sparse-runtime-ranges-visible-lighting-publication",
     sanitization: [
       "native qualification identities",
       "oracle metadata and state evidence",

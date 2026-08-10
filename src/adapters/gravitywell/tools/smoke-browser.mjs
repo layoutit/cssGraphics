@@ -30,6 +30,7 @@ try {
   if (server) await waitFor(() => serverOutput.includes("Local:"), 20_000);
   browser = await chromium.launch({ channel: "chrome", headless: true });
   const page = await browser.newPage({ viewport: { width: 960, height: 600 }, deviceScaleFactor: 1 });
+  await page.route("**/favicon.ico", (faviconRoute) => faviconRoute.fulfill({ status: 204 }));
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
   page.on("console", (message) => { if (message.type() === "error") pageErrors.push(message.text()); });

@@ -20,6 +20,7 @@ import {
   CSSFLOWER_LIGHTING_GRID_WIDTH,
   CSSFLOWER_LIGHTING_ADDRESS_SCHEDULE_SCHEMA,
   CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT,
+  CSSFLOWER_VISIBLE_LIGHTING_PUBLICATION_SCHEDULE_SCHEMA,
   CSSFLOWER_LIGHTING_LAYOUT,
   CSSFLOWER_LIGHTING_PAGE_COUNT,
   CSSFLOWER_LIGHTING_PAGE_ROWS,
@@ -119,6 +120,7 @@ export async function loadPreparedScene(manifest, routeState) {
       sceneData?.lighting?.backgroundPositionYs?.length !== CSSFLOWER_LIGHTING_PAGE_ROWS ||
       sceneData?.lighting?.backgroundPositionXs?.length !== CSSFLOWER_LIGHTING_PAGE_COUNT ||
       !validPreparedLightingAddressSchedule(sceneData?.lighting?.addressSchedule) ||
+      !validPreparedVisibleLightingPublicationSchedule(sceneData?.lighting?.visiblePublicationSchedule) ||
       sceneData?.lighting?.rowSelection !== CSSFLOWER_LIGHTING_ROW_SELECTION ||
       sceneData?.lighting?.temporalInterpolation !== false ||
       sceneData?.lighting?.runtimeRootFrameVariables !== 1 ||
@@ -136,6 +138,9 @@ export async function loadPreparedScene(manifest, routeState) {
     throw new Error("Generated cssFlower retained snapshot binding is missing. Run pnpm prepare:cssflower first.");
   }
   const addressBytes = decodePreparedLightingAddressBytes(sceneData.lighting.addressSchedule);
+  const visibleLightingPayloads = decodePreparedVisibleLightingPayloads(
+    sceneData.lighting.visiblePublicationSchedule,
+  );
   const frontFacingPayloads = decodePreparedFrontFacingPayloads(sceneData.playback.frontFacingSchedule);
   await assertSha256(
     addressBytes,
@@ -143,6 +148,8 @@ export async function loadPreparedScene(manifest, routeState) {
     "exact sparse-lighting address schedule",
   );
   await Promise.all(frontFacingPayloads.map(({ bytes, sha256, label }) =>
+    assertSha256(bytes, sha256, label)));
+  await Promise.all(visibleLightingPayloads.map(({ bytes, sha256, label }) =>
     assertSha256(bytes, sha256, label)));
   await assertSha256(new TextEncoder().encode(snapshotHtml), entry.snapshot.sha256, "snapshot");
   validatePreparedMorphAssets(sceneData.playback, sceneData.lighting);
@@ -189,6 +196,44 @@ function validPreparedLightingAddressSchedule(schedule) {
     /^[a-f0-9]{64}$/u.test(schedule.faceIndicesSha256 ?? "") &&
     typeof schedule.faceIndicesBase64 === "string" && schedule.faceIndicesBase64.length > 0 &&
     schedule.runtimeSelection === "prepared-state-range-only-no-lighting-or-geometry-calculation";
+}
+
+function validPreparedVisibleLightingPublicationSchedule(schedule) {
+  return schedule?.schema === CSSFLOWER_VISIBLE_LIGHTING_PUBLICATION_SCHEDULE_SCHEMA &&
+    schedule.stateCount === 360 && schedule.faceCount === 1_200 &&
+    schedule.sourceLightingAddressUpdateCount === CSSFLOWER_LIGHTING_ADDRESS_UPDATE_COUNT &&
+    schedule.selection === "prepared-lighting-change-intersect-visible-plus-newly-visible-catchup" &&
+    Number.isSafeInteger(schedule.visibleAddressChangeCount) && schedule.visibleAddressChangeCount > 0 &&
+    Number.isSafeInteger(schedule.newlyVisibleCatchupCount) && schedule.newlyVisibleCatchupCount > 0 &&
+    Number.isSafeInteger(schedule.suppressedHiddenAddressWriteCount) &&
+    schedule.visibleAddressChangeCount + schedule.suppressedHiddenAddressWriteCount ===
+      schedule.sourceLightingAddressUpdateCount &&
+    schedule.publicationCount === schedule.visibleAddressChangeCount + schedule.newlyVisibleCatchupCount &&
+    validOffsets(schedule.visibleAddressChangeOffsets, schedule.stateCount + 1,
+      schedule.visibleAddressChangeCount) &&
+    schedule.visibleAddressChangeFaceIndicesEncoding ===
+      "base64-u16le-state-major-visible-address-change-face-indices" &&
+    schedule.visibleAddressChangeFaceIndicesByteLength === schedule.visibleAddressChangeCount * 2 &&
+    /^[a-f0-9]{64}$/u.test(schedule.visibleAddressChangeFaceIndicesSha256 ?? "") &&
+    typeof schedule.visibleAddressChangeFaceIndicesBase64 === "string" &&
+    schedule.visibleAddressChangeFaceIndicesBase64.length > 0 &&
+    validOffsets(schedule.newlyVisibleCatchupOffsets, schedule.stateCount + 1,
+      schedule.newlyVisibleCatchupCount) &&
+    schedule.newlyVisibleCatchupFaceIndicesEncoding ===
+      "base64-u16le-state-major-newly-visible-catchup-face-indices" &&
+    schedule.newlyVisibleCatchupFaceIndicesByteLength === schedule.newlyVisibleCatchupCount * 2 &&
+    /^[a-f0-9]{64}$/u.test(schedule.newlyVisibleCatchupFaceIndicesSha256 ?? "") &&
+    typeof schedule.newlyVisibleCatchupFaceIndicesBase64 === "string" &&
+    schedule.newlyVisibleCatchupFaceIndicesBase64.length > 0 &&
+    schedule.newlyVisibleCatchupAddressStateIndicesEncoding ===
+      "base64-u16le-state-major-newly-visible-catchup-address-state-indices" &&
+    schedule.newlyVisibleCatchupAddressStateIndicesByteLength ===
+      schedule.newlyVisibleCatchupCount * 2 &&
+    /^[a-f0-9]{64}$/u.test(schedule.newlyVisibleCatchupAddressStateIndicesSha256 ?? "") &&
+    typeof schedule.newlyVisibleCatchupAddressStateIndicesBase64 === "string" &&
+    schedule.newlyVisibleCatchupAddressStateIndicesBase64.length > 0 &&
+    schedule.runtimeSelection ===
+      "prepared-state-range-only-no-face-visibility-test-or-hidden-face-style-write";
 }
 
 function validPreparedFrontFacingSchedule(schedule) {
@@ -255,6 +300,29 @@ function decodePreparedFrontFacingPayloads(schedule) {
       schedule.initialVisibilityAssignmentsByteLength,
       schedule.initialVisibilityAssignmentsSha256,
       "initial visibility assignments",
+    ),
+  ];
+}
+
+function decodePreparedVisibleLightingPayloads(schedule) {
+  return [
+    decodeBase64Payload(
+      schedule.visibleAddressChangeFaceIndicesBase64,
+      schedule.visibleAddressChangeFaceIndicesByteLength,
+      schedule.visibleAddressChangeFaceIndicesSha256,
+      "visible lighting address-change face indices",
+    ),
+    decodeBase64Payload(
+      schedule.newlyVisibleCatchupFaceIndicesBase64,
+      schedule.newlyVisibleCatchupFaceIndicesByteLength,
+      schedule.newlyVisibleCatchupFaceIndicesSha256,
+      "newly visible lighting catch-up face indices",
+    ),
+    decodeBase64Payload(
+      schedule.newlyVisibleCatchupAddressStateIndicesBase64,
+      schedule.newlyVisibleCatchupAddressStateIndicesByteLength,
+      schedule.newlyVisibleCatchupAddressStateIndicesSha256,
+      "newly visible lighting catch-up address-state indices",
     ),
   ];
 }

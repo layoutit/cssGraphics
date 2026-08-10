@@ -88,6 +88,7 @@
     "verify:source-only": "node scripts/verify-source-only.mjs --strict",
     "verify:flowerbox:bank": "node src/adapters/flowerbox/tools/verify-product-bank.mjs",
     "verify:flowerbox:runtime": "node src/adapters/flowerbox/tools/audit-runtime-surface.mjs",
+    "test:flowerbox:lighting-publication": "node --test src/adapters/flowerbox/test/visible-lighting-publication.test.mjs",
     "test:flowerbox:browser": "node src/adapters/flowerbox/tools/smoke-browser.mjs",
     "test:flowerbox:deploy": "node src/adapters/flowerbox/tools/smoke-browser.mjs --deploy",
     "verify:gears:bank": "node src/adapters/gears/tools/verify-product-bank.mjs",

@@ -321,7 +321,7 @@ function assertProof(state) {
       state.customClassCount !== 1200 || state.customClassUniqueCount !== 1200 ||
       state.customClassMaxLength !== 2 || state.customClassesValid !== true ||
       state.comparisonElementCount !== 1 || state.shellWordmarkText !== "css.graphics/flowerbox" ||
-      state.shellWordmarkHref !== "https://css.graphics/flowerbox/" ||
+      state.shellWordmarkHref !== new URL("/", state.shellWordmarkHref).href ||
       state.shellGithubText !== "GitHub" || state.shellGithubHref !== "https://github.com/layoutit/cssGraphics" ||
       state.shellStructure !== true || state.snapshotStyleCount !== 1 || state.preparedLeafRuleCount !== 1200 ||
       state.leafInlineTransformCount <= 0 || state.leafInlineTransformCount > 1200 ||
@@ -358,6 +358,8 @@ function assertProof(state) {
       stats.runtimePreparedFrontFacingStateSelections <= 0 || stats.preparedFrontFacingDilationTicks !== 1 ||
       stats.preparedFrontFacingSelectedFaceCount !== 166886 ||
       stats.preparedFrontFacingVisibilityChangeCount !== 8310 ||
+      stats.preparedVisibleLightingPublicationCount !== 164713 ||
+      stats.preparedHiddenLightingAddressWriteSuppressionCount !== 98845 ||
       stats.preparedVisibilitySelectionDomain !== "prepared-source-camera-depth16-owned-pixel-occlusion" ||
       stats.preparedVisibilityMinimumOwnedPixels !== 8 ||
       stats.preparedVisibilitySampleGrid !== 1 || stats.preparedVisibilityAdjacencyRings !== 0 ||

@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { brotliDecompressSync } from "node:zlib";
+import { CSSGRAVITYWELL_TRANSFORM_BLOCK_COUNT } from "../src/cssgravitywell/renderContract.mjs";
 
-export const CSSGRAVITYWELL_PRODUCT_BANK_SCHEMA = "cssgravitywell-product-bank@1";
+export const CSSGRAVITYWELL_PRODUCT_BANK_SCHEMA = "cssgravitywell-product-bank@2";
 const RETAINED_LEAF_COUNT = 1_922;
 const PREPARED_COLOR_COUNT = 4_096;
 
@@ -54,6 +55,8 @@ export async function inspectCssgravitywellProductBank(root, { verifyDescriptor 
   let preparedFrameCount = 0;
   let transformAssetCount = 0;
   let transformEncodedBytes = 0;
+  let maximumTransformBlockPreparedCssStringBytes = 0;
+  let maximumResidentTransformPreparedCssStringBytes = 0;
   let colorAssetCount = 0;
   let changeAssetCount = 0;
   let visibilityAssetCount = 0;
@@ -80,7 +83,8 @@ export async function inspectCssgravitywellProductBank(root, { verifyDescriptor 
       scene.playback.leafCount === RETAINED_LEAF_COUNT &&
       scene.metrics?.preparedLeafCount === RETAINED_LEAF_COUNT &&
       scene.metrics.sourceCoarseGridSegmentCount === 1_922 &&
-      scene.playback.blockCount === 3 && scene.playback.blocks?.length === 3 &&
+      scene.playback.blockCount === CSSGRAVITYWELL_TRANSFORM_BLOCK_COUNT &&
+      scene.playback.blocks?.length === CSSGRAVITYWELL_TRANSFORM_BLOCK_COUNT &&
       scene.playback.runtimeLookaheadBlockCount === 1 &&
       scene.metrics.runtimeGeometryConstructionCount === 0 &&
       scene.metrics.runtimeTopologyConstructionCount === 0 &&
@@ -93,6 +97,11 @@ export async function inspectCssgravitywellProductBank(root, { verifyDescriptor 
       scene.timeline.terminalFlatFrameIndex === scene.playback.frameCount - 1,
     `bank ${bankIndex} prepared runtime contract`);
     preparedFrameCount += scene.playback.frameCount;
+    maximumResidentTransformPreparedCssStringBytes = Math.max(
+      maximumResidentTransformPreparedCssStringBytes,
+      ...scene.playback.blocks.map((block, index) => block.preparedCssStringByteLength +
+        (scene.playback.blocks[index + 1]?.preparedCssStringByteLength ?? 0)),
+    );
 
     for (const [blockIndex, descriptor] of scene.playback.blocks.entries()) {
       const expectedStart = blockIndex * scene.playback.blockFrameCount;
@@ -120,6 +129,10 @@ export async function inspectCssgravitywellProductBank(root, { verifyDescriptor 
       await verifyAsset(root, path, descriptor.byteLength, descriptor.sha256, `bank ${bankIndex} transform`);
       transformAssetCount += 1;
       transformEncodedBytes += descriptor.byteLength;
+      maximumTransformBlockPreparedCssStringBytes = Math.max(
+        maximumTransformBlockPreparedCssStringBytes,
+        descriptor.preparedCssStringByteLength,
+      );
     }
     const color = scene.playback.colorAsset;
     assert(color?.distribution === "prepared-transform-blocks" &&
@@ -176,6 +189,8 @@ export async function inspectCssgravitywellProductBank(root, { verifyDescriptor 
     preparedFrameCount,
     transformAssetCount,
     transformEncodedBytes,
+    maximumTransformBlockPreparedCssStringBytes,
+    maximumResidentTransformPreparedCssStringBytes,
     colorAssetCount,
     changeAssetCount,
     visibilityAssetCount,

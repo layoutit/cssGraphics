@@ -5,7 +5,10 @@ import { fileURLToPath } from "node:url";
 export const adapterRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 export const repositoryRoot = resolve(adapterRoot, "..", "..", "..");
 export const localSourceRoot = resolve(adapterRoot, "..", "..", "..", ".local", "electropaint");
-export const generatedPublicRoot = resolve(repositoryRoot, "build", "generated", "public");
+export const generatedPublicRoot = resolve(
+  process.env.CSSSELECTROPAINT_GENERATED_PUBLIC_ROOT ??
+    resolve(repositoryRoot, "build", "generated", "public"),
+);
 export const generatedAdapterRoot = resolve(generatedPublicRoot, "cssselectropaint");
 export const generatedVariantsRoot = resolve(generatedAdapterRoot, "variants");
 export const manifestPath = resolve(generatedAdapterRoot, "manifest.json");

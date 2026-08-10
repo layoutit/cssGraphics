@@ -135,5 +135,9 @@ test("deployment serves the landing at the root", async () => {
     packageManifest,
     /CSSMAZE_DEPLOY_BUILD=1 pnpm build:maze && CSSSELECTROPAINT_DEPLOY_BUILD=1 pnpm build:electropaint && CSSGRAPHICS_DEPLOY_BUILD=1 pnpm build:site/u,
   );
+  assert.match(
+    packageManifest,
+    /"prepare:electropaint:deploy": "pnpm prepare:electropaint:artifact"/u,
+  );
   assert.match(viteConfig, /emptyOutDir: !deployBuild/u);
 });

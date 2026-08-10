@@ -7,14 +7,11 @@ import { fileURLToPath } from "node:url";
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(siteRoot, "..");
 const expectedProjects = [
-  ["electropaint", 7, "David A. Tristram / SGI", "2026-08-10"],
-  ["flowerbox", 6, "Microsoft", "2026-08-06"],
-  ["gravitywell", 5, "XScreenSaver", "2026-08-09"],
-  ["menger", 4, "XScreenSaver", "2026-08-08"],
   ["maze", 3, "XScreenSaver", "2026-08-09"],
   ["gears", 2, "XScreenSaver", "2026-08-07"],
   ["pipes", 1, "Original", "2026-08-06"],
 ];
+const hiddenLandingProjects = ["electropaint", "flowerbox", "gravitywell", "menger"];
 const projectAdapterDirectories = new Map([
   ["electropaint", "electropaint"],
   ["flowerbox", "flowerbox"],
@@ -41,6 +38,10 @@ test("landing presents the current deployed collection", async () => {
   assert.equal(new Set(projectManifest.projects.map(({ id }) => id)).size, expectedProjects.length);
   assert.equal(new Set(projectManifest.projects.map(({ number }) => number)).size,
     expectedProjects.length);
+  assert.deepEqual(
+    projectManifest.projects.filter(({ id }) => hiddenLandingProjects.includes(id)),
+    [],
+  );
   for (const [id, number, source, date] of expectedProjects) {
     const project = projectManifest.projects.find((entry) => entry.id === id);
     assert.equal(project.number, number);
@@ -102,16 +103,7 @@ test("landing is only the shared shell and linked project thumbnails", async () 
 });
 
 test("every deployed project wordmark links back to the landing", async () => {
-  const projectManifest = JSON.parse(
-    await readFile(resolve(siteRoot, "public/projects.json"), "utf8"),
-  );
-  assert.deepEqual(
-    projectManifest.projects.map(({ id }) => id),
-    [...projectAdapterDirectories.keys()],
-  );
-  for (const { id } of projectManifest.projects) {
-    const adapterDirectory = projectAdapterDirectories.get(id);
-    assert.ok(adapterDirectory, `missing adapter directory for ${id}`);
+  for (const [id, adapterDirectory] of projectAdapterDirectories) {
     const html = await readFile(
       resolve(repositoryRoot, "src/adapters", adapterDirectory, "index.html"),
       "utf8",

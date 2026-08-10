@@ -8,8 +8,10 @@ import { adapterRoot, repositoryRoot } from "../src/prepare/cssmenger/paths.mjs"
 
 const smokeDir = join("bench", "results", "cssmenger", "smoke");
 const screenshotPath = join(smokeDir, "default-route.png");
+const mobileScreenshotPath = join(smokeDir, "mobile-default-route.png");
 const statePath = join(smokeDir, "state.json");
 const port = await freePort();
+const route = `http://127.0.0.1:${port}/`;
 let output = "";
 const server = spawn("pnpm", ["exec", "vite", "--config", join(adapterRoot, "vite.config.mjs"), "--host", "127.0.0.1", "--port", String(port), "--strictPort"], {
   cwd: repositoryRoot,
@@ -29,7 +31,7 @@ try {
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
     page.on("console", (message) => { if (message.type() === "error") pageErrors.push(message.text()); });
-    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "networkidle" });
+    await page.goto(route, { waitUntil: "networkidle" });
     await page.waitForFunction(() => ["ready", "error"].includes(document.body.dataset.portStatus), null, { timeout: 30_000 });
     await page.evaluate(() => window.__cssMengerDebug.seek(420));
     await page.evaluate(() => new Promise((resolve) =>
@@ -101,7 +103,7 @@ try {
         evidence.state.tick !== 420 || !evidence.state.paused || evidence.retainedLeaves !== 84 ||
         evidence.retainedRenderWrappers !== 2 || evidence.retainedModelRoots !== 0 ||
         evidence.retainedAxisRoots !== 0 || evidence.forbiddenElements !== 0 || evidence.visibleSampleCount < 10 ||
-        evidence.shellWordmarkPath !== "/menger" || evidence.shellHomeHref !== "https://css.graphics/" ||
+        evidence.shellWordmarkPath !== "/menger" || evidence.shellHomeHref !== new URL("/", route).href ||
         evidence.shellGithubHref !== "https://github.com/layoutit/cssGraphics" ||
         evidence.backfaceVisibility !== "hidden" ||
         evidence.inheritedPublicationProperties.some(Boolean) ||
@@ -115,6 +117,7 @@ try {
         evidence.stats.runtimeAdjacentPublicationComparisonCount !== 0 ||
         evidence.stats.runtimeHotPathProfilingBranchCount !== 0 ||
         evidence.stats.runtimeHotPathDebugCounterWritesPerScheduledTick !== 0 ||
+        evidence.stats.preparedSchedulerCatchUpMode !== "coalesced-latest-prepared-state" ||
         evidence.stats.preparedFrontFacingAxisSelectionsPerScheduledTick !== 3 ||
         evidence.stats.preparedFrontFacingLeafWritesPerScheduledTick.minimum !== 41 ||
         evidence.stats.preparedFrontFacingLeafWritesPerScheduledTick.maximum !== 50 ||
@@ -126,8 +129,33 @@ try {
       throw new Error(`cssMenger browser smoke contract failed: ${JSON.stringify({ evidence, pageErrors })}`);
     }
     await page.screenshot({ path: screenshotPath });
-    await writeFile(statePath, `${JSON.stringify({ ...evidence, screenshotPath }, null, 2)}\n`);
-    console.log(JSON.stringify({ status: "passed", screenshotPath, statePath, ...evidence }, null, 2));
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobileFrames = [];
+    for (const tick of [0, 120, 320, 420, 720, 1080, 1439]) {
+      await page.evaluate((nextTick) => globalThis.__cssMengerDebug.seek(nextTick), tick);
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      mobileFrames.push(await page.evaluate((frameTick) => {
+        const leaves = [...document.querySelectorAll(".polycss-camera > .polycss-scene > b, .polycss-camera > .polycss-scene > i, .polycss-camera > .polycss-scene > s")];
+        const bounds = leaves.map((leaf) => leaf.getBoundingClientRect()).filter((rect) => rect.width > 0 && rect.height > 0);
+        return {
+          tick: frameTick,
+          left: Math.min(...bounds.map((rect) => rect.left)),
+          right: Math.max(...bounds.map((rect) => rect.right)),
+          top: Math.min(...bounds.map((rect) => rect.top)),
+          bottom: Math.max(...bounds.map((rect) => rect.bottom)),
+          computedScale: getComputedStyle(document.querySelector(".polycss-scene")).scale,
+        };
+      }, tick));
+    }
+    if (mobileFrames.some((frame) => frame.left < 0 || frame.right > 390 || frame.top < 50 || frame.bottom > 844 ||
+        frame.computedScale !== "1.2")) {
+      throw new Error(`cssMenger mobile framing contract failed: ${JSON.stringify(mobileFrames)}`);
+    }
+    await page.evaluate(() => globalThis.__cssMengerDebug.seek(120));
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await page.screenshot({ path: mobileScreenshotPath });
+    await writeFile(statePath, `${JSON.stringify({ ...evidence, screenshotPath, mobileScreenshotPath, mobileFrames }, null, 2)}\n`);
+    console.log(JSON.stringify({ status: "passed", screenshotPath, mobileScreenshotPath, statePath, mobileFrames, ...evidence }, null, 2));
   } finally {
     await browser.close();
   }

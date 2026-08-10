@@ -9,8 +9,13 @@ import { adapterRoot, repositoryRoot } from "../src/prepare/cssmenger/paths.mjs"
 const outputDir = join(repositoryRoot, "bench", "results", "cssmenger", "performance");
 const tracePath = join(outputDir, "frame-work-chrome-trace.json");
 const summaryPath = join(outputDir, "frame-work-summary.json");
-const viewport = { width: 960, height: 600 };
-const sampleTick = 320;
+const viewport = {
+  width: positiveInteger("CSSMENGER_PERF_VIEWPORT_WIDTH", 960),
+  height: positiveInteger("CSSMENGER_PERF_VIEWPORT_HEIGHT", 600),
+};
+const deviceScaleFactor = positiveNumber("CSSMENGER_PERF_DEVICE_SCALE_FACTOR", 1);
+const cpuThrottlingRate = positiveNumber("CSSMENGER_PERF_CPU_THROTTLE", 1);
+const sampleTick = nonNegativeInteger("CSSMENGER_PERF_SAMPLE_TICK", 320);
 const port = await freePort();
 const route = `http://127.0.0.1:${port}/`;
 let serverOutput = "";
@@ -29,9 +34,12 @@ try {
   });
   browser = await chromium.launch({ channel: "chrome", headless: true });
   const browserVersion = browser.version();
-  const context = await browser.newContext({ viewport, deviceScaleFactor: 1 });
+  const context = await browser.newContext({ viewport, deviceScaleFactor });
   const page = await context.newPage();
   const cdp = await context.newCDPSession(page);
+  if (cpuThrottlingRate !== 1) {
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: cpuThrottlingRate });
+  }
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.stack || error.message));
   page.on("console", (message) => {
@@ -199,7 +207,8 @@ try {
     route,
     build: "vite-production-preview",
     browser: { name: "Google Chrome", version: browserVersion, channel: "chrome", headless: true },
-    viewport,
+    viewport: { ...viewport, deviceScaleFactor },
+    cpuThrottlingRate,
     sampleTick,
     publication: result.publication,
     isolatedPublications: result.isolatedPublications,
@@ -336,4 +345,22 @@ async function waitFor(predicate, timeoutMilliseconds, onPoll) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Timed out waiting for Vite preview.\n${serverOutput}`);
+}
+
+function positiveNumber(name, fallback) {
+  const value = Number(process.env[name] ?? fallback);
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive number`);
+  return value;
+}
+
+function positiveInteger(name, fallback) {
+  const value = positiveNumber(name, fallback);
+  if (!Number.isSafeInteger(value)) throw new Error(`${name} must be a positive integer`);
+  return value;
+}
+
+function nonNegativeInteger(name, fallback) {
+  const value = Number(process.env[name] ?? fallback);
+  if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${name} must be a non-negative integer`);
+  return value;
 }

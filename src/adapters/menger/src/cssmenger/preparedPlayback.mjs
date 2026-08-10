@@ -126,14 +126,23 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
   }
 
   function advanceOne() {
-    if (tick >= playback.segmentEndState) {
-      if (!playback.loop) {
-        paused = true;
-        return tick;
-      }
-      return publishAdjacentFast(playback.segmentStartState);
+    return advancePreparedStates(1);
+  }
+
+  function advancePreparedStates(count) {
+    if (!Number.isSafeInteger(count) || count < 1) {
+      throw new RangeError("cssMenger prepared advance count must be positive");
     }
-    return publishAdjacentFast(tick + 1);
+    if (!playback.loop && tick >= playback.segmentEndState) {
+      paused = true;
+      return tick;
+    }
+    const stateIndex = playback.loop
+      ? playback.segmentStartState + ((tick - playback.segmentStartState + count) % playback.stateCount)
+      : Math.min(playback.segmentEndState, tick + count);
+    if (stateIndex !== tick) publishAdjacentFast(stateIndex);
+    if (!playback.loop && tick >= playback.segmentEndState) paused = true;
+    return tick;
   }
 
   function advanceOneProfiled(profile) {
@@ -163,10 +172,10 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
   function loopFast(timestamp) {
     animationFrame = null;
     if (paused) return;
-    advanceOne();
+    const elapsedSteps = Math.max(1, Math.floor((timestamp - nextFrameAt) / frameMilliseconds) + 1);
+    advancePreparedStates(elapsedSteps);
     if (paused) return;
-    nextFrameAt += frameMilliseconds;
-    if (nextFrameAt <= timestamp) nextFrameAt = timestamp + frameMilliseconds;
+    nextFrameAt += elapsedSteps * frameMilliseconds;
     scheduleNextDraw();
   }
 
@@ -233,6 +242,7 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
         runtimeAdjacentPublicationComparisonCount: 0,
         runtimeHotPathProfilingBranchCount: 0,
         runtimeHotPathDebugCounterWritesPerScheduledTick: 0,
+        preparedSchedulerCatchUpMode: "coalesced-latest-prepared-state",
         preparedFrontFacingAxisSelectionsPerScheduledTick: 3,
         preparedFrontFacingLeafWritesPerScheduledTick: Object.freeze({
           minimum: playback.frontFacingSchedule.minimumSelectedLeafCountPerState,

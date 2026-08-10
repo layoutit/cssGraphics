@@ -9,9 +9,14 @@ import { adapterRoot, repositoryRoot } from "../src/prepare/cssmenger/paths.mjs"
 const outputDir = join(repositoryRoot, "bench", "results", "cssmenger", "performance");
 const tracePath = join(outputDir, "chrome-trace.json");
 const summaryPath = join(outputDir, "summary.json");
-const durationMilliseconds = 10_000;
-const calibrationDurationMilliseconds = 5_000;
-const viewport = { width: 960, height: 600 };
+const durationMilliseconds = positiveNumber("CSSMENGER_PERF_DURATION_MS", 10_000);
+const calibrationDurationMilliseconds = positiveNumber("CSSMENGER_PERF_CALIBRATION_MS", 5_000);
+const viewport = {
+  width: positiveInteger("CSSMENGER_PERF_VIEWPORT_WIDTH", 960),
+  height: positiveInteger("CSSMENGER_PERF_VIEWPORT_HEIGHT", 600),
+};
+const deviceScaleFactor = positiveNumber("CSSMENGER_PERF_DEVICE_SCALE_FACTOR", 1);
+const cpuThrottlingRate = positiveNumber("CSSMENGER_PERF_CPU_THROTTLE", 1);
 const port = await freePort();
 const route = `http://127.0.0.1:${port}/`;
 let serverOutput = "";
@@ -30,9 +35,12 @@ try {
   });
   browser = await chromium.launch({ channel: "chrome", headless: true });
   const browserVersion = browser.version();
-  const context = await browser.newContext({ viewport, deviceScaleFactor: 1 });
+  const context = await browser.newContext({ viewport, deviceScaleFactor });
   const page = await context.newPage();
   const cdp = await context.newCDPSession(page);
+  if (cpuThrottlingRate !== 1) {
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: cpuThrottlingRate });
+  }
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
   page.on("console", (message) => {
@@ -138,20 +146,23 @@ try {
     globalThis.__cssMengerDebug.resume();
   });
   await page.waitForTimeout(durationMilliseconds);
-  const sample = await page.evaluate(() => {
-    globalThis.__cssMengerDebug.pause();
-    return globalThis.__cssMengerPerformanceSample.stop();
+  const sampledState = await page.evaluate(() => {
+    const sample = globalThis.__cssMengerPerformanceSample.stop();
+    return {
+      sample,
+      state: globalThis.__cssMengerDebug.state(),
+      stats: globalThis.__cssMengerDebug.stats(),
+      stableDom: globalThis.__cssMengerDebug.assertStableDomIdentity(),
+      errors: globalThis.__cssMengerDebug.errors(),
+    };
   });
-  const afterState = await page.evaluate(() => ({
-    state: globalThis.__cssMengerDebug.state(),
-    stats: globalThis.__cssMengerDebug.stats(),
-    stableDom: globalThis.__cssMengerDebug.assertStableDomIdentity(),
-    errors: globalThis.__cssMengerDebug.errors(),
-  }));
   const afterMetrics = metricMap(await cdp.send("Performance.getMetrics"));
   await cdp.send("Tracing.end");
   await tracingComplete;
+  await page.evaluate(() => globalThis.__cssMengerDebug.pause());
 
+  const sample = sampledState.sample;
+  const afterState = sampledState;
   const frameIntervals = sample.frameIntervals.filter((value) => Number.isFinite(value) && value >= 0);
   const longTasks = sample.longTasks.filter((entry) => Number.isFinite(entry.duration));
   const calibrationFrameIntervals = calibrationSample.frameIntervals.filter((value) => Number.isFinite(value) && value >= 0);
@@ -162,7 +173,8 @@ try {
     route,
     build: "vite-production-preview",
     browser: { name: "Google Chrome", version: browserVersion, channel: "chrome", headless: true },
-    viewport,
+    viewport: { ...viewport, deviceScaleFactor },
+    cpuThrottlingRate,
     startup: {
       ...startup,
       readyWallMilliseconds,
@@ -192,10 +204,10 @@ try {
       tickStart: beforeState.state.tick,
       tickEnd: afterState.state.tick,
       preparedStateAdvanceCount: afterState.state.tick - beforeState.state.tick,
-      modelTransformWriteCount: afterState.state.tick - beforeState.state.tick,
-      frontFacingLeafPaletteWriteEstimate: (afterState.state.tick - beforeState.state.tick) *
+      modelTransformWriteCount: null,
+      frontFacingLeafPaletteWriteUpperBound: (afterState.state.tick - beforeState.state.tick) *
         afterState.stats.preparedFrontFacingLeafWritesPerScheduledTick.average,
-      schedulerCallbackCount: afterState.state.tick - beforeState.state.tick,
+      schedulerCallbackCount: null,
       runtimeInstrumentationEnabled: afterState.stats.runtimeInstrumentationEnabled,
       runtimeHotPathDomStyleReadCount: afterState.stats.runtimeHotPathDomStyleReadCount,
       runtimeAdjacentPublicationComparisonCount: afterState.stats.runtimeAdjacentPublicationComparisonCount,
@@ -335,4 +347,16 @@ async function waitFor(predicate, timeoutMilliseconds, onPoll) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error(`Timed out waiting for Vite preview.\n${serverOutput}`);
+}
+
+function positiveNumber(name, fallback) {
+  const value = Number(process.env[name] ?? fallback);
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be a positive number`);
+  return value;
+}
+
+function positiveInteger(name, fallback) {
+  const value = positiveNumber(name, fallback);
+  if (!Number.isSafeInteger(value)) throw new Error(`${name} must be a positive integer`);
+  return value;
 }

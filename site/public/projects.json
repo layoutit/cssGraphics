@@ -1,0 +1,68 @@
+{
+  "schema": "cssgraphics.projects@2",
+  "projects": [
+    {
+      "number": 7,
+      "id": "electropaint",
+      "name": "ElectroPaint",
+      "route": "/electropaint/",
+      "preview": "/landing/electropaint.webp",
+      "source": "David A. Tristram / SGI",
+      "date": "2026-08-10"
+    },
+    {
+      "number": 6,
+      "id": "flowerbox",
+      "name": "Flower Box",
+      "route": "/flowerbox/",
+      "preview": "/landing/flowerbox.webp",
+      "source": "Microsoft",
+      "date": "2026-08-06"
+    },
+    {
+      "number": 5,
+      "id": "gravitywell",
+      "name": "Gravity Well",
+      "route": "/gravitywell/",
+      "preview": "/landing/gravitywell.webp",
+      "source": "XScreenSaver",
+      "date": "2026-08-09"
+    },
+    {
+      "number": 4,
+      "id": "menger",
+      "name": "Menger",
+      "route": "/menger/",
+      "preview": "/landing/menger.webp",
+      "source": "XScreenSaver",
+      "date": "2026-08-08"
+    },
+    {
+      "number": 3,
+      "id": "maze",
+      "name": "Maze",
+      "route": "/maze/",
+      "preview": "/landing/maze.webp",
+      "source": "XScreenSaver",
+      "date": "2026-08-09"
+    },
+    {
+      "number": 2,
+      "id": "gears",
+      "name": "Gears",
+      "route": "/gears/",
+      "preview": "/landing/gears.webp",
+      "source": "XScreenSaver",
+      "date": "2026-08-07"
+    },
+    {
+      "number": 1,
+      "id": "pipes",
+      "name": "Pipes",
+      "route": "/pipes/",
+      "preview": "/landing/pipes.webp",
+      "source": "Original",
+      "date": "2026-08-06"
+    }
+  ]
+}

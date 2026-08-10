@@ -7,6 +7,7 @@ import {
   DISTRIBUTION_CATALOG,
   type DistributionMediaType,
 } from "./site/catalog";
+import { PROJECTS } from "./site/projects";
 
 const repoRoot = import.meta.dirname;
 const publicRoot = resolve(repoRoot, "site/public");
@@ -20,12 +21,11 @@ function distributionFiles(): readonly DistributionFile[] {
   const files: DistributionFile[] = [
     { path: "catalog.json", mediaType: "application/json" },
     { path: "favicon.ico", mediaType: "image/x-icon" },
-    { path: "landing/flowerbox.webp", mediaType: "image/webp" },
-    { path: "landing/gears.webp", mediaType: "image/webp" },
-    { path: "landing/gravitywell.webp", mediaType: "image/webp" },
-    { path: "landing/maze.webp", mediaType: "image/webp" },
-    { path: "landing/menger.webp", mediaType: "image/webp" },
-    { path: "landing/pipes.webp", mediaType: "image/webp" },
+    { path: "projects.json", mediaType: "application/json" },
+    ...PROJECTS.map(({ preview }) => ({
+      path: preview.replace(/^\//u, ""),
+      mediaType: "image/webp" as const,
+    })),
     { path: "robots.txt", mediaType: "text/plain" },
     { path: "sitemap.xml", mediaType: "application/xml" },
   ];

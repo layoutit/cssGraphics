@@ -1,24 +1,10 @@
 import "./site.css";
-
-interface LandingProject {
-  readonly name: string;
-  readonly route: string;
-  readonly preview: string;
-}
-
-const PROJECTS: readonly LandingProject[] = Object.freeze([
-  { name: "Gravity Well", route: "/gravitywell/", preview: "/landing/gravitywell.webp" },
-  { name: "Maze", route: "/maze/", preview: "/landing/maze.webp" },
-  { name: "Menger", route: "/menger/", preview: "/landing/menger.webp" },
-  { name: "Gears", route: "/gears/", preview: "/landing/gears.webp" },
-  { name: "Flower Box", route: "/flowerbox/", preview: "/landing/flowerbox.webp" },
-  { name: "Pipes", route: "/pipes/", preview: "/landing/pipes.webp" },
-]);
+import { PROJECTS } from "./projects";
 
 const list = document.querySelector<HTMLElement>("#asset-list");
 if (!list) throw new Error("Missing #asset-list.");
 
-for (const [index, project] of PROJECTS.entries()) {
+for (const project of PROJECTS) {
   const link = document.createElement("a");
   link.className = "project-thumbnail";
   link.href = project.route;
@@ -38,11 +24,27 @@ for (const [index, project] of PROJECTS.entries()) {
 
   const number = document.createElement("span");
   number.className = "project-number";
-  number.textContent = `#${String(index + 1).padStart(3, "0")}`;
+  number.textContent = `#${String(project.number).padStart(3, "0")}`;
   number.setAttribute("aria-hidden", "true");
+
+  const meta = document.createElement("span");
+  meta.className = "project-meta";
+
+  const source = document.createElement("span");
+  source.className = "project-source";
+  source.textContent = project.source;
+
+  const date = document.createElement("time");
+  date.className = "project-date";
+  date.dateTime = project.date;
+  date.textContent = project.date.replaceAll("-", ".");
+
+  meta.appendChild(source);
+  meta.appendChild(date);
 
   link.appendChild(title);
   link.appendChild(number);
+  link.appendChild(meta);
   link.appendChild(image);
   list.appendChild(link);
 }

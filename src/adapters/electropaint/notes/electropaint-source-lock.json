@@ -1,0 +1,61 @@
+{
+  "schema": "cssselectropaint-source-lock@2",
+  "authorities": [
+    {
+      "name": "kent-reference",
+      "repository": "https://github.com/srirangav/electropaintosx",
+      "commit": "3be67ea1562c0df573edc21e8bfa9f88e62b5b38",
+      "license": "GPL-2.0-or-later",
+      "files": [
+        {
+          "path": "ElectropaintView.mm",
+          "sha256": "d9ff76dbcdabac585b37875f3f9a8a43d8f690ca2a4dbc4d383ec9fb5feb81eb"
+        },
+        {
+          "path": "README.txt",
+          "sha256": "c74886353299157aa7f6573a63793af1efb18b0915703262a60c69bbecc77659"
+        },
+        {
+          "path": "gpl.txt",
+          "sha256": "204d8eff92f95aac4df6c8122bc1505f468f3a901e5a4cc08940e0ede1938994"
+        }
+      ]
+    },
+    {
+      "name": "ralph-reference",
+      "repository": "https://github.com/iamralpht/elektropaintjs",
+      "commit": "12d5f43ab34f26eb388651de3b870800972ac96c",
+      "license": "GPL-2.0-or-later",
+      "files": [
+        {
+          "path": "ep.js",
+          "sha256": "cacb3616fae29e26128baf5b522caefe11d2e354198d29168b81a29e8a46c654"
+        },
+        {
+          "path": "ep.html",
+          "sha256": "60307c9bb0683f620be15757a41bafdbbaa763defe77676f48c80df7fecd276c"
+        }
+      ]
+    },
+    {
+      "name": "browser-reference",
+      "repository": "https://github.com/oppegard/electropaint",
+      "commit": "714092ad588e668bee9eb66dfdc94c66f516452b",
+      "license": "GPL-2.0-only",
+      "files": [
+        {
+          "path": "src/math.ts",
+          "sha256": "ae7b9e794fa31e4d66df24f29282bc2bb62e73bc6181631707e7fe70386e4420"
+        },
+        {
+          "path": "package.json",
+          "sha256": "96381dbe445bf73d133646b6d1a5632b68252ed46c1943d7bcc26a31e5df02bd"
+        },
+        {
+          "path": "LICENSE",
+          "sha256": "204d8eff92f95aac4df6c8122bc1505f468f3a901e5a4cc08940e0ede1938994"
+        }
+      ]
+    }
+  ]
+}

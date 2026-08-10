@@ -89,7 +89,7 @@ test("product index uses the css.graphics shell", async () => {
   const html = await readFile(join(root, "index.html"), "utf8");
   assert.match(html, /<title>css\.graphics\/menger<\/title>/u);
   assert.match(html, /class="site-header"/u);
-  assert.match(html, /class="site-wordmark"[^>]+href="https:\/\/css\.graphics\/"/u);
+  assert.match(html, /class="site-wordmark"[^>]+href="\/"/u);
   assert.match(html, /site-wordmark-path">\/menger/u);
   assert.match(html, /href="https:\/\/github\.com\/layoutit\/cssGraphics"/u);
 });

@@ -123,6 +123,82 @@ test("finite prepared playback clamps instead of claiming a false loop", () => {
   assert.equal(timelineStateIndexForTick(999, playback), 11);
 });
 
+test("late playback coalesces missed source ticks into one prepared publication", () => {
+  const originalHTMLElement = globalThis.HTMLElement;
+  let requestedFrame = null;
+  let requestedDelay = null;
+  let modelTransformWrites = 0;
+  let axisColorWrites = 0;
+  class FakeHTMLElement {
+    constructor() {
+      let transform = "";
+      let backgroundPositionY = "";
+      this.style = {
+        setProperty: (name, value) => { this.style[name] = value; },
+        getPropertyValue: () => { throw new Error("runtime DOM style read"); },
+      };
+      Object.defineProperties(this.style, {
+        transform: {
+          get: () => transform,
+          set: (value) => { transform = value; modelTransformWrites += 1; },
+        },
+        backgroundPositionY: {
+          get: () => backgroundPositionY,
+          set: (value) => { backgroundPositionY = value; axisColorWrites += 1; },
+        },
+      });
+    }
+  }
+  globalThis.HTMLElement = FakeHTMLElement;
+  try {
+    const sourcePlayback = buildPreparedMengerPlayback({ stateCount: 4 });
+    const playback = {
+      ...sourcePlayback,
+      frontFacingSchedule: {
+        schema: "cssmenger-prepared-front-facing-leaf-schedule@1",
+        encoding: "state-axis-offsets-plus-global-leaf-indices",
+        stateCount: sourcePlayback.stateCount,
+        axisCount: 3,
+        offsets: Array.from({ length: sourcePlayback.stateCount * 3 + 1 }, (_, index) => index * 14),
+        leafIndices: Array.from({ length: sourcePlayback.stateCount }, () =>
+          Array.from({ length: 3 }, (_, axis) =>
+            Array.from({ length: 14 }, (_, index) => axis * 28 + index))).flat(2),
+        minimumSelectedLeafCountPerState: 42,
+        maximumSelectedLeafCountPerState: 42,
+        averageSelectedLeafCountPerState: 42,
+        frontFaceDilationTicks: 1,
+      },
+    };
+    const player = createCssmengerPreparedPlayer({
+      playback,
+      planeAtlas: {
+        schema: "cssmenger-prepared-coplanar-plane-atlas@1",
+        leafCount: 84,
+        paletteStateCount: 128,
+        paletteBackgroundPositionYs: Array.from({ length: 128 }, (_, index) => `${-index}px`),
+      },
+      publicationRoot: new FakeHTMLElement(),
+      leaves: Array.from({ length: 84 }, () => new FakeHTMLElement()),
+      readNow: () => 0,
+      requestFrame: (callback) => { requestedFrame = callback; return 1; },
+      cancelFrame: () => {},
+      requestDelay: (callback) => { requestedDelay = callback; return 2; },
+      cancelDelay: () => {},
+    });
+    player.resume();
+    requestedDelay();
+    requestedFrame(95);
+    player.pause();
+    assert.equal(player.tick, 3);
+    assert.equal(modelTransformWrites, 2);
+    assert.equal(axisColorWrites, 126);
+    assert.equal(player.stats().preparedSchedulerCatchUpMode, "coalesced-latest-prepared-state");
+  } finally {
+    if (originalHTMLElement === undefined) delete globalThis.HTMLElement;
+    else globalThis.HTMLElement = originalHTMLElement;
+  }
+});
+
 function hash(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }

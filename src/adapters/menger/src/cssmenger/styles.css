@@ -144,4 +144,14 @@ body > .polycss-camera {
   .site-header {
     padding-inline: 12px;
   }
+
+  body > .polycss-camera > .polycss-scene {
+    scale: 1.05 !important;
+  }
+}
+
+@media (min-width: 361px) and (max-width: 430px) {
+  body > .polycss-camera > .polycss-scene {
+    scale: 1.2 !important;
+  }
 }

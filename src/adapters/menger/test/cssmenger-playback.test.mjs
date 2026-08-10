@@ -120,13 +120,20 @@ test("steady playback holds prepared colors for three source ticks without DOM r
     assert.equal(modelTransformWrites, 4);
     const afterAdvance = player.stats();
     assert.equal(axisColorWrites, 126);
+    assert.equal(leaves[0].style.backgroundPositionY, "-1px");
+    assert.equal(leaves[28].style.backgroundPositionY, "-43px");
+    assert.equal(leaves[56].style.backgroundPositionY, "-85px");
     assert.equal(afterAdvance.runtimeHotPathDomStyleReadCount, 0);
     assert.equal(afterAdvance.runtimeAdjacentPublicationComparisonCount, 0);
     assert.equal(afterAdvance.runtimeHotPathProfilingBranchCount, 0);
+    assert.equal(afterAdvance.preparedColorPaletteStepPerPublication, 1);
+    assert.equal(afterAdvance.preparedColorPaletteCycleMilliseconds, 11_520);
+    assert.equal(afterAdvance.preparedColorAdvanceMode, "one-adjacent-prepared-palette-row-per-publication");
 
-    player.setTick(1);
+    player.setTick(2);
     assert.equal(modelTransformWrites, 5);
     assert.equal(axisColorWrites, 168);
+    assert.equal(leaves[0].style.backgroundPositionY, "-2px");
   } finally {
     if (originalHTMLElement === undefined) delete globalThis.HTMLElement;
     else globalThis.HTMLElement = originalHTMLElement;
@@ -140,7 +147,7 @@ test("finite prepared playback clamps instead of claiming a false loop", () => {
   assert.equal(timelineStateIndexForTick(999, playback), 11);
 });
 
-test("late playback coalesces missed source ticks into one prepared publication", () => {
+test("late playback coalesces non-aligned geometry catch-up without skipping adjacent palette rows", () => {
   const originalHTMLElement = globalThis.HTMLElement;
   let requestedFrame = null;
   let requestedDelay = null;
@@ -168,7 +175,7 @@ test("late playback coalesces missed source ticks into one prepared publication"
   }
   globalThis.HTMLElement = FakeHTMLElement;
   try {
-    const sourcePlayback = buildPreparedMengerPlayback({ stateCount: 5 });
+    const sourcePlayback = buildPreparedMengerPlayback({ stateCount: 12 });
     const playback = {
       ...sourcePlayback,
       frontFacingSchedule: {
@@ -186,6 +193,7 @@ test("late playback coalesces missed source ticks into one prepared publication"
         frontFaceDilationTicks: 1,
       },
     };
+    const leaves = Array.from({ length: 84 }, () => new FakeHTMLElement());
     const player = createCssmengerPreparedPlayer({
       playback,
       planeAtlas: {
@@ -195,7 +203,7 @@ test("late playback coalesces missed source ticks into one prepared publication"
         paletteBackgroundPositionYs: Array.from({ length: 128 }, (_, index) => `${-index}px`),
       },
       publicationRoot: new FakeHTMLElement(),
-      leaves: Array.from({ length: 84 }, () => new FakeHTMLElement()),
+      leaves,
       readNow: () => 0,
       requestFrame: (callback) => { requestedFrame = callback; return 1; },
       cancelFrame: () => {},
@@ -204,11 +212,18 @@ test("late playback coalesces missed source ticks into one prepared publication"
     });
     player.resume();
     requestedDelay();
-    requestedFrame(95);
-    player.pause();
-    assert.equal(player.tick, 3);
+    requestedFrame(125);
+    assert.equal(player.tick, 4);
     assert.equal(modelTransformWrites, 2);
     assert.equal(axisColorWrites, 126);
+    assert.equal(leaves[0].style.backgroundPositionY, "-1px");
+    requestedDelay();
+    requestedFrame(245);
+    player.pause();
+    assert.equal(player.tick, 8);
+    assert.equal(modelTransformWrites, 3);
+    assert.equal(axisColorWrites, 168);
+    assert.equal(leaves[0].style.backgroundPositionY, "-2px");
     assert.equal(player.stats().preparedSchedulerCatchUpMode, "coalesced-latest-prepared-state");
   } finally {
     if (originalHTMLElement === undefined) delete globalThis.HTMLElement;

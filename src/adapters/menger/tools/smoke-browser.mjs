@@ -33,6 +33,28 @@ try {
     page.on("console", (message) => { if (message.type() === "error") pageErrors.push(message.text()); });
     await page.goto(route, { waitUntil: "networkidle" });
     await page.waitForFunction(() => ["ready", "error"].includes(document.body.dataset.portStatus), null, { timeout: 30_000 });
+    const colorCadenceEvidence = await page.evaluate(() => {
+      const debug = window.__cssMengerDebug;
+      const leaves = [...document.querySelectorAll(".polycss-camera > .polycss-scene > b, .polycss-camera > .polycss-scene > i, .polycss-camera > .polycss-scene > s")];
+      const schedule = debug.scene.playback.frontFacingSchedule;
+      const publicationStateIndex = 3;
+      const segmentIndex = publicationStateIndex * schedule.axisCount;
+      const sampledLeafIndex = schedule.leafIndices[schedule.offsets[segmentIndex]];
+      const sampledLeaf = leaves[sampledLeafIndex];
+      debug.seek(0);
+      const positions = [sampledLeaf?.style.backgroundPositionY ?? ""];
+      for (let step = 0; step < 3; step += 1) {
+        debug.step();
+        positions.push(sampledLeaf?.style.backgroundPositionY ?? "");
+      }
+      return {
+        sampledLeafIndex,
+        positions,
+        expectedInitial: debug.scene.planeAtlas.paletteBackgroundPositionYs[debug.scene.playback.colorRows[0][0]],
+        expectedAdjacent: debug.scene.planeAtlas.paletteBackgroundPositionYs[debug.scene.playback.colorRows[1][0]],
+        rejectedThreeStepJump: debug.scene.planeAtlas.paletteBackgroundPositionYs[debug.scene.playback.colorRows[3][0]],
+      };
+    });
     await page.evaluate(() => window.__cssMengerDebug.seek(420));
     await page.evaluate(() => new Promise((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -121,6 +143,14 @@ try {
         evidence.stats.preparedColorPublicationIntervalTicks !== 3 ||
         evidence.stats.preparedColorPublicationDelayMilliseconds !== 90 ||
         evidence.stats.preparedColorPublicationMode !== "fixed-prepared-source-state-interval" ||
+        evidence.stats.preparedColorPaletteStepPerPublication !== 1 ||
+        evidence.stats.preparedColorPaletteCycleMilliseconds !== 11_520 ||
+        evidence.stats.preparedColorAdvanceMode !== "one-adjacent-prepared-palette-row-per-publication" ||
+        colorCadenceEvidence.positions[0] !== colorCadenceEvidence.expectedInitial ||
+        colorCadenceEvidence.positions[1] !== colorCadenceEvidence.expectedInitial ||
+        colorCadenceEvidence.positions[2] !== colorCadenceEvidence.expectedInitial ||
+        colorCadenceEvidence.positions[3] !== colorCadenceEvidence.expectedAdjacent ||
+        colorCadenceEvidence.positions[3] === colorCadenceEvidence.rejectedThreeStepJump ||
         evidence.stats.preparedFrontFacingAxisSelectionsPerScheduledTick.minimum !== 0 ||
         evidence.stats.preparedFrontFacingAxisSelectionsPerScheduledTick.maximum !== 3 ||
         evidence.stats.preparedFrontFacingAxisSelectionsPerScheduledTick.nominalAverage !== 1 ||
@@ -134,7 +164,7 @@ try {
         evidence.stats.runtimeRecursionCount !== 0 || evidence.stats.runtimeMergeCount !== 0 ||
         evidence.stats.runtimeColorGenerationCount !== 0 || evidence.stats.runtimeRotationCalculationCount !== 0 ||
         evidence.stats.runtimeCameraCalculationCount !== 0 || !evidence.stats.preparedSourceFaceCoverageExact) {
-      throw new Error(`cssMenger browser smoke contract failed: ${JSON.stringify({ evidence, pageErrors })}`);
+      throw new Error(`cssMenger browser smoke contract failed: ${JSON.stringify({ evidence, colorCadenceEvidence, pageErrors })}`);
     }
     await page.screenshot({ path: screenshotPath });
     await page.setViewportSize({ width: 390, height: 844 });
@@ -162,8 +192,8 @@ try {
     await page.evaluate(() => globalThis.__cssMengerDebug.seek(120));
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     await page.screenshot({ path: mobileScreenshotPath });
-    await writeFile(statePath, `${JSON.stringify({ ...evidence, screenshotPath, mobileScreenshotPath, mobileFrames }, null, 2)}\n`);
-    console.log(JSON.stringify({ status: "passed", screenshotPath, mobileScreenshotPath, statePath, mobileFrames, ...evidence }, null, 2));
+    await writeFile(statePath, `${JSON.stringify({ ...evidence, screenshotPath, mobileScreenshotPath, colorCadenceEvidence, mobileFrames }, null, 2)}\n`);
+    console.log(JSON.stringify({ status: "passed", screenshotPath, mobileScreenshotPath, statePath, colorCadenceEvidence, mobileFrames, ...evidence }, null, 2));
   } finally {
     await browser.close();
   }

@@ -220,6 +220,8 @@ try {
     const mobileEvidence = await mobilePage.evaluate(async () => {
       const debug = globalThis.__cssMengerDebug;
       debug.seek(720);
+      const frozenLightingStep = debug.profileStep();
+      debug.seek(720);
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const scene = document.querySelector(".polycss-camera > .polycss-scene");
       const firstLeaf = scene.querySelector(":scope > b");
@@ -235,6 +237,7 @@ try {
         selectedAssetBytes: debug.stats().preparedPlaneAtlasAssetBytes,
         selectedLightingIntervalTicks: debug.stats().preparedColorPublicationIntervalTicks,
         selectedLightingAddressUpdateCount: debug.stats().preparedLightingAddressUpdateCount,
+        frozenLightingStep,
         desktopUrl: debug.scene.planeAtlas.assetUrl,
         mobileUrl: atlas.assetUrl,
         backgroundImage: getComputedStyle(firstLeaf).backgroundImage,
@@ -251,9 +254,10 @@ try {
       /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.avif$/u.test(path));
     if (mobileErrors.length || !mobileEvidence.ready || mobileEvidence.errors.length ||
         mobileEvidence.bodyDataAttributes.length !== 0 || mobileEvidence.selectedProfile !== "mobile" ||
-        mobileEvidence.selectedDecodedBytes !== 44_177_400 || mobileEvidence.selectedAssetBytes !== 3_299_290 ||
-        mobileEvidence.selectedLightingIntervalTicks !== 4 ||
-        mobileEvidence.selectedLightingAddressUpdateCount !== 15_750 || mobileEvidence.tick !== 720 ||
+        mobileEvidence.selectedDecodedBytes !== 218_700 || mobileEvidence.selectedAssetBytes !== 15_028 ||
+        mobileEvidence.selectedLightingIntervalTicks !== 1_440 ||
+        mobileEvidence.selectedLightingAddressUpdateCount !== 84 ||
+        mobileEvidence.frozenLightingStep?.preparedLightingAddressWriteCount !== 0 || mobileEvidence.tick !== 720 ||
         !mobileEvidence.backgroundImage.includes(mobileEvidence.mobileUrl) ||
         mobileEvidence.backgroundSize !== mobileEvidence.expectedBackgroundSize ||
         requestedDesktopAtlases.length !== 0 || new Set(requestedMobileAtlases).size !== 1) {

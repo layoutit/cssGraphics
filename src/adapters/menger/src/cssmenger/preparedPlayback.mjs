@@ -1,5 +1,6 @@
 export const COLOR_PUBLICATION_INTERVAL_TICKS = 2;
-export const MOBILE_COLOR_PUBLICATION_INTERVAL_TICKS = 4;
+export const MOBILE_COLOR_PUBLICATION_INTERVAL_TICKS = 1_440;
+const LEGACY_COLOR_PUBLICATION_INTERVAL_TICKS = 4;
 
 export function timelineStateIndexForTick(tick, playback) {
   if (!Number.isSafeInteger(tick) || tick < 0) throw new RangeError("cssMenger tick must be a non-negative safe integer");
@@ -219,7 +220,11 @@ function validatePlayback(playback, planeAtlas, publicationRoot, leaves) {
       planeAtlas.visibleLeafFieldCount !== playback.frontFacingSchedule.leafIndices.length ||
       planeAtlas.slotCount > planeAtlas.visibleLeafFieldCount ||
       planeAtlas.sourceStateCount !== playback.stateCount ||
-      ![COLOR_PUBLICATION_INTERVAL_TICKS, MOBILE_COLOR_PUBLICATION_INTERVAL_TICKS]
+      ![
+        LEGACY_COLOR_PUBLICATION_INTERVAL_TICKS,
+        COLOR_PUBLICATION_INTERVAL_TICKS,
+        MOBILE_COLOR_PUBLICATION_INTERVAL_TICKS,
+      ]
         .includes(planeAtlas.lightingSampleIntervalTicks) ||
       planeAtlas.lightingSampleDelayMilliseconds !==
         playback.sourceFrameDelayMilliseconds * planeAtlas.lightingSampleIntervalTicks ||

@@ -60,21 +60,21 @@ test("generated manifest and scene expose one source-backed default path", async
   assert.equal(scene.mobilePlaneAtlas.profile, "mobile");
   assert.match(scene.mobilePlaneAtlas.assetUrl,
     /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.avif$/u);
-  assert.equal(scene.mobilePlaneAtlas.byteLength, 3_299_290);
-  assert.equal(scene.mobilePlaneAtlas.decodedBytes, 44_177_400);
-  assert.equal(scene.mobilePlaneAtlas.width, 16_362);
-  assert.equal(scene.mobilePlaneAtlas.height, 675);
-  assert.equal(scene.mobilePlaneAtlas.slotCount, 15_082);
-  assert.equal(scene.mobilePlaneAtlas.lightingSampleIntervalTicks, 4);
-  assert.equal(scene.mobilePlaneAtlas.lightingSampleDelayMilliseconds, 120);
-  assert.equal(scene.mobilePlaneAtlas.lightingSampleCount, 360);
-  assert.equal(scene.mobilePlaneAtlas.addressUpdateCount, 15_750);
-  assert.equal(scene.mobilePlaneAtlas.redundantAddressWriteCountRemoved, 45_774);
+  assert.equal(scene.mobilePlaneAtlas.byteLength, 15_028);
+  assert.equal(scene.mobilePlaneAtlas.decodedBytes, 218_700);
+  assert.equal(scene.mobilePlaneAtlas.width, 2_025);
+  assert.equal(scene.mobilePlaneAtlas.height, 27);
+  assert.equal(scene.mobilePlaneAtlas.slotCount, 75);
+  assert.equal(scene.mobilePlaneAtlas.lightingSampleIntervalTicks, 1_440);
+  assert.equal(scene.mobilePlaneAtlas.lightingSampleDelayMilliseconds, 43_200);
+  assert.equal(scene.mobilePlaneAtlas.lightingSampleCount, 1);
+  assert.equal(scene.mobilePlaneAtlas.addressUpdateCount, 84);
+  assert.equal(scene.mobilePlaneAtlas.redundantAddressWriteCountRemoved, 61_440);
   assert.deepEqual(scene.mobilePlaneAtlas.addressWriteCountPerState, {
     minimum: 0,
-    maximum: 49,
-    average: 15_750 / 1_440,
-    zeroWriteStateCount: 811,
+    maximum: 43,
+    average: 84 / 1_440,
+    zeroWriteStateCount: 1_401,
   });
   assert.equal(scene.metrics.atlasPageCount, 2);
   assert.equal(scene.playback.frontFacingSchedule.schema, "cssmenger-prepared-front-facing-leaf-schedule@1");

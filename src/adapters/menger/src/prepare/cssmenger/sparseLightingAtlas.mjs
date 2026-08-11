@@ -8,7 +8,7 @@ import {
 
 const GUTTER = 0;
 export const DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS = 2;
-export const MOBILE_LIGHTING_SAMPLE_INTERVAL_TICKS = 4;
+export const MOBILE_LIGHTING_SAMPLE_INTERVAL_TICKS = 1_440;
 const MAXIMUM_TEXTURE_DIMENSION = 16_384;
 const preparedBytes = new WeakMap();
 

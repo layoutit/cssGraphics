@@ -110,18 +110,18 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     scene.mobilePlaneAtlas?.profile === "mobile" &&
     /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.avif$/u.test(scene.mobilePlaneAtlas?.assetUrl) &&
     scene.mobilePlaneAtlas?.mimeType === "image/avif" &&
-    scene.mobilePlaneAtlas?.width === 16_362 && scene.mobilePlaneAtlas?.height === 675 &&
-    scene.mobilePlaneAtlas?.decodedBytes === 44_177_400 &&
-    scene.mobilePlaneAtlas?.byteLength === 3_299_290 &&
+    scene.mobilePlaneAtlas?.width === 2_025 && scene.mobilePlaneAtlas?.height === 27 &&
+    scene.mobilePlaneAtlas?.decodedBytes === 218_700 &&
+    scene.mobilePlaneAtlas?.byteLength === 15_028 &&
     scene.mobilePlaneAtlas?.leafCount === 84 &&
     scene.mobilePlaneAtlas?.visibleLeafFieldCount === 61_524 &&
-    scene.mobilePlaneAtlas?.slotCount === 15_082 &&
-    scene.mobilePlaneAtlas?.lightingSampleIntervalTicks === 4 &&
-    scene.mobilePlaneAtlas?.lightingSampleDelayMilliseconds === 120 &&
-    scene.mobilePlaneAtlas?.lightingSampleCount === 360 &&
-    scene.mobilePlaneAtlas?.addressUpdateCount === 15_750 &&
-    scene.mobilePlaneAtlas?.redundantAddressWriteCountRemoved === 45_774 &&
-    scene.mobilePlaneAtlas?.addressWriteCountPerState?.zeroWriteStateCount === 811 &&
+    scene.mobilePlaneAtlas?.slotCount === 75 &&
+    scene.mobilePlaneAtlas?.lightingSampleIntervalTicks === 1_440 &&
+    scene.mobilePlaneAtlas?.lightingSampleDelayMilliseconds === 43_200 &&
+    scene.mobilePlaneAtlas?.lightingSampleCount === 1 &&
+    scene.mobilePlaneAtlas?.addressUpdateCount === 84 &&
+    scene.mobilePlaneAtlas?.redundantAddressWriteCountRemoved === 61_440 &&
+    scene.mobilePlaneAtlas?.addressWriteCountPerState?.zeroWriteStateCount === 1_401 &&
     scene.mobilePlaneAtlas?.sourceFaceCoverageExact === true,
   "prepared mobile atlas identity");
 

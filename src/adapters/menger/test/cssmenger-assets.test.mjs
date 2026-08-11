@@ -72,10 +72,12 @@ test("generated manifest and scene expose one source-backed default path", async
   assert.equal(scene.mobilePlaneAtlas.redundantAddressWriteCountRemoved, 61_440);
   assert.deepEqual(scene.mobilePlaneAtlas.addressWriteCountPerState, {
     minimum: 0,
-    maximum: 43,
-    average: 84 / 1_440,
-    zeroWriteStateCount: 1_401,
+    maximum: 0,
+    average: 0,
+    zeroWriteStateCount: 1_440,
   });
+  assert.equal(scene.mobilePlaneAtlas.addressInitialization, "all-leaf-addresses-before-playback");
+  assert.equal(scene.mobilePlaneAtlas.addressInitializationWriteCount, 84);
   assert.equal(scene.metrics.atlasPageCount, 2);
   assert.equal(scene.playback.frontFacingSchedule.schema, "cssmenger-prepared-front-facing-leaf-schedule@1");
   assert.equal(scene.playback.frontFacingSchedule.offsets.length, 1440 * 3 + 1);

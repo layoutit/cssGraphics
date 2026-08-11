@@ -120,8 +120,12 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     scene.mobilePlaneAtlas?.lightingSampleDelayMilliseconds === 43_200 &&
     scene.mobilePlaneAtlas?.lightingSampleCount === 1 &&
     scene.mobilePlaneAtlas?.addressUpdateCount === 84 &&
+    scene.mobilePlaneAtlas?.addressInitializationWriteCount === 84 &&
     scene.mobilePlaneAtlas?.redundantAddressWriteCountRemoved === 61_440 &&
-    scene.mobilePlaneAtlas?.addressWriteCountPerState?.zeroWriteStateCount === 1_401 &&
+    scene.mobilePlaneAtlas?.addressWriteCountPerState?.maximum === 0 &&
+    scene.mobilePlaneAtlas?.addressWriteCountPerState?.average === 0 &&
+    scene.mobilePlaneAtlas?.addressWriteCountPerState?.zeroWriteStateCount === 1_440 &&
+    scene.mobilePlaneAtlas?.addressInitialization === "all-leaf-addresses-before-playback" &&
     scene.mobilePlaneAtlas?.sourceFaceCoverageExact === true,
   "prepared mobile atlas identity");
 

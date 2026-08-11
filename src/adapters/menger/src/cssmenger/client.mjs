@@ -2,6 +2,7 @@ import { installCssmengerDebugApi } from "./debugApi.mjs";
 import { loadPreparedManifest, loadPreparedScene } from "./manifestClient.mjs";
 import { createCssmengerPreparedPlayer } from "./preparedPlayback.mjs";
 import { mountPreparedPolycssSnapshot } from "./polycssScene.mjs";
+import { selectCssmengerPlaneAtlasProfile } from "./profileSelection.mjs";
 import { loadPreparedMengerPlaneAtlasAsset } from "./preparedPlaneAtlasAsset.mjs";
 import { createRouteState } from "./routeState.mjs";
 
@@ -19,7 +20,7 @@ export function mountCssmengerClient(host) {
     state.route = route;
     state.manifest = await loadPreparedManifest(route);
     const { entry, sceneData, snapshotHtml } = await loadPreparedScene(state.manifest, route);
-    const planeAtlasProfile = matchMedia("(max-width: 430px)").matches ? "mobile" : "desktop";
+    const planeAtlasProfile = selectCssmengerPlaneAtlasProfile();
     const planeAtlas = planeAtlasProfile === "mobile" ? sceneData.mobilePlaneAtlas : sceneData.planeAtlas;
     const planeAtlasAsset = await loadPreparedMengerPlaneAtlasAsset(planeAtlas);
     state.sceneData = sceneData;

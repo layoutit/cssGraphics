@@ -219,6 +219,12 @@ try {
       { timeout: 30_000 });
     const mobileEvidence = await mobilePage.evaluate(async () => {
       const debug = globalThis.__cssMengerDebug;
+      debug.pause();
+      const frozenLightingAddresses = [0, 1, 186, 720, 1_439, 0].map((stateIndex) => {
+        debug.seek(stateIndex);
+        return [...document.querySelectorAll(".polycss-camera > .polycss-scene > b")]
+          .map((leaf) => leaf.style.backgroundPosition);
+      });
       debug.seek(720);
       const frozenLightingStep = debug.profileStep();
       debug.seek(720);
@@ -237,6 +243,9 @@ try {
         selectedAssetBytes: debug.stats().preparedPlaneAtlasAssetBytes,
         selectedLightingIntervalTicks: debug.stats().preparedColorPublicationIntervalTicks,
         selectedLightingAddressUpdateCount: debug.stats().preparedLightingAddressUpdateCount,
+        frozenLightingAddressesStable: frozenLightingAddresses.every((addresses) =>
+          addresses.length === 84 && addresses.every(Boolean) &&
+          addresses.every((address, index) => address === frozenLightingAddresses[0][index])),
         frozenLightingStep,
         desktopUrl: debug.scene.planeAtlas.assetUrl,
         mobileUrl: atlas.assetUrl,
@@ -257,12 +266,51 @@ try {
         mobileEvidence.selectedDecodedBytes !== 218_700 || mobileEvidence.selectedAssetBytes !== 15_028 ||
         mobileEvidence.selectedLightingIntervalTicks !== 1_440 ||
         mobileEvidence.selectedLightingAddressUpdateCount !== 84 ||
+        !mobileEvidence.frozenLightingAddressesStable ||
         mobileEvidence.frozenLightingStep?.preparedLightingAddressWriteCount !== 0 || mobileEvidence.tick !== 720 ||
         !mobileEvidence.backgroundImage.includes(mobileEvidence.mobileUrl) ||
         mobileEvidence.backgroundSize !== mobileEvidence.expectedBackgroundSize ||
         requestedDesktopAtlases.length !== 0 || new Set(requestedMobileAtlases).size !== 1) {
       throw new Error(`cssMenger responsive mobile atlas failed: ${JSON.stringify({
         mobileEvidence, requestedDesktopAtlases, requestedMobileAtlases, mobileErrors,
+      })}`);
+    }
+    const widePhoneContext = await browser.newContext({
+      viewport: { width: 844, height: 390 },
+      isMobile: true,
+      hasTouch: true,
+      userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148",
+    });
+    const widePhonePage = await widePhoneContext.newPage();
+    const widePhoneRequests = [];
+    const widePhoneErrors = [];
+    widePhonePage.on("request", (request) => widePhoneRequests.push(new URL(request.url()).pathname));
+    widePhonePage.on("pageerror", (error) => widePhoneErrors.push(error.stack || error.message));
+    widePhonePage.on("console", (message) => {
+      if (message.type() === "error") widePhoneErrors.push(message.text());
+    });
+    await widePhonePage.goto(route, { waitUntil: "networkidle" });
+    await widePhonePage.waitForFunction(() =>
+      document.body.classList.contains("ready") || document.body.classList.contains("error"), null,
+    { timeout: 30_000 });
+    const widePhoneEvidence = await widePhonePage.evaluate(() => ({
+      profile: globalThis.__cssMengerDebug.stats().preparedPlaneAtlasProfile,
+      assetBytes: globalThis.__cssMengerDebug.stats().preparedPlaneAtlasAssetBytes,
+      colorMode: globalThis.__cssMengerDebug.stats().preparedColorPublicationMode,
+      viewportWidth: innerWidth,
+      errors: globalThis.__cssMengerDebug.errors(),
+    }));
+    await widePhoneContext.close();
+    const widePhoneDesktopAtlases = widePhoneRequests.filter((path) =>
+      /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif$/u.test(path));
+    const widePhoneMobileAtlases = widePhoneRequests.filter((path) =>
+      /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.avif$/u.test(path));
+    if (widePhoneErrors.length || widePhoneEvidence.errors.length || widePhoneEvidence.viewportWidth <= 430 ||
+        widePhoneEvidence.profile !== "mobile" || widePhoneEvidence.assetBytes !== 15_028 ||
+        widePhoneEvidence.colorMode !== "prepared-frozen-lighting-all-leaf-initialization-only" ||
+        widePhoneDesktopAtlases.length !== 0 || new Set(widePhoneMobileAtlases).size !== 1) {
+      throw new Error(`cssMenger wide-phone profile selection failed: ${JSON.stringify({
+        widePhoneEvidence, widePhoneDesktopAtlases, widePhoneMobileAtlases, widePhoneErrors,
       })}`);
     }
     const result = {
@@ -276,6 +324,9 @@ try {
       mobileEvidence,
       requestedDesktopAtlases,
       requestedMobileAtlases,
+      widePhoneEvidence,
+      widePhoneDesktopAtlases,
+      widePhoneMobileAtlases,
       atlasRequests,
       pageRequests,
       pageErrors,

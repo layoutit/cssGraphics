@@ -18,6 +18,7 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
   const readNow = overrides.readNow ?? globalThis.performance.now.bind(globalThis.performance);
   const frameMilliseconds = playback.sourceFrameDelayMilliseconds;
   const addressSchedule = decodePreparedAddressSchedule(planeAtlas);
+  const frozenLighting = planeAtlas.lightingSampleCount === 1;
   const schedulerLeadMilliseconds = Math.min(4, frameMilliseconds / 4);
   let paused = true;
   let tick = playback.initial.stateIndex;
@@ -44,7 +45,7 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
     const startedAt = profile ? readNow() : 0;
     publicationRoot.style.transform = playback.transforms[stateIndex];
     const transformPublishedAt = profile ? readNow() : 0;
-    const targetCount = publishAddressRange(
+    const targetCount = frozenLighting ? 0 : publishAddressRange(
       addressSchedule.offsets[stateIndex],
       addressSchedule.offsets[stateIndex + 1],
     );
@@ -63,6 +64,11 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
   }
 
   function publishAbsoluteState(stateIndex) {
+    if (frozenLighting) {
+      publicationRoot.style.transform = playback.transforms[stateIndex];
+      tick = stateIndex;
+      return tick;
+    }
     const slotsByLeaf = new Int32Array(leaves.length).fill(-1);
     const end = addressSchedule.offsets[stateIndex + 1];
     for (let cursor = 0; cursor < end; cursor += 1) {
@@ -114,7 +120,12 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
     scheduleNextDraw();
   }
 
-  publishSequentialState(tick);
+  if (frozenLighting) {
+    publicationRoot.style.transform = playback.transforms[tick];
+    publishAddressRange(0, addressSchedule.slotIndices.length);
+  } else {
+    publishSequentialState(tick);
+  }
   return Object.freeze({
     get tick() { return tick; },
     get paused() { return paused; },
@@ -163,7 +174,9 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
         preparedSchedulerCatchUpMode: "one-adjacent-prepared-state-no-skip",
         preparedColorPublicationIntervalTicks: planeAtlas.lightingSampleIntervalTicks,
         preparedColorPublicationDelayMilliseconds: planeAtlas.lightingSampleDelayMilliseconds,
-        preparedColorPublicationMode: "prepared-held-lighting-sample-plus-per-state-front-face-address",
+        preparedColorPublicationMode: frozenLighting
+          ? "prepared-frozen-lighting-all-leaf-initialization-only"
+          : "prepared-held-lighting-sample-plus-per-state-front-face-address",
         preparedLightingAddressPublicationIntervalTicks: 1,
         preparedLightingAddressPublicationDelayMilliseconds: frameMilliseconds,
         preparedLightingAtlasSlotCount: planeAtlas.slotCount,
@@ -178,6 +191,9 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
           ...planeAtlas.addressWriteCountPerState,
         }),
         preparedLightingAddressUpdateCount: planeAtlas.addressUpdateCount,
+        preparedLightingInitializationAddressWriteCount: frozenLighting
+          ? planeAtlas.addressUpdateCount
+          : 0,
         preparedRedundantLightingAddressWriteCountRemoved: planeAtlas.redundantAddressWriteCountRemoved,
         runtimeLightingAddressComparisonCount: 0,
         runtimeHotPathDomStyleReadCount: 0,
@@ -283,6 +299,13 @@ function decodePreparedAddressSchedule(planeAtlas) {
   }
   if (seen.some((selected) => selected === 0)) {
     throw new Error("Prepared cssMenger lighting atlas contains an unreachable slot");
+  }
+  if (planeAtlas.lightingSampleCount === 1) {
+    const seenLeaves = new Uint8Array(planeAtlas.leafCount);
+    for (const leafIndex of leafIndices) seenLeaves[leafIndex] += 1;
+    if (leafIndices.length !== planeAtlas.leafCount || seenLeaves.some((count) => count !== 1)) {
+      throw new Error("Frozen cssMenger lighting must initialize every retained leaf exactly once");
+    }
   }
   return Object.freeze({ offsets, leafIndices, slotIndices });
 }

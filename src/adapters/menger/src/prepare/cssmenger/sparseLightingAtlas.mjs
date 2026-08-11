@@ -118,6 +118,7 @@ export async function buildPreparedMengerSparseLightingAtlas({
     frontFacingSchedule,
     slotByScheduleCursor,
     leafCount: geometry.bundles.length,
+    initializeAllLeafAddresses: Math.ceil(playback.stateCount / lightingSampleIntervalTicks) === 1,
   });
   const addressStateOffsetBytes = u16leBytes(addressSchedule.offsets);
   const addressLeafIndexBytes = Buffer.from(addressSchedule.leafIndices);
@@ -166,6 +167,10 @@ export async function buildPreparedMengerSparseLightingAtlas({
     addressSlotIndexByteLength: addressSlotIndexBytes.length,
     addressSlotIndicesBase64: addressSlotIndexBytes.toString("base64"),
     addressUpdateCount: addressSchedule.updateCount,
+    addressInitializationWriteCount: addressSchedule.initializationWriteCount,
+    addressInitialization: addressSchedule.initializeAllLeafAddresses
+      ? "all-leaf-addresses-before-playback"
+      : "per-state-front-facing-delta",
     addressWriteCountPerState: Object.freeze({
       minimum: addressSchedule.minimumWriteCountPerState,
       maximum: addressSchedule.maximumWriteCountPerState,
@@ -213,7 +218,13 @@ export function preparedMengerSparseLightingAtlasBytes(contract) {
   return preparedBytes.get(contract) ?? null;
 }
 
-function prepareExactDeltaAddressSchedule({ playback, frontFacingSchedule, slotByScheduleCursor, leafCount }) {
+function prepareExactDeltaAddressSchedule({
+  playback,
+  frontFacingSchedule,
+  slotByScheduleCursor,
+  leafCount,
+  initializeAllLeafAddresses,
+}) {
   if (playback.initial.stateIndex !== 0 || leafCount > 255) {
     throw new Error("Prepared cssMenger delta address schedule requires state zero and u8 leaf ids");
   }
@@ -222,6 +233,25 @@ function prepareExactDeltaAddressSchedule({ playback, frontFacingSchedule, slotB
   const leafIndices = [];
   const slotIndices = [];
   const writeCounts = [];
+  if (initializeAllLeafAddresses) {
+    const initialSlots = new Int32Array(leafCount).fill(-1);
+    for (let cursor = 0; cursor < slotByScheduleCursor.length; cursor += 1) {
+      const leafIndex = frontFacingSchedule.leafIndices[cursor];
+      const slotIndex = slotByScheduleCursor[cursor];
+      if (initialSlots[leafIndex] >= 0 && initialSlots[leafIndex] !== slotIndex) {
+        throw new Error("Frozen cssMenger lighting contains more than one prepared address per leaf");
+      }
+      initialSlots[leafIndex] = slotIndex;
+    }
+    if (initialSlots.some((slotIndex) => slotIndex < 0)) {
+      throw new Error("Frozen cssMenger lighting does not cover every retained leaf");
+    }
+    for (let leafIndex = 0; leafIndex < leafCount; leafIndex += 1) {
+      currentSlots[leafIndex] = initialSlots[leafIndex];
+      leafIndices.push(leafIndex);
+      slotIndices.push(initialSlots[leafIndex]);
+    }
+  }
   for (let stateIndex = 0; stateIndex < playback.stateCount; stateIndex += 1) {
     const stateStart = leafIndices.length;
     for (let axis = 0; axis < frontFacingSchedule.axisCount; axis += 1) {
@@ -242,6 +272,8 @@ function prepareExactDeltaAddressSchedule({ playback, frontFacingSchedule, slotB
     offsets.push(leafIndices.length);
   }
   const updateCount = leafIndices.length;
+  const initializationWriteCount = initializeAllLeafAddresses ? leafCount : 0;
+  const scheduledUpdateCount = updateCount - initializationWriteCount;
   if (updateCount > 65_535 || offsets.at(-1) !== updateCount) {
     throw new Error("Prepared cssMenger delta address schedule exceeds its u16 contract");
   }
@@ -254,8 +286,10 @@ function prepareExactDeltaAddressSchedule({ playback, frontFacingSchedule, slotB
     updateCount,
     minimumWriteCountPerState,
     maximumWriteCountPerState,
-    averageWriteCountPerState: updateCount / playback.stateCount,
+    averageWriteCountPerState: scheduledUpdateCount / playback.stateCount,
     zeroWriteStateCount: writeCounts.reduce((count, value) => count + Number(value === 0), 0),
+    initializeAllLeafAddresses,
+    initializationWriteCount,
   });
 }
 

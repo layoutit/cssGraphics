@@ -139,6 +139,76 @@ test("prepared playback wraps forever at the prepared sequence boundary", () => 
   assert.equal(timelineStateIndexForTick(999, playback), 3);
 });
 
+test("frozen mobile lighting initializes every leaf once and never publishes lighting again", () => {
+  const originalHTMLElement = globalThis.HTMLElement;
+  let transformWrites = 0;
+  let lightingAddressWrites = 0;
+  class FakeHTMLElement {
+    constructor() {
+      let transform = "";
+      let backgroundPosition = "";
+      this.style = {};
+      Object.defineProperties(this.style, {
+        transform: {
+          get: () => transform,
+          set: (value) => { transform = value; transformWrites += 1; },
+        },
+        backgroundPosition: {
+          get: () => backgroundPosition,
+          set: (value) => { backgroundPosition = value; lightingAddressWrites += 1; },
+        },
+      });
+    }
+  }
+  globalThis.HTMLElement = FakeHTMLElement;
+  try {
+    const sourcePlayback = buildPreparedMengerPlayback({ stateCount: 5 });
+    const playback = {
+      ...sourcePlayback,
+      frontFacingSchedule: {
+        schema: "cssmenger-prepared-front-facing-leaf-schedule@1",
+        encoding: "state-axis-offsets-plus-global-leaf-indices",
+        stateCount: sourcePlayback.stateCount,
+        axisCount: 3,
+        offsets: Array.from({ length: sourcePlayback.stateCount * 3 + 1 }, (_, index) => index * 14),
+        leafIndices: Array.from({ length: sourcePlayback.stateCount }, () =>
+          Array.from({ length: 3 }, (_, axis) =>
+            Array.from({ length: 14 }, (_, index) => axis * 28 + index))).flat(2),
+        minimumSelectedLeafCountPerState: 42,
+        maximumSelectedLeafCountPerState: 42,
+        averageSelectedLeafCountPerState: 42,
+        frontFaceDilationTicks: 1,
+      },
+    };
+    const leaves = Array.from({ length: 84 }, () => new FakeHTMLElement());
+    const player = createCssmengerPreparedPlayer({
+      playback,
+      planeAtlas: fakeFrozenMobileAtlas(playback.frontFacingSchedule),
+      publicationRoot: new FakeHTMLElement(),
+      leaves,
+      requestFrame: () => 1,
+      cancelFrame: () => {},
+      requestDelay: () => 1,
+      cancelDelay: () => {},
+    });
+    const initialAddresses = leaves.map((leaf) => leaf.style.backgroundPosition);
+    assert.equal(transformWrites, 1);
+    assert.equal(lightingAddressWrites, 84);
+    assert.equal(initialAddresses.every(Boolean), true);
+    player.step(4);
+    player.step();
+    player.setTick(3);
+    assert.equal(transformWrites, 7);
+    assert.equal(lightingAddressWrites, 84);
+    assert.deepEqual(leaves.map((leaf) => leaf.style.backgroundPosition), initialAddresses);
+    assert.equal(player.stats().preparedColorPublicationMode,
+      "prepared-frozen-lighting-all-leaf-initialization-only");
+  } finally {
+    if (originalHTMLElement === undefined) delete globalThis.HTMLElement;
+    else globalThis.HTMLElement = originalHTMLElement;
+  }
+});
+
 test("late playback still advances one adjacent prepared state per scheduled draw", () => {
   const originalHTMLElement = globalThis.HTMLElement;
   let requestedFrame = null;
@@ -269,6 +339,47 @@ function fakeSparseAtlas(frontFacingSchedule) {
       zeroWriteStateCount: 0,
     },
     redundantAddressWriteCountRemoved: 0,
+  };
+}
+
+function fakeFrozenMobileAtlas(frontFacingSchedule) {
+  const sourceStateCount = frontFacingSchedule.stateCount;
+  const stateOffsets = [0, ...Array.from({ length: sourceStateCount }, () => 84)];
+  const stateOffsetBytes = u16leBytes(stateOffsets);
+  const leafIndexBytes = Buffer.from(Array.from({ length: 84 }, (_, index) => index));
+  const slotIndexBytes = u16leBytes(Array.from({ length: 84 }, (_, index) => index));
+  return {
+    schema: "cssmenger-prepared-sparse-leaf-lighting-atlas@1",
+    leafCount: 84,
+    slotCount: 84,
+    visibleLeafFieldCount: frontFacingSchedule.leafIndices.length,
+    sourceStateCount,
+    lightingSampleIntervalTicks: 1_440,
+    lightingSampleDelayMilliseconds: 43_200,
+    lightingSampleCount: 1,
+    transformPublicationIntervalTicks: 1,
+    transformPublicationDelayMilliseconds: 30,
+    columns: 84,
+    slotWidth: 27,
+    slotHeight: 27,
+    gutterPixels: 0,
+    addressScheduleSchema: "cssmenger-prepared-exact-delta-lighting-address-schedule@1",
+    addressEncoding:
+      "base64-u16le-state-offsets-plus-u8-leaf-indices-plus-u16le-exact-deduplicated-slot-indices",
+    addressStateOffsetByteLength: stateOffsetBytes.length,
+    addressStateOffsetsBase64: stateOffsetBytes.toString("base64"),
+    addressLeafIndexByteLength: leafIndexBytes.length,
+    addressLeafIndicesBase64: leafIndexBytes.toString("base64"),
+    addressSlotIndexByteLength: slotIndexBytes.length,
+    addressSlotIndicesBase64: slotIndexBytes.toString("base64"),
+    addressUpdateCount: 84,
+    addressWriteCountPerState: {
+      minimum: 0,
+      maximum: 84,
+      average: 84 / sourceStateCount,
+      zeroWriteStateCount: sourceStateCount - 1,
+    },
+    redundantAddressWriteCountRemoved: frontFacingSchedule.leafIndices.length - 84,
   };
 }
 

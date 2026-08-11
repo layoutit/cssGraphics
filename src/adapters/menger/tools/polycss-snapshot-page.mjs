@@ -119,19 +119,24 @@ function sanitizeSnapshot(html, sceneData) {
   scene.style.transform = modelTransform;
   const fragment = parsed.createDocumentFragment();
   const flattenedLeaves = [];
+  const exactLeafTransforms = [];
   const axisLeafCounts = [];
+  const halfExtent = maximumPreparedTranslation(axes.flatMap((axis) =>
+    [...axis.querySelectorAll(":scope > b")].map((leaf) => leaf.style.transform)));
   for (let axis = 0; axis < axes.length; axis += 1) {
     const axisRoot = axes[axis];
     const axisLeaves = [...axisRoot.querySelectorAll(":scope > b")];
     axisLeafCounts.push(axisLeaves.length);
     for (const leaf of axisLeaves) {
       const flattened = parsed.createElement("b");
-      flattened.style.transform = leaf.style.transform;
+      const exactTransform = snapMatrix3dToPreparedGrid(leaf.style.transform, halfExtent, planeAtlas.tileWidth);
+      flattened.style.transform = exactTransform;
       if (!flattened.style.transform) {
         throw new Error("Exported cssMenger leaf is missing prepared placement");
       }
       fragment.append(flattened);
       flattenedLeaves.push(flattened);
+      exactLeafTransforms.push(exactTransform);
     }
   }
   model.remove();
@@ -154,9 +159,24 @@ function sanitizeSnapshot(html, sceneData) {
   }
   for (const element of parsed.querySelectorAll("script, canvas, svg")) element.remove();
   return Object.freeze({
-    html: `<!doctype html>${parsed.documentElement.outerHTML}\n`,
+    html: restoreExactInlineTransforms(
+      `<!doctype html>${parsed.documentElement.outerHTML}\n`,
+      exactLeafTransforms,
+    ),
     frontFacingSchedule,
   });
+}
+
+function restoreExactInlineTransforms(html, transforms) {
+  let index = 0;
+  const restored = html.replace(
+    /(<b style="transform: )matrix3d\([^)]+\)(;")/gu,
+    (_match, prefix, suffix) => `${prefix}${transforms[index++]}${suffix}`,
+  );
+  if (index !== transforms.length) {
+    throw new Error("Prepared cssMenger exact inline transform census drifted");
+  }
+  return restored;
 }
 
 function preparedViewLonghands(viewTransform) {
@@ -256,6 +276,7 @@ function applyPreparedPlaneAtlas(modelRoot, atlas) {
   }
   const leaves = [...modelRoot.querySelectorAll("[data-cssmenger-plane-leaf]")];
   if (leaves.length !== atlas.leafCount) throw new Error("Prepared cssMenger plane atlas leaf census drifted");
+  const bindings = [];
   for (const leaf of leaves) {
     const leafIndex = Number(leaf.getAttribute("data-cssmenger-plane-leaf"));
     const patternIndex = atlas.leafPatternIndices[leafIndex];
@@ -269,11 +290,12 @@ function applyPreparedPlaneAtlas(modelRoot, atlas) {
     if (!(sourceWidth > 0) || !(sourceHeight > 0)) {
       throw new Error(`Prepared cssMenger plane atlas leaf ${leafIndex} has no source extent`);
     }
-    leaf.style.transform = resizeMatrix3d(
+    const resizedTransform = resizeMatrix3d(
       leaf.style.transform,
       sourceWidth / row[2],
       sourceHeight / row[3],
     );
+    bindings.push({ leaf, resizedTransform });
     leaf.style.width = `${row[2]}px`;
     leaf.style.height = `${row[3]}px`;
     leaf.style.color = "transparent";
@@ -284,6 +306,10 @@ function applyPreparedPlaneAtlas(modelRoot, atlas) {
     leaf.style.backgroundPositionY = "var(--axis-atlas-y)";
     leaf.style.backgroundSize = atlas.backgroundSize;
     leaf.style.imageRendering = "pixelated";
+  }
+  const halfExtent = maximumPreparedTranslation(bindings.map(({ resizedTransform }) => resizedTransform));
+  for (const { leaf, resizedTransform } of bindings) {
+    leaf.style.transform = snapMatrix3dToPreparedGrid(resizedTransform, halfExtent, atlas.tileWidth);
   }
 }
 
@@ -301,15 +327,42 @@ async function preloadPreparedPlaneAtlas(atlas) {
 }
 
 function resizeMatrix3d(transform, scaleX, scaleY) {
+  const values = matrix3dValues(transform);
+  for (let index = 0; index < 4; index += 1) values[index] *= scaleX;
+  for (let index = 4; index < 8; index += 1) values[index] *= scaleY;
+  return `matrix3d(${values.map(number).join(", ")})`;
+}
+
+function maximumPreparedTranslation(transforms) {
+  const maximum = Math.max(...transforms.flatMap((transform) =>
+    matrix3dValues(transform).slice(12, 15).map(Math.abs)));
+  if (!(maximum > 0)) throw new Error("Prepared cssMenger plane grid has no extent");
+  return maximum;
+}
+
+function snapMatrix3dToPreparedGrid(transform, halfExtent, tileWidth) {
+  if (!Number.isSafeInteger(tileWidth) || tileWidth < 1) {
+    throw new Error("Prepared cssMenger plane grid width is invalid");
+  }
+  const values = matrix3dValues(transform);
+  const cellExtent = halfExtent * 2 / tileWidth;
+  for (let index = 0; index < 8; index += 1) {
+    if (Math.abs(values[index]) > 1e-6) values[index] = Math.sign(values[index]) * cellExtent;
+  }
+  for (let index = 12; index < 15; index += 1) {
+    values[index] = -halfExtent + Math.round((values[index] + halfExtent) / cellExtent) * cellExtent;
+  }
+  return `matrix3d(${values.map(number).join(", ")})`;
+}
+
+function matrix3dValues(transform) {
   const match = /^matrix3d\(([^)]+)\)$/u.exec(transform);
   if (!match) throw new Error(`Prepared cssMenger leaf transform is not matrix3d: ${transform}`);
   const values = match[1].split(",").map((value) => Number(value.trim()));
   if (values.length !== 16 || values.some((value) => !Number.isFinite(value))) {
     throw new Error("Prepared cssMenger leaf matrix is invalid");
   }
-  for (let index = 0; index < 4; index += 1) values[index] *= scaleX;
-  for (let index = 4; index < 8; index += 1) values[index] *= scaleY;
-  return `matrix3d(${values.map(number).join(", ")})`;
+  return values;
 }
 
 function number(value) {

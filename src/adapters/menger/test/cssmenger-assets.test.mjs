@@ -98,6 +98,9 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
   assert.equal(scene.renderer.runtimeGeometryPayload, false);
   assert.equal(scene.renderer.textureBackend, "atlas");
   assert.equal(scene.renderer.textureLeafSizing, "raster");
+  assert.equal(scene.renderer.preparedPlaneGridSnap, "exact-source-cell-boundary-matrix3d");
+  assert.equal(scene.renderer.transformPresentation,
+    "display-refresh-css-linear-interpolation-between-prepared-30ms-states");
   assert.equal(scene.textureLeafSizing, "raster");
   assert.equal(scene.renderer.runtimeDomGrowth, false);
   assert.equal(scene.renderer.backfacePolicy, "prepared-closed-opaque-surface-cull");
@@ -121,6 +124,9 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
   assert.equal(mobileScene.mobilePlaneAtlas.addressWriteCountPerState.maximum, 18);
   assert.equal(mobileScene.mobilePlaneAtlas.addressInitializationWriteCount, 0);
   assert.equal(mobileScene.renderer.runtimeGeometryPayload, false);
+  assert.equal(mobileScene.renderer.preparedPlaneGridSnap, "exact-source-cell-boundary-matrix3d");
+  assert.equal(mobileScene.renderer.transformPresentation,
+    "display-refresh-css-linear-interpolation-between-prepared-30ms-states");
   assert.doesNotMatch(JSON.stringify(mobileScene), /\/(?:Users|home)\//u);
 });
 
@@ -159,6 +165,7 @@ test("mobile snapshot is the reduced retained depth-2 graph", async () => {
   assert.equal((html.match(/<div(?:\s|>)/gu) ?? []).length, 2);
   assert.equal((html.match(/<b style="transform: matrix3d\(/gu) ?? []).length, 30);
   assert.match(html, /--cssmenger-tile-width:9px;--cssmenger-tile-height:9px/u);
+  assert.match(html, /matrix3d\(36\.666666667,/u);
   assert.doesNotMatch(html, /cssmenger-(?:model|axis)|!important|\sdata-[\w-]+=/u);
   assert.doesNotMatch(html, /<script\b|<canvas\b|<svg\b/iu);
 });
@@ -168,6 +175,8 @@ test("product runtime CSS stays on the fast browser path", async () => {
   const shellGradient = "linear-gradient(180deg, #0b1119 0%, #000 100%)";
   assert.equal(css.split(shellGradient).length - 1, 2);
   assert.doesNotMatch(css, /!important/iu);
+  assert.match(css, /body > \.polycss-camera > \.polycss-scene\s*\{[^}]*transition:\s*transform 30ms linear;/su);
+  assert.match(css, /body > \.polycss-camera > \.polycss-scene\s*\{[^}]*will-change:\s*transform;/su);
   assert.match(css, /body > \.polycss-camera > \.polycss-scene > b\s*\{/u);
   assert.doesNotMatch(css, /background-image:\s*var\(--a\)/u);
   assert.match(css, /body:not\(\.ready\):not\(\.error\)::after/u);

@@ -57,6 +57,8 @@ export async function buildCssmengerFirstSliceScene({ dataSource, sceneId = "dep
       textureLeafSizing: "raster",
       stableDom: true,
       merge: "one-prepared-alpha-atlas-quad-per-directional-plane",
+      preparedPlaneGridSnap: "exact-source-cell-boundary-matrix3d",
+      transformPresentation: "display-refresh-css-linear-interpolation-between-prepared-30ms-states",
       backfacePolicy: "prepared-closed-opaque-surface-cull",
       runtimeGeometryConstruction: false,
       runtimeRecursion: false,

@@ -284,7 +284,7 @@ try {
         cssOpacityEvidence.stats.preparedColorPublicationMode !==
           "prepared-palette-base-plus-cadence-batched-black-alpha-shadow-atlas" ||
         cssOpacityEvidence.stats.preparedCssOpacityWriteCountPerScheduledTick !== 0 ||
-        cssOpacityEvidence.stats.preparedLightingAddressPublicationIntervalTicks !== 2 ||
+        cssOpacityEvidence.stats.preparedLightingAddressPublicationIntervalTicks !== 1 ||
         cssOpacityEvidence.stats.preparedLightingAtlasAssetCount !== 2 ||
         cssOpacityEvidence.stats.preparedFlatSceneLeafLightingSeparation !== true ||
         cssOpacityEvidence.stats.preparedLoopPresentationMode !==

@@ -16,6 +16,7 @@ const PALETTE_ROLES = Object.freeze({
     stateCount: 128,
     assetPrefix: "planes-opacity-base",
     technique: "one-alpha-color-base-atlas-quad-per-directional-plane",
+    rgbNormalization: "divide-by-maximum-rgb-channel",
   }),
 });
 
@@ -73,7 +74,7 @@ export function buildPreparedMengerPlaneAtlas({ geometry, palette, paletteRole =
     colorType: 6,
   });
   for (let paletteIndex = 0; paletteIndex < palette.length; paletteIndex += 1) {
-    const color = palette[paletteIndex].map((value) => Math.max(0, Math.min(255, Math.round(value * 255))));
+    const color = preparedPaletteColor(palette[paletteIndex], role);
     for (const pattern of patterns) {
       const contentX = pattern.index * slotWidth + GUTTER;
       const contentY = paletteIndex * slotHeight + GUTTER;
@@ -92,6 +93,7 @@ export function buildPreparedMengerPlaneAtlas({ geometry, palette, paletteRole =
     schema: "cssmenger-prepared-coplanar-plane-atlas@1",
     technique: role.technique,
     paletteRole,
+    rgbNormalization: role.rgbNormalization ?? "none",
     assetUrl: `/cssmenger/assets/${role.assetPrefix}-${sha256}.png`,
     assetSha256: sha256,
     encoding: "PNG-RGBA8",
@@ -127,6 +129,17 @@ export function buildPreparedMengerPlaneAtlas({ geometry, palette, paletteRole =
   });
   preparedBytes.set(contract, bytes);
   return contract;
+}
+
+function preparedPaletteColor(material, role) {
+  const maximumRgb = Math.max(...material.slice(0, 3));
+  if (role.rgbNormalization && !(maximumRgb > 0)) {
+    throw new Error("Prepared cssMenger CSS-opacity palette contains a black material");
+  }
+  return material.map((value, channel) => {
+    const normalized = channel < 3 && role.rgbNormalization ? value / maximumRgb : value;
+    return Math.max(0, Math.min(255, Math.round(normalized * 255)));
+  });
 }
 
 export function preparedMengerPlaneAtlasBytes(contract) {

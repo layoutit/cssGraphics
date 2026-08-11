@@ -9,6 +9,7 @@ import {
 const SOURCE_RGB_GUTTER = 0;
 const CSS_BLACK_ALPHA_GUTTER = 1;
 export const DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS = 2;
+export const CSS_OPACITY_LIGHTING_SAMPLE_INTERVAL_TICKS = 1;
 export const MOBILE_LIGHTING_SAMPLE_INTERVAL_TICKS = 1_440;
 const MAXIMUM_TEXTURE_DIMENSION = 16_384;
 const preparedBytes = new WeakMap();
@@ -29,7 +30,11 @@ export async function buildPreparedMengerSparseLightingAtlas({
       frontFacingSchedule.stateCount !== playback.stateCount ||
       frontFacingSchedule.offsets?.length !== playback.stateCount * 3 + 1 ||
       frontFacingSchedule.offsets.at(-1) !== frontFacingSchedule.leafIndices?.length ||
-      ![DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS, MOBILE_LIGHTING_SAMPLE_INTERVAL_TICKS]
+      ![
+        CSS_OPACITY_LIGHTING_SAMPLE_INTERVAL_TICKS,
+        DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS,
+        MOBILE_LIGHTING_SAMPLE_INTERVAL_TICKS,
+      ]
         .includes(lightingSampleIntervalTicks) ||
       !["desktop", "mobile"].includes(profile) ||
       !["source-rgb", "css-black-alpha"].includes(presentation)) {

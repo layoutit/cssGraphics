@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import test from "node:test";
+import { PNG } from "pngjs";
 import { loadPreparedMengerPlaneAtlasAsset } from "../src/cssmenger/preparedPlaneAtlasAsset.mjs";
 import { generatedPublicRoot } from "../src/prepare/cssmenger/paths.mjs";
 
@@ -145,6 +146,7 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
   assert.equal(scene.mobilePlaneAtlas.addressInitializationWriteCount, 84);
   assert.equal(scene.cssOpacityBaseAtlas.schema, "cssmenger-prepared-coplanar-plane-atlas@1");
   assert.equal(scene.cssOpacityBaseAtlas.paletteRole, "css-opacity-base");
+  assert.equal(scene.cssOpacityBaseAtlas.rgbNormalization, "divide-by-maximum-rgb-channel");
   assert.equal(scene.cssOpacityBaseAtlas.paletteStateCount, 128);
   assert.equal(scene.cssOpacityBaseAtlas.leafCount, 84);
   assert.equal(scene.cssOpacityBaseAtlas.decodedBytes, 3_444_736);
@@ -152,24 +154,34 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
     /^\/cssmenger\/assets\/planes-opacity-base-[a-f0-9]{64}\.png$/u);
   assert.equal(scene.cssOpacityShadowAtlas.schema, "cssmenger-prepared-sparse-leaf-lighting-atlas@1");
   assert.equal(scene.cssOpacityShadowAtlas.presentation, "css-black-alpha");
-  assert.equal(scene.cssOpacityShadowAtlas.byteLength, 2_854_502);
-  assert.equal(scene.cssOpacityShadowAtlas.decodedBytes, 94_864_800);
+  assert.equal(scene.cssOpacityShadowAtlas.byteLength, 5_619_933);
+  assert.equal(scene.cssOpacityShadowAtlas.decodedBytes, 185_935_008);
   assert.equal(scene.cssOpacityShadowAtlas.width, 16_356);
-  assert.equal(scene.cssOpacityShadowAtlas.height, 1_450);
+  assert.equal(scene.cssOpacityShadowAtlas.height, 2_842);
   assert.equal(scene.cssOpacityShadowAtlas.gutterPixels, 1);
-  assert.equal(scene.cssOpacityShadowAtlas.slotCount, 27_650);
+  assert.equal(scene.cssOpacityShadowAtlas.slotCount, 55_122);
   assert.match(scene.cssOpacityShadowAtlas.assetUrl,
     /^\/cssmenger\/assets\/lighting-shadow-grid-[a-f0-9]{64}\.avif$/u);
-  assert.equal(scene.cssOpacityShadowAtlas.lightingSampleIntervalTicks, 2);
-  assert.equal(scene.cssOpacityShadowAtlas.lightingSampleDelayMilliseconds, 60);
-  assert.equal(scene.cssOpacityShadowAtlas.lightingSampleCount, 720);
-  assert.equal(scene.cssOpacityShadowAtlas.addressPublicationIntervalTicks, 2);
-  assert.equal(scene.cssOpacityShadowAtlas.addressPublicationDelayMilliseconds, 60);
-  assert.equal(scene.cssOpacityShadowAtlas.addressedVisibleLeafFieldCount, 30_770);
-  assert.equal(scene.cssOpacityShadowAtlas.addressUpdateCount, 29_076);
+  assert.equal(scene.cssOpacityShadowAtlas.lightingSampleIntervalTicks, 1);
+  assert.equal(scene.cssOpacityShadowAtlas.lightingSampleDelayMilliseconds, 30);
+  assert.equal(scene.cssOpacityShadowAtlas.lightingSampleCount, 1_440);
+  assert.equal(scene.cssOpacityShadowAtlas.addressPublicationIntervalTicks, 1);
+  assert.equal(scene.cssOpacityShadowAtlas.addressPublicationDelayMilliseconds, 30);
+  assert.equal(scene.cssOpacityShadowAtlas.addressedVisibleLeafFieldCount, 61_524);
+  assert.equal(scene.cssOpacityShadowAtlas.addressUpdateCount, 57_200);
   assert.equal(scene.cssOpacityShadowAtlas.reverseAddressUpdateCount > 0, true);
   assert.deepEqual(scene.cssOpacityShadowAtlas.preparedAxisPaletteSourceIndices, [1, 0, 2]);
   assert.equal(scene.cssOpacityShadowAtlas.preparedPaletteColors.length, 128);
+  const opacityBaseBytes = await readFile(join(generated,
+    scene.cssOpacityBaseAtlas.assetUrl.replace(/^\/cssmenger\//u, "")));
+  const opacityBaseImage = PNG.sync.read(opacityBaseBytes);
+  for (let paletteIndex = 0; paletteIndex < scene.cssOpacityBaseAtlas.paletteStateCount; paletteIndex += 1) {
+    const contentY = paletteIndex * scene.cssOpacityBaseAtlas.slotHeight +
+      scene.cssOpacityBaseAtlas.gutterPixels;
+    const opaquePixel = firstOpaquePixelInRow(opacityBaseImage, contentY);
+    assert.ok(opaquePixel, `missing CSS-opacity base pixel for palette ${paletteIndex}`);
+    assert.equal(Math.max(...opaquePixel.slice(0, 3)), 255);
+  }
   assert.equal(scene.cssOpacityLighting, undefined);
   assert.equal(scene.metrics.atlasPageCount, 2);
   assert.equal(scene.playback.frontFacingSchedule.schema, "cssmenger-prepared-front-facing-leaf-schedule@1");
@@ -296,4 +308,12 @@ test("product index uses the css.graphics shell", async () => {
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, "utf8"));
+}
+
+function firstOpaquePixelInRow(image, y) {
+  for (let x = 0; x < image.width; x += 1) {
+    const offset = (y * image.width + x) * 4;
+    if (image.data[offset + 3] > 0) return [...image.data.subarray(offset, offset + 4)];
+  }
+  return null;
 }

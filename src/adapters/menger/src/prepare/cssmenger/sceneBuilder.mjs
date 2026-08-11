@@ -5,19 +5,23 @@ import { sourceProvenanceFor } from "./provenance.mjs";
 import { cssmengerSlicePlan, describeFirstSlice } from "./slicePlan.mjs";
 import { buildPreparedMengerPlayback } from "./sourcePlayback.mjs";
 
-const DEPTH = 3;
+const SCENE_DEPTHS = Object.freeze({
+  "depth-2": 2,
+  "depth-3": 3,
+});
 const VIEWPORT = Object.freeze({ width: 960, height: 600 });
 const SOURCE_FOV_DEGREES = 30;
 const SOURCE_EYE_Z = 30;
 const POLYCSS_SOURCE_UNIT_PIXELS = 70;
 
 export async function buildCssmengerFirstSliceScene({ dataSource, sceneId = "depth-3" } = {}) {
-  if (sceneId !== "depth-3") throw new RangeError(`Unknown prepared cssMenger scene ${sceneId}`);
+  const depth = SCENE_DEPTHS[sceneId];
+  if (!depth) throw new RangeError(`Unknown prepared cssMenger scene ${sceneId}`);
   if (!dataSource?.sourceCommit) throw new Error("cssMenger scene preparation requires verified source identity");
   const playback = buildPreparedMengerPlayback();
   const initialColorRow = playback.colorRows[playback.initial.stateIndex];
   const axisColors = initialColorRow.map((index) => playback.palette[index].material);
-  const geometry = buildMengerPreparedGeometry({ depth: DEPTH, axisColors });
+  const geometry = buildMengerPreparedGeometry({ depth, axisColors });
   const planeAtlas = buildPreparedMengerPlaneAtlas({
     geometry,
     palette: playback.palette.map((entry) => entry.material),
@@ -26,7 +30,7 @@ export async function buildCssmengerFirstSliceScene({ dataSource, sceneId = "dep
   return Object.freeze({
     schema: "cssmenger-prepared-scene@1",
     id: sceneId,
-    label: "XScreenSaver Menger — deterministic depth 3",
+    label: `XScreenSaver Menger — deterministic depth ${depth}`,
     mode: cssmengerSlicePlan.mode,
     artifactMode: cssmengerSlicePlan.artifactMode,
     firstSlice: describeFirstSlice(),
@@ -35,7 +39,7 @@ export async function buildCssmengerFirstSliceScene({ dataSource, sceneId = "dep
     sourceProfile: Object.freeze({
       schema: "cssmenger-source-profile@1",
       seed: playback.seed,
-      depth: DEPTH,
+      depth,
       cellsPerAxis: geometry.cellsPerAxis,
       sourceBounds: Object.freeze([-1.5, 1.5]),
       sourceScale: 2.2,
@@ -88,8 +92,8 @@ export async function buildCssmengerFirstSliceScene({ dataSource, sceneId = "dep
     meshes: geometry.meshes,
     metrics: Object.freeze({
       meshCount: geometry.meshes.length,
-      sourceDepth: DEPTH,
-      sourceCellCount: 20 ** DEPTH,
+      sourceDepth: depth,
+      sourceCellCount: 20 ** depth,
       ...geometry.metrics,
       preparedPlaneTexturePatternCount: planeAtlas.patternCount,
       preparedPlaneAtlasWidth: planeAtlas.width,
@@ -121,7 +125,7 @@ export async function buildCssmengerFirstSliceScene({ dataSource, sceneId = "dep
       visualComparison: "exact-first-common-prefix-diverged",
     }),
     warnings: Object.freeze([
-      "The first product slice fixes source depth at 3; the XScreenSaver depth-change sequence remains outside this slice.",
+      `This prepared product scene fixes source depth at ${depth}; the XScreenSaver depth-change sequence remains outside this slice.`,
       "The prepared source rotator segment wraps from its final state to its first state for endless playback.",
       "Wander and interactive trackball input are disabled in this first slice.",
       "Axis material colors follow the prepared XScreenSaver palette rows; fixed-function two-light moving highlights are not yet a native visual-parity claim.",

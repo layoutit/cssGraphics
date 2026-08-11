@@ -10,12 +10,14 @@ import { selectCssmengerPlaneAtlasProfile } from "../src/cssmenger/profileSelect
 test("cssmenger route defaults to the first slice", () => {
   const route = createRouteState("");
   assert.equal(route.scene, DEFAULT_SCENE_ID);
+  assert.equal(route.sceneExplicit, false);
   assert.equal(route.manifestUrl, "/cssmenger/manifest.json");
 });
 
 test("cssmenger route accepts safe scene ids", () => {
   const route = createRouteState("?scene=demo-room_01");
   assert.equal(route.scene, "demo-room_01");
+  assert.equal(route.sceneExplicit, true);
   assert.equal(publicRouteFor({ scene: route.scene }), "/?scene=demo-room_01");
 });
 

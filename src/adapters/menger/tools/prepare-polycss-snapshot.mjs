@@ -19,7 +19,7 @@ import {
   preparedMengerSparseLightingAtlasBytes,
 } from "../src/prepare/cssmenger/sparseLightingAtlas.mjs";
 
-const sceneId = "depth-3";
+const sceneId = sceneIdFromArgs(process.argv.slice(2));
 const sceneUrl = `/cssmenger/scenes/${sceneId}.json`;
 const scenePath = join(generatedPublicRoot, "scenes", `${sceneId}.json`);
 const privateScenePath = join(generatedPrivateRoot, "scenes", `${sceneId}.prepared.json`);
@@ -81,7 +81,9 @@ function bindFinalAtlasDimensions(html, desktopAtlas, mobileAtlas) {
   return html.replace(
     "</style>",
     `.polycss-scene{--cssmenger-atlas-width:${desktopAtlas.width}px;` +
-      `--cssmenger-atlas-height:${desktopAtlas.height}px}` +
+      `--cssmenger-atlas-height:${desktopAtlas.height}px;` +
+      `--cssmenger-tile-width:${desktopAtlas.tileWidth}px;` +
+      `--cssmenger-tile-height:${desktopAtlas.tileHeight}px}` +
       `body>.polycss-camera>.polycss-scene>b{background-image:url("${desktopAtlas.assetUrl}")}` +
       `.polycss-scene.cssmenger-mobile-atlas{--cssmenger-atlas-width:${mobileAtlas.width}px;` +
       `--cssmenger-atlas-height:${mobileAtlas.height}px}` +
@@ -135,7 +137,9 @@ async function prepareSparseLightingAtlases(frontFacingSchedule) {
     geometry,
     playback: scene.playback,
     frontFacingSchedule,
-    lightingSampleIntervalTicks: MOBILE_LIGHTING_SAMPLE_INTERVAL_TICKS,
+    lightingSampleIntervalTicks: scene.sourceProfile.depth === 2
+      ? DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS
+      : MOBILE_LIGHTING_SAMPLE_INTERVAL_TICKS,
     profile: "mobile",
   });
   for (const contract of [desktopAtlas, mobileAtlas]) {
@@ -213,7 +217,7 @@ async function publishRuntimeScene(frontFacingSchedule, desktopAtlas, mobileAtla
       visualComparison: "exact-first-common-prefix-diverged",
     },
     warnings: [
-      "The first product slice fixes source depth at 3; the XScreenSaver depth-change sequence remains outside this slice.",
+      `This prepared product scene fixes source depth at ${scene.sourceProfile.depth}; the XScreenSaver depth-change sequence remains outside this slice.`,
       "The prepared source rotator segment wraps from its final state to its first state for endless playback.",
       "Wander and interactive trackball input are disabled in this first slice.",
       "Moving two-light RGB and palette colors are prepared off the runtime path into exact source-cell face tiles.",
@@ -241,6 +245,15 @@ async function publishRuntimeScene(frontFacingSchedule, desktopAtlas, mobileAtla
   if (intermediateAtlas?.assetUrl) {
     await rm(join(generatedPublicRoot, intermediateAtlas.assetUrl.replace(/^\/cssmenger\//u, "")), { force: true });
   }
+}
+
+function sceneIdFromArgs(argv) {
+  const sceneIndex = argv.indexOf("--scene");
+  const value = sceneIndex >= 0 ? argv[sceneIndex + 1] : "depth-3";
+  if (!["depth-2", "depth-3"].includes(value)) {
+    throw new RangeError(`Unknown prepared cssMenger scene ${value}`);
+  }
+  return value;
 }
 
 async function freePort() {

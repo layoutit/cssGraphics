@@ -220,13 +220,13 @@ try {
     const mobileEvidence = await mobilePage.evaluate(async () => {
       const debug = globalThis.__cssMengerDebug;
       debug.pause();
-      const frozenLightingAddresses = [0, 1, 186, 720, 1_439, 0].map((stateIndex) => {
+      const lightingAddresses = [0, 1, 2, 186, 720, 1_439].map((stateIndex) => {
         debug.seek(stateIndex);
         return [...document.querySelectorAll(".polycss-camera > .polycss-scene > b")]
           .map((leaf) => leaf.style.backgroundPosition);
       });
       debug.seek(720);
-      const frozenLightingStep = debug.profileStep();
+      const lightingSteps = [debug.profileStep(), debug.profileStep()];
       debug.seek(720);
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const scene = document.querySelector(".polycss-camera > .polycss-scene");
@@ -239,14 +239,15 @@ try {
           .filter((attribute) => attribute.name.startsWith("data-"))
           .map((attribute) => attribute.name),
         selectedProfile: debug.stats().preparedPlaneAtlasProfile,
+        selectedScene: debug.state().scene,
+        leafCount: document.querySelectorAll(".polycss-camera > .polycss-scene > b").length,
         selectedDecodedBytes: debug.stats().preparedPlaneAtlasDecodedBytes,
         selectedAssetBytes: debug.stats().preparedPlaneAtlasAssetBytes,
         selectedLightingIntervalTicks: debug.stats().preparedColorPublicationIntervalTicks,
         selectedLightingAddressUpdateCount: debug.stats().preparedLightingAddressUpdateCount,
-        frozenLightingAddressesStable: frozenLightingAddresses.every((addresses) =>
-          addresses.length === 84 && addresses.every(Boolean) &&
-          addresses.every((address, index) => address === frozenLightingAddresses[0][index])),
-        frozenLightingStep,
+        lightingAddressesChange: lightingAddresses.slice(1).some((addresses) =>
+          addresses.some((address, index) => address !== lightingAddresses[0][index])),
+        lightingSteps,
         desktopUrl: debug.scene.planeAtlas.assetUrl,
         mobileUrl: atlas.assetUrl,
         backgroundImage: getComputedStyle(firstLeaf).backgroundImage,
@@ -263,11 +264,15 @@ try {
       /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.avif$/u.test(path));
     if (mobileErrors.length || !mobileEvidence.ready || mobileEvidence.errors.length ||
         mobileEvidence.bodyDataAttributes.length !== 0 || mobileEvidence.selectedProfile !== "mobile" ||
-        mobileEvidence.selectedDecodedBytes !== 218_700 || mobileEvidence.selectedAssetBytes !== 15_028 ||
-        mobileEvidence.selectedLightingIntervalTicks !== 1_440 ||
-        mobileEvidence.selectedLightingAddressUpdateCount !== 84 ||
-        !mobileEvidence.frozenLightingAddressesStable ||
-        mobileEvidence.frozenLightingStep?.preparedLightingAddressWriteCount !== 0 || mobileEvidence.tick !== 720 ||
+        mobileEvidence.selectedScene !== "depth-2" || mobileEvidence.leafCount !== 30 ||
+        mobileEvidence.selectedDecodedBytes !== 3_538_080 || mobileEvidence.selectedAssetBytes !== 416_630 ||
+        mobileEvidence.selectedLightingIntervalTicks !== 2 ||
+        mobileEvidence.selectedLightingAddressUpdateCount !== 11_002 ||
+        !mobileEvidence.lightingAddressesChange ||
+        mobileEvidence.lightingSteps?.length !== 2 ||
+        mobileEvidence.lightingSteps.some((step) => step.preparedLightingAddressWriteCount > 18) ||
+        !mobileEvidence.lightingSteps.some((step) => step.preparedLightingAddressWriteCount > 0) ||
+        mobileEvidence.tick !== 720 ||
         !mobileEvidence.backgroundImage.includes(mobileEvidence.mobileUrl) ||
         mobileEvidence.backgroundSize !== mobileEvidence.expectedBackgroundSize ||
         requestedDesktopAtlases.length !== 0 || new Set(requestedMobileAtlases).size !== 1) {
@@ -295,6 +300,8 @@ try {
     { timeout: 30_000 });
     const widePhoneEvidence = await widePhonePage.evaluate(() => ({
       profile: globalThis.__cssMengerDebug.stats().preparedPlaneAtlasProfile,
+      scene: globalThis.__cssMengerDebug.state().scene,
+      leaves: document.querySelectorAll(".polycss-camera > .polycss-scene > b").length,
       assetBytes: globalThis.__cssMengerDebug.stats().preparedPlaneAtlasAssetBytes,
       colorMode: globalThis.__cssMengerDebug.stats().preparedColorPublicationMode,
       viewportWidth: innerWidth,
@@ -306,8 +313,9 @@ try {
     const widePhoneMobileAtlases = widePhoneRequests.filter((path) =>
       /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.avif$/u.test(path));
     if (widePhoneErrors.length || widePhoneEvidence.errors.length || widePhoneEvidence.viewportWidth <= 430 ||
-        widePhoneEvidence.profile !== "mobile" || widePhoneEvidence.assetBytes !== 15_028 ||
-        widePhoneEvidence.colorMode !== "prepared-frozen-lighting-all-leaf-initialization-only" ||
+        widePhoneEvidence.profile !== "mobile" || widePhoneEvidence.scene !== "depth-2" ||
+        widePhoneEvidence.leaves !== 30 || widePhoneEvidence.assetBytes !== 416_630 ||
+        widePhoneEvidence.colorMode !== "prepared-held-lighting-sample-plus-per-state-front-face-address" ||
         widePhoneDesktopAtlases.length !== 0 || new Set(widePhoneMobileAtlases).size !== 1) {
       throw new Error(`cssMenger wide-phone profile selection failed: ${JSON.stringify({
         widePhoneEvidence, widePhoneDesktopAtlases, widePhoneMobileAtlases, widePhoneErrors,

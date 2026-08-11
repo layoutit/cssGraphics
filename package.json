@@ -78,7 +78,7 @@
     "package:electropaint:artifact": "node src/adapters/electropaint/tools/package-product-bank.mjs --source build/generated/public/cssselectropaint --archive build/release/cssselectropaint-product-bank-v1.tar.gz",
     "prepare:electropaint:check": "node src/adapters/electropaint/tools/check-prepare-determinism.mjs",
     "prepare:menger:artifact": "node scripts/prepare/cssmenger-product-bank.mjs",
-    "prepare:menger:source": "node src/adapters/menger/tools/prepare-cssmenger.mjs && node src/adapters/menger/tools/prepare-polycss-snapshot.mjs",
+    "prepare:menger:source": "node src/adapters/menger/tools/prepare-cssmenger.mjs && node src/adapters/menger/tools/prepare-polycss-snapshot.mjs --scene depth-3 && node src/adapters/menger/tools/prepare-polycss-snapshot.mjs --scene depth-2",
     "prepare:maze:artifact": "node scripts/prepare/cssmaze-product-bank.mjs",
     "prepare:maze:source": "node src/adapters/maze/tools/prepare-cssmaze.mjs && node src/adapters/maze/tools/prepare-polycss-snapshot.mjs",
     "prepare:maze:check": "node src/adapters/maze/tools/check-prepare-determinism.mjs",

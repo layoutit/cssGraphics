@@ -46,6 +46,18 @@ export function mountPreparedPolycssSnapshot({
     throw new Error("Prepared cssMenger plane atlas binding drifted");
   }
   const stableNodes = Object.freeze([mountedCamera, mountedScene, ...leaves]);
+  const axisLeafCounts = sceneData.meshDescriptors?.map((mesh) => mesh.polygonCount);
+  if (!Array.isArray(axisLeafCounts) || axisLeafCounts.length !== 3 ||
+      axisLeafCounts.some((count) => !Number.isSafeInteger(count) || count < 1) ||
+      axisLeafCounts.reduce((sum, count) => sum + count, 0) !== leaves.length) {
+    throw new Error("Prepared cssMenger axis leaf census drifted");
+  }
+  let axisLeafOffset = 0;
+  const axisLeaves = Object.freeze(axisLeafCounts.map((count) => {
+    const selected = Object.freeze(leaves.slice(axisLeafOffset, axisLeafOffset + count));
+    axisLeafOffset += count;
+    return selected;
+  }));
   let runtimeDomCreationCount = 0;
   let runtimeDomRemovalCount = 0;
   const observer = new MutationObserver((records) => {
@@ -72,8 +84,7 @@ export function mountPreparedPolycssSnapshot({
     camera: mountedCamera,
     scene: mountedScene,
     publicationRoot: mountedScene,
-    axisLeaves: Object.freeze([0, 1, 2].map((axis) =>
-      Object.freeze(leaves.slice(axis * 28, axis * 28 + 28)))),
+    axisLeaves,
     leaves: Object.freeze(leaves),
     assertStableDomIdentity,
     stats() {

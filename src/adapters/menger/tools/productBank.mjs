@@ -9,8 +9,9 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
   const manifest = JSON.parse(manifestBytes.toString("utf8"));
   assert(manifest.schema === "cssmenger-manifest@1" && manifest.status === "ready",
     "manifest contract");
-  assert(manifest.defaultScene?.id === "depth-3" && manifest.scenes?.length === 1 &&
-    manifest.scenes[0]?.id === "depth-3", "prepared scene identity");
+  assert(manifest.defaultScene?.id === "depth-3" && manifest.scenes?.length === 2 &&
+    manifest.scenes[0]?.id === "depth-3" && manifest.scenes[1]?.id === "depth-2",
+  "prepared scene identity");
   assert(manifest.artifactMode === "prepared-polycss-snapshot" &&
     manifest.runtime?.geometryPayload === false &&
     manifest.runtime?.runtimeDomGrowth === false,
@@ -146,7 +147,82 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
   assert(!/\sdata-[\w-]+=/u.test(snapshot) && !/<(?:script|canvas|svg)\b/iu.test(snapshot),
     "lean DOM");
 
-  const expectedFiles = new Set(["manifest.json", scenePath, snapshotPath, atlasPath, mobileAtlasPath]);
+  const reducedEntry = manifest.scenes[1];
+  const reducedScenePath = productPath(reducedEntry.sceneUrl);
+  const reducedSnapshotPath = productPath(reducedEntry.snapshotUrl);
+  const reducedSceneBytes = await readFile(join(root, reducedScenePath));
+  const reducedSceneText = reducedSceneBytes.toString("utf8");
+  const reducedScene = JSON.parse(reducedSceneText);
+  assert(reducedScene.schema === "cssmenger-prepared-scene@1" && reducedScene.id === "depth-2" &&
+    reducedScene.source?.sourceRevision === "906693799e4fb7581436590cf84ecb2d3c9186ba" &&
+    reducedScene.sourceProfile?.seed === 26080801 && reducedScene.sourceProfile?.depth === 2,
+  "reduced scene source identity");
+  assert(reducedScene.meshes === undefined && reducedScene.meshDescriptors?.length === 3 &&
+    reducedScene.meshDescriptors.every((mesh) => mesh.polygonCount === 10) &&
+    reducedScene.metrics?.sourcePolygonCount === 1_056 &&
+    reducedScene.metrics?.sourceFaceCoverageCount === 1_056 &&
+    reducedScene.metrics?.sourceFaceCoverageExact === true &&
+    reducedScene.metrics?.sourceFaceCoverageSha256 ===
+      "b802d6c7e24245b5ac377d704c275aa052ee841edb75a94d08931f9e7dd4bc34" &&
+    reducedScene.metrics?.preparedLeafCount === 30 &&
+    reducedScene.metrics?.mergedSourceFaceCount === 1_026 &&
+    reducedScene.metrics?.coplanarPartitionOptimal === true &&
+    reducedScene.metrics?.preparedPlaneTexturePatternCount === 4,
+  "reduced exact prepared coverage and merge");
+  assert(reducedScene.playback?.schema === "cssmenger-prepared-playback@1" &&
+    reducedScene.playback?.stateCount === 1_440 && reducedScene.playback?.loop === true &&
+    reducedScene.playback?.sourceFrameDelayMilliseconds === 30 &&
+    reducedScene.playback?.frontFacingSchedule?.offsets?.length === 1_440 * 3 + 1 &&
+    reducedScene.playback.frontFacingSchedule.offsets.at(-1) ===
+      reducedScene.playback.frontFacingSchedule.leafIndices?.length &&
+    reducedScene.renderer?.stableDom === true && reducedScene.renderer?.runtimeGeometryPayload === false &&
+    reducedScene.renderer?.runtimeGeometryConstruction === false &&
+    reducedScene.renderer?.runtimeLightingCalculation === false &&
+    reducedScene.renderer?.runtimeDomGrowth === false && reducedScene.renderer?.alternateRenderer === false,
+  "reduced prepared runtime boundary");
+  const reducedAtlasPaths = [];
+  for (const [profile, reducedAtlas] of [
+    ["desktop", reducedScene.planeAtlas],
+    ["mobile", reducedScene.mobilePlaneAtlas],
+  ]) {
+    const reducedAtlasPath = productPath(reducedAtlas?.assetUrl);
+    const reducedAtlasBytes = await readFile(join(root, reducedAtlasPath));
+    const suffix = profile === "mobile" ? "-mobile" : "";
+    assert(reducedAtlasBytes.length === 416_630 && reducedAtlas?.byteLength === 416_630 &&
+      sha256(reducedAtlasBytes) === reducedAtlas.assetSha256 &&
+      reducedAtlas?.schema === "cssmenger-prepared-sparse-leaf-lighting-atlas@1" &&
+      reducedAtlas?.profile === profile &&
+      new RegExp(`^/cssmenger/assets/lighting-grid${suffix}-[a-f0-9]{64}\\.avif$`, "u")
+        .test(reducedAtlas?.assetUrl) &&
+      reducedAtlas?.width === 16_380 && reducedAtlas?.height === 54 &&
+      reducedAtlas?.decodedBytes === 3_538_080 && reducedAtlas?.leafCount === 30 &&
+      reducedAtlas?.visibleLeafFieldCount === 21_828 && reducedAtlas?.slotCount === 10_479 &&
+      reducedAtlas?.lightingSampleIntervalTicks === 2 &&
+      reducedAtlas?.lightingSampleDelayMilliseconds === 60 &&
+      reducedAtlas?.lightingSampleCount === 720 && reducedAtlas?.addressUpdateCount === 11_002 &&
+      reducedAtlas?.addressInitializationWriteCount === 0 &&
+      reducedAtlas?.addressWriteCountPerState?.maximum === 18 &&
+      reducedAtlas?.addressWriteCountPerState?.zeroWriteStateCount === 627 &&
+      reducedAtlas?.sourceFaceCoverageExact === true,
+    `reduced ${profile} atlas identity`);
+    reducedAtlasPaths.push(reducedAtlasPath);
+  }
+  const reducedSnapshot = await readFile(join(root, reducedSnapshotPath), "utf8");
+  assert(count(reducedSnapshot, /<b\b/gu) === 30 &&
+    count(reducedSnapshot, /<i\b/gu) === 0 && count(reducedSnapshot, /<s\b/gu) === 0 &&
+    count(reducedSnapshot, /<div\b/gu) === 2 && count(reducedSnapshot, /style="/gu) === 31 &&
+    count(reducedSnapshot, /<b style="transform: matrix3d\(/gu) === 30 &&
+    /--cssmenger-tile-width:9px;--cssmenger-tile-height:9px/u.test(reducedSnapshot) &&
+    !/cssmenger-(?:model|axis)|!important|\sdata-[\w-]+=/u.test(reducedSnapshot) &&
+    !/<(?:script|canvas|svg)\b/iu.test(reducedSnapshot),
+  "reduced retained DOM");
+  assert(!/(?:\/Users\/|\\Users\\|file:\/\/|\.local\/)/u.test(reducedSceneText),
+    "reduced public paths");
+
+  const expectedFiles = new Set([
+    "manifest.json", scenePath, snapshotPath, atlasPath, mobileAtlasPath,
+    reducedScenePath, reducedSnapshotPath, ...reducedAtlasPaths,
+  ]);
   const files = (await walk(root))
     .map((path) => relative(root, path).split(sep).join("/"))
     .filter((path) => path !== "product-bank.json")
@@ -167,21 +243,24 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     closureSha256: closure.digest("hex"),
     closureBytes,
     fileCount: files.length,
-    sceneCount: 1,
+    sceneCount: 2,
     retainedRenderWrapperCount: 2,
     retainedModelRootCount: 0,
     retainedAxisRootCount: 0,
     preparedLeafCount: 84,
+    mobilePreparedLeafCount: 30,
     sourceFaceCount: 18_048,
     mergedSourceFaceCount: 17_964,
+    mobileSourceFaceCount: 1_056,
+    mobileMergedSourceFaceCount: 1_026,
     timelineStateCount: 1_440,
     paletteStateCount: 128,
-    atlasAssetCount: 2,
+    atlasAssetCount: 4,
     lightingAddressUpdateCount: scene.planeAtlas.addressUpdateCount,
     redundantLightingAddressWriteCountRemoved: scene.planeAtlas.redundantAddressWriteCountRemoved,
-    mobileLightingAddressUpdateCount: scene.mobilePlaneAtlas.addressUpdateCount,
+    mobileLightingAddressUpdateCount: reducedScene.mobilePlaneAtlas.addressUpdateCount,
     mobileRedundantLightingAddressWriteCountRemoved:
-      scene.mobilePlaneAtlas.redundantAddressWriteCountRemoved,
+      reducedScene.mobilePlaneAtlas.redundantAddressWriteCountRemoved,
   });
 
   if (verifyDescriptor) {
@@ -189,7 +268,8 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     for (const [key, value] of Object.entries(summary)) {
       assert(descriptor[key] === value, `product descriptor ${key}`);
     }
-    assert(descriptor.nativeAlignment?.sourceSemantics === "aligned-for-fixed-depth-3-slice" &&
+    assert(descriptor.nativeAlignment?.sourceSemantics ===
+      "aligned-for-fixed-depth-3-desktop-and-depth-2-mobile-slices" &&
       descriptor.nativeAlignment?.visualParity === "unqualified" &&
       descriptor.publicBoundary?.xscreensaverSourceIncluded === false &&
       descriptor.publicBoundary?.nativeBinaryIncluded === false &&
@@ -207,10 +287,10 @@ export async function writeCssmengerProductBankDescriptor(root, summary) {
       repository: "https://github.com/Zygo/xscreensaver",
       revision: "906693799e4fb7581436590cf84ecb2d3c9186ba",
       preparedSeed: 26080801,
-      preparedDepth: 3,
+      preparedDepths: [3, 2],
     },
     nativeAlignment: {
-      sourceSemantics: "aligned-for-fixed-depth-3-slice",
+      sourceSemantics: "aligned-for-fixed-depth-3-desktop-and-depth-2-mobile-slices",
       visualParity: "unqualified",
     },
     transport: {

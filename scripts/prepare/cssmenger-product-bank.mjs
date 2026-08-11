@@ -13,16 +13,17 @@ const lock = JSON.parse(await readFile(
   "utf8",
 ));
 if (lock.schema !== "cssmenger-prepared-bank-lock@1" ||
-    lock.sceneCount !== 1 || lock.retainedRenderWrapperCount !== 2 ||
+    lock.sceneCount !== 2 || lock.retainedRenderWrapperCount !== 2 ||
     lock.retainedModelRootCount !== 0 || lock.retainedAxisRootCount !== 0 ||
-    lock.preparedLeafCount !== 84 ||
+    lock.preparedLeafCount !== 84 || lock.mobilePreparedLeafCount !== 30 ||
     lock.sourceFaceCount !== 18_048 || lock.mergedSourceFaceCount !== 17_964 ||
+    lock.mobileSourceFaceCount !== 1_056 || lock.mobileMergedSourceFaceCount !== 1_026 ||
     lock.timelineStateCount !== 1_440 || lock.paletteStateCount !== 128 ||
-    lock.atlasAssetCount !== 2 || lock.lightingAddressUpdateCount !== 30_989 ||
+    lock.atlasAssetCount !== 4 || lock.lightingAddressUpdateCount !== 30_989 ||
     lock.redundantLightingAddressWriteCountRemoved !== 30_535 ||
-    lock.mobileLightingAddressUpdateCount !== 84 ||
-    lock.mobileRedundantLightingAddressWriteCountRemoved !== 61_440) {
-  throw new Error("cssMenger prepared-bank lock does not bind the retained depth-3 product");
+    lock.mobileLightingAddressUpdateCount !== 11_002 ||
+    lock.mobileRedundantLightingAddressWriteCountRemoved !== 10_826) {
+  throw new Error("cssMenger prepared-bank lock does not bind the retained desktop/mobile product");
 }
 const generatedRoot = resolve(
   process.env.CSSMENGER_GENERATED_ROOT ?? join(repositoryRoot, "build", "generated"),

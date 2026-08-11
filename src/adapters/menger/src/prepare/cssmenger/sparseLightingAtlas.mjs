@@ -6,7 +6,8 @@ import {
   preparedSourceFaceVertices,
 } from "./mengerGeometry.mjs";
 
-const GUTTER = 0;
+const SOURCE_RGB_GUTTER = 0;
+const CSS_BLACK_ALPHA_GUTTER = 1;
 export const DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS = 2;
 export const MOBILE_LIGHTING_SAMPLE_INTERVAL_TICKS = 1_440;
 const MAXIMUM_TEXTURE_DIMENSION = 16_384;
@@ -18,6 +19,7 @@ export async function buildPreparedMengerSparseLightingAtlas({
   frontFacingSchedule,
   lightingSampleIntervalTicks = DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS,
   profile = "desktop",
+  presentation = "source-rgb",
 }) {
   if (!geometry?.metrics?.sourceFaceCoverageExact || !Array.isArray(geometry.bundles) ||
       playback?.schema !== "cssmenger-prepared-playback@1" ||
@@ -29,14 +31,21 @@ export async function buildPreparedMengerSparseLightingAtlas({
       frontFacingSchedule.offsets.at(-1) !== frontFacingSchedule.leafIndices?.length ||
       ![DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS, MOBILE_LIGHTING_SAMPLE_INTERVAL_TICKS]
         .includes(lightingSampleIntervalTicks) ||
-      !["desktop", "mobile"].includes(profile)) {
+      !["desktop", "mobile"].includes(profile) ||
+      !["source-rgb", "css-black-alpha"].includes(presentation)) {
     throw new TypeError("Complete cssMenger geometry, playback, and front-facing schedule are required");
   }
+  const gutterPixels = presentation === "css-black-alpha"
+    ? CSS_BLACK_ALPHA_GUTTER
+    : SOURCE_RGB_GUTTER;
   const tileWidth = geometry.cellsPerAxis;
   const tileHeight = geometry.cellsPerAxis;
-  const slotWidth = tileWidth + GUTTER * 2;
-  const slotHeight = tileHeight + GUTTER * 2;
+  const slotWidth = tileWidth + gutterPixels * 2;
+  const slotHeight = tileHeight + gutterPixels * 2;
   const visibleLeafFieldCount = frontFacingSchedule.leafIndices.length;
+  const addressPublicationIntervalTicks = presentation === "css-black-alpha"
+    ? lightingSampleIntervalTicks
+    : 1;
 
   const polygonByLeaf = new Map(geometry.meshes.flatMap((mesh) => mesh.polygons).map((polygon) => [
     Number(polygon.data["cssmenger-plane-leaf"]),
@@ -51,6 +60,7 @@ export async function buildPreparedMengerSparseLightingAtlas({
   }));
   const fields = [];
   for (let stateIndex = 0; stateIndex < playback.stateCount; stateIndex += 1) {
+    if (stateIndex % addressPublicationIntervalTicks !== 0) continue;
     for (let axis = 0; axis < frontFacingSchedule.axisCount; axis += 1) {
       const segment = stateIndex * frontFacingSchedule.axisCount + axis;
       const start = frontFacingSchedule.offsets[segment];
@@ -79,6 +89,8 @@ export async function buildPreparedMengerSparseLightingAtlas({
       tileHeight,
       slotWidth: tileWidth,
       slotHeight: tileHeight,
+      gutterPixels: 0,
+      presentation,
     });
     const tileSha256 = createHash("sha256").update(tile).digest("hex");
     const candidates = slotsBySha256.get(tileSha256) ?? [];
@@ -111,6 +123,7 @@ export async function buildPreparedMengerSparseLightingAtlas({
       tileHeight,
       slotWidth,
       slotHeight,
+      gutterPixels,
     });
   }
   const addressSchedule = prepareExactDeltaAddressSchedule({
@@ -118,7 +131,13 @@ export async function buildPreparedMengerSparseLightingAtlas({
     frontFacingSchedule,
     slotByScheduleCursor,
     leafCount: geometry.bundles.length,
+    addressPublicationIntervalTicks,
     initializeAllLeafAddresses: Math.ceil(playback.stateCount / lightingSampleIntervalTicks) === 1,
+  });
+  const reverseAddressSchedule = prepareExactReverseDeltaAddressSchedule({
+    addressSchedule,
+    stateCount: playback.stateCount,
+    leafCount: geometry.bundles.length,
   });
   const addressStateOffsetBytes = u16leBytes(addressSchedule.offsets);
   const addressLeafIndexBytes = Buffer.from(addressSchedule.leafIndices);
@@ -128,6 +147,14 @@ export async function buildPreparedMengerSparseLightingAtlas({
     .update(addressLeafIndexBytes)
     .update(addressSlotIndexBytes)
     .digest("hex");
+  const reverseAddressStateOffsetBytes = u16leBytes(reverseAddressSchedule.offsets);
+  const reverseAddressLeafIndexBytes = Buffer.from(reverseAddressSchedule.leafIndices);
+  const reverseAddressSlotIndexBytes = u16leBytes(reverseAddressSchedule.slotIndices);
+  const reverseAddressSha256 = createHash("sha256")
+    .update(reverseAddressStateOffsetBytes)
+    .update(reverseAddressLeafIndexBytes)
+    .update(reverseAddressSlotIndexBytes)
+    .digest("hex");
   const bytes = await sharp(rgba, {
     raw: { width, height, channels: 4 },
     limitInputPixels: false,
@@ -135,9 +162,14 @@ export async function buildPreparedMengerSparseLightingAtlas({
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const contract = Object.freeze({
     schema: "cssmenger-prepared-sparse-leaf-lighting-atlas@1",
-    technique: `exact-deduplicated-one-source-cell-texel-per-visible-coplanar-leaf-held-${lightingSampleIntervalTicks}-source-ticks-addressed-by-front-facing-schedule-cursor`,
+    technique: presentation === "css-black-alpha"
+      ? `prepared-deduplicated-one-source-cell-black-alpha-shadow-per-sampled-visible-coplanar-leaf-held-${lightingSampleIntervalTicks}-source-ticks-over-css-palette`
+      : `exact-deduplicated-one-source-cell-texel-per-visible-coplanar-leaf-held-${lightingSampleIntervalTicks}-source-ticks-addressed-by-front-facing-schedule-cursor`,
+    presentation,
     profile,
-    assetUrl: `/cssmenger/assets/lighting-grid${profile === "mobile" ? "-mobile" : ""}-${sha256}.avif`,
+    assetUrl: presentation === "css-black-alpha"
+      ? `/cssmenger/assets/lighting-shadow-grid-${sha256}.avif`
+      : `/cssmenger/assets/lighting-grid${profile === "mobile" ? "-mobile" : ""}-${sha256}.avif`,
     assetSha256: sha256,
     encoding: "AVIF-lossy-q83-alpha-lossless-yuv444",
     mimeType: "image/avif",
@@ -155,7 +187,7 @@ export async function buildPreparedMengerSparseLightingAtlas({
     slotHeight,
     columns,
     rows,
-    gutterPixels: GUTTER,
+    gutterPixels,
     slotCount,
     addressEncoding: "base64-u16le-state-offsets-plus-u8-leaf-indices-plus-u16le-exact-deduplicated-slot-indices",
     addressScheduleSchema: "cssmenger-prepared-exact-delta-lighting-address-schedule@1",
@@ -167,30 +199,50 @@ export async function buildPreparedMengerSparseLightingAtlas({
     addressSlotIndexByteLength: addressSlotIndexBytes.length,
     addressSlotIndicesBase64: addressSlotIndexBytes.toString("base64"),
     addressUpdateCount: addressSchedule.updateCount,
+    reverseAddressScheduleSchema: "cssmenger-prepared-exact-reverse-delta-lighting-address-schedule@1",
+    reverseAddressScheduleSha256: reverseAddressSha256,
+    reverseAddressStateOffsetByteLength: reverseAddressStateOffsetBytes.length,
+    reverseAddressStateOffsetsBase64: reverseAddressStateOffsetBytes.toString("base64"),
+    reverseAddressLeafIndexByteLength: reverseAddressLeafIndexBytes.length,
+    reverseAddressLeafIndicesBase64: reverseAddressLeafIndexBytes.toString("base64"),
+    reverseAddressSlotIndexByteLength: reverseAddressSlotIndexBytes.length,
+    reverseAddressSlotIndicesBase64: reverseAddressSlotIndexBytes.toString("base64"),
+    reverseAddressUpdateCount: reverseAddressSchedule.updateCount,
     addressInitializationWriteCount: addressSchedule.initializationWriteCount,
     addressInitialization: addressSchedule.initializeAllLeafAddresses
       ? "all-leaf-addresses-before-playback"
-      : "per-state-front-facing-delta",
+      : addressPublicationIntervalTicks === 1
+        ? "per-state-front-facing-delta"
+        : "sample-cadence-front-facing-delta",
     addressWriteCountPerState: Object.freeze({
       minimum: addressSchedule.minimumWriteCountPerState,
       maximum: addressSchedule.maximumWriteCountPerState,
       average: addressSchedule.averageWriteCountPerState,
       zeroWriteStateCount: addressSchedule.zeroWriteStateCount,
     }),
-    redundantAddressWriteCountRemoved: visibleLeafFieldCount - addressSchedule.updateCount,
-    redundantAddressWriteRatio:
-      (visibleLeafFieldCount - addressSchedule.updateCount) / visibleLeafFieldCount,
+    reverseAddressWriteCountPerState: Object.freeze({
+      minimum: reverseAddressSchedule.minimumWriteCountPerState,
+      maximum: reverseAddressSchedule.maximumWriteCountPerState,
+      average: reverseAddressSchedule.averageWriteCountPerState,
+      zeroWriteStateCount: reverseAddressSchedule.zeroWriteStateCount,
+    }),
+    addressedVisibleLeafFieldCount: fields.length,
+    redundantAddressWriteCountRemoved: fields.length - addressSchedule.updateCount,
+    redundantAddressWriteRatio: (fields.length - addressSchedule.updateCount) / fields.length,
     atlasFieldOrder: "first-unique-byte-exact-tile-in-leaf-index-then-source-state-index-order",
     tileDeduplication: "sha256-candidate-then-byte-for-byte-rgba-equality",
     exactUniqueTileCount: slotCount,
-    exactDuplicateTileCount: visibleLeafFieldCount - slotCount,
-    exactTileDeduplicationRatio: (visibleLeafFieldCount - slotCount) / visibleLeafFieldCount,
+    exactDuplicateTileCount: fields.length - slotCount,
+    exactTileDeduplicationRatio: (fields.length - slotCount) / fields.length,
     lightingSampleIntervalTicks,
     lightingSampleDelayMilliseconds:
       playback.sourceFrameDelayMilliseconds * lightingSampleIntervalTicks,
     lightingSampleCount: Math.ceil(playback.stateCount / lightingSampleIntervalTicks),
     transformPublicationIntervalTicks: 1,
     transformPublicationDelayMilliseconds: playback.sourceFrameDelayMilliseconds,
+    addressPublicationIntervalTicks,
+    addressPublicationDelayMilliseconds:
+      playback.sourceFrameDelayMilliseconds * addressPublicationIntervalTicks,
     imageRendering: "pixelated",
     leafCount: geometry.bundles.length,
     sourceFaceCount: geometry.metrics.sourcePolygonCount,
@@ -205,10 +257,23 @@ export async function buildPreparedMengerSparseLightingAtlas({
       atlasConstruction: 0,
       lightingCalculations: 0,
       colorCalculations: 0,
-      addressSelection: "prepared-exact-delta-address-schedule",
+      addressSelection: addressPublicationIntervalTicks === 1
+        ? "prepared-exact-delta-address-schedule"
+        : "prepared-sample-cadence-delta-address-schedule",
       addressComparison: false,
       topologyMutation: false,
     }),
+    ...(presentation === "css-black-alpha" ? {
+      preparedAxisPaletteSourceIndices: Object.freeze([1, 0, 2]),
+      preparedPaletteColors: Object.freeze(playback.palette.map((entry) => {
+        const maximum = Math.max(...entry.material.slice(0, 3));
+        if (!(maximum > 0)) throw new Error("cssMenger CSS palette contains a black source material");
+        return `rgb(${entry.material.slice(0, 3)
+          .map((channel) => byte(channel / maximum)).join(" ")})`;
+      })),
+      colorReconstruction:
+        "normalized-css-palette-under-prepared-per-source-cell-black-alpha-shadow",
+    } : {}),
   });
   preparedBytes.set(contract, bytes);
   return contract;
@@ -223,6 +288,7 @@ function prepareExactDeltaAddressSchedule({
   frontFacingSchedule,
   slotByScheduleCursor,
   leafCount,
+  addressPublicationIntervalTicks,
   initializeAllLeafAddresses,
 }) {
   if (playback.initial.stateIndex !== 0 || leafCount > 255) {
@@ -254,17 +320,19 @@ function prepareExactDeltaAddressSchedule({
   }
   for (let stateIndex = 0; stateIndex < playback.stateCount; stateIndex += 1) {
     const stateStart = leafIndices.length;
-    for (let axis = 0; axis < frontFacingSchedule.axisCount; axis += 1) {
-      const segment = stateIndex * frontFacingSchedule.axisCount + axis;
-      const start = frontFacingSchedule.offsets[segment];
-      const end = frontFacingSchedule.offsets[segment + 1];
-      for (let cursor = start; cursor < end; cursor += 1) {
-        const leafIndex = frontFacingSchedule.leafIndices[cursor];
-        const slotIndex = slotByScheduleCursor[cursor];
-        if (currentSlots[leafIndex] === slotIndex) continue;
-        currentSlots[leafIndex] = slotIndex;
-        leafIndices.push(leafIndex);
-        slotIndices.push(slotIndex);
+    if (stateIndex % addressPublicationIntervalTicks === 0) {
+      for (let axis = 0; axis < frontFacingSchedule.axisCount; axis += 1) {
+        const segment = stateIndex * frontFacingSchedule.axisCount + axis;
+        const start = frontFacingSchedule.offsets[segment];
+        const end = frontFacingSchedule.offsets[segment + 1];
+        for (let cursor = start; cursor < end; cursor += 1) {
+          const leafIndex = frontFacingSchedule.leafIndices[cursor];
+          const slotIndex = slotByScheduleCursor[cursor];
+          if (currentSlots[leafIndex] === slotIndex) continue;
+          currentSlots[leafIndex] = slotIndex;
+          leafIndices.push(leafIndex);
+          slotIndices.push(slotIndex);
+        }
       }
     }
     const writeCount = leafIndices.length - stateStart;
@@ -290,6 +358,58 @@ function prepareExactDeltaAddressSchedule({
     zeroWriteStateCount: writeCounts.reduce((count, value) => count + Number(value === 0), 0),
     initializeAllLeafAddresses,
     initializationWriteCount,
+  });
+}
+
+function prepareExactReverseDeltaAddressSchedule({
+  addressSchedule,
+  stateCount,
+  leafCount,
+}) {
+  const slotsByState = [];
+  const currentSlots = new Int32Array(leafCount).fill(-1);
+  for (let stateIndex = 0; stateIndex < stateCount; stateIndex += 1) {
+    const start = addressSchedule.offsets[stateIndex];
+    const end = addressSchedule.offsets[stateIndex + 1];
+    for (let cursor = start; cursor < end; cursor += 1) {
+      currentSlots[addressSchedule.leafIndices[cursor]] = addressSchedule.slotIndices[cursor];
+    }
+    slotsByState.push(Int32Array.from(currentSlots));
+  }
+  const offsets = [0];
+  const leafIndices = [];
+  const slotIndices = [];
+  const writeCounts = [];
+  for (let stateIndex = 0; stateIndex < stateCount; stateIndex += 1) {
+    const stateStart = leafIndices.length;
+    if (stateIndex < stateCount - 1) {
+      const sourceSlots = slotsByState[stateIndex + 1];
+      const targetSlots = slotsByState[stateIndex];
+      for (let leafIndex = 0; leafIndex < leafCount; leafIndex += 1) {
+        const slotIndex = targetSlots[leafIndex];
+        if (slotIndex < 0 || sourceSlots[leafIndex] === slotIndex) continue;
+        leafIndices.push(leafIndex);
+        slotIndices.push(slotIndex);
+      }
+    }
+    writeCounts.push(leafIndices.length - stateStart);
+    offsets.push(leafIndices.length);
+  }
+  const updateCount = leafIndices.length;
+  if (updateCount > 65_535 || offsets.at(-1) !== updateCount) {
+    throw new Error("Prepared cssMenger reverse delta address schedule exceeds its u16 contract");
+  }
+  return Object.freeze({
+    offsets: Object.freeze(offsets),
+    leafIndices: Object.freeze(leafIndices),
+    slotIndices: Object.freeze(slotIndices),
+    updateCount,
+    minimumWriteCountPerState:
+      writeCounts.reduce((minimum, count) => Math.min(minimum, count), Infinity),
+    maximumWriteCountPerState:
+      writeCounts.reduce((maximum, count) => Math.max(maximum, count), 0),
+    averageWriteCountPerState: updateCount / stateCount,
+    zeroWriteStateCount: writeCounts.reduce((count, value) => count + Number(value === 0), 0),
   });
 }
 
@@ -357,11 +477,13 @@ function writeLightingTile({
   tileHeight,
   slotWidth,
   slotHeight,
+  gutterPixels = 0,
+  presentation,
 }) {
   const slotX = (slotIndex % columns) * slotWidth;
   const slotY = Math.floor(slotIndex / columns) * slotHeight;
-  const contentX = slotX + GUTTER;
-  const contentY = slotY + GUTTER;
+  const contentX = slotX + gutterPixels;
+  const contentY = slotY + gutterPixels;
   const rotation = playback.nativeRotationDegrees[stateIndex];
   const materialIndices = playback.colorRows[stateIndex];
   const rotatedNormals = new Map();
@@ -376,12 +498,24 @@ function writeLightingTile({
     const material = playback.palette[materialIndices[sourceAxisGroup]].material;
     const colors = face.vertices.map((vertex) => shadeVertex(material, vertex, normal, rotation));
     const offset = ((contentY + face.y) * width + contentX + face.x) * 4;
+    const target = [0, 1, 2].map((channel) =>
+      colors.reduce((sum, color) => sum + color[channel], 0) / colors.length);
+    if (presentation === "css-black-alpha") {
+      const maximumMaterialChannel = Math.max(...material.slice(0, 3));
+      const base = material.slice(0, 3).map((channel) => channel / maximumMaterialChannel);
+      const brightness = clamp01(dot(target, base) / dot(base, base));
+      rgba[offset] = 0;
+      rgba[offset + 1] = 0;
+      rgba[offset + 2] = 0;
+      rgba[offset + 3] = byte(1 - brightness);
+      continue;
+    }
     for (let channel = 0; channel < 3; channel += 1) {
-      rgba[offset + channel] = byte(colors.reduce((sum, color) => sum + color[channel], 0) / colors.length);
+      rgba[offset + channel] = byte(target[channel]);
     }
     rgba[offset + 3] = 255;
   }
-  if (GUTTER > 0) duplicateGutter(rgba, width, contentX, contentY, tileWidth, tileHeight);
+  if (gutterPixels > 0) duplicateGutter(rgba, width, contentX, contentY, tileWidth, tileHeight);
 }
 
 function copyTileIntoAtlas({
@@ -394,16 +528,17 @@ function copyTileIntoAtlas({
   tileHeight,
   slotWidth,
   slotHeight,
+  gutterPixels,
 }) {
-  const contentX = (slotIndex % columns) * slotWidth + GUTTER;
-  const contentY = Math.floor(slotIndex / columns) * slotHeight + GUTTER;
+  const contentX = (slotIndex % columns) * slotWidth + gutterPixels;
+  const contentY = Math.floor(slotIndex / columns) * slotHeight + gutterPixels;
   const rowBytes = tileWidth * 4;
   for (let y = 0; y < tileHeight; y += 1) {
     const sourceStart = y * rowBytes;
     const targetStart = ((contentY + y) * width + contentX) * 4;
     tile.copy(rgba, targetStart, sourceStart, sourceStart + rowBytes);
   }
-  if (GUTTER > 0) duplicateGutter(rgba, width, contentX, contentY, tileWidth, tileHeight);
+  if (gutterPixels > 0) duplicateGutter(rgba, width, contentX, contentY, tileWidth, tileHeight);
 }
 
 function duplicateGutter(rgba, atlasWidth, contentX, contentY, width, height) {

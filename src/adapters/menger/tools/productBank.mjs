@@ -58,7 +58,7 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
   assert(scene.renderer?.stableDom === true &&
     scene.renderer?.preparedPlaneGridSnap === "exact-source-cell-boundary-matrix3d" &&
     scene.renderer?.transformPresentation ===
-      "display-refresh-css-linear-interpolation-between-prepared-30ms-states" &&
+      "compositor-css-keyframes-through-prepared-30ms-states-on-existing-scene-node" &&
     scene.renderer?.runtimeGeometryConstruction === false &&
     scene.renderer?.runtimeRecursion === false &&
     scene.renderer?.runtimeMerge === false &&
@@ -132,6 +132,7 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     scene.mobilePlaneAtlas?.addressInitialization === "all-leaf-addresses-before-playback" &&
     scene.mobilePlaneAtlas?.sourceFaceCoverageExact === true,
   "prepared mobile atlas identity");
+  const cssOpacityAtlasPaths = await inspectCssOpacityAtlasPair(root, scene, 84);
 
   const snapshot = await readFile(join(root, snapshotPath), "utf8");
   assert(count(snapshot, /<b\b/gu) === 84 &&
@@ -143,8 +144,13 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     /matrix3d\(12\.222222222,/u.test(snapshot) &&
     count(snapshot, /<b><\/b>/gu) === 0 &&
     !/\.polycss-scene>b:nth-child\(\d+\)\{transform:/u.test(snapshot) &&
-    /body>\.polycss-camera>\.polycss-scene>b\{background-image:url\("\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif"\)\}/u.test(snapshot) &&
+    /\.polycss-scene>b\{background-image:url\("\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif"\)\}/u.test(snapshot) &&
     /\.polycss-scene\.cssmenger-mobile-atlas.*lighting-grid-mobile-[a-f0-9]{64}\.avif/u.test(snapshot) &&
+    snapshot.includes(scene.cssOpacityBaseAtlas.assetUrl) &&
+    snapshot.includes(scene.cssOpacityShadowAtlas.assetUrl) &&
+    count(snapshot, /%\{transform:rotateX/gu) === 1_440 &&
+    /--cssmenger-rotation-duration:43170ms/u.test(snapshot) &&
+    !/mask-image|-webkit-mask/u.test(snapshot) &&
     !/cssmenger-(?:model|axis)/u.test(snapshot) &&
     !/var\(--[mxyz]\)|--[mxyz]:|!important/iu.test(snapshot),
   "retained DOM");
@@ -182,7 +188,7 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     reducedScene.renderer?.stableDom === true && reducedScene.renderer?.runtimeGeometryPayload === false &&
     reducedScene.renderer?.preparedPlaneGridSnap === "exact-source-cell-boundary-matrix3d" &&
     reducedScene.renderer?.transformPresentation ===
-      "display-refresh-css-linear-interpolation-between-prepared-30ms-states" &&
+      "compositor-css-keyframes-through-prepared-30ms-states-on-existing-scene-node" &&
     reducedScene.renderer?.runtimeGeometryConstruction === false &&
     reducedScene.renderer?.runtimeLightingCalculation === false &&
     reducedScene.renderer?.runtimeDomGrowth === false && reducedScene.renderer?.alternateRenderer === false,
@@ -214,6 +220,7 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     `reduced ${profile} atlas identity`);
     reducedAtlasPaths.push(reducedAtlasPath);
   }
+  const reducedCssOpacityAtlasPaths = await inspectCssOpacityAtlasPair(root, reducedScene, 30);
   const reducedSnapshot = await readFile(join(root, reducedSnapshotPath), "utf8");
   assert(count(reducedSnapshot, /<b\b/gu) === 30 &&
     count(reducedSnapshot, /<i\b/gu) === 0 && count(reducedSnapshot, /<s\b/gu) === 0 &&
@@ -221,6 +228,10 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     count(reducedSnapshot, /<b style="transform: matrix3d\(/gu) === 30 &&
     /matrix3d\(36\.666666667,/u.test(reducedSnapshot) &&
     /--cssmenger-tile-width:9px;--cssmenger-tile-height:9px/u.test(reducedSnapshot) &&
+    reducedSnapshot.includes(reducedScene.cssOpacityBaseAtlas.assetUrl) &&
+    reducedSnapshot.includes(reducedScene.cssOpacityShadowAtlas.assetUrl) &&
+    count(reducedSnapshot, /%\{transform:rotateX/gu) === 1_440 &&
+    !/mask-image|-webkit-mask/u.test(reducedSnapshot) &&
     !/cssmenger-(?:model|axis)|!important|\sdata-[\w-]+=/u.test(reducedSnapshot) &&
     !/<(?:script|canvas|svg)\b/iu.test(reducedSnapshot),
   "reduced retained DOM");
@@ -229,7 +240,8 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
 
   const expectedFiles = new Set([
     "manifest.json", scenePath, snapshotPath, atlasPath, mobileAtlasPath,
-    reducedScenePath, reducedSnapshotPath, ...reducedAtlasPaths,
+    ...cssOpacityAtlasPaths, reducedScenePath, reducedSnapshotPath, ...reducedAtlasPaths,
+    ...reducedCssOpacityAtlasPaths,
   ]);
   const files = (await walk(root))
     .map((path) => relative(root, path).split(sep).join("/"))
@@ -254,6 +266,7 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     sceneCount: 2,
     retainedRenderWrapperCount: 2,
     retainedModelRootCount: 0,
+    retainedLightingRootCount: 0,
     retainedAxisRootCount: 0,
     preparedLeafCount: 84,
     mobilePreparedLeafCount: 30,
@@ -263,7 +276,7 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     mobileMergedSourceFaceCount: 1_026,
     timelineStateCount: 1_440,
     paletteStateCount: 128,
-    atlasAssetCount: 4,
+    atlasAssetCount: 8,
     lightingAddressUpdateCount: scene.planeAtlas.addressUpdateCount,
     redundantLightingAddressWriteCountRemoved: scene.planeAtlas.redundantAddressWriteCountRemoved,
     mobileLightingAddressUpdateCount: reducedScene.mobilePlaneAtlas.addressUpdateCount,
@@ -286,6 +299,33 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     "product public boundary");
   }
   return summary;
+}
+
+async function inspectCssOpacityAtlasPair(root, scene, expectedLeafCount) {
+  const base = scene.cssOpacityBaseAtlas;
+  const shadow = scene.cssOpacityShadowAtlas;
+  const basePath = productPath(base?.assetUrl);
+  const shadowPath = productPath(shadow?.assetUrl);
+  const [baseBytes, shadowBytes] = await Promise.all([
+    readFile(join(root, basePath)),
+    readFile(join(root, shadowPath)),
+  ]);
+  assert(baseBytes.length === base?.byteLength && sha256(baseBytes) === base.assetSha256 &&
+    base?.schema === "cssmenger-prepared-coplanar-plane-atlas@1" &&
+    base?.paletteRole === "css-opacity-base" && base?.encoding === "PNG-RGBA8" &&
+    base?.paletteStateCount === 128 && base?.leafCount === expectedLeafCount &&
+    base?.sourceFaceCoverageExact === true &&
+    /^\/cssmenger\/assets\/planes-opacity-base-[a-f0-9]{64}\.png$/u.test(base?.assetUrl),
+  "prepared CSS opacity base atlas identity");
+  assert(shadowBytes.length === shadow?.byteLength && sha256(shadowBytes) === shadow.assetSha256 &&
+    shadow?.schema === "cssmenger-prepared-sparse-leaf-lighting-atlas@1" &&
+    shadow?.profile === "desktop" && shadow?.presentation === "css-black-alpha" &&
+    shadow?.mimeType === "image/avif" && shadow?.leafCount === expectedLeafCount &&
+    shadow?.lightingSampleIntervalTicks === 2 && shadow?.lightingSampleCount === 720 &&
+    shadow?.addressPublicationIntervalTicks === 2 && shadow?.sourceFaceCoverageExact === true &&
+    /^\/cssmenger\/assets\/lighting-shadow-grid-[a-f0-9]{64}\.avif$/u.test(shadow?.assetUrl),
+  "prepared CSS opacity shadow atlas identity");
+  return [basePath, shadowPath];
 }
 
 export async function writeCssmengerProductBankDescriptor(root, summary) {

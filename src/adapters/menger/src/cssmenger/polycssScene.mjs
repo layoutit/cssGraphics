@@ -6,7 +6,9 @@ export function mountPreparedPolycssSnapshot({
   snapshotHtml,
   planeAtlas,
   planeAtlasProfile,
-  planeAtlasAsset,
+  renderAtlases,
+  renderAtlasAssets,
+  lightingPresentation,
 }) {
   if (!(host instanceof HTMLElement)) throw new Error("Missing cssMenger host");
   if (typeof snapshotHtml !== "string") throw new Error("Prepared cssMenger snapshot is required");
@@ -19,7 +21,8 @@ export function mountPreparedPolycssSnapshot({
   const scene = camera?.querySelector(".polycss-scene");
   const snapshotLeaves = [...(scene?.querySelectorAll(":scope > b") ?? [])];
   if (styles.length === 0 || !(camera instanceof HTMLElement) || !(scene instanceof HTMLElement) ||
-      snapshotLeaves.length !== sceneData.metrics.preparedLeafCount || scene.querySelector(":scope > i, :scope > s")) {
+      snapshotLeaves.length !== sceneData.metrics.preparedLeafCount ||
+      scene.children.length !== snapshotLeaves.length || scene.querySelector(":scope > i, :scope > s, :scope > div")) {
     throw new Error("Prepared cssMenger snapshot is missing its retained PolyCSS graph");
   }
   removePreparedSnapshotStyles();
@@ -32,19 +35,44 @@ export function mountPreparedPolycssSnapshot({
   const mountedScene = mountedCamera.querySelector(".polycss-scene");
   const leaves = [...(mountedScene?.querySelectorAll(":scope > b") ?? [])];
   if (!(mountedScene instanceof HTMLElement) || leaves.length !== sceneData.metrics.preparedLeafCount ||
-      mountedScene.querySelector(":scope > i, :scope > s")) {
+      mountedScene.children.length !== leaves.length || mountedScene.querySelector(":scope > i, :scope > s, :scope > div")) {
     throw new Error("Prepared cssMenger retained target census drifted");
   }
-  mountedScene.classList.toggle("cssmenger-mobile-atlas", planeAtlasProfile === "mobile");
+  mountedScene.classList.toggle("cssmenger-mobile-atlas",
+    lightingPresentation === "atlas" && planeAtlasProfile === "mobile");
+  mountedScene.classList.toggle("cssmenger-css-opacity", lightingPresentation === "css-opacity");
   for (const existing of host.querySelectorAll(":scope > .polycss-camera")) existing.remove();
   host.append(mountedCamera);
-  if (planeAtlasAsset?.sha256 !== planeAtlas?.assetSha256 || typeof planeAtlasAsset.url !== "string" ||
-      !["desktop", "mobile"].includes(planeAtlasProfile) || planeAtlas?.profile !== planeAtlasProfile) {
+  if (!Array.isArray(renderAtlases) || !Array.isArray(renderAtlasAssets) ||
+      renderAtlases.length !== renderAtlasAssets.length || renderAtlases.length < 1 ||
+      renderAtlases.some((atlas, index) => renderAtlasAssets[index]?.sha256 !== atlas?.assetSha256 ||
+        typeof renderAtlasAssets[index].url !== "string" ||
+        renderAtlasAssets[index].decodedImageRetention !== "css-background-lifetime") ||
+      !["atlas", "css-opacity"].includes(lightingPresentation) ||
+      !["desktop", "mobile"].includes(planeAtlasProfile) || planeAtlas?.profile !== planeAtlasProfile ||
+      (lightingPresentation === "atlas" &&
+        (renderAtlases.length !== 1 || renderAtlases[0] !== planeAtlas) ||
+      lightingPresentation === "css-opacity" &&
+        (renderAtlases.length !== 2 || renderAtlases[0]?.paletteRole !== "css-opacity-base" ||
+          renderAtlases[1]?.presentation !== "css-black-alpha"))) {
     throw new Error("Prepared cssMenger plane atlas asset is missing or unverified");
   }
-  if (!getComputedStyle(leaves[0]).backgroundImage.includes(planeAtlasAsset.url)) {
+  const computedLeaf = getComputedStyle(leaves[0]);
+  if ((lightingPresentation === "atlas" &&
+        !computedLeaf.backgroundImage.includes(renderAtlasAssets[0].url)) ||
+      (lightingPresentation === "css-opacity" &&
+        (!computedLeaf.backgroundImage.includes(renderAtlasAssets[0].url) ||
+          !computedLeaf.backgroundImage.includes(renderAtlasAssets[1].url) ||
+          computedLeaf.maskImage !== "none"))) {
     throw new Error("Prepared cssMenger plane atlas binding drifted");
   }
+  const rotationAnimations = mountedScene.getAnimations()
+    .filter((animation) => animation.animationName === "cssmenger-prepared-rotation");
+  if (rotationAnimations.length !== 1) {
+    throw new Error("Prepared cssMenger compositor rotation animation is missing");
+  }
+  const rotationAnimation = rotationAnimations[0];
+  rotationAnimation.pause();
   const stableNodes = Object.freeze([mountedCamera, mountedScene, ...leaves]);
   const axisLeafCounts = sceneData.meshDescriptors?.map((mesh) => mesh.polygonCount);
   if (!Array.isArray(axisLeafCounts) || axisLeafCounts.length !== 3 ||
@@ -84,6 +112,7 @@ export function mountPreparedPolycssSnapshot({
     camera: mountedCamera,
     scene: mountedScene,
     publicationRoot: mountedScene,
+    rotationAnimation,
     axisLeaves,
     leaves: Object.freeze(leaves),
     assertStableDomIdentity,
@@ -95,14 +124,24 @@ export function mountPreparedPolycssSnapshot({
         retainedSceneRootCount: 1,
         retainedRenderWrapperCount: 2,
         retainedModelRootCount: 0,
+        retainedRotationRootCount: 0,
+        retainedLightingRootCount: 0,
         retainedAxisRootCount: 0,
         retainedPolygonLeafCount: leaves.length,
         preparedPlaneAtlasTextureLeafCount: leaves.length,
-        preparedPlaneAtlasUniqueUrlCount: 1,
+        preparedPlaneAtlasUniqueUrlCount: renderAtlases.length,
         preparedPlaneAtlasProfile: planeAtlasProfile,
-        preparedPlaneAtlasDecodedBytes: planeAtlas.decodedBytes,
-        preparedPlaneAtlasAssetBytes: planeAtlasAsset.byteLength,
-        preparedPlaneAtlasAssetSha256: planeAtlasAsset.sha256,
+        preparedLightingPresentation: lightingPresentation,
+        preparedCompositorRotationAnimationCount: 1,
+        preparedPlaneAtlasDecodedBytes:
+          renderAtlases.reduce((sum, atlas) => sum + atlas.decodedBytes, 0),
+        preparedPlaneAtlasAssetBytes:
+          renderAtlasAssets.reduce((sum, asset) => sum + asset.byteLength, 0),
+        preparedPlaneAtlasAssetSha256: renderAtlasAssets.map((asset) => asset.sha256).join(","),
+        preparedPlaneAtlasDecodedImageRetention: renderAtlasAssets.every((asset) =>
+          asset.decodedImageRetention === "css-background-lifetime")
+          ? "css-background-lifetime"
+          : "invalid",
         runtimeDomCreationCount,
         runtimeDomRemovalCount,
         runtimeDomMutationCount: runtimeDomCreationCount + runtimeDomRemovalCount,
@@ -111,6 +150,7 @@ export function mountPreparedPolycssSnapshot({
     },
     destroy() {
       observer.disconnect();
+      rotationAnimation.cancel();
       mountedCamera.remove();
       removePreparedSnapshotStyles();
     },

@@ -71,11 +71,13 @@ export async function captureBrowserMengerFrames(options = {}) {
           await debug.seek(tick);
           await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
           const playback = debug.scene.playback;
-          const publicationRoot = document.querySelector(".polycss-camera > .polycss-scene");
-          const leaves = [...document.querySelectorAll(".polycss-camera > .polycss-scene > b")];
+          const rotationRoot = document.querySelector(".polycss-camera > .polycss-scene");
+          const leaves = [...document.querySelectorAll(
+            ".polycss-camera > .polycss-scene > b",
+          )];
           const planeAtlas = debug.scene.planeAtlas;
           const expectedTransformMatrix = new DOMMatrix(playback.transforms[tick]).toFloat64Array();
-          const publishedTransformMatrix = new DOMMatrix(publicationRoot?.style.transform).toFloat64Array();
+          const publishedTransformMatrix = new DOMMatrix(rotationRoot?.style.transform).toFloat64Array();
           const offsets = decodeU16(planeAtlas.addressStateOffsetsBase64);
           const leafIndices = decodeU8(planeAtlas.addressLeafIndicesBase64);
           const slotIndices = decodeU16(planeAtlas.addressSlotIndicesBase64);
@@ -93,7 +95,7 @@ export async function captureBrowserMengerFrames(options = {}) {
             tick: debug.state().tick,
             paused: debug.state().paused,
             preparedTransform: playback.transforms[tick],
-            publishedTransform: publicationRoot?.style.transform ?? null,
+            publishedTransform: rotationRoot?.style.transform ?? null,
             publishedTransformMatrixMaxDelta: Math.max(...publishedTransformMatrix.map((value, index) =>
               Math.abs(value - expectedTransformMatrix[index]))),
             paletteIndices: playback.colorRows[tick],

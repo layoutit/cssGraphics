@@ -17,8 +17,12 @@ const viewport = {
 };
 const deviceScaleFactor = positiveNumber("CSSMENGER_PERF_DEVICE_SCALE_FACTOR", 1);
 const cpuThrottlingRate = positiveNumber("CSSMENGER_PERF_CPU_THROTTLE", 1);
+const routeQuery = process.env.CSSMENGER_PERF_ROUTE_QUERY ?? "";
+if (routeQuery && !/^\?[a-z0-9=&-]+$/u.test(routeQuery)) {
+  throw new Error("CSSMENGER_PERF_ROUTE_QUERY must be a safe query string beginning with ?");
+}
 const port = await freePort();
-const route = `http://127.0.0.1:${port}/`;
+const route = `http://127.0.0.1:${port}/${routeQuery}`;
 let serverOutput = "";
 const server = spawn("pnpm", ["exec", "vite", "preview", "--config", join(adapterRoot, "vite.config.mjs"), "--host", "127.0.0.1", "--port", String(port), "--strictPort"], {
   cwd: repositoryRoot,
@@ -121,7 +125,9 @@ try {
       firstPaintMilliseconds: paints["first-paint"] ?? null,
       firstContentfulPaintMilliseconds: paints["first-contentful-paint"] ?? null,
       domElementCount: document.querySelectorAll("*").length,
-      retainedLeafCount: document.querySelectorAll(".polycss-camera > .polycss-scene > b, .polycss-camera > .polycss-scene > i, .polycss-camera > .polycss-scene > s").length,
+      retainedLeafCount: document.querySelectorAll(
+        ".polycss-camera > .polycss-scene > b",
+      ).length,
       transfer: performance.getEntriesByType("resource").map((entry) => ({
         name: new URL(entry.name).pathname,
         durationMilliseconds: entry.duration,
@@ -208,7 +214,7 @@ try {
       preparedStateAdvanceCount: afterState.state.tick - beforeState.state.tick,
       modelTransformWriteUpperBound:
         (afterState.state.tick - beforeState.state.tick) *
-        1,
+        afterState.stats.runtimeRotationStyleWriteCountPerScheduledTick,
       lightingAddressWriteUpperBound:
         (afterState.state.tick - beforeState.state.tick) *
         afterState.stats.preparedLightingAddressWritesPerScheduledTick.maximum,

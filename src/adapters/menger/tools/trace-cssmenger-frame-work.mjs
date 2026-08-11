@@ -91,8 +91,8 @@ try {
   const result = await page.evaluate(async (tick) => {
     const debug = globalThis.__cssMengerDebug;
     const scene = debug.scene;
-    const publicationRoot = document.querySelector(".polycss-camera > .polycss-scene");
-    if (!(publicationRoot instanceof HTMLElement) || scene?.planeAtlas?.sourceStateCount <= tick + 1) {
+    const rotationRoot = document.querySelector(".polycss-camera > .polycss-scene");
+    if (!(rotationRoot instanceof HTMLElement) || scene?.planeAtlas?.sourceStateCount <= tick + 1) {
       throw new Error("Single-frame work probe could not bind the prepared runtime graph");
     }
     const originalTransform = scene.playback.transforms[tick];
@@ -104,10 +104,10 @@ try {
     await settle();
 
     const transformOnly = await measuredCase("cssmenger-transform-only", () => {
-      publicationRoot.style.transform = nextTransform;
+      rotationRoot.style.transform = nextTransform;
       return { writeCount: 1, property: "transform", targetCount: 1 };
     });
-    publicationRoot.style.transform = originalTransform;
+    rotationRoot.style.transform = originalTransform;
     await settle();
 
     performance.mark("cssmenger-frame-work-start");

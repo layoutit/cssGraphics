@@ -142,7 +142,7 @@ body > .polycss-camera {
 }
 
 body > .polycss-camera > .polycss-scene {
-  transition: transform 30ms linear;
+  animation: cssmenger-prepared-rotation var(--cssmenger-rotation-duration) linear infinite alternate both paused;
   will-change: transform;
 }
 

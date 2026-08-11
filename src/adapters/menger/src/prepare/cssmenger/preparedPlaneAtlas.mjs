@@ -6,12 +6,26 @@ import { preparedSourceFaceVertices } from "./mengerGeometry.mjs";
 const GUTTER = 1;
 const preparedBytes = new WeakMap();
 
-export function buildPreparedMengerPlaneAtlas({ geometry, palette }) {
+const PALETTE_ROLES = Object.freeze({
+  source: Object.freeze({
+    stateCount: 128,
+    assetPrefix: "planes",
+    technique: "one-alpha-atlas-quad-per-directional-plane-with-prepared-palette-banks",
+  }),
+  "css-opacity-base": Object.freeze({
+    stateCount: 128,
+    assetPrefix: "planes-opacity-base",
+    technique: "one-alpha-color-base-atlas-quad-per-directional-plane",
+  }),
+});
+
+export function buildPreparedMengerPlaneAtlas({ geometry, palette, paletteRole = "source" }) {
+  const role = PALETTE_ROLES[paletteRole];
   if (!geometry?.metrics?.sourceFaceCoverageExact || !Array.isArray(geometry.bundles) ||
       !Array.isArray(geometry.sourceFaces) || !Array.isArray(geometry.meshes) ||
-      !Array.isArray(palette) || palette.length !== 128 ||
+      !role || !Array.isArray(palette) || palette.length !== role.stateCount ||
       palette.some((material) => !Array.isArray(material) || material.length !== 4)) {
-    throw new TypeError("Complete Menger plane geometry and 128-color prepared palette are required");
+    throw new TypeError("Complete Menger plane geometry and a supported prepared palette are required");
   }
   const polygonByLeaf = new Map(geometry.meshes.flatMap((mesh) => mesh.polygons).map((polygon) => [
     Number(polygon.data["cssmenger-plane-leaf"]),
@@ -76,10 +90,12 @@ export function buildPreparedMengerPlaneAtlas({ geometry, palette }) {
   ])));
   const contract = Object.freeze({
     schema: "cssmenger-prepared-coplanar-plane-atlas@1",
-    technique: "one-alpha-atlas-quad-per-directional-plane-with-prepared-palette-banks",
-    assetUrl: `/cssmenger/assets/planes-${sha256}.png`,
+    technique: role.technique,
+    paletteRole,
+    assetUrl: `/cssmenger/assets/${role.assetPrefix}-${sha256}.png`,
     assetSha256: sha256,
     encoding: "PNG-RGBA8",
+    byteLength: bytes.length,
     width: image.width,
     height: image.height,
     decodedBytes: image.width * image.height * 4,

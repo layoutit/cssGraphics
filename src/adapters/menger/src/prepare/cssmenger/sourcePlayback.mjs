@@ -35,12 +35,19 @@ export function buildPreparedMengerPlayback({
   const transforms = [];
   const nativeRotationDegrees = [];
   const colorRows = [];
+  let previousTransformDegrees = null;
   const colorOffset1 = Math.trunc(palette.length / 3);
   const colorOffset2 = colorOffset1 * 2;
   for (let tick = 0; tick < stateCount; tick += 1) {
     const [x, y, z] = getRotation(rotator, rng, true);
-    transforms.push(`rotateX(${number(-x * 360)}deg) rotateY(${number(y * 360)}deg) rotateZ(${number(-z * 360)}deg)`);
-    nativeRotationDegrees.push(Object.freeze([x * 360, y * 360, z * 360]));
+    const sourceRotationDegrees = [x * 360, y * 360, z * 360];
+    const wrappedTransformDegrees = [-sourceRotationDegrees[0], sourceRotationDegrees[1], -sourceRotationDegrees[2]];
+    const transformDegrees = previousTransformDegrees
+      ? wrappedTransformDegrees.map((value, axis) => nearestEquivalentDegrees(value, previousTransformDegrees[axis]))
+      : wrappedTransformDegrees;
+    transforms.push(`rotateX(${number(transformDegrees[0])}deg) rotateY(${number(transformDegrees[1])}deg) rotateZ(${number(transformDegrees[2])}deg)`);
+    nativeRotationDegrees.push(Object.freeze(sourceRotationDegrees));
+    previousTransformDegrees = transformDegrees;
     colorRows.push(Object.freeze([
       tick % palette.length,
       (tick + colorOffset1) % palette.length,
@@ -62,10 +69,15 @@ export function buildPreparedMengerPlayback({
     nativeRotationDegrees: Object.freeze(nativeRotationDegrees),
     colorRows: Object.freeze(colorRows),
     adjacentPublicationMode: "all-fields-change",
+    transformAngleMode: "prepared-nearest-equivalent-unwrapped-degrees",
     runtimeInterpolation: false,
     runtimeColorGeneration: false,
     runtimeRotationCalculation: false,
   });
+}
+
+function nearestEquivalentDegrees(value, previousValue) {
+  return value - Math.round((value - previousValue) / 360) * 360;
 }
 
 function assertEveryAdjacentStateChangesAllPublications(transforms, colorRows) {

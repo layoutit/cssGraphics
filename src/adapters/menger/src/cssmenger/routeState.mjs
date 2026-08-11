@@ -1,24 +1,32 @@
 export const DEFAULT_SCENE_ID = "depth-3";
 export const MOBILE_SCENE_ID = "depth-2";
-export const PUBLIC_ROUTE_PARAMS = ["scene"];
+export const DEFAULT_LIGHTING_PRESENTATION = "atlas";
+export const PUBLIC_ROUTE_PARAMS = ["scene", "lighting"];
 
 export function createRouteState(search = globalThis.location?.search ?? "") {
   const params = new URLSearchParams(search);
   const scene = cleanSceneId(params.get("scene")) ?? DEFAULT_SCENE_ID;
+  const lighting = params.get("lighting") === "opacity" ? "opacity" : DEFAULT_LIGHTING_PRESENTATION;
   return {
     params,
     scene,
+    lighting,
     sceneExplicit: params.has("scene"),
+    lightingExplicit: params.has("lighting"),
     manifestUrl: "/cssmenger/manifest.json",
-    publicRoute: publicRouteFor({ scene }),
-    routeContract: "?scene=<scene-id>",
+    publicRoute: publicRouteFor({ scene, lighting }),
+    routeContract: "?scene=<scene-id>&lighting=<atlas|opacity>",
   };
 }
 
-export function publicRouteFor({ scene = DEFAULT_SCENE_ID } = {}) {
-  if (scene === DEFAULT_SCENE_ID) return "/";
+export function publicRouteFor({
+  scene = DEFAULT_SCENE_ID,
+  lighting = DEFAULT_LIGHTING_PRESENTATION,
+} = {}) {
+  if (scene === DEFAULT_SCENE_ID && lighting === DEFAULT_LIGHTING_PRESENTATION) return "/";
   const params = new URLSearchParams();
-  params.set("scene", scene);
+  if (scene !== DEFAULT_SCENE_ID) params.set("scene", scene);
+  if (lighting === "opacity") params.set("lighting", lighting);
   return "/?" + params.toString();
 }
 

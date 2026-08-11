@@ -1,11 +1,64 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import test from "node:test";
+import { loadPreparedMengerPlaneAtlasAsset } from "../src/cssmenger/preparedPlaneAtlasAsset.mjs";
 import { generatedPublicRoot } from "../src/prepare/cssmenger/paths.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const generated = generatedPublicRoot;
+
+test("verified lighting atlas bytes stay bound to the CSS background lifetime", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalImage = globalThis.Image;
+  const bytes = Uint8Array.from([17, 34, 51, 68]);
+  const assetSha256 = createHash("sha256").update(bytes).digest("hex");
+  class FakeImage {
+    constructor() { throw new Error("asset verification must not decode an off-DOM duplicate"); }
+  }
+  globalThis.fetch = async () => ({
+    ok: true,
+    arrayBuffer: async () => bytes.slice().buffer,
+  });
+  globalThis.Image = FakeImage;
+  try {
+    const asset = await loadPreparedMengerPlaneAtlasAsset({
+      schema: "cssmenger-prepared-sparse-leaf-lighting-atlas@1",
+      assetUrl: `/cssmenger/assets/lighting-grid-${assetSha256}.avif`,
+      profile: "desktop",
+      assetSha256,
+      encoding: "AVIF-lossy-q83-alpha-lossless-yuv444",
+      quality: 83,
+      alphaQuality: 100,
+      chromaSubsampling: "4:4:4",
+      byteLength: bytes.byteLength,
+      width: 27,
+      height: 27,
+    });
+    assert.equal(asset.decodedImageRetention, "css-background-lifetime");
+    assert.equal(asset.retained, true);
+    asset.destroy();
+    assert.equal(asset.retained, false);
+    asset.destroy();
+    const cssOpacityAsset = await loadPreparedMengerPlaneAtlasAsset({
+      schema: "cssmenger-prepared-coplanar-plane-atlas@1",
+      paletteRole: "css-opacity-base",
+      assetUrl: `/cssmenger/assets/planes-opacity-base-${assetSha256}.png`,
+      assetSha256,
+      encoding: "PNG-RGBA8",
+      byteLength: bytes.byteLength,
+      width: 27,
+      height: 27,
+    });
+    assert.equal(cssOpacityAsset.paletteRole, "css-opacity-base");
+    cssOpacityAsset.destroy();
+    assert.equal(cssOpacityAsset.retained, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.Image = originalImage;
+  }
+});
 
 test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared paths", async () => {
   const manifest = await readJson(join(generated, "manifest.json"));
@@ -28,9 +81,11 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
   assert.equal(scene.metrics.preparedPlaneTexturePatternCount, 8);
   assert.equal(scene.metrics.preparedRenderWrapperCount, 2);
   assert.equal(scene.metrics.preparedModelRootCount, 0);
+  assert.equal(scene.metrics.preparedLightingRootCount, 0);
   assert.equal(scene.metrics.preparedAxisRootCount, 0);
   assert.equal(manifest.scenes[0].metrics.preparedRenderWrapperCount, 2);
   assert.equal(manifest.scenes[0].metrics.preparedModelRootCount, 0);
+  assert.equal(manifest.scenes[0].metrics.preparedLightingRootCount, 0);
   assert.equal(manifest.scenes[0].metrics.preparedAxisRootCount, 0);
   assert.equal(scene.planeAtlas.leafCount, 84);
   assert.equal(scene.planeAtlas.profile, "desktop");
@@ -48,6 +103,14 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
   assert.equal(scene.planeAtlas.addressScheduleSchema,
     "cssmenger-prepared-exact-delta-lighting-address-schedule@1");
   assert.equal(scene.planeAtlas.addressUpdateCount, 30_989);
+  assert.equal(scene.planeAtlas.reverseAddressScheduleSchema,
+    "cssmenger-prepared-exact-reverse-delta-lighting-address-schedule@1");
+  assert.equal(scene.planeAtlas.reverseAddressStateOffsetByteLength, (1_440 + 1) * 2);
+  assert.equal(scene.planeAtlas.reverseAddressLeafIndexByteLength,
+    scene.planeAtlas.reverseAddressUpdateCount);
+  assert.equal(scene.planeAtlas.reverseAddressSlotIndexByteLength,
+    scene.planeAtlas.reverseAddressUpdateCount * 2);
+  assert.equal(scene.planeAtlas.reverseAddressUpdateCount > 0, true);
   assert.equal(scene.planeAtlas.addressStateOffsetByteLength, (1_440 + 1) * 2);
   assert.equal(scene.planeAtlas.addressLeafIndexByteLength, 30_989);
   assert.equal(scene.planeAtlas.addressSlotIndexByteLength, 30_989 * 2);
@@ -70,6 +133,7 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
   assert.equal(scene.mobilePlaneAtlas.lightingSampleDelayMilliseconds, 43_200);
   assert.equal(scene.mobilePlaneAtlas.lightingSampleCount, 1);
   assert.equal(scene.mobilePlaneAtlas.addressUpdateCount, 84);
+  assert.equal(scene.mobilePlaneAtlas.reverseAddressUpdateCount, 0);
   assert.equal(scene.mobilePlaneAtlas.redundantAddressWriteCountRemoved, 61_440);
   assert.deepEqual(scene.mobilePlaneAtlas.addressWriteCountPerState, {
     minimum: 0,
@@ -79,6 +143,34 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
   });
   assert.equal(scene.mobilePlaneAtlas.addressInitialization, "all-leaf-addresses-before-playback");
   assert.equal(scene.mobilePlaneAtlas.addressInitializationWriteCount, 84);
+  assert.equal(scene.cssOpacityBaseAtlas.schema, "cssmenger-prepared-coplanar-plane-atlas@1");
+  assert.equal(scene.cssOpacityBaseAtlas.paletteRole, "css-opacity-base");
+  assert.equal(scene.cssOpacityBaseAtlas.paletteStateCount, 128);
+  assert.equal(scene.cssOpacityBaseAtlas.leafCount, 84);
+  assert.equal(scene.cssOpacityBaseAtlas.decodedBytes, 3_444_736);
+  assert.match(scene.cssOpacityBaseAtlas.assetUrl,
+    /^\/cssmenger\/assets\/planes-opacity-base-[a-f0-9]{64}\.png$/u);
+  assert.equal(scene.cssOpacityShadowAtlas.schema, "cssmenger-prepared-sparse-leaf-lighting-atlas@1");
+  assert.equal(scene.cssOpacityShadowAtlas.presentation, "css-black-alpha");
+  assert.equal(scene.cssOpacityShadowAtlas.byteLength, 2_854_502);
+  assert.equal(scene.cssOpacityShadowAtlas.decodedBytes, 94_864_800);
+  assert.equal(scene.cssOpacityShadowAtlas.width, 16_356);
+  assert.equal(scene.cssOpacityShadowAtlas.height, 1_450);
+  assert.equal(scene.cssOpacityShadowAtlas.gutterPixels, 1);
+  assert.equal(scene.cssOpacityShadowAtlas.slotCount, 27_650);
+  assert.match(scene.cssOpacityShadowAtlas.assetUrl,
+    /^\/cssmenger\/assets\/lighting-shadow-grid-[a-f0-9]{64}\.avif$/u);
+  assert.equal(scene.cssOpacityShadowAtlas.lightingSampleIntervalTicks, 2);
+  assert.equal(scene.cssOpacityShadowAtlas.lightingSampleDelayMilliseconds, 60);
+  assert.equal(scene.cssOpacityShadowAtlas.lightingSampleCount, 720);
+  assert.equal(scene.cssOpacityShadowAtlas.addressPublicationIntervalTicks, 2);
+  assert.equal(scene.cssOpacityShadowAtlas.addressPublicationDelayMilliseconds, 60);
+  assert.equal(scene.cssOpacityShadowAtlas.addressedVisibleLeafFieldCount, 30_770);
+  assert.equal(scene.cssOpacityShadowAtlas.addressUpdateCount, 29_076);
+  assert.equal(scene.cssOpacityShadowAtlas.reverseAddressUpdateCount > 0, true);
+  assert.deepEqual(scene.cssOpacityShadowAtlas.preparedAxisPaletteSourceIndices, [1, 0, 2]);
+  assert.equal(scene.cssOpacityShadowAtlas.preparedPaletteColors.length, 128);
+  assert.equal(scene.cssOpacityLighting, undefined);
   assert.equal(scene.metrics.atlasPageCount, 2);
   assert.equal(scene.playback.frontFacingSchedule.schema, "cssmenger-prepared-front-facing-leaf-schedule@1");
   assert.equal(scene.playback.frontFacingSchedule.offsets.length, 1440 * 3 + 1);
@@ -100,7 +192,7 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
   assert.equal(scene.renderer.textureLeafSizing, "raster");
   assert.equal(scene.renderer.preparedPlaneGridSnap, "exact-source-cell-boundary-matrix3d");
   assert.equal(scene.renderer.transformPresentation,
-    "display-refresh-css-linear-interpolation-between-prepared-30ms-states");
+    "compositor-css-keyframes-through-prepared-30ms-states-on-existing-scene-node");
   assert.equal(scene.textureLeafSizing, "raster");
   assert.equal(scene.renderer.runtimeDomGrowth, false);
   assert.equal(scene.renderer.backfacePolicy, "prepared-closed-opaque-surface-cull");
@@ -120,13 +212,14 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
   assert.equal(mobileScene.mobilePlaneAtlas.decodedBytes, 3_538_080);
   assert.equal(mobileScene.mobilePlaneAtlas.leafCount, 30);
   assert.equal(mobileScene.mobilePlaneAtlas.addressUpdateCount, 11_002);
+  assert.equal(mobileScene.mobilePlaneAtlas.reverseAddressUpdateCount > 0, true);
   assert.equal(mobileScene.mobilePlaneAtlas.lightingSampleIntervalTicks, 2);
   assert.equal(mobileScene.mobilePlaneAtlas.addressWriteCountPerState.maximum, 18);
   assert.equal(mobileScene.mobilePlaneAtlas.addressInitializationWriteCount, 0);
   assert.equal(mobileScene.renderer.runtimeGeometryPayload, false);
   assert.equal(mobileScene.renderer.preparedPlaneGridSnap, "exact-source-cell-boundary-matrix3d");
   assert.equal(mobileScene.renderer.transformPresentation,
-    "display-refresh-css-linear-interpolation-between-prepared-30ms-states");
+    "compositor-css-keyframes-through-prepared-30ms-states-on-existing-scene-node");
   assert.doesNotMatch(JSON.stringify(mobileScene), /\/(?:Users|home)\//u);
 });
 
@@ -143,11 +236,19 @@ test("prepared snapshot is retained DOM without an alternate renderer", async ()
   assert.equal((html.match(/<b style="transform: matrix3d\(/gu) ?? []).length, 84);
   assert.doesNotMatch(html, /\.polycss-scene>b:nth-child\(\d+\)\{transform:/u);
   assert.match(html,
-    /body>\.polycss-camera>\.polycss-scene>b\{background-image:url\("\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif"\)\}/u);
+    /\.polycss-scene>b\{background-image:url\("\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif"\)\}/u);
   assert.match(html,
     /\.polycss-scene\.cssmenger-mobile-atlas.*lighting-grid-mobile-[a-f0-9]{64}\.avif/u);
+  assert.match(html,
+    /\.polycss-scene\.cssmenger-css-opacity.*planes-opacity-base-[a-f0-9]{64}\.png/u);
+  assert.match(html,
+    /\.polycss-scene\.cssmenger-css-opacity>b\{[^}]*background-image:url\("\/cssmenger\/assets\/lighting-shadow-grid-[^)]*\),url\("\/cssmenger\/assets\/planes-opacity-base-/u);
+  assert.doesNotMatch(html, /mask-image|-webkit-mask/u);
   assert.match(html, /\.polycss-scene\{translate:0px 0px -980\.385px;scale:1\.4(?:;|\})/u);
   assert.match(html, /<div class="polycss-scene" aria-hidden="true" style="transform: rotateX/u);
+  assert.match(html, /@keyframes cssmenger-prepared-rotation\{0%\{transform:rotateX/u);
+  assert.match(html, /--cssmenger-rotation-duration:43170ms/u);
+  assert.doesNotMatch(html, /cssmenger-(?:rotation|lighting)-root/u);
   assert.doesNotMatch(html, /<b style="(?!transform: matrix3d\()[^"]+/u);
   assert.doesNotMatch(html, /var\(--[mxyz]\)|--[mxyz]:/u);
   assert.match(html, /backface-visibility:\s*hidden/u);
@@ -175,7 +276,7 @@ test("product runtime CSS stays on the fast browser path", async () => {
   const shellGradient = "linear-gradient(180deg, #0b1119 0%, #000 100%)";
   assert.equal(css.split(shellGradient).length - 1, 2);
   assert.doesNotMatch(css, /!important/iu);
-  assert.match(css, /body > \.polycss-camera > \.polycss-scene\s*\{[^}]*transition:\s*transform 30ms linear;/su);
+  assert.match(css, /body > \.polycss-camera > \.polycss-scene\s*\{[^}]*animation:\s*cssmenger-prepared-rotation var\(--cssmenger-rotation-duration\) linear infinite alternate both paused;/su);
   assert.match(css, /body > \.polycss-camera > \.polycss-scene\s*\{[^}]*will-change:\s*transform;/su);
   assert.match(css, /body > \.polycss-camera > \.polycss-scene > b\s*\{/u);
   assert.doesNotMatch(css, /background-image:\s*var\(--a\)/u);

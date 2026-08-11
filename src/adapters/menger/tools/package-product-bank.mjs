@@ -50,6 +50,8 @@ async function copyProductClosure(source, target) {
     paths.add(snapshotPath);
     paths.add(productPath(scene.planeAtlas?.assetUrl));
     paths.add(productPath(scene.mobilePlaneAtlas?.assetUrl));
+    paths.add(productPath(scene.cssOpacityBaseAtlas?.assetUrl));
+    paths.add(productPath(scene.cssOpacityShadowAtlas?.assetUrl));
   }
   for (const path of paths) {
     await mkdir(dirname(join(target, path)), { recursive: true });

@@ -21,6 +21,16 @@ test("cssmenger route accepts safe scene ids", () => {
   assert.equal(publicRouteFor({ scene: route.scene }), "/?scene=demo-room_01");
 });
 
+test("cssmenger route exposes the prepared CSS opacity A/B presentation", () => {
+  const route = createRouteState("?lighting=opacity");
+  assert.equal(route.lighting, "opacity");
+  assert.equal(route.lightingExplicit, true);
+  assert.equal(route.publicRoute, "/?lighting=opacity");
+  assert.equal(publicRouteFor({ scene: "depth-2", lighting: "opacity" }),
+    "/?scene=depth-2&lighting=opacity");
+  assert.equal(createRouteState("?lighting=filter").lighting, "atlas");
+});
+
 test("cssmenger route rejects unsafe scene ids", () => {
   const route = createRouteState("?scene=../../retail");
   assert.equal(route.scene, DEFAULT_SCENE_ID);

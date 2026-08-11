@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { dirname, join } from "node:path";
 import { chromium } from "playwright";
@@ -12,6 +12,10 @@ import {
   repositoryRoot,
 } from "../src/prepare/cssmenger/paths.mjs";
 import { buildMengerPreparedGeometry } from "../src/prepare/cssmenger/mengerGeometry.mjs";
+import {
+  buildPreparedMengerPlaneAtlas,
+  preparedMengerPlaneAtlasBytes,
+} from "../src/prepare/cssmenger/preparedPlaneAtlas.mjs";
 import {
   buildPreparedMengerSparseLightingAtlas,
   DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS,
@@ -50,11 +54,34 @@ try {
     );
     const snapshot = await page.evaluate(() => window.__cssMengerDebugSnapshot);
     if (snapshot.status !== "ready") throw new Error(snapshot.error || "cssMenger snapshot failed");
-    const { desktopAtlas, mobileAtlas } = await prepareSparseLightingAtlases(snapshot.frontFacingSchedule);
+    const preparedLighting = await prepareSparseLightingAtlases(snapshot.frontFacingSchedule);
+    const {
+      desktopAtlas,
+      mobileAtlas,
+      cssOpacityBaseAtlas,
+      cssOpacityShadowAtlas,
+      axisLeafCounts,
+      rotationAnimationStyles,
+    } = preparedLighting;
     await mkdir(dirname(snapshotPath), { recursive: true });
-    await writeFile(snapshotPath, bindFinalAtlasDimensions(snapshot.html, desktopAtlas, mobileAtlas));
+    await writeFile(snapshotPath, bindFinalAtlasDimensions({
+      html: snapshot.html,
+      desktopAtlas,
+      mobileAtlas,
+      cssOpacityBaseAtlas,
+      cssOpacityShadowAtlas,
+      axisLeafCounts,
+      rotationAnimationStyles,
+    }));
     await rm(join(dirname(snapshotPath), `${sceneId}.polycss.html`), { force: true });
-    await publishRuntimeScene(snapshot.frontFacingSchedule, desktopAtlas, mobileAtlas);
+    await publishRuntimeScene({
+      frontFacingSchedule: snapshot.frontFacingSchedule,
+      desktopAtlas,
+      mobileAtlas,
+      cssOpacityBaseAtlas,
+      cssOpacityShadowAtlas,
+    });
+    await pruneUnreferencedGeneratedAtlasAssets();
     console.log(JSON.stringify({
       snapshotPath,
       snapshotUrl,
@@ -72,24 +99,74 @@ try {
   server.kill("SIGTERM");
 }
 
-function bindFinalAtlasDimensions(html, desktopAtlas, mobileAtlas) {
+function bindFinalAtlasDimensions({
+  html,
+  desktopAtlas,
+  mobileAtlas,
+  cssOpacityBaseAtlas,
+  cssOpacityShadowAtlas,
+  axisLeafCounts,
+  rotationAnimationStyles,
+}) {
   if (typeof html !== "string" || (html.match(/<\/style>/gu) ?? []).length !== 1 ||
       !validResponsiveAtlas(desktopAtlas, "desktop") || !validResponsiveAtlas(mobileAtlas, "mobile") ||
-      desktopAtlas.slotWidth !== mobileAtlas.slotWidth || desktopAtlas.slotHeight !== mobileAtlas.slotHeight) {
+      desktopAtlas.slotWidth !== mobileAtlas.slotWidth || desktopAtlas.slotHeight !== mobileAtlas.slotHeight ||
+      !validCssOpacityAtlas(cssOpacityBaseAtlas, "css-opacity-base", 128) ||
+      !validCssOpacityShadowAtlas(cssOpacityShadowAtlas) ||
+      typeof rotationAnimationStyles !== "string" || !rotationAnimationStyles.includes("@keyframes") ||
+      cssOpacityBaseAtlas.leafCount !== desktopAtlas.leafCount ||
+      cssOpacityShadowAtlas.leafCount !== desktopAtlas.leafCount ||
+      !Array.isArray(axisLeafCounts) || axisLeafCounts.length !== 3 ||
+      axisLeafCounts.reduce((sum, count) => sum + count, 0) !== desktopAtlas.leafCount) {
     throw new Error("Prepared cssMenger snapshot cannot bind final atlas dimensions");
   }
+  const cssOpacityStyles = preparedCssOpacityStyles({
+    baseAtlas: cssOpacityBaseAtlas,
+    shadowAtlas: cssOpacityShadowAtlas,
+  });
   return html.replace(
     "</style>",
     `.polycss-scene{--cssmenger-atlas-width:${desktopAtlas.width}px;` +
       `--cssmenger-atlas-height:${desktopAtlas.height}px;` +
       `--cssmenger-tile-width:${desktopAtlas.tileWidth}px;` +
       `--cssmenger-tile-height:${desktopAtlas.tileHeight}px}` +
-      `body>.polycss-camera>.polycss-scene>b{background-image:url("${desktopAtlas.assetUrl}")}` +
+      `body>.polycss-camera>.polycss-scene>b{` +
+      `background-image:url("${desktopAtlas.assetUrl}")}` +
       `.polycss-scene.cssmenger-mobile-atlas{--cssmenger-atlas-width:${mobileAtlas.width}px;` +
       `--cssmenger-atlas-height:${mobileAtlas.height}px}` +
       `body>.polycss-camera>.polycss-scene.cssmenger-mobile-atlas>b{` +
-      `background-image:url("${mobileAtlas.assetUrl}")}</style>`,
+      `background-image:url("${mobileAtlas.assetUrl}")}` +
+      `${cssOpacityStyles}${rotationAnimationStyles}</style>`,
   );
+}
+
+function validCssOpacityAtlas(atlas, role, paletteStateCount) {
+  return atlas?.schema === "cssmenger-prepared-coplanar-plane-atlas@1" &&
+    atlas.paletteRole === role && atlas.paletteStateCount === paletteStateCount &&
+    atlas.encoding === "PNG-RGBA8" && Number.isSafeInteger(atlas.byteLength) && atlas.byteLength > 0 &&
+    /^\/cssmenger\/assets\/planes-opacity-base-[a-f0-9]{64}\.png$/u.test(atlas.assetUrl);
+}
+
+function validCssOpacityShadowAtlas(atlas) {
+  return atlas?.schema === "cssmenger-prepared-sparse-leaf-lighting-atlas@1" &&
+    atlas.profile === "desktop" && atlas.presentation === "css-black-alpha" &&
+    Number.isSafeInteger(atlas.width) && Number.isSafeInteger(atlas.height) &&
+    /^\/cssmenger\/assets\/lighting-shadow-grid-[a-f0-9]{64}\.avif$/u.test(atlas.assetUrl) &&
+    Array.isArray(atlas.preparedAxisPaletteSourceIndices) &&
+    atlas.preparedAxisPaletteSourceIndices.join(",") === "1,0,2";
+}
+
+function preparedCssOpacityStyles({ baseAtlas, shadowAtlas }) {
+  const scene = "body>.polycss-camera>.polycss-scene.cssmenger-css-opacity";
+  const rules = [
+    `${scene}{--cssmenger-atlas-width:${shadowAtlas.width}px;` +
+      `--cssmenger-atlas-height:${shadowAtlas.height}px}`,
+    `${scene}>b{background-color:transparent;` +
+      `background-image:url("${shadowAtlas.assetUrl}"),url("${baseAtlas.assetUrl}");` +
+      `background-size:${shadowAtlas.width}px ${shadowAtlas.height}px,${baseAtlas.backgroundSize};` +
+      `background-repeat:no-repeat,no-repeat}`,
+  ];
+  return rules.join("");
 }
 
 function validResponsiveAtlas(atlas, profile) {
@@ -106,6 +183,31 @@ function atlasSummary(atlas) {
     slotCount: atlas.slotCount,
     lightingSampleIntervalTicks: atlas.lightingSampleIntervalTicks,
   };
+}
+
+async function pruneUnreferencedGeneratedAtlasAssets() {
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  const retainedUrls = new Set();
+  for (const entry of manifest.scenes ?? []) {
+    if (typeof entry.sceneUrl !== "string") continue;
+    const candidatePath = join(generatedPublicRoot, entry.sceneUrl.replace(/^\/cssmenger\//u, ""));
+    const candidate = JSON.parse(await readFile(candidatePath, "utf8"));
+    for (const atlas of [
+      candidate.planeAtlas,
+      candidate.mobilePlaneAtlas,
+      candidate.cssOpacityBaseAtlas,
+      candidate.cssOpacityShadowAtlas,
+    ]) {
+      if (typeof atlas?.assetUrl === "string") retainedUrls.add(atlas.assetUrl);
+    }
+  }
+  const assetsRoot = join(generatedPublicRoot, "assets");
+  const generatedAtlasName = /^(?:lighting-grid(?:-mobile)?|lighting-shadow-grid)-[a-f0-9]{64}\.avif$|^planes-opacity-(?:base|mask|shadow)-[a-f0-9]{64}\.png$/u;
+  for (const filename of await readdir(assetsRoot)) {
+    if (generatedAtlasName.test(filename) && !retainedUrls.has(`/cssmenger/assets/${filename}`)) {
+      await rm(join(assetsRoot, filename));
+    }
+  }
 }
 
 async function stagePreparedScene() {
@@ -142,7 +244,20 @@ async function prepareSparseLightingAtlases(frontFacingSchedule) {
       : MOBILE_LIGHTING_SAMPLE_INTERVAL_TICKS,
     profile: "mobile",
   });
-  for (const contract of [desktopAtlas, mobileAtlas]) {
+  const cssOpacityBaseAtlas = buildPreparedMengerPlaneAtlas({
+    geometry,
+    palette: scene.playback.palette.map((entry) => entry.material),
+    paletteRole: "css-opacity-base",
+  });
+  const cssOpacityShadowAtlas = await buildPreparedMengerSparseLightingAtlas({
+    geometry,
+    playback: scene.playback,
+    frontFacingSchedule,
+    lightingSampleIntervalTicks: DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS,
+    profile: "desktop",
+    presentation: "css-black-alpha",
+  });
+  for (const contract of [desktopAtlas, mobileAtlas, cssOpacityShadowAtlas]) {
     const bytes = preparedMengerSparseLightingAtlasBytes(contract);
     if (!bytes || bytes.length !== contract.byteLength) {
       throw new Error(`Prepared cssMenger ${contract.profile} lighting atlas bytes are unavailable`);
@@ -153,10 +268,54 @@ async function prepareSparseLightingAtlases(frontFacingSchedule) {
     await writeFile(temporary, bytes);
     await rename(temporary, assetPath);
   }
-  return { desktopAtlas, mobileAtlas };
+  for (const contract of [cssOpacityBaseAtlas]) {
+    const bytes = preparedMengerPlaneAtlasBytes(contract);
+    if (!bytes || bytes.length !== contract.byteLength) {
+      throw new Error(`Prepared cssMenger ${contract.paletteRole} atlas bytes are unavailable`);
+    }
+    const assetPath = join(generatedPublicRoot, contract.assetUrl.replace(/^\/cssmenger\//u, ""));
+    await mkdir(dirname(assetPath), { recursive: true });
+    const temporary = `${assetPath}.tmp`;
+    await writeFile(temporary, bytes);
+    await rename(temporary, assetPath);
+  }
+  return {
+    desktopAtlas,
+    mobileAtlas,
+    cssOpacityBaseAtlas,
+    cssOpacityShadowAtlas,
+    axisLeafCounts: scene.meshes.map((mesh) => mesh.polygons.length),
+    rotationAnimationStyles: preparedRotationAnimationStyles(scene.playback),
+  };
 }
 
-async function publishRuntimeScene(frontFacingSchedule, desktopAtlas, mobileAtlas) {
+function preparedRotationAnimationStyles(playback) {
+  if (playback?.stateCount !== playback.transforms?.length || playback.stateCount < 2 ||
+      !(playback.sourceFrameDelayMilliseconds > 0) ||
+      playback.transforms.some((transform) =>
+        !/^rotateX\(-?\d+(?:\.\d+)?deg\) rotateY\(-?\d+(?:\.\d+)?deg\) rotateZ\(-?\d+(?:\.\d+)?deg\)$/u
+          .test(transform))) {
+    throw new Error("Prepared cssMenger compositor rotation keyframes are invalid");
+  }
+  const finalStateIndex = playback.stateCount - 1;
+  const durationMilliseconds = finalStateIndex * playback.sourceFrameDelayMilliseconds;
+  const keyframes = playback.transforms.map((transform, stateIndex) => {
+    const percentage = stateIndex === finalStateIndex
+      ? "100"
+      : (stateIndex / finalStateIndex * 100).toFixed(9).replace(/\.?0+$/u, "");
+    return `${percentage}%{transform:${transform}}`;
+  }).join("");
+  return `body>.polycss-camera>.polycss-scene{--cssmenger-rotation-duration:${durationMilliseconds}ms}` +
+    `@keyframes cssmenger-prepared-rotation{${keyframes}}`;
+}
+
+async function publishRuntimeScene({
+  frontFacingSchedule,
+  desktopAtlas,
+  mobileAtlas,
+  cssOpacityBaseAtlas,
+  cssOpacityShadowAtlas,
+}) {
   const scene = JSON.parse(await readFile(privateScenePath, "utf8"));
   if (frontFacingSchedule?.schema !== "cssmenger-prepared-front-facing-leaf-schedule@1" ||
       frontFacingSchedule.stateCount !== scene.playback?.stateCount ||
@@ -171,12 +330,20 @@ async function publishRuntimeScene(frontFacingSchedule, desktopAtlas, mobileAtla
     atlas.sourceStateCount === scene.playback.stateCount)) {
     throw new Error("Prepared cssMenger sparse lighting atlas is invalid");
   }
+  if (!validCssOpacityAtlas(cssOpacityBaseAtlas, "css-opacity-base", 128) ||
+      !validCssOpacityShadowAtlas(cssOpacityShadowAtlas) ||
+      cssOpacityShadowAtlas.sourceStateCount !== scene.playback.stateCount ||
+      cssOpacityShadowAtlas.leafCount !== cssOpacityBaseAtlas.leafCount) {
+    throw new Error("Prepared cssMenger CSS opacity lighting is invalid");
+  }
   const intermediateAtlas = scene.planeAtlas;
   const runtimeScene = {
     ...scene,
     playback: { ...scene.playback, frontFacingSchedule },
     planeAtlas: desktopAtlas,
     mobilePlaneAtlas: mobileAtlas,
+    cssOpacityBaseAtlas,
+    cssOpacityShadowAtlas,
     metrics: {
       ...scene.metrics,
       preparedPlaneAtlasWidth: desktopAtlas.width,
@@ -187,9 +354,22 @@ async function publishRuntimeScene(frontFacingSchedule, desktopAtlas, mobileAtla
       preparedMobilePlaneAtlasHeight: mobileAtlas.height,
       preparedMobilePlaneAtlasDecodedBytes: mobileAtlas.decodedBytes,
       preparedMobilePlaneAtlasTotalEncodedBytes: mobileAtlas.byteLength,
+      preparedCssOpacityBaseAtlasDecodedBytes: cssOpacityBaseAtlas.decodedBytes,
+      preparedCssOpacityBaseAtlasTotalEncodedBytes: cssOpacityBaseAtlas.byteLength,
+      preparedCssOpacityShadowAtlasDecodedBytes: cssOpacityShadowAtlas.decodedBytes,
+      preparedCssOpacityShadowAtlasTotalEncodedBytes: cssOpacityShadowAtlas.byteLength,
+      preparedCssOpacityLightingScheduleBytes:
+        cssOpacityShadowAtlas.addressStateOffsetByteLength +
+        cssOpacityShadowAtlas.addressLeafIndexByteLength +
+        cssOpacityShadowAtlas.addressSlotIndexByteLength +
+        cssOpacityShadowAtlas.reverseAddressStateOffsetByteLength +
+        cssOpacityShadowAtlas.reverseAddressLeafIndexByteLength +
+        cssOpacityShadowAtlas.reverseAddressSlotIndexByteLength,
+      preparedCssOpacityLightingSampleCount: cssOpacityShadowAtlas.lightingSampleCount,
       atlasPageCount: 2,
       preparedRenderWrapperCount: 2,
       preparedModelRootCount: 0,
+      preparedLightingRootCount: 0,
       preparedAxisRootCount: 0,
       preparedFrontFacingLeafCountPerState: Object.freeze({
         minimum: frontFacingSchedule.minimumSelectedLeafCountPerState,
@@ -199,9 +379,11 @@ async function publishRuntimeScene(frontFacingSchedule, desktopAtlas, mobileAtla
       preparedVisibleLightingFieldCount: desktopAtlas.visibleLeafFieldCount,
       preparedOmittedBackFacingLightingFieldCount: desktopAtlas.omittedBackFacingLeafFieldCount,
       preparedLightingAddressUpdateCount: desktopAtlas.addressUpdateCount,
+      preparedReverseLightingAddressUpdateCount: desktopAtlas.reverseAddressUpdateCount,
       preparedRedundantLightingAddressWriteCountRemoved:
         desktopAtlas.redundantAddressWriteCountRemoved,
       preparedMobileLightingAddressUpdateCount: mobileAtlas.addressUpdateCount,
+      preparedMobileReverseLightingAddressUpdateCount: mobileAtlas.reverseAddressUpdateCount,
       preparedMobileRedundantLightingAddressWriteCountRemoved:
         mobileAtlas.redundantAddressWriteCountRemoved,
     },
@@ -218,9 +400,10 @@ async function publishRuntimeScene(frontFacingSchedule, desktopAtlas, mobileAtla
     },
     warnings: [
       `This prepared product scene fixes source depth at ${scene.sourceProfile.depth}; the XScreenSaver depth-change sequence remains outside this slice.`,
-      "The prepared source rotator segment wraps from its final state to its first state for endless playback.",
+      "The prepared source rotator segment reverses at its endpoints for continuous endless playback without a final-to-first transform jump.",
       "Wander and interactive trackball input are disabled in this first slice.",
       "Moving two-light RGB and palette colors are prepared off the runtime path into exact source-cell face tiles.",
+      "The optional CSS-opacity preview intentionally replaces intra-plane source-cell lighting with one prepared mean black-overlay opacity per retained plane.",
       "Coplanar bundles preserve an exact one-to-one census of all source faces before merging.",
       "The fresh exact-first browser/native pixel comparison diverges for the deduplicated atlas; native visual parity remains unqualified.",
     ],

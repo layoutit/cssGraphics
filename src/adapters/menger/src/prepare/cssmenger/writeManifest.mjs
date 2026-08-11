@@ -47,7 +47,7 @@ export async function writeCssmengerPreparedOutput({
     warnings,
     runtime: {
       debugApi,
-      routeContract: "?scene=<scene-id>",
+      routeContract: "?scene=<scene-id>&lighting=<atlas|opacity>",
       geometryPayload: false,
       runtimeDomGrowth: false,
     },
@@ -59,6 +59,7 @@ export async function writeCssmengerPreparedOutput({
 async function writePreparedPlaneAtlas(atlas) {
   const bytes = preparedMengerPlaneAtlasBytes(atlas);
   if (!bytes || atlas?.schema !== "cssmenger-prepared-coplanar-plane-atlas@1" ||
+      atlas.paletteRole !== "source" || bytes.length !== atlas.byteLength ||
       !/^\/cssmenger\/assets\/planes-[a-f0-9]{64}\.png$/u.test(atlas.assetUrl)) {
     throw new Error("Prepared cssMenger plane atlas bytes are missing or invalid");
   }

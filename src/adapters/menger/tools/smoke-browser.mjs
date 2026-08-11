@@ -208,7 +208,7 @@ try {
         frame.bottom > frame.viewportHeight)) {
       throw new Error(`cssMenger mobile framing failed: ${JSON.stringify(mobileFraming)}`);
     }
-    const mobilePage = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+    const mobilePage = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3 });
     const mobileRequests = [];
     const mobileErrors = [];
     mobilePage.on("request", (request) => mobileRequests.push(new URL(request.url()).pathname));
@@ -239,6 +239,7 @@ try {
           .filter((attribute) => attribute.name.startsWith("data-"))
           .map((attribute) => attribute.name),
         selectedProfile: debug.stats().preparedPlaneAtlasProfile,
+        devicePixelRatio,
         selectedScene: debug.state().scene,
         leafCount: document.querySelectorAll(".polycss-camera > .polycss-scene > b").length,
         selectedDecodedBytes: debug.stats().preparedPlaneAtlasDecodedBytes,
@@ -253,6 +254,9 @@ try {
         backgroundImage: getComputedStyle(firstLeaf).backgroundImage,
         backgroundSize: getComputedStyle(firstLeaf).backgroundSize,
         expectedBackgroundSize: `${atlas.width}px ${atlas.height}px`,
+        transformTransitionProperty: getComputedStyle(scene).transitionProperty,
+        transformTransitionDuration: getComputedStyle(scene).transitionDuration,
+        transformTransitionTimingFunction: getComputedStyle(scene).transitionTimingFunction,
         tick: debug.state().tick,
       };
     });
@@ -264,6 +268,7 @@ try {
       /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.avif$/u.test(path));
     if (mobileErrors.length || !mobileEvidence.ready || mobileEvidence.errors.length ||
         mobileEvidence.bodyDataAttributes.length !== 0 || mobileEvidence.selectedProfile !== "mobile" ||
+        mobileEvidence.devicePixelRatio !== 3 ||
         mobileEvidence.selectedScene !== "depth-2" || mobileEvidence.leafCount !== 30 ||
         mobileEvidence.selectedDecodedBytes !== 3_538_080 || mobileEvidence.selectedAssetBytes !== 416_630 ||
         mobileEvidence.selectedLightingIntervalTicks !== 2 ||
@@ -275,6 +280,9 @@ try {
         mobileEvidence.tick !== 720 ||
         !mobileEvidence.backgroundImage.includes(mobileEvidence.mobileUrl) ||
         mobileEvidence.backgroundSize !== mobileEvidence.expectedBackgroundSize ||
+        mobileEvidence.transformTransitionProperty !== "transform" ||
+        mobileEvidence.transformTransitionDuration !== "0.03s" ||
+        mobileEvidence.transformTransitionTimingFunction !== "linear" ||
         requestedDesktopAtlases.length !== 0 || new Set(requestedMobileAtlases).size !== 1) {
       throw new Error(`cssMenger responsive mobile atlas failed: ${JSON.stringify({
         mobileEvidence, requestedDesktopAtlases, requestedMobileAtlases, mobileErrors,
@@ -282,6 +290,7 @@ try {
     }
     const widePhoneContext = await browser.newContext({
       viewport: { width: 844, height: 390 },
+      deviceScaleFactor: 3,
       isMobile: true,
       hasTouch: true,
       userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148",

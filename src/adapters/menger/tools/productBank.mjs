@@ -56,6 +56,9 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     scene.playback?.runtimeRotationCalculation === false,
   "prepared playback");
   assert(scene.renderer?.stableDom === true &&
+    scene.renderer?.preparedPlaneGridSnap === "exact-source-cell-boundary-matrix3d" &&
+    scene.renderer?.transformPresentation ===
+      "display-refresh-css-linear-interpolation-between-prepared-30ms-states" &&
     scene.renderer?.runtimeGeometryConstruction === false &&
     scene.renderer?.runtimeRecursion === false &&
     scene.renderer?.runtimeMerge === false &&
@@ -137,6 +140,7 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     count(snapshot, /<div\b/gu) === 2 &&
     count(snapshot, /style="/gu) === 85 &&
     count(snapshot, /<b style="transform: matrix3d\(/gu) === 84 &&
+    /matrix3d\(12\.222222222,/u.test(snapshot) &&
     count(snapshot, /<b><\/b>/gu) === 0 &&
     !/\.polycss-scene>b:nth-child\(\d+\)\{transform:/u.test(snapshot) &&
     /body>\.polycss-camera>\.polycss-scene>b\{background-image:url\("\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif"\)\}/u.test(snapshot) &&
@@ -176,6 +180,9 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     reducedScene.playback.frontFacingSchedule.offsets.at(-1) ===
       reducedScene.playback.frontFacingSchedule.leafIndices?.length &&
     reducedScene.renderer?.stableDom === true && reducedScene.renderer?.runtimeGeometryPayload === false &&
+    reducedScene.renderer?.preparedPlaneGridSnap === "exact-source-cell-boundary-matrix3d" &&
+    reducedScene.renderer?.transformPresentation ===
+      "display-refresh-css-linear-interpolation-between-prepared-30ms-states" &&
     reducedScene.renderer?.runtimeGeometryConstruction === false &&
     reducedScene.renderer?.runtimeLightingCalculation === false &&
     reducedScene.renderer?.runtimeDomGrowth === false && reducedScene.renderer?.alternateRenderer === false,
@@ -212,6 +219,7 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     count(reducedSnapshot, /<i\b/gu) === 0 && count(reducedSnapshot, /<s\b/gu) === 0 &&
     count(reducedSnapshot, /<div\b/gu) === 2 && count(reducedSnapshot, /style="/gu) === 31 &&
     count(reducedSnapshot, /<b style="transform: matrix3d\(/gu) === 30 &&
+    /matrix3d\(36\.666666667,/u.test(reducedSnapshot) &&
     /--cssmenger-tile-width:9px;--cssmenger-tile-height:9px/u.test(reducedSnapshot) &&
     !/cssmenger-(?:model|axis)|!important|\sdata-[\w-]+=/u.test(reducedSnapshot) &&
     !/<(?:script|canvas|svg)\b/iu.test(reducedSnapshot),

@@ -48,6 +48,7 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     scene.playback.frontFacingSchedule.offsets.at(-1) === scene.playback.frontFacingSchedule.leafIndices?.length &&
     scene.playback.frontFacingSchedule.frontFaceDilationTicks === 1 &&
     scene.playback?.sourceFrameDelayMilliseconds === 30 &&
+    scene.playback?.loop === true &&
     scene.playback?.adjacentPublicationMode === "all-fields-change" &&
     scene.playback?.runtimeInterpolation === false &&
     scene.playback?.runtimeColorGeneration === false &&
@@ -105,9 +106,11 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     count(snapshot, /<i\b/gu) === 0 &&
     count(snapshot, /<s\b/gu) === 0 &&
     count(snapshot, /<div\b/gu) === 2 &&
-    count(snapshot, /style="/gu) === 1 &&
-    count(snapshot, /\.polycss-scene>b:nth-child\(\d+\)\{transform:matrix3d\(/gu) === 84 &&
-    count(snapshot, /<b><\/b>/gu) === 84 &&
+    count(snapshot, /style="/gu) === 85 &&
+    count(snapshot, /<b style="transform: matrix3d\(/gu) === 84 &&
+    count(snapshot, /<b><\/b>/gu) === 0 &&
+    !/\.polycss-scene>b:nth-child\(\d+\)\{transform:/u.test(snapshot) &&
+    /body>\.polycss-camera>\.polycss-scene>b\{background-image:url\("\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif"\)\}/u.test(snapshot) &&
     !/cssmenger-(?:model|axis)/u.test(snapshot) &&
     !/var\(--[mxyz]\)|--[mxyz]:|!important/iu.test(snapshot),
   "retained DOM");

@@ -21,6 +21,19 @@ body {
   background: linear-gradient(180deg, #0b1119 0%, #000 100%);
 }
 
+body:not(.ready):not(.error)::after {
+  content: "";
+  position: fixed;
+  inset: 50% auto auto 50%;
+  z-index: 20;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 1px solid rgb(240 240 240 / 18%);
+  border-top-color: rgb(240 240 240 / 70%);
+  border-radius: 50%;
+}
+
 .site-header {
   position: fixed;
   inset: 0 0 auto;
@@ -142,7 +155,6 @@ body > .polycss-camera > .polycss-scene > b {
   line-height: 0;
   text-decoration: none;
   background-color: transparent;
-  background-image: var(--a);
   background-repeat: no-repeat;
   background-size: var(--cssmenger-atlas-width) var(--cssmenger-atlas-height);
   transform-origin: 0 0;

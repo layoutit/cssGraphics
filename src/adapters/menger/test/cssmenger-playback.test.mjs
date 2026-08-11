@@ -129,11 +129,14 @@ test("steady playback publishes one prepared sparse-lighting address set per sou
   }
 });
 
-test("finite prepared playback clamps instead of claiming a false loop", () => {
+test("prepared playback wraps forever at the prepared sequence boundary", () => {
   const playback = buildPreparedMengerPlayback({ stateCount: 12 });
+  assert.equal(playback.loop, true);
   assert.equal(timelineStateIndexForTick(0, playback), 0);
   assert.equal(timelineStateIndexForTick(8, playback), 8);
-  assert.equal(timelineStateIndexForTick(999, playback), 11);
+  assert.equal(timelineStateIndexForTick(11, playback), 11);
+  assert.equal(timelineStateIndexForTick(12, playback), 0);
+  assert.equal(timelineStateIndexForTick(999, playback), 3);
 });
 
 test("late playback still advances one adjacent prepared state per scheduled draw", () => {
@@ -209,6 +212,13 @@ test("late playback still advances one adjacent prepared state per scheduled dra
     assert.equal(lightingAddressWrites, 126);
     assert.equal(leaves[0].style.backgroundPosition, "0px -162px");
     assert.equal(player.stats().preparedSchedulerCatchUpMode, "one-adjacent-prepared-state-no-skip");
+    player.setTick(11);
+    player.resume();
+    requestedDelay();
+    requestedFrame(400);
+    assert.equal(player.tick, 0);
+    assert.equal(player.paused, false);
+    player.pause();
   } finally {
     if (originalHTMLElement === undefined) delete globalThis.HTMLElement;
     else globalThis.HTMLElement = originalHTMLElement;

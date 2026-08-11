@@ -122,7 +122,7 @@ export async function buildCssmengerFirstSliceScene({ dataSource, sceneId = "dep
     }),
     warnings: Object.freeze([
       "The first product slice fixes source depth at 3; the XScreenSaver depth-change sequence remains outside this slice.",
-      "The source rotator segment is finite and clamps at its final prepared state rather than claiming a false loop.",
+      "The prepared source rotator segment wraps from its final state to its first state for endless playback.",
       "Wander and interactive trackball input are disabled in this first slice.",
       "Axis material colors follow the prepared XScreenSaver palette rows; fixed-function two-light moving highlights are not yet a native visual-parity claim.",
       "Coplanar bundles preserve an exact one-to-one census of all source faces before merging.",

@@ -49,10 +49,6 @@ export function mountCssmengerClient(host) {
       },
     });
     state.ready = true;
-    document.body.dataset.productView = "1";
-    document.body.dataset.gameView = "polycss";
-    document.body.dataset.portSlug = "cssmenger";
-    document.body.dataset.scene = entry.id;
     setStatus("ready");
     requestAnimationFrame(() => player.resume());
   }
@@ -70,5 +66,6 @@ function recordError(state, message, host) {
 }
 
 function setStatus(kind) {
-  document.body.dataset.portStatus = kind;
+  document.body.classList.remove("loading", "ready", "error");
+  document.body.classList.add(kind);
 }

@@ -47,9 +47,10 @@ export async function captureBrowserMengerFrames(options = {}) {
       page.on("console", (message) => { if (message.type() === "error") pageErrors.push(message.text()); });
       const url = `http://127.0.0.1:${port}/`;
       await page.goto(url, { waitUntil: "domcontentloaded" });
-      await page.waitForFunction(() => ["ready", "error"].includes(document.body.dataset.portStatus), null, { timeout: 30_000 });
+      await page.waitForFunction(() => document.body.classList.contains("ready") || document.body.classList.contains("error"), null, { timeout: 30_000 });
       const initial = await page.evaluate(() => ({
-        status: document.body.dataset.portStatus,
+        status: document.body.classList.contains("ready") ? "ready" :
+          document.body.classList.contains("error") ? "error" : "loading",
         ready: Boolean(window.__cssMengerDebug?.ready),
         sceneId: window.__cssMengerDebug?.scene?.id ?? null,
         oracle: window.__cssMengerDebug?.scene?.oracle ?? null,

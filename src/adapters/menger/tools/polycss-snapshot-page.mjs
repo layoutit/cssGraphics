@@ -142,10 +142,7 @@ function sanitizeSnapshot(html, sceneData) {
   });
   stylesheet.textContent +=
     `.polycss-camera{perspective:${perspective}}` +
-    `.polycss-scene{translate:${view.translate};scale:${view.scale}}` +
-    flattenedLeaves.map((leaf, index) =>
-      `.polycss-scene>b:nth-child(${index + 1}){transform:${leaf.style.transform}}`).join("");
-  for (const leaf of flattenedLeaves) leaf.replaceWith(parsed.createElement("b"));
+    `.polycss-scene{translate:${view.translate};scale:${view.scale}}`;
   for (const element of parsed.querySelectorAll("*")) {
     for (const attribute of [...element.attributes]) {
       if (attribute.name.startsWith("data-")) element.removeAttribute(attribute.name);

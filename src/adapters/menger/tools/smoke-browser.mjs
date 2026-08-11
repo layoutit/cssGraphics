@@ -29,6 +29,26 @@ try {
   });
   const browser = await chromium.launch({ channel: "chrome", headless: true });
   try {
+    const loadingPage = await browser.newPage({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 });
+    let releaseAtlasRequest;
+    const atlasRequestGate = new Promise((resolve) => { releaseAtlasRequest = resolve; });
+    await loadingPage.route("**/cssmenger/assets/lighting-grid-*.avif", async (request) => {
+      await atlasRequestGate;
+      await request.continue();
+    });
+    await loadingPage.goto(route, { waitUntil: "domcontentloaded" });
+    await loadingPage.waitForFunction(() => document.body.classList.contains("loading"));
+    const loadingIndicator = await loadingPage.evaluate(() => {
+      const style = getComputedStyle(document.body, "::after");
+      return { content: style.content, width: style.width, height: style.height, borderRadius: style.borderRadius };
+    });
+    releaseAtlasRequest();
+    await loadingPage.waitForFunction(() => document.body.classList.contains("ready"), null, { timeout: 30_000 });
+    await loadingPage.close();
+    if (loadingIndicator.content === "none" || loadingIndicator.width !== "18px" ||
+        loadingIndicator.height !== "18px" || loadingIndicator.borderRadius !== "50%") {
+      throw new Error(`cssMenger loading indicator failed: ${JSON.stringify(loadingIndicator)}`);
+    }
     const page = await browser.newPage({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 });
     const pageErrors = [];
     const requests = [];
@@ -36,7 +56,7 @@ try {
     page.on("console", (message) => { if (message.type() === "error") pageErrors.push(message.text()); });
     page.on("request", (request) => requests.push(new URL(request.url()).pathname));
     await page.goto(route, { waitUntil: "networkidle" });
-    await page.waitForFunction(() => ["ready", "error"].includes(document.body.dataset.portStatus), null,
+    await page.waitForFunction(() => document.body.classList.contains("ready") || document.body.classList.contains("error"), null,
       { timeout: 30_000 });
 
     const evidence = await page.evaluate(() => {
@@ -51,7 +71,11 @@ try {
       }
       const firstStyle = getComputedStyle(leaves[0]);
       return {
-        status: document.body.dataset.portStatus,
+        status: document.body.classList.contains("ready") ? "ready" :
+          document.body.classList.contains("error") ? "error" : "loading",
+        bodyDataAttributes: [...document.body.attributes]
+          .filter((attribute) => attribute.name.startsWith("data-"))
+          .map((attribute) => attribute.name),
         ready: debug?.ready === true,
         stable: debug?.assertStableDomIdentity?.() === true,
         errors: debug?.errors?.() ?? [],
@@ -73,6 +97,7 @@ try {
           imageRendering: firstStyle.imageRendering,
           backfaceVisibility: firstStyle.backfaceVisibility,
           backgroundSize: firstStyle.backgroundSize,
+          backgroundImage: firstStyle.backgroundImage,
         },
         expectedBackgroundSize: `${debug.scene.planeAtlas.width}px ${debug.scene.planeAtlas.height}px`,
         atlasUrl: debug.scene.planeAtlas.assetUrl,
@@ -107,31 +132,43 @@ try {
       debug.pause();
       return debug.state();
     });
+    const loopProgress = await page.evaluate(async () => {
+      const debug = globalThis.__cssMengerDebug;
+      debug.seek(1_439);
+      debug.resume();
+      await new Promise((resolve) => setTimeout(resolve, 90));
+      const state = debug.state();
+      debug.pause();
+      return state;
+    });
     const atlasRequests = requests.filter((path) => /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif$/u.test(path));
     const pageRequests = requests.filter((path) => /(?:page|frame)-\d+/u.test(path));
 
-    if (pageErrors.length || evidence.status !== "ready" || !evidence.ready || !evidence.stable ||
+    if (pageErrors.length || evidence.status !== "ready" || evidence.bodyDataAttributes.length !== 0 ||
+        !evidence.ready || !evidence.stable ||
         evidence.errors.length || evidence.bCount !== 84 || evidence.iCount !== 0 || evidence.sCount !== 0 ||
         evidence.forbiddenRendererCount !== 0 || evidence.leafImportantInlineCount !== 0 ||
         evidence.leafBackgroundSizeInlineCount !== 0 || evidence.leafImageRenderingInlineCount !== 0 ||
         evidence.leafInlineProperties.some((property) =>
-          !["background-position", "background-position-x", "background-position-y"].includes(property)) ||
-        evidence.sceneInlineProperties.some((property) => !["--a", "transform"].includes(property)) ||
+          !["background-position", "background-position-x", "background-position-y", "transform"].includes(property)) ||
+        evidence.sceneInlineProperties.some((property) => property !== "transform") ||
         evidence.cameraInlineProperties.length !== 0 ||
         evidence.importantRules.length !== 0 || evidence.computed.width !== "27px" ||
         evidence.computed.height !== "27px" || evidence.computed.imageRendering !== "pixelated" ||
         evidence.computed.backfaceVisibility !== "hidden" ||
+        !evidence.computed.backgroundImage.includes(evidence.atlasUrl) ||
         evidence.computed.backgroundSize !== evidence.expectedBackgroundSize ||
         evidence.sceneVariableWidth !== `${evidence.atlasWidth}px` ||
         evidence.sceneVariableHeight !== `${evidence.atlasHeight}px` || evidence.atlasPageCount !== 1 ||
-        atlasRequests.length !== 1 || pageRequests.length !== 0 ||
+        new Set(atlasRequests).size !== 1 || pageRequests.length !== 0 ||
         sampledStates.some((sample, index) => sample.tick !== [0, 36, 420, 1_439][index] ||
           !sample.paused || sample.matrixMaxDelta > 1e-5) ||
         playbackProgress.tick < 25 || playbackProgress.tick > 45 || !playbackProgress.paused ||
+        loopProgress.tick < 0 || loopProgress.tick > 3 || loopProgress.paused ||
         evidence.stats.runtimeDomMutationCount !== 0 || evidence.stats.runtimeDomGrowth !== false ||
         evidence.stats.runtimeLightingCalculationCount !== 0 || evidence.stats.runtimeGeometryConstructionCount !== 0) {
       throw new Error(`cssMenger browser smoke failed: ${JSON.stringify({
-        evidence, sampledStates, playbackProgress, atlasRequests, pageRequests, pageErrors,
+        evidence, sampledStates, playbackProgress, loopProgress, atlasRequests, pageRequests, pageErrors,
       })}`);
     }
     await page.evaluate(() => globalThis.__cssMengerDebug.seek(36));
@@ -171,9 +208,11 @@ try {
     }
     const result = {
       route,
+      loadingIndicator,
       evidence,
       sampledStates,
       playbackProgress,
+      loopProgress,
       mobileFraming,
       atlasRequests,
       pageRequests,

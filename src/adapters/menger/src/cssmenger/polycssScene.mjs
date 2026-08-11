@@ -33,7 +33,6 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, pl
   if (planeAtlasAsset?.sha256 !== sceneData.planeAtlas?.assetSha256 || typeof planeAtlasAsset.url !== "string") {
     throw new Error("Prepared cssMenger plane atlas asset is missing or unverified");
   }
-  mountedScene.style.setProperty("--a", `url("${planeAtlasAsset.url}")`);
   if (!getComputedStyle(leaves[0]).backgroundImage.includes(planeAtlasAsset.url)) {
     throw new Error("Prepared cssMenger plane atlas binding drifted");
   }

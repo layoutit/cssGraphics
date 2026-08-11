@@ -29,7 +29,8 @@ try {
     await page.screenshot({ path: join(outDir, "frame.png") });
     const state = await page.evaluate(() => ({
       url: location.href,
-      status: document.body.dataset.portStatus ?? "",
+      status: document.body.classList.contains("ready") ? "ready" :
+        document.body.classList.contains("error") ? "error" : "loading",
       debugReady: Boolean(window.__cssMengerDebug),
       stats: window.__cssMengerDebug?.stats?.() ?? null,
       meshes: window.__cssMengerDebug?.meshes?.() ?? [],

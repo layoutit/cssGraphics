@@ -74,13 +74,15 @@ try {
 
 function bindFinalAtlasDimensions(html, atlas) {
   if (typeof html !== "string" || (html.match(/<\/style>/gu) ?? []).length !== 1 ||
-      !Number.isSafeInteger(atlas?.width) || !Number.isSafeInteger(atlas?.height)) {
+      !Number.isSafeInteger(atlas?.width) || !Number.isSafeInteger(atlas?.height) ||
+      !/^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif$/u.test(atlas.assetUrl)) {
     throw new Error("Prepared cssMenger snapshot cannot bind final atlas dimensions");
   }
   return html.replace(
     "</style>",
     `.polycss-scene{--cssmenger-atlas-width:${atlas.width}px;` +
-      `--cssmenger-atlas-height:${atlas.height}px}</style>`,
+      `--cssmenger-atlas-height:${atlas.height}px}` +
+      `body>.polycss-camera>.polycss-scene>b{background-image:url("${atlas.assetUrl}")}</style>`,
   );
 }
 
@@ -172,7 +174,7 @@ async function publishRuntimeScene(frontFacingSchedule, sparseLightingAtlas) {
     },
     warnings: [
       "The first product slice fixes source depth at 3; the XScreenSaver depth-change sequence remains outside this slice.",
-      "The source rotator segment is finite and clamps at its final prepared state rather than claiming a false loop.",
+      "The prepared source rotator segment wraps from its final state to its first state for endless playback.",
       "Wander and interactive trackball input are disabled in this first slice.",
       "Moving two-light RGB and palette colors are prepared off the runtime path into exact source-cell face tiles.",
       "Coplanar bundles preserve an exact one-to-one census of all source faces before merging.",

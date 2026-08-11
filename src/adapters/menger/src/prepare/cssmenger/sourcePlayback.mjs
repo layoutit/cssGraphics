@@ -55,7 +55,7 @@ export function buildPreparedMengerPlayback({
     stateCount,
     segmentStartState: 0,
     segmentEndState: stateCount - 1,
-    loop: false,
+    loop: true,
     initial: Object.freeze({ stateIndex: 0 }),
     palette: Object.freeze(palette),
     transforms: Object.freeze(transforms),

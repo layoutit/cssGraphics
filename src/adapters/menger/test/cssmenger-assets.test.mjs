@@ -92,13 +92,16 @@ test("prepared snapshot is retained DOM without an alternate renderer", async ()
   assert.equal((html.match(/<i(?:\s|>)/gu) ?? []).length, 0);
   assert.equal((html.match(/<s(?:\s|>)/gu) ?? []).length, 0);
   assert.equal((html.match(/<div(?:\s|>)/gu) ?? []).length, 2);
-  assert.equal((html.match(/style="/gu) ?? []).length, 1);
+  assert.equal((html.match(/style="/gu) ?? []).length, 85);
   assert.doesNotMatch(html, /cssmenger-(?:model|axis)/u);
-  assert.equal((html.match(/<b><\/b>/gu) ?? []).length, 84);
-  assert.equal((html.match(/\.polycss-scene>b:nth-child\(\d+\)\{transform:matrix3d\(/gu) ?? []).length, 84);
+  assert.equal((html.match(/<b><\/b>/gu) ?? []).length, 0);
+  assert.equal((html.match(/<b style="transform: matrix3d\(/gu) ?? []).length, 84);
+  assert.doesNotMatch(html, /\.polycss-scene>b:nth-child\(\d+\)\{transform:/u);
+  assert.match(html,
+    /body>\.polycss-camera>\.polycss-scene>b\{background-image:url\("\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif"\)\}/u);
   assert.match(html, /\.polycss-scene\{translate:0px 0px -980\.385px;scale:1\.4(?:;|\})/u);
   assert.match(html, /<div class="polycss-scene" aria-hidden="true" style="transform: rotateX/u);
-  assert.doesNotMatch(html, /<b[^>]+style=/u);
+  assert.doesNotMatch(html, /<b style="(?!transform: matrix3d\()[^"]+/u);
   assert.doesNotMatch(html, /var\(--[mxyz]\)|--[mxyz]:/u);
   assert.match(html, /backface-visibility:\s*hidden/u);
   assert.doesNotMatch(html, /image-rendering:/u);
@@ -113,6 +116,9 @@ test("product runtime CSS stays on the fast browser path", async () => {
   assert.equal(css.split(shellGradient).length - 1, 2);
   assert.doesNotMatch(css, /!important/iu);
   assert.match(css, /body > \.polycss-camera > \.polycss-scene > b\s*\{/u);
+  assert.doesNotMatch(css, /background-image:\s*var\(--a\)/u);
+  assert.match(css, /body:not\(\.ready\):not\(\.error\)::after/u);
+  assert.doesNotMatch(css, /data-port-status/u);
   assert.doesNotMatch(css.replaceAll(shellGradient, "none"), /(?:clip-path|mask(?:-image)?|backdrop-filter|box-shadow|text-shadow|(?:linear|radial|conic)-gradient|mix-blend-mode|background-blend-mode)\s*:/iu);
 });
 

@@ -15,29 +15,18 @@ export async function loadPreparedMengerPlaneAtlasAsset(atlas) {
   if (bytes.byteLength !== atlas.byteLength || actualSha256 !== atlas.assetSha256) {
     throw new Error(`Prepared cssMenger plane atlas hash drifted (${actualSha256})`);
   }
-  const url = URL.createObjectURL(new Blob([bytes], { type: "image/avif" }));
   const image = new Image();
   image.decoding = "async";
-  image.src = url;
-  try {
-    await image.decode();
-    if (image.naturalWidth !== atlas.width || image.naturalHeight !== atlas.height) {
-      throw new Error(`Prepared cssMenger plane atlas dimensions drifted (${image.naturalWidth}x${image.naturalHeight})`);
-    }
-  } catch (error) {
-    URL.revokeObjectURL(url);
-    throw error;
+  image.src = atlas.assetUrl;
+  await image.decode();
+  if (image.naturalWidth !== atlas.width || image.naturalHeight !== atlas.height) {
+    throw new Error(`Prepared cssMenger plane atlas dimensions drifted (${image.naturalWidth}x${image.naturalHeight})`);
   }
-  let destroyed = false;
   return Object.freeze({
-    url,
+    url: atlas.assetUrl,
     byteLength: bytes.byteLength,
     sha256: actualSha256,
-    destroy() {
-      if (destroyed) return;
-      destroyed = true;
-      URL.revokeObjectURL(url);
-    },
+    destroy() {},
   });
 }
 

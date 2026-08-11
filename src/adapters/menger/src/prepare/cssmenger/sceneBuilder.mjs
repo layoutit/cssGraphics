@@ -49,6 +49,8 @@ export async function buildCssmengerFirstSliceScene({ dataSource, sceneId = "dep
       package: "@layoutit/polycss",
       version: "0.2.11",
       representation: "prepared-alpha-atlas-coplanar-plane-bundles-in-retained-snapshot",
+      textureBackend: "atlas",
+      textureLeafSizing: "raster",
       stableDom: true,
       merge: "one-prepared-alpha-atlas-quad-per-directional-plane",
       backfacePolicy: "prepared-closed-opaque-surface-cull",
@@ -76,6 +78,7 @@ export async function buildCssmengerFirstSliceScene({ dataSource, sceneId = "dep
     background: "#000000",
     textureLighting: "baked",
     textureQuality: 1,
+    textureLeafSizing: "raster",
     lighting: Object.freeze({
       ambient: Object.freeze({ color: "#ffffff", intensity: 1 }),
       directional: Object.freeze({ direction: Object.freeze([0, -1, 0]), color: "#ffffff", intensity: 0 }),

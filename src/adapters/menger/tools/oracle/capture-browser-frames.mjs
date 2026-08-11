@@ -46,7 +46,7 @@ export async function captureBrowserMengerFrames(options = {}) {
       page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
       page.on("console", (message) => { if (message.type() === "error") pageErrors.push(message.text()); });
       const url = `http://127.0.0.1:${port}/`;
-      await page.goto(url, { waitUntil: "networkidle" });
+      await page.goto(url, { waitUntil: "domcontentloaded" });
       await page.waitForFunction(() => ["ready", "error"].includes(document.body.dataset.portStatus), null, { timeout: 30_000 });
       const initial = await page.evaluate(() => ({
         status: document.body.dataset.portStatus,
@@ -67,44 +67,69 @@ export async function captureBrowserMengerFrames(options = {}) {
         const sourceTick = ticks[index];
         const row = await page.evaluate(async (tick) => {
           const debug = window.__cssMengerDebug;
-          debug.seek(tick);
+          await debug.seek(tick);
           await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
           const playback = debug.scene.playback;
           const publicationRoot = document.querySelector(".polycss-camera > .polycss-scene");
-          const leaves = [...document.querySelectorAll(".polycss-camera > .polycss-scene > b, .polycss-camera > .polycss-scene > i, .polycss-camera > .polycss-scene > s")];
-          const frontFacingSchedule = playback.frontFacingSchedule;
-          const preparedAxisAtlasPositions = playback.colorRows[tick].map((paletteIndex) =>
-            debug.scene.planeAtlas.paletteBackgroundPositionYs[paletteIndex]);
-          const publishedTransform = publicationRoot?.style.transform ?? null;
+          const leaves = [...document.querySelectorAll(".polycss-camera > .polycss-scene > b")];
+          const planeAtlas = debug.scene.planeAtlas;
           const expectedTransformMatrix = new DOMMatrix(playback.transforms[tick]).toFloat64Array();
-          const publishedTransformMatrix = new DOMMatrix(publishedTransform).toFloat64Array();
+          const publishedTransformMatrix = new DOMMatrix(publicationRoot?.style.transform).toFloat64Array();
+          const offsets = decodeU16(planeAtlas.addressStateOffsetsBase64);
+          const leafIndices = decodeU8(planeAtlas.addressLeafIndicesBase64);
+          const slotIndices = decodeU16(planeAtlas.addressSlotIndicesBase64);
+          const expectedSlots = new Int32Array(planeAtlas.leafCount).fill(-1);
+          for (let cursor = 0; cursor < offsets[tick + 1]; cursor += 1) {
+            expectedSlots[leafIndices[cursor]] = slotIndices[cursor];
+          }
+          const publishedAddresses = leaves.map((leaf, leafIndex) => ({
+            leafIndex,
+            expected: expectedSlots[leafIndex] < 0 ? "" : backgroundPositionForSlot(expectedSlots[leafIndex]),
+            actual: leaf.style.backgroundPosition,
+          })).filter((address) => address.expected);
+          const mismatchedAddresses = publishedAddresses.filter((address) => address.actual !== address.expected);
           return {
             tick: debug.state().tick,
             paused: debug.state().paused,
             preparedTransform: playback.transforms[tick],
-            expectedPublishedTransform: playback.transforms[tick],
-            publishedTransform,
+            publishedTransform: publicationRoot?.style.transform ?? null,
             publishedTransformMatrixMaxDelta: Math.max(...publishedTransformMatrix.map((value, index) =>
               Math.abs(value - expectedTransformMatrix[index]))),
             paletteIndices: playback.colorRows[tick],
             paletteSource16: playback.colorRows[tick].map((paletteIndex) => playback.palette[paletteIndex].source16),
-            preparedAxisAtlasPositions,
-            publishedSelectedLeafAtlasPositions: [0, 1, 2].map((axis) => {
-              const segmentIndex = tick * frontFacingSchedule.axisCount + axis;
-              const start = frontFacingSchedule.offsets[segmentIndex];
-              const end = frontFacingSchedule.offsets[segmentIndex + 1];
-              return frontFacingSchedule.leafIndices
-                .slice(start, end)
-                .map((leafIndex) =>
-                leaves[leafIndex]?.style.backgroundPositionY ?? null);
-            }),
+            preparedLightingAddressCount: publishedAddresses.length,
+            mismatchedLightingAddressCount: mismatchedAddresses.length,
+            mismatchedLightingAddresses: mismatchedAddresses,
+            stats: debug.stats(),
+            errors: debug.errors(),
             stableDom: debug.assertStableDomIdentity(),
           };
+
+          function decodeU8(base64) {
+            const binary = atob(base64);
+            return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+          }
+
+          function decodeU16(base64) {
+            const bytes = decodeU8(base64);
+            const values = new Uint16Array(bytes.length / 2);
+            for (let index = 0; index < values.length; index += 1) {
+              values[index] = bytes[index * 2] | bytes[index * 2 + 1] << 8;
+            }
+            return values;
+          }
+
+          function backgroundPositionForSlot(slotIndex) {
+            const column = slotIndex % planeAtlas.columns;
+            const atlasRow = Math.floor(slotIndex / planeAtlas.columns);
+            return `${-(column * planeAtlas.slotWidth + planeAtlas.gutterPixels)}px ` +
+              `${-(atlasRow * planeAtlas.slotHeight + planeAtlas.gutterPixels)}px`;
+          }
         }, sourceTick);
         if (row.tick !== sourceTick || !row.paused || !row.stableDom ||
             row.publishedTransformMatrixMaxDelta > 1e-5 ||
-            row.publishedSelectedLeafAtlasPositions.some((values, axis) =>
-              values.some((value) => value !== row.preparedAxisAtlasPositions[axis]))) {
+            row.preparedLightingAddressCount < 1 || row.mismatchedLightingAddressCount !== 0 ||
+            row.stats.preparedLightingAtlasAssetCount !== 1 || row.errors.length !== 0) {
           throw new Error(`Browser oracle state publication drifted at tick ${sourceTick}: ${JSON.stringify(row)}`);
         }
         rows.push(row);

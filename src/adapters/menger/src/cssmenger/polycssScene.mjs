@@ -10,9 +10,9 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, pl
   const styles = [...snapshot.querySelectorAll("style")];
   const camera = snapshot.querySelector(".polycss-camera");
   const scene = camera?.querySelector(".polycss-scene");
-  const axisLeaves = ["b", "i", "s"].map((tag) => [...(scene?.querySelectorAll(`:scope > ${tag}`) ?? [])]);
+  const snapshotLeaves = [...(scene?.querySelectorAll(":scope > b") ?? [])];
   if (styles.length === 0 || !(camera instanceof HTMLElement) || !(scene instanceof HTMLElement) ||
-      axisLeaves.some((leaves) => leaves.length === 0)) {
+      snapshotLeaves.length !== sceneData.metrics.preparedLeafCount || scene.querySelector(":scope > i, :scope > s")) {
     throw new Error("Prepared cssMenger snapshot is missing its retained PolyCSS graph");
   }
   removePreparedSnapshotStyles();
@@ -25,11 +25,9 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, pl
   for (const existing of host.querySelectorAll(":scope > .polycss-camera")) existing.remove();
   host.append(mountedCamera);
   const mountedScene = mountedCamera.querySelector(".polycss-scene");
-  const mountedAxisLeaves = ["b", "i", "s"].map((tag) =>
-    [...(mountedScene?.querySelectorAll(`:scope > ${tag}`) ?? [])]);
-  const leaves = mountedAxisLeaves.flat();
-  if (!(mountedScene instanceof HTMLElement) || mountedAxisLeaves.some((group) => group.length !== 28) ||
-      leaves.length !== sceneData.metrics.preparedLeafCount) {
+  const leaves = [...(mountedScene?.querySelectorAll(":scope > b") ?? [])];
+  if (!(mountedScene instanceof HTMLElement) || leaves.length !== sceneData.metrics.preparedLeafCount ||
+      mountedScene.querySelector(":scope > i, :scope > s")) {
     throw new Error("Prepared cssMenger retained target census drifted");
   }
   if (planeAtlasAsset?.sha256 !== sceneData.planeAtlas?.assetSha256 || typeof planeAtlasAsset.url !== "string") {
@@ -54,7 +52,7 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, pl
     const current = [
       host.querySelector(":scope > .polycss-camera"),
       host.querySelector(":scope > .polycss-camera > .polycss-scene"),
-      ...host.querySelectorAll(":scope > .polycss-camera > .polycss-scene > b, :scope > .polycss-camera > .polycss-scene > i, :scope > .polycss-camera > .polycss-scene > s"),
+      ...host.querySelectorAll(":scope > .polycss-camera > .polycss-scene > b"),
     ];
     if (current.length !== stableNodes.length || current.some((node, index) => node !== stableNodes[index])) {
       throw new Error("Prepared cssMenger retained DOM identity changed");
@@ -66,7 +64,8 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, pl
     camera: mountedCamera,
     scene: mountedScene,
     publicationRoot: mountedScene,
-    axisLeaves: Object.freeze(mountedAxisLeaves.map((group) => Object.freeze(group))),
+    axisLeaves: Object.freeze([0, 1, 2].map((axis) =>
+      Object.freeze(leaves.slice(axis * 28, axis * 28 + 28)))),
     leaves: Object.freeze(leaves),
     assertStableDomIdentity,
     stats() {

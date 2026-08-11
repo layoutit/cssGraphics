@@ -9,7 +9,17 @@ export const cssmengerOracleRoot = resolve(
   process.env.CSSMENGER_ORACLE_OUT ?? join(localRoot, "oracle"),
 );
 
-export async function compareFrameSequences({ expected, actual, out, label, frameCount, diffFrames = "worst" }) {
+export async function compareFrameSequences({
+  expected,
+  actual,
+  out,
+  label,
+  frameCount,
+  diffFrames = "worst",
+  meanThreshold = 0,
+  changedThreshold = 0,
+  channelThreshold = 0,
+}) {
   const script = resolve(
     process.env.CSS_FRAME_SEQUENCE_ORACLE_SCRIPT ??
     join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "skills", "frame-sequence-oracle", "scripts", "frame-sequence.mjs"),
@@ -23,16 +33,17 @@ export async function compareFrameSequences({ expected, actual, out, label, fram
     "--out", out,
     "--replace",
     "--label", label,
-    "--mean-threshold", "0",
-    "--changed-threshold", "0",
-    "--channel-threshold", "0",
+    "--mean-threshold", String(meanThreshold),
+    "--changed-threshold", String(changedThreshold),
+    "--channel-threshold", String(channelThreshold),
     "--diff-frames", diffFrames,
     "--diff-amplify", "1",
     "--max-frames", String(frameCount),
   ], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(result.stderr || result.stdout || `frame comparison exited ${result.status}`);
-  return readJson(join(out, `${label}.json`));
+  const manifestPath = join(out, `${label}.json`);
+  return Object.freeze({ ...(await readJson(manifestPath)), manifestPath });
 }
 
 export async function writeJson(path, value) {

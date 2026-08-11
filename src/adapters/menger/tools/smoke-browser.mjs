@@ -8,12 +8,14 @@ import { adapterRoot, repositoryRoot } from "../src/prepare/cssmenger/paths.mjs"
 
 const smokeDir = join("bench", "results", "cssmenger", "smoke");
 const screenshotPath = join(smokeDir, "default-route.png");
-const mobileScreenshotPath = join(smokeDir, "mobile-default-route.png");
+const narrowMobileScreenshotPath = join(smokeDir, "mobile-360-default-route.png");
+const mobileScreenshotPath = join(smokeDir, "mobile-390-default-route.png");
 const statePath = join(smokeDir, "state.json");
 const port = await freePort();
 const route = `http://127.0.0.1:${port}/`;
 let output = "";
-const server = spawn("pnpm", ["exec", "vite", "--config", join(adapterRoot, "vite.config.mjs"), "--host", "127.0.0.1", "--port", String(port), "--strictPort"], {
+const server = spawn("pnpm", ["exec", "vite", "--config", join(adapterRoot, "vite.config.mjs"),
+  "--host", "127.0.0.1", "--port", String(port), "--strictPort"], {
   cwd: repositoryRoot,
   stdio: ["ignore", "pipe", "pipe"],
 });
@@ -27,173 +29,165 @@ try {
   });
   const browser = await chromium.launch({ channel: "chrome", headless: true });
   try {
-    const page = await browser.newPage({ viewport: { width: 960, height: 600 }, deviceScaleFactor: 1 });
+    const page = await browser.newPage({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 });
     const pageErrors = [];
+    const requests = [];
     page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
     page.on("console", (message) => { if (message.type() === "error") pageErrors.push(message.text()); });
+    page.on("request", (request) => requests.push(new URL(request.url()).pathname));
     await page.goto(route, { waitUntil: "networkidle" });
-    await page.waitForFunction(() => ["ready", "error"].includes(document.body.dataset.portStatus), null, { timeout: 30_000 });
-    const colorCadenceEvidence = await page.evaluate(() => {
-      const debug = window.__cssMengerDebug;
-      const leaves = [...document.querySelectorAll(".polycss-camera > .polycss-scene > b, .polycss-camera > .polycss-scene > i, .polycss-camera > .polycss-scene > s")];
-      const schedule = debug.scene.playback.frontFacingSchedule;
-      const publicationStateIndex = 3;
-      const segmentIndex = publicationStateIndex * schedule.axisCount;
-      const sampledLeafIndex = schedule.leafIndices[schedule.offsets[segmentIndex]];
-      const sampledLeaf = leaves[sampledLeafIndex];
-      debug.seek(0);
-      const positions = [sampledLeaf?.style.backgroundPositionY ?? ""];
-      for (let step = 0; step < 3; step += 1) {
-        debug.step();
-        positions.push(sampledLeaf?.style.backgroundPositionY ?? "");
-      }
-      return {
-        sampledLeafIndex,
-        positions,
-        expectedInitial: debug.scene.planeAtlas.paletteBackgroundPositionYs[debug.scene.playback.colorRows[0][0]],
-        expectedAdjacent: debug.scene.planeAtlas.paletteBackgroundPositionYs[debug.scene.playback.colorRows[1][0]],
-        rejectedThreeStepJump: debug.scene.planeAtlas.paletteBackgroundPositionYs[debug.scene.playback.colorRows[3][0]],
-      };
-    });
-    await page.evaluate(() => window.__cssMengerDebug.seek(420));
-    await page.evaluate(() => new Promise((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(resolve))));
-    await page.waitForTimeout(250);
+    await page.waitForFunction(() => ["ready", "error"].includes(document.body.dataset.portStatus), null,
+      { timeout: 30_000 });
+
     const evidence = await page.evaluate(() => {
-      const debug = window.__cssMengerDebug;
+      const debug = globalThis.__cssMengerDebug;
       const scene = document.querySelector(".polycss-camera > .polycss-scene");
-      const leaves = [...document.querySelectorAll(".polycss-camera > .polycss-scene > b, .polycss-camera > .polycss-scene > i, .polycss-camera > .polycss-scene > s")];
-      const visibleSampleCount = leaves.filter((leaf, index) => {
-        const rect = leaf.getBoundingClientRect();
-        const style = getComputedStyle(leaf);
-        return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0 &&
-          rect.left < innerWidth && rect.top < innerHeight && style.backgroundImage !== "none";
-      }).length;
-      const frontFacingSchedule = debug.scene.playback.frontFacingSchedule;
-      const expectedAxisAtlasPositions = debug.scene.playback.colorRows[420].map((paletteIndex) =>
-        debug.scene.planeAtlas.paletteBackgroundPositionYs[paletteIndex]);
-      const selectedLeafPalettePositions = [0, 1, 2].map((axis) => {
-        const segmentIndex = 420 * frontFacingSchedule.axisCount + axis;
-        const start = frontFacingSchedule.offsets[segmentIndex];
-        const end = frontFacingSchedule.offsets[segmentIndex + 1];
-        return frontFacingSchedule.leafIndices
-          .slice(start, end)
-          .map((leafIndex) => ({
-          leafIndex,
-          actual: leaves[leafIndex]?.style.backgroundPositionY ?? "",
-          expected: expectedAxisAtlasPositions[axis],
-          }));
-      });
-      const modelTransform = scene?.style.transform ?? "";
-      const expectedTransform = debug.scene.playback.transforms[420];
-      const actualMatrix = new DOMMatrix(modelTransform).toFloat64Array();
-      const expectedMatrix = new DOMMatrix(expectedTransform).toFloat64Array();
+      const leaves = [...document.querySelectorAll(".polycss-camera > .polycss-scene > b")];
+      const importantRules = [];
+      for (const sheet of [...document.styleSheets]) {
+        for (const rule of [...(sheet.cssRules ?? [])]) {
+          if (rule.cssText?.includes("!important")) importantRules.push(rule.cssText);
+        }
+      }
+      const firstStyle = getComputedStyle(leaves[0]);
       return {
         status: document.body.dataset.portStatus,
-        message: document.querySelector(".cssmenger-error-message")?.textContent ?? "",
-        ready: debug.ready,
-        state: debug.state(),
-        stats: debug.stats(),
-        stable: debug.assertStableDomIdentity(),
-        retainedLeaves: leaves.length,
-        retainedRenderWrappers: document.querySelectorAll("body > .polycss-camera, body > .polycss-camera > .polycss-scene").length,
-        retainedModelRoots: document.querySelectorAll(".cssmenger-model").length,
-        retainedAxisRoots: document.querySelectorAll(".cssmenger-axis").length,
-        forbiddenElements: document.querySelectorAll(".polycss-camera canvas, .polycss-camera svg").length,
-        shellWordmarkPath: document.querySelector(".site-wordmark-path")?.textContent ?? "",
-        shellHomeHref: document.querySelector(".site-wordmark")?.href ?? "",
-        shellGithubHref: document.querySelector(".site-action-icon-only")?.href ?? "",
-        visibleSampleCount,
-        backfaceVisibility: getComputedStyle(leaves[0]).backfaceVisibility,
-        inheritedPublicationProperties: ["--m", "--x", "--y", "--z"].map((property) =>
-          scene?.style.getPropertyValue(property) ?? ""),
-        selectedLeafPalettePositions,
-        modelTransform,
-        expectedTransform,
-        modelTransformMatrixMaxDelta: Math.max(...actualMatrix.map((value, index) =>
-          Math.abs(value - expectedMatrix[index]))),
-        viewTranslate: scene?.style.translate ?? "",
-        viewScale: scene?.style.scale ?? "",
-        geometryPayload: Array.isArray(debug.scene.meshes),
-        pageMetadataCount: document.querySelectorAll("[data-poly-index], [data-polycss-leaf]").length,
-        renderLeafAttributeCounts: leaves.map((leaf) => leaf.attributes.length),
-        shellScaffoldingCount: document.querySelectorAll("#app, #scene, #status, main, section, output").length,
-        sceneElementCount: document.querySelectorAll(".polycss-camera, .polycss-camera *").length,
+        ready: debug?.ready === true,
+        stable: debug?.assertStableDomIdentity?.() === true,
+        errors: debug?.errors?.() ?? [],
+        stats: debug?.stats?.() ?? null,
+        bCount: leaves.length,
+        iCount: document.querySelectorAll(".polycss-camera > .polycss-scene > i").length,
+        sCount: document.querySelectorAll(".polycss-camera > .polycss-scene > s").length,
+        forbiddenRendererCount: document.querySelectorAll("canvas, svg:not(.site-wordmark-svg):not(.site-action-icon)").length,
+        leafImportantInlineCount: leaves.filter((leaf) => leaf.getAttribute("style")?.includes("important")).length,
+        leafBackgroundSizeInlineCount: leaves.filter((leaf) => leaf.style.backgroundSize).length,
+        leafImageRenderingInlineCount: leaves.filter((leaf) => leaf.style.imageRendering).length,
+        leafInlineProperties: [...new Set(leaves.flatMap((leaf) => [...leaf.style]))].sort(),
+        sceneInlineProperties: [...scene.style].sort(),
+        cameraInlineProperties: [...document.querySelector(".polycss-camera").style].sort(),
+        importantRules,
+        computed: {
+          width: firstStyle.width,
+          height: firstStyle.height,
+          imageRendering: firstStyle.imageRendering,
+          backfaceVisibility: firstStyle.backfaceVisibility,
+          backgroundSize: firstStyle.backgroundSize,
+        },
+        expectedBackgroundSize: `${debug.scene.planeAtlas.width}px ${debug.scene.planeAtlas.height}px`,
+        atlasUrl: debug.scene.planeAtlas.assetUrl,
+        atlasWidth: debug.scene.planeAtlas.width,
+        atlasHeight: debug.scene.planeAtlas.height,
+        atlasPageCount: debug.scene.metrics.atlasPageCount,
+        sceneVariableWidth: getComputedStyle(scene).getPropertyValue("--cssmenger-atlas-width"),
+        sceneVariableHeight: getComputedStyle(scene).getPropertyValue("--cssmenger-atlas-height"),
       };
     });
-    if (pageErrors.length || evidence.status !== "ready" || !evidence.ready || !evidence.stable ||
-        evidence.state.tick !== 420 || !evidence.state.paused || evidence.retainedLeaves !== 84 ||
-        evidence.retainedRenderWrappers !== 2 || evidence.retainedModelRoots !== 0 ||
-        evidence.retainedAxisRoots !== 0 || evidence.forbiddenElements !== 0 || evidence.visibleSampleCount < 10 ||
-        evidence.shellWordmarkPath !== "/menger" || evidence.shellHomeHref !== new URL("/", route).href ||
-        evidence.shellGithubHref !== "https://github.com/layoutit/cssGraphics" ||
-        evidence.backfaceVisibility !== "hidden" ||
-        evidence.inheritedPublicationProperties.some(Boolean) ||
-        evidence.selectedLeafPalettePositions.flat().some(({ actual, expected }) => actual !== expected) ||
-        evidence.modelTransformMatrixMaxDelta > 1e-5 || evidence.viewTranslate !== "0px 0px -980.385px" ||
-        evidence.viewScale !== "1.4" || evidence.geometryPayload || evidence.pageMetadataCount !== 0 ||
-        evidence.renderLeafAttributeCounts.some((count) => count !== 1) ||
-        evidence.shellScaffoldingCount !== 0 || evidence.sceneElementCount !== 86 ||
-        evidence.stats.runtimeInstrumentationEnabled || evidence.stats.preparedStatesApplied !== null ||
-        evidence.stats.runtimeHotPathDomStyleReadCount !== 0 ||
-        evidence.stats.runtimeAdjacentPublicationComparisonCount !== 0 ||
-        evidence.stats.runtimeHotPathProfilingBranchCount !== 0 ||
-        evidence.stats.runtimeHotPathDebugCounterWritesPerScheduledTick !== 0 ||
-        evidence.stats.preparedSchedulerCatchUpMode !== "coalesced-latest-prepared-state" ||
-        evidence.stats.preparedColorPublicationIntervalTicks !== 3 ||
-        evidence.stats.preparedColorPublicationDelayMilliseconds !== 90 ||
-        evidence.stats.preparedColorPublicationMode !== "fixed-prepared-source-state-interval" ||
-        evidence.stats.preparedColorPaletteStepPerPublication !== 1 ||
-        evidence.stats.preparedColorPaletteCycleMilliseconds !== 11_520 ||
-        evidence.stats.preparedColorAdvanceMode !== "one-adjacent-prepared-palette-row-per-publication" ||
-        colorCadenceEvidence.positions[0] !== colorCadenceEvidence.expectedInitial ||
-        colorCadenceEvidence.positions[1] !== colorCadenceEvidence.expectedInitial ||
-        colorCadenceEvidence.positions[2] !== colorCadenceEvidence.expectedInitial ||
-        colorCadenceEvidence.positions[3] !== colorCadenceEvidence.expectedAdjacent ||
-        colorCadenceEvidence.positions[3] === colorCadenceEvidence.rejectedThreeStepJump ||
-        evidence.stats.preparedFrontFacingAxisSelectionsPerScheduledTick.minimum !== 0 ||
-        evidence.stats.preparedFrontFacingAxisSelectionsPerScheduledTick.maximum !== 3 ||
-        evidence.stats.preparedFrontFacingAxisSelectionsPerScheduledTick.nominalAverage !== 1 ||
-        evidence.stats.preparedFrontFacingLeafWritesPerScheduledTick.minimum !== 0 ||
-        evidence.stats.preparedFrontFacingLeafWritesPerScheduledTick.maximum !== 50 ||
-        evidence.stats.preparedFrontFacingLeafWritesPerScheduledTick.nominalAverage !== 42.725 / 3 ||
-        evidence.stats.preparedFrontFacingLeafWritesPerColorPublication.minimum !== 41 ||
-        evidence.stats.preparedFrontFacingLeafWritesPerColorPublication.maximum !== 50 ||
-        evidence.stats.preparedFrontFacingLeafWritesPerColorPublication.average !== 42.725 ||
-        evidence.stats.runtimeDomMutationCount !== 0 || evidence.stats.runtimeGeometryConstructionCount !== 0 ||
-        evidence.stats.runtimeRecursionCount !== 0 || evidence.stats.runtimeMergeCount !== 0 ||
-        evidence.stats.runtimeColorGenerationCount !== 0 || evidence.stats.runtimeRotationCalculationCount !== 0 ||
-        evidence.stats.runtimeCameraCalculationCount !== 0 || !evidence.stats.preparedSourceFaceCoverageExact) {
-      throw new Error(`cssMenger browser smoke contract failed: ${JSON.stringify({ evidence, colorCadenceEvidence, pageErrors })}`);
-    }
-    await page.screenshot({ path: screenshotPath });
-    await page.setViewportSize({ width: 390, height: 844 });
-    const mobileFrames = [];
-    for (const tick of [0, 120, 320, 420, 720, 1080, 1439]) {
-      await page.evaluate((nextTick) => globalThis.__cssMengerDebug.seek(nextTick), tick);
-      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-      mobileFrames.push(await page.evaluate((frameTick) => {
-        const leaves = [...document.querySelectorAll(".polycss-camera > .polycss-scene > b, .polycss-camera > .polycss-scene > i, .polycss-camera > .polycss-scene > s")];
-        const bounds = leaves.map((leaf) => leaf.getBoundingClientRect()).filter((rect) => rect.width > 0 && rect.height > 0);
+
+    const sampledStates = [];
+    for (const tick of [0, 36, 420, 1_439]) {
+      sampledStates.push(await page.evaluate((stateIndex) => {
+        const debug = globalThis.__cssMengerDebug;
+        debug.seek(stateIndex);
+        const scene = document.querySelector(".polycss-camera > .polycss-scene");
+        const actual = new DOMMatrix(scene.style.transform).toFloat64Array();
+        const expected = new DOMMatrix(debug.scene.playback.transforms[stateIndex]).toFloat64Array();
         return {
-          tick: frameTick,
-          left: Math.min(...bounds.map((rect) => rect.left)),
-          right: Math.max(...bounds.map((rect) => rect.right)),
-          top: Math.min(...bounds.map((rect) => rect.top)),
-          bottom: Math.max(...bounds.map((rect) => rect.bottom)),
-          computedScale: getComputedStyle(document.querySelector(".polycss-scene")).scale,
+          tick: debug.state().tick,
+          paused: debug.state().paused,
+          matrixMaxDelta: Math.max(...actual.map((value, index) => Math.abs(value - expected[index]))),
         };
       }, tick));
     }
-    if (mobileFrames.some((frame) => frame.left < 0 || frame.right > 390 || frame.top < 50 || frame.bottom > 844 ||
-        frame.computedScale !== "1.2")) {
-      throw new Error(`cssMenger mobile framing contract failed: ${JSON.stringify(mobileFrames)}`);
+    const playbackProgress = await page.evaluate(async () => {
+      const debug = globalThis.__cssMengerDebug;
+      debug.seek(0);
+      debug.resume();
+      await new Promise((resolve) => setTimeout(resolve, 1_200));
+      debug.pause();
+      return debug.state();
+    });
+    const atlasRequests = requests.filter((path) => /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif$/u.test(path));
+    const pageRequests = requests.filter((path) => /(?:page|frame)-\d+/u.test(path));
+
+    if (pageErrors.length || evidence.status !== "ready" || !evidence.ready || !evidence.stable ||
+        evidence.errors.length || evidence.bCount !== 84 || evidence.iCount !== 0 || evidence.sCount !== 0 ||
+        evidence.forbiddenRendererCount !== 0 || evidence.leafImportantInlineCount !== 0 ||
+        evidence.leafBackgroundSizeInlineCount !== 0 || evidence.leafImageRenderingInlineCount !== 0 ||
+        evidence.leafInlineProperties.some((property) =>
+          !["background-position", "background-position-x", "background-position-y"].includes(property)) ||
+        evidence.sceneInlineProperties.some((property) => !["--a", "transform"].includes(property)) ||
+        evidence.cameraInlineProperties.length !== 0 ||
+        evidence.importantRules.length !== 0 || evidence.computed.width !== "27px" ||
+        evidence.computed.height !== "27px" || evidence.computed.imageRendering !== "pixelated" ||
+        evidence.computed.backfaceVisibility !== "hidden" ||
+        evidence.computed.backgroundSize !== evidence.expectedBackgroundSize ||
+        evidence.sceneVariableWidth !== `${evidence.atlasWidth}px` ||
+        evidence.sceneVariableHeight !== `${evidence.atlasHeight}px` || evidence.atlasPageCount !== 1 ||
+        atlasRequests.length !== 1 || pageRequests.length !== 0 ||
+        sampledStates.some((sample, index) => sample.tick !== [0, 36, 420, 1_439][index] ||
+          !sample.paused || sample.matrixMaxDelta > 1e-5) ||
+        playbackProgress.tick < 25 || playbackProgress.tick > 45 || !playbackProgress.paused ||
+        evidence.stats.runtimeDomMutationCount !== 0 || evidence.stats.runtimeDomGrowth !== false ||
+        evidence.stats.runtimeLightingCalculationCount !== 0 || evidence.stats.runtimeGeometryConstructionCount !== 0) {
+      throw new Error(`cssMenger browser smoke failed: ${JSON.stringify({
+        evidence, sampledStates, playbackProgress, atlasRequests, pageRequests, pageErrors,
+      })}`);
     }
-    await page.evaluate(() => globalThis.__cssMengerDebug.seek(120));
-    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-    await page.screenshot({ path: mobileScreenshotPath });
-    await writeFile(statePath, `${JSON.stringify({ ...evidence, screenshotPath, mobileScreenshotPath, colorCadenceEvidence, mobileFrames }, null, 2)}\n`);
-    console.log(JSON.stringify({ status: "passed", screenshotPath, mobileScreenshotPath, statePath, colorCadenceEvidence, mobileFrames, ...evidence }, null, 2));
+    await page.evaluate(() => globalThis.__cssMengerDebug.seek(36));
+    await page.screenshot({ path: screenshotPath });
+    const mobileFraming = [];
+    for (const viewport of [
+      { width: 360, height: 780, expectedScale: "0.82", screenshotPath: narrowMobileScreenshotPath },
+      { width: 390, height: 844, expectedScale: "0.88", screenshotPath: mobileScreenshotPath },
+    ]) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      for (const tick of [0, 320, 720, 1_439]) {
+        mobileFraming.push(await page.evaluate(({ stateIndex, expectedScale }) => {
+          const debug = globalThis.__cssMengerDebug;
+          debug.seek(stateIndex);
+          const leaves = [...document.querySelectorAll(".polycss-camera > .polycss-scene > b")];
+          const bounds = leaves.map((leaf) => leaf.getBoundingClientRect())
+            .filter((rectangle) => rectangle.width > 0 && rectangle.height > 0);
+          return {
+            tick: debug.state().tick,
+            viewportWidth: innerWidth,
+            viewportHeight: innerHeight,
+            expectedScale,
+            computedScale: getComputedStyle(document.querySelector(".polycss-scene")).scale,
+            left: Math.min(...bounds.map((rectangle) => rectangle.left)),
+            right: Math.max(...bounds.map((rectangle) => rectangle.right)),
+            top: Math.min(...bounds.map((rectangle) => rectangle.top)),
+            bottom: Math.max(...bounds.map((rectangle) => rectangle.bottom)),
+          };
+        }, { stateIndex: tick, expectedScale: viewport.expectedScale }));
+      }
+      await page.screenshot({ path: viewport.screenshotPath });
+    }
+    if (mobileFraming.some((frame) => frame.tick === null || frame.computedScale !== frame.expectedScale ||
+        frame.left < 0 || frame.right > frame.viewportWidth || frame.top < 50 ||
+        frame.bottom > frame.viewportHeight)) {
+      throw new Error(`cssMenger mobile framing failed: ${JSON.stringify(mobileFraming)}`);
+    }
+    const result = {
+      route,
+      evidence,
+      sampledStates,
+      playbackProgress,
+      mobileFraming,
+      atlasRequests,
+      pageRequests,
+      pageErrors,
+    };
+    await writeFile(statePath, `${JSON.stringify(result, null, 2)}\n`);
+    console.log(JSON.stringify({
+      status: "pass",
+      screenshotPath,
+      narrowMobileScreenshotPath,
+      mobileScreenshotPath,
+      statePath,
+      ...result,
+    }, null, 2));
   } finally {
     await browser.close();
   }

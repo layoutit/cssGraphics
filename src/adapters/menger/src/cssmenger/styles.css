@@ -128,6 +128,29 @@ body > .polycss-camera {
   background: transparent;
 }
 
+body > .polycss-camera > .polycss-scene > b {
+  position: absolute;
+  display: block;
+  width: 27px;
+  height: 27px;
+  margin: 0;
+  padding: 0;
+  color: transparent;
+  font: inherit;
+  font-weight: normal;
+  font-style: normal;
+  line-height: 0;
+  text-decoration: none;
+  background-color: transparent;
+  background-image: var(--a);
+  background-repeat: no-repeat;
+  background-size: var(--cssmenger-atlas-width) var(--cssmenger-atlas-height);
+  transform-origin: 0 0;
+  transform-style: preserve-3d;
+  image-rendering: pixelated;
+  backface-visibility: hidden;
+}
+
 .cssmenger-error-message {
   position: fixed;
   inset: 0;
@@ -146,12 +169,12 @@ body > .polycss-camera {
   }
 
   body > .polycss-camera > .polycss-scene {
-    scale: 1.05 !important;
+    scale: 0.82;
   }
 }
 
 @media (min-width: 361px) and (max-width: 430px) {
   body > .polycss-camera > .polycss-scene {
-    scale: 1.2 !important;
+    scale: 0.88;
   }
 }

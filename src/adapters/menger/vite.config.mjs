@@ -9,7 +9,9 @@ const adapterRoot = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(adapterRoot, "..", "..", "..");
 const generatedPublicDir = resolve(
   process.env.CSSMENGER_GENERATED_PUBLIC_DIR ??
-    join(repositoryRoot, "build/generated/public"),
+    (process.env.CSSMENGER_GENERATED_ROOT
+      ? join(process.env.CSSMENGER_GENERATED_ROOT, "public")
+      : join(repositoryRoot, "build/generated/public")),
 );
 const deployBuild = process.env.CSSMENGER_DEPLOY_BUILD === "1";
 

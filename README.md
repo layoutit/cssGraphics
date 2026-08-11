@@ -73,9 +73,11 @@ browser assets are not committed.
 XScreenSaver Menger. Its fixed depth-3 slice preserves the seeded recursive
 cell and face census, palette rows, rotator states, 30 ms cadence, and prepared
 camera. Prepare time merges 18,048 source faces into 84 retained coplanar plane
-bundles with exact source-face coverage; runtime retains one model root and
-three axis roots and performs no geometry, recursion, merging, color,
-rotation, camera, or DOM construction.
+bundles with exact source-face coverage, then byte-deduplicates prepared moving
+lighting into one Q83 AVIF and an exact delta address schedule. Runtime retains
+only camera/scene roots plus 84 direct `<b>` leaves, publishes transforms every
+30 ms and held lighting every 60 ms, and performs no geometry, recursion,
+merging, lighting, address comparison, rotation, camera, or DOM construction.
 
 ```sh
 pnpm prepare:menger:artifact

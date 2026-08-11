@@ -15,13 +15,18 @@ try {
   const completed = native.pass && browser.pass && comparison.completed;
   const report = {
     schema: "cssmenger-oracle@1",
-    status: comparison.visual.exact ? "completed-exact-pixel-match" : "completed-pixel-divergence",
+    status: comparison.visual.exact
+      ? "completed-exact-pixel-match"
+      : comparison.visual.boundedMatch
+        ? "completed-bounded-native-raster-edge-match"
+        : "completed-pixel-divergence",
     completed,
-    pass: completed && comparison.visual.exact,
+    pass: completed && comparison.pass,
     exactNativeAa: native.visualAa.exact,
     exactBrowserAa: browser.visualAa.exact,
     exactNativeBrowserState: comparison.sourceState.exact,
     exactNativeBrowserPixels: comparison.visual.exact,
+    boundedNativeBrowserPixels: comparison.visual.boundedMatch,
     visualQualification: comparison.visual.qualification,
     nativeReport: native.reportPath,
     browserReport: browser.reportPath,

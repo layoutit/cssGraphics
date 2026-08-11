@@ -14,6 +14,7 @@ test("prepared XScreenSaver random, palette, and rotator segment is deterministi
   assert.equal(playback.stateCount, 1440);
   assert.equal(playback.palette.length, 128);
   assert.equal(playback.transforms.length, 1440);
+  assert.equal(playback.nativeRotationDegrees.length, 1440);
   assert.equal(playback.colorRows.length, 1440);
   assert.equal(hash(playback.palette), "84d4a563fb968f6e084dd7e7d88e40dc5953a86b0794c5b0e19283ab47d5b55f");
   assert.equal(hash(playback.transforms), "934d20245221f2481a9c7d7e307eb5d0a1a18311550ef505fe3c4f8bc28c292b");
@@ -32,14 +33,14 @@ test("prepared XScreenSaver random, palette, and rotator segment is deterministi
   assert.equal(playback.runtimeRotationCalculation, false);
 });
 
-test("steady playback holds prepared colors for three source ticks without DOM reads or adjacent comparisons", () => {
+test("steady playback publishes one prepared sparse-lighting address set per source tick", () => {
   const originalHTMLElement = globalThis.HTMLElement;
   let modelTransformWrites = 0;
-  let axisColorWrites = 0;
+  let lightingAddressWrites = 0;
   class FakeHTMLElement {
     constructor() {
       let transform = "";
-      let backgroundPositionY = "";
+      let backgroundPosition = "";
       this.style = {
         setProperty: (name, value) => {
           this.style[name] = value;
@@ -51,9 +52,9 @@ test("steady playback holds prepared colors for three source ticks without DOM r
           get: () => transform,
           set: (value) => { transform = value; modelTransformWrites += 1; },
         },
-        backgroundPositionY: {
-          get: () => backgroundPositionY,
-          set: (value) => { backgroundPositionY = value; axisColorWrites += 1; },
+        backgroundPosition: {
+          get: () => backgroundPosition,
+          set: (value) => { backgroundPosition = value; lightingAddressWrites += 1; },
         },
       });
     }
@@ -79,12 +80,7 @@ test("steady playback holds prepared colors for three source ticks without DOM r
       },
     };
     const publicationRoot = new FakeHTMLElement();
-    const planeAtlas = {
-      schema: "cssmenger-prepared-coplanar-plane-atlas@1",
-      leafCount: 84,
-      paletteStateCount: 128,
-      paletteBackgroundPositionYs: Array.from({ length: 128 }, (_, index) => `${-index}px`),
-    };
+    const planeAtlas = fakeSparseAtlas(playback.frontFacingSchedule);
     const leaves = Array.from({ length: 84 }, () => new FakeHTMLElement());
     const player = createCssmengerPreparedPlayer({
       playback,
@@ -98,42 +94,35 @@ test("steady playback holds prepared colors for three source ticks without DOM r
     });
 
     const defaultStats = player.stats();
-    assert.equal(defaultStats.runtimeInstrumentationEnabled, false);
-    assert.equal(defaultStats.preparedStatesApplied, null);
-    assert.equal(defaultStats.runtimeHotPathDebugCounterWritesPerScheduledTick, 0);
     assert.equal(defaultStats.preparedColorPublicationIntervalTicks, COLOR_PUBLICATION_INTERVAL_TICKS);
-    assert.equal(defaultStats.preparedColorPublicationDelayMilliseconds, 90);
-    assert.deepEqual(defaultStats.preparedFrontFacingAxisSelectionsPerScheduledTick, {
-      minimum: 0,
-      maximum: 3,
-      nominalAverage: 1,
-    });
+    assert.equal(defaultStats.preparedColorPublicationDelayMilliseconds, 60);
+    assert.equal(defaultStats.preparedLightingAddressPublicationIntervalTicks, 1);
+    assert.equal(defaultStats.preparedLightingAddressPublicationDelayMilliseconds, 30);
+    assert.equal(defaultStats.preparedFrontFacingAxisSelectionsPerScheduledTick, 3);
     assert.equal(modelTransformWrites, 1);
-    assert.equal(axisColorWrites, 84);
+    assert.equal(lightingAddressWrites, 42);
     player.step();
     assert.equal(modelTransformWrites, 2);
-    assert.equal(axisColorWrites, 84);
+    assert.equal(lightingAddressWrites, 84);
     player.step();
     assert.equal(modelTransformWrites, 3);
-    assert.equal(axisColorWrites, 84);
+    assert.equal(lightingAddressWrites, 126);
     player.step();
     assert.equal(modelTransformWrites, 4);
     const afterAdvance = player.stats();
-    assert.equal(axisColorWrites, 126);
-    assert.equal(leaves[0].style.backgroundPositionY, "-1px");
-    assert.equal(leaves[28].style.backgroundPositionY, "-43px");
-    assert.equal(leaves[56].style.backgroundPositionY, "-85px");
+    assert.equal(lightingAddressWrites, 168);
+    assert.equal(leaves[0].style.backgroundPosition, "0px -243px");
+    assert.equal(leaves[28].style.backgroundPosition, "0px -270px");
+    assert.equal(leaves[56].style.backgroundPosition, "0px -297px");
     assert.equal(afterAdvance.runtimeHotPathDomStyleReadCount, 0);
-    assert.equal(afterAdvance.runtimeAdjacentPublicationComparisonCount, 0);
-    assert.equal(afterAdvance.runtimeHotPathProfilingBranchCount, 0);
-    assert.equal(afterAdvance.preparedColorPaletteStepPerPublication, 1);
-    assert.equal(afterAdvance.preparedColorPaletteCycleMilliseconds, 11_520);
-    assert.equal(afterAdvance.preparedColorAdvanceMode, "one-adjacent-prepared-palette-row-per-publication");
+    assert.equal(afterAdvance.runtimeLightingCalculationCount, 0);
+    assert.equal(afterAdvance.preparedLightingAtlasAssetCount, 1);
+    assert.equal(afterAdvance.preparedLightingAtlasSlotCount, 210);
 
     player.setTick(2);
     assert.equal(modelTransformWrites, 5);
-    assert.equal(axisColorWrites, 168);
-    assert.equal(leaves[0].style.backgroundPositionY, "-2px");
+    assert.equal(lightingAddressWrites, 210);
+    assert.equal(leaves[0].style.backgroundPosition, "0px -162px");
   } finally {
     if (originalHTMLElement === undefined) delete globalThis.HTMLElement;
     else globalThis.HTMLElement = originalHTMLElement;
@@ -147,16 +136,16 @@ test("finite prepared playback clamps instead of claiming a false loop", () => {
   assert.equal(timelineStateIndexForTick(999, playback), 11);
 });
 
-test("late playback coalesces non-aligned geometry catch-up without skipping adjacent palette rows", () => {
+test("late playback still advances one adjacent prepared state per scheduled draw", () => {
   const originalHTMLElement = globalThis.HTMLElement;
   let requestedFrame = null;
   let requestedDelay = null;
   let modelTransformWrites = 0;
-  let axisColorWrites = 0;
+  let lightingAddressWrites = 0;
   class FakeHTMLElement {
     constructor() {
       let transform = "";
-      let backgroundPositionY = "";
+      let backgroundPosition = "";
       this.style = {
         setProperty: (name, value) => { this.style[name] = value; },
         getPropertyValue: () => { throw new Error("runtime DOM style read"); },
@@ -166,9 +155,9 @@ test("late playback coalesces non-aligned geometry catch-up without skipping adj
           get: () => transform,
           set: (value) => { transform = value; modelTransformWrites += 1; },
         },
-        backgroundPositionY: {
-          get: () => backgroundPositionY,
-          set: (value) => { backgroundPositionY = value; axisColorWrites += 1; },
+        backgroundPosition: {
+          get: () => backgroundPosition,
+          set: (value) => { backgroundPosition = value; lightingAddressWrites += 1; },
         },
       });
     }
@@ -196,12 +185,7 @@ test("late playback coalesces non-aligned geometry catch-up without skipping adj
     const leaves = Array.from({ length: 84 }, () => new FakeHTMLElement());
     const player = createCssmengerPreparedPlayer({
       playback,
-      planeAtlas: {
-        schema: "cssmenger-prepared-coplanar-plane-atlas@1",
-        leafCount: 84,
-        paletteStateCount: 128,
-        paletteBackgroundPositionYs: Array.from({ length: 128 }, (_, index) => `${-index}px`),
-      },
+      planeAtlas: fakeSparseAtlas(playback.frontFacingSchedule),
       publicationRoot: new FakeHTMLElement(),
       leaves,
       readNow: () => 0,
@@ -213,18 +197,18 @@ test("late playback coalesces non-aligned geometry catch-up without skipping adj
     player.resume();
     requestedDelay();
     requestedFrame(125);
-    assert.equal(player.tick, 4);
+    assert.equal(player.tick, 1);
     assert.equal(modelTransformWrites, 2);
-    assert.equal(axisColorWrites, 126);
-    assert.equal(leaves[0].style.backgroundPositionY, "-1px");
+    assert.equal(lightingAddressWrites, 84);
+    assert.equal(leaves[0].style.backgroundPosition, "0px -81px");
     requestedDelay();
     requestedFrame(245);
     player.pause();
-    assert.equal(player.tick, 8);
+    assert.equal(player.tick, 2);
     assert.equal(modelTransformWrites, 3);
-    assert.equal(axisColorWrites, 168);
-    assert.equal(leaves[0].style.backgroundPositionY, "-2px");
-    assert.equal(player.stats().preparedSchedulerCatchUpMode, "coalesced-latest-prepared-state");
+    assert.equal(lightingAddressWrites, 126);
+    assert.equal(leaves[0].style.backgroundPosition, "0px -162px");
+    assert.equal(player.stats().preparedSchedulerCatchUpMode, "one-adjacent-prepared-state-no-skip");
   } finally {
     if (originalHTMLElement === undefined) delete globalThis.HTMLElement;
     else globalThis.HTMLElement = originalHTMLElement;
@@ -233,4 +217,53 @@ test("late playback coalesces non-aligned geometry catch-up without skipping adj
 
 function hash(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+
+function fakeSparseAtlas(frontFacingSchedule) {
+  const sourceStateCount = frontFacingSchedule.stateCount;
+  const slotCount = frontFacingSchedule.leafIndices.length;
+  const stateOffsets = Array.from({ length: sourceStateCount + 1 }, (_, stateIndex) =>
+    frontFacingSchedule.offsets[stateIndex * 3]);
+  const stateOffsetBytes = u16leBytes(stateOffsets);
+  const leafIndexBytes = Buffer.from(frontFacingSchedule.leafIndices);
+  const slotIndexBytes = u16leBytes(Array.from({ length: slotCount }, (_, index) => index));
+  return {
+    schema: "cssmenger-prepared-sparse-leaf-lighting-atlas@1",
+    leafCount: 84,
+    slotCount,
+    visibleLeafFieldCount: slotCount,
+    sourceStateCount,
+    lightingSampleIntervalTicks: 2,
+    lightingSampleDelayMilliseconds: 60,
+    lightingSampleCount: Math.ceil(sourceStateCount / 2),
+    transformPublicationIntervalTicks: 1,
+    transformPublicationDelayMilliseconds: 30,
+    columns: 14,
+    slotWidth: 27,
+    slotHeight: 27,
+    gutterPixels: 0,
+    addressScheduleSchema: "cssmenger-prepared-exact-delta-lighting-address-schedule@1",
+    addressEncoding:
+      "base64-u16le-state-offsets-plus-u8-leaf-indices-plus-u16le-exact-deduplicated-slot-indices",
+    addressStateOffsetByteLength: stateOffsetBytes.length,
+    addressStateOffsetsBase64: stateOffsetBytes.toString("base64"),
+    addressLeafIndexByteLength: leafIndexBytes.length,
+    addressLeafIndicesBase64: leafIndexBytes.toString("base64"),
+    addressSlotIndexByteLength: slotIndexBytes.length,
+    addressSlotIndicesBase64: slotIndexBytes.toString("base64"),
+    addressUpdateCount: slotCount,
+    addressWriteCountPerState: {
+      minimum: 42,
+      maximum: 42,
+      average: 42,
+      zeroWriteStateCount: 0,
+    },
+    redundantAddressWriteCountRemoved: 0,
+  };
+}
+
+function u16leBytes(values) {
+  const bytes = Buffer.alloc(values.length * 2);
+  for (let index = 0; index < values.length; index += 1) bytes.writeUInt16LE(values[index], index * 2);
+  return bytes;
 }

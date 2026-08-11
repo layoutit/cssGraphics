@@ -15,7 +15,7 @@ const viewport = {
 };
 const deviceScaleFactor = positiveNumber("CSSMENGER_PERF_DEVICE_SCALE_FACTOR", 1);
 const cpuThrottlingRate = positiveNumber("CSSMENGER_PERF_CPU_THROTTLE", 1);
-const sampleTick = nonNegativeInteger("CSSMENGER_PERF_SAMPLE_TICK", 320);
+const sampleTick = nonNegativeInteger("CSSMENGER_PERF_SAMPLE_TICK", 319);
 const port = await freePort();
 const route = `http://127.0.0.1:${port}/`;
 let serverOutput = "";
@@ -46,11 +46,11 @@ try {
     if (message.type() === "error") errors.push(message.text());
   });
 
-  await page.goto(route, { waitUntil: "networkidle" });
+  await page.goto(route, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => globalThis.__cssMengerDebug?.ready === true, null, { timeout: 30_000 });
   await page.evaluate(async (tick) => {
     globalThis.__cssMengerDebug.pause();
-    globalThis.__cssMengerDebug.seek(tick);
+    await globalThis.__cssMengerDebug.seek(tick);
     await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
   }, sampleTick);
 
@@ -92,17 +92,11 @@ try {
     const debug = globalThis.__cssMengerDebug;
     const scene = debug.scene;
     const publicationRoot = document.querySelector(".polycss-camera > .polycss-scene");
-    const leaves = [...document.querySelectorAll(".polycss-camera > .polycss-scene > b, .polycss-camera > .polycss-scene > i, .polycss-camera > .polycss-scene > s")];
-    if (!(publicationRoot instanceof HTMLElement) ||
-        scene?.playback?.transforms?.length <= tick + 1 ||
-        scene?.playback?.colorRows?.length <= tick + 1) {
+    if (!(publicationRoot instanceof HTMLElement) || scene?.planeAtlas?.sourceStateCount <= tick + 1) {
       throw new Error("Single-frame work probe could not bind the prepared runtime graph");
     }
     const originalTransform = scene.playback.transforms[tick];
     const nextTransform = scene.playback.transforms[tick + 1];
-    const originalColorRow = scene.playback.colorRows[tick];
-    const nextColorRow = scene.playback.colorRows[tick + 1];
-    const atlasPositions = scene.planeAtlas.paletteBackgroundPositionYs;
     const beforeStats = debug.stats();
     performance.mark("cssmenger-baseline-start");
     await fourFrames("cssmenger-baseline");
@@ -116,13 +110,6 @@ try {
     publicationRoot.style.transform = originalTransform;
     await settle();
 
-    const paletteOnly = await measuredCase("cssmenger-palette-only", () => {
-      const writeCount = writeSelectedColors(tick + 1, nextColorRow);
-      return { writeCount, property: "background-position-y", targetCount: writeCount };
-    });
-    writeSelectedColors(tick, originalColorRow);
-    await settle();
-
     performance.mark("cssmenger-frame-work-start");
     const publication = debug.profileStep();
     performance.mark("cssmenger-publication-complete");
@@ -131,11 +118,12 @@ try {
     const afterStats = debug.stats();
     return {
       publication,
-      isolatedPublications: { transformOnly, paletteOnly },
+      isolatedPublications: { transformOnly },
       statsDelta: Object.freeze({
         preparedStatesApplied: publication.after.tick - publication.before.tick,
-        runtimeModelTransformWrites: Number(publication.modelTransform.changed),
-        runtimeAxisColorWrites: publication.axes.reduce((count, axis) => count + axis.targetCount, 0),
+        runtimeModelTransformWrites: 1,
+        runtimeLightingAddressWrites: publication.preparedLightingAddressWriteCount,
+        runtimeLightingAddressComparisons: 0,
         runtimeSchedulerCallbackCount: 0,
         runtimeDomMutationCount: afterStats.runtimeDomMutationCount - beforeStats.runtimeDomMutationCount,
         runtimeGeometryConstructionCount: afterStats.runtimeGeometryConstructionCount - beforeStats.runtimeGeometryConstructionCount,
@@ -144,22 +132,6 @@ try {
       stableDom: debug.assertStableDomIdentity(),
       finalState: debug.state(),
     };
-
-    function writeSelectedColors(stateIndex, colorRow) {
-      const schedule = scene.playback.frontFacingSchedule;
-      let writeCount = 0;
-      for (let axis = 0; axis < 3; axis += 1) {
-        const backgroundPositionY = atlasPositions[colorRow[axis]];
-        const segmentIndex = stateIndex * schedule.axisCount + axis;
-        const start = schedule.offsets[segmentIndex];
-        const end = schedule.offsets[segmentIndex + 1];
-        for (let index = start; index < end; index += 1) {
-          leaves[schedule.leafIndices[index]].style.backgroundPositionY = backgroundPositionY;
-          writeCount += 1;
-        }
-      }
-      return writeCount;
-    }
 
     async function measuredCase(prefix, publish) {
       performance.mark(`${prefix}-start`);
@@ -195,14 +167,12 @@ try {
   const marks = userTimingMarks(traceEvents);
   const baselineWindow = traceWindow(marks, "cssmenger-baseline-start", "cssmenger-baseline-end");
   const transformWindow = traceWindow(marks, "cssmenger-transform-only-start", "cssmenger-transform-only-end");
-  const paletteWindow = traceWindow(marks, "cssmenger-palette-only-start", "cssmenger-palette-only-end");
   const workWindow = traceWindow(marks, "cssmenger-frame-work-start", "cssmenger-frame-work-end");
   const baseline = summarizeWindow(traceEvents, threadNames, baselineWindow);
   const transformOnly = summarizeWindow(traceEvents, threadNames, transformWindow);
-  const paletteOnly = summarizeWindow(traceEvents, threadNames, paletteWindow);
   const frameWork = summarizeWindow(traceEvents, threadNames, workWindow);
   const summary = {
-    schema: "cssmenger-single-runtime-frame-work-trace@1",
+    schema: "cssmenger-single-runtime-frame-work-trace@2",
     capturedAt: new Date().toISOString(),
     route,
     build: "vite-production-preview",
@@ -217,10 +187,9 @@ try {
       stableDom: result.stableDom,
       finalState: result.finalState,
     },
-    windows: { baseline, transformOnly, paletteOnly, frameWork },
+    windows: { baseline, transformOnly, frameWork },
     incrementalBrowserWork: {
       transformOnly: subtractSummaries(baseline, transformOnly),
-      paletteOnly: subtractSummaries(baseline, paletteOnly),
       completeTick: subtractSummaries(baseline, frameWork),
     },
     performanceMetricDelta: {

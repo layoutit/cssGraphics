@@ -92,19 +92,21 @@ try {
       "devtools.timeline",
       "blink.user_timing",
       "loading",
+      "disabled-by-default-devtools.timeline",
       "disabled-by-default-devtools.timeline.frame",
+      "disabled-by-default-devtools.timeline.paint",
     ].join(","),
     options: "sampling-frequency=10000",
     transferMode: "ReportEvents",
   });
 
   const navigationStarted = performance.now();
-  await page.goto(route, { waitUntil: "networkidle" });
+  await page.goto(route, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => globalThis.__cssMengerDebug?.ready === true, null, { timeout: 30_000 });
   const readyWallMilliseconds = performance.now() - navigationStarted;
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     globalThis.__cssMengerDebug.pause();
-    globalThis.__cssMengerDebug.seek(0);
+    await globalThis.__cssMengerDebug.seek(0);
   });
   await page.waitForTimeout(250);
 
@@ -168,7 +170,7 @@ try {
   const calibrationFrameIntervals = calibrationSample.frameIntervals.filter((value) => Number.isFinite(value) && value >= 0);
   const calibrationLongTasks = calibrationSample.longTasks.filter((entry) => Number.isFinite(entry.duration));
   const summary = {
-    schema: "cssmenger-browser-performance-trace@1",
+    schema: "cssmenger-browser-performance-trace@2",
     capturedAt: new Date().toISOString(),
     route,
     build: "vite-production-preview",
@@ -204,17 +206,21 @@ try {
       tickStart: beforeState.state.tick,
       tickEnd: afterState.state.tick,
       preparedStateAdvanceCount: afterState.state.tick - beforeState.state.tick,
-      modelTransformWriteCount: null,
-      frontFacingLeafPaletteWriteUpperBound: Math.ceil(
-        (afterState.state.tick - beforeState.state.tick) /
-          afterState.stats.preparedColorPublicationIntervalTicks,
-      ) * afterState.stats.preparedFrontFacingLeafWritesPerColorPublication.maximum,
+      modelTransformWriteUpperBound:
+        (afterState.state.tick - beforeState.state.tick) *
+        1,
+      lightingAddressWriteUpperBound:
+        (afterState.state.tick - beforeState.state.tick) *
+        afterState.stats.preparedLightingAddressWritesPerScheduledTick.maximum,
+      lightingAddressWriteExpectedFromPreparedAverage:
+        (afterState.state.tick - beforeState.state.tick) *
+        afterState.stats.preparedLightingAddressWritesPerScheduledTick.average,
       schedulerCallbackCount: null,
-      runtimeInstrumentationEnabled: afterState.stats.runtimeInstrumentationEnabled,
+      preparedLightingAddressUpdateCount: afterState.stats.preparedLightingAddressUpdateCount,
+      preparedRedundantLightingAddressWriteCountRemoved:
+        afterState.stats.preparedRedundantLightingAddressWriteCountRemoved,
       runtimeHotPathDomStyleReadCount: afterState.stats.runtimeHotPathDomStyleReadCount,
-      runtimeAdjacentPublicationComparisonCount: afterState.stats.runtimeAdjacentPublicationComparisonCount,
-      runtimeHotPathProfilingBranchCount: afterState.stats.runtimeHotPathProfilingBranchCount,
-      runtimeHotPathDebugCounterWritesPerScheduledTick: afterState.stats.runtimeHotPathDebugCounterWritesPerScheduledTick,
+      runtimeLightingAddressComparisonCount: afterState.stats.runtimeLightingAddressComparisonCount,
       requestAnimationFrame: summarizeDurations(frameIntervals),
       overBudgetFrameCount: {
         above16_7Milliseconds: frameIntervals.filter((value) => value > 16.7).length,
@@ -259,11 +265,8 @@ try {
     noRuntimeDomOrGeometryWork: summary.steadyAnimation.runtimeDomMutationCount === 0 &&
       summary.steadyAnimation.runtimeGeometryConstructionCount === 0 &&
       summary.steadyAnimation.runtimeMergeCount === 0,
-    noRuntimeInstrumentationWork: summary.steadyAnimation.runtimeInstrumentationEnabled === false &&
-      summary.steadyAnimation.runtimeHotPathDomStyleReadCount === 0 &&
-      summary.steadyAnimation.runtimeAdjacentPublicationComparisonCount === 0 &&
-      summary.steadyAnimation.runtimeHotPathProfilingBranchCount === 0 &&
-      summary.steadyAnimation.runtimeHotPathDebugCounterWritesPerScheduledTick === 0,
+    noRuntimeInstrumentationWork: summary.steadyAnimation.runtimeHotPathDomStyleReadCount === 0 &&
+      summary.steadyAnimation.runtimeLightingAddressComparisonCount === 0,
     noLongTasksDuringSteadyAnimation: summary.steadyAnimation.longTasks.count === 0,
     noFiftyMillisecondFrames: summary.steadyAnimation.overBudgetFrameCount.atLeast50Milliseconds === 0,
     noErrors: summary.errors.length === 0,
@@ -302,7 +305,10 @@ function summarizeRendererMainThread(events) {
   const mainThreads = new Set(events
     .filter((event) => event.ph === "M" && event.name === "thread_name" && event.args?.name === "CrRendererMain")
     .map((event) => `${event.pid}:${event.tid}`));
-  const names = new Set(["RunTask", "FunctionCall", "UpdateLayoutTree", "Layout", "PrePaint", "Paint", "CompositeLayers", "FireAnimationFrame"]);
+  const names = new Set([
+    "RunTask", "FunctionCall", "UpdateLayoutTree", "Layout", "PrePaint", "Paint", "PaintImage",
+    "CompositeLayers", "FireAnimationFrame", "ImageDecodeTask", "RasterTask",
+  ]);
   const totals = {};
   for (const event of events) {
     if (event.ph !== "X" || !Number.isFinite(event.dur) || !mainThreads.has(`${event.pid}:${event.tid}`) || !names.has(event.name)) continue;

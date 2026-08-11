@@ -144,8 +144,8 @@ body > .polycss-camera {
 body > .polycss-camera > .polycss-scene > b {
   position: absolute;
   display: block;
-  width: 27px;
-  height: 27px;
+  width: var(--cssmenger-tile-width, 27px);
+  height: var(--cssmenger-tile-height, 27px);
   margin: 0;
   padding: 0;
   color: transparent;

@@ -75,11 +75,11 @@ async function main() {
   }
   const stats = collectPolyRenderStats(host, sceneData.metrics.preparedLeafCount);
   const exported = await exportPolySceneSnapshot(host, {
-    title: "cssMenger — prepared XScreenSaver depth-3 sponge",
+    title: `cssMenger — prepared XScreenSaver depth-${sceneData.sourceProfile.depth} sponge`,
   });
   const sanitized = sanitizeSnapshot(exported, sceneData);
   const html = sanitized.html;
-  if ((html.match(/<b\b/gu) ?? []).length !== 84 ||
+  if ((html.match(/<b\b/gu) ?? []).length !== sceneData.metrics.preparedLeafCount ||
       /<i\b|<s\b/iu.test(html) ||
       /cssmenger-(?:model|axis)|<script\b|<canvas\b|<svg\b/iu.test(html) ||
       /\/(?:Users|home)\//u.test(html)) {
@@ -119,9 +119,12 @@ function sanitizeSnapshot(html, sceneData) {
   scene.style.transform = modelTransform;
   const fragment = parsed.createDocumentFragment();
   const flattenedLeaves = [];
+  const axisLeafCounts = [];
   for (let axis = 0; axis < axes.length; axis += 1) {
     const axisRoot = axes[axis];
-    for (const leaf of axisRoot.querySelectorAll(":scope > b")) {
+    const axisLeaves = [...axisRoot.querySelectorAll(":scope > b")];
+    axisLeafCounts.push(axisLeaves.length);
+    for (const leaf of axisLeaves) {
       const flattened = parsed.createElement("b");
       flattened.style.transform = leaf.style.transform;
       if (!flattened.style.transform) {
@@ -139,6 +142,7 @@ function sanitizeSnapshot(html, sceneData) {
     planeAtlas,
     view,
     leaves: flattenedLeaves,
+    axisLeafCounts,
   });
   stylesheet.textContent +=
     `.polycss-camera{perspective:${perspective}}` +
@@ -166,8 +170,11 @@ function preparedViewLonghands(viewTransform) {
   });
 }
 
-function prepareFrontFacingSchedule({ playback, perspective, planeAtlas, view, leaves }) {
-  if (leaves.length !== planeAtlas.leafCount || leaves.length !== 84 ||
+function prepareFrontFacingSchedule({ playback, perspective, planeAtlas, view, leaves, axisLeafCounts }) {
+  if (leaves.length !== planeAtlas.leafCount ||
+      !Array.isArray(axisLeafCounts) || axisLeafCounts.length !== 3 ||
+      axisLeafCounts.some((count) => !Number.isSafeInteger(count) || count < 1) ||
+      axisLeafCounts.reduce((sum, count) => sum + count, 0) !== leaves.length ||
       playback.transforms?.length !== playback.stateCount) {
     throw new Error("Prepared cssMenger front-facing schedule inputs are incomplete");
   }
@@ -198,14 +205,16 @@ function prepareFrontFacingSchedule({ playback, perspective, planeAtlas, view, l
   const leafIndices = [];
   const offsets = [0];
   const selectedLeafCounts = [];
+  const axisOffsets = axisLeafCounts.map((count, axis) =>
+    axisLeafCounts.slice(0, axis).reduce((sum, value) => sum + value, 0));
   for (let stateIndex = 0; stateIndex < playback.stateCount; stateIndex += 1) {
     const stateStart = leafIndices.length;
     const previous = visibleByState[Math.max(0, stateIndex - 1)];
     const current = visibleByState[stateIndex];
     const next = visibleByState[Math.min(playback.stateCount - 1, stateIndex + 1)];
     for (let axis = 0; axis < 3; axis += 1) {
-      const axisStart = axis * 28;
-      for (let leafIndex = axisStart; leafIndex < axisStart + 28; leafIndex += 1) {
+      const axisStart = axisOffsets[axis];
+      for (let leafIndex = axisStart; leafIndex < axisStart + axisLeafCounts[axis]; leafIndex += 1) {
         if (previous[leafIndex] || current[leafIndex] || next[leafIndex]) leafIndices.push(leafIndex);
       }
       offsets.push(leafIndices.length);

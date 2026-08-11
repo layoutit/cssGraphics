@@ -4,7 +4,7 @@ import { createCssmengerPreparedPlayer } from "./preparedPlayback.mjs";
 import { mountPreparedPolycssSnapshot } from "./polycssScene.mjs";
 import { selectCssmengerPlaneAtlasProfile } from "./profileSelection.mjs";
 import { loadPreparedMengerPlaneAtlasAsset } from "./preparedPlaneAtlasAsset.mjs";
-import { createRouteState } from "./routeState.mjs";
+import { createRouteState, MOBILE_SCENE_ID } from "./routeState.mjs";
 
 export function mountCssmengerClient(host) {
   const state = { ready: false, route: null, manifest: null, sceneData: null, mount: null, errors: [] };
@@ -19,12 +19,15 @@ export function mountCssmengerClient(host) {
     const route = createRouteState();
     state.route = route;
     state.manifest = await loadPreparedManifest(route);
-    const { entry, sceneData, snapshotHtml } = await loadPreparedScene(state.manifest, route);
     const planeAtlasProfile = selectCssmengerPlaneAtlasProfile();
+    const preparedRoute = planeAtlasProfile === "mobile" && !route.sceneExplicit
+      ? { ...route, scene: MOBILE_SCENE_ID }
+      : route;
+    const { entry, sceneData, snapshotHtml } = await loadPreparedScene(state.manifest, preparedRoute);
     const planeAtlas = planeAtlasProfile === "mobile" ? sceneData.mobilePlaneAtlas : sceneData.planeAtlas;
     const planeAtlasAsset = await loadPreparedMengerPlaneAtlasAsset(planeAtlas);
     state.sceneData = sceneData;
-    state.route = Object.freeze({ ...route, selectedScene: entry.id });
+    state.route = Object.freeze({ ...route, preparedScene: preparedRoute.scene, selectedScene: entry.id });
     setStatus("loading");
     const snapshot = mountPreparedPolycssSnapshot({
       host,

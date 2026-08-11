@@ -1,4 +1,5 @@
 export const DEFAULT_SCENE_ID = "depth-3";
+export const MOBILE_SCENE_ID = "depth-2";
 export const PUBLIC_ROUTE_PARAMS = ["scene"];
 
 export function createRouteState(search = globalThis.location?.search ?? "") {
@@ -7,6 +8,7 @@ export function createRouteState(search = globalThis.location?.search ?? "") {
   return {
     params,
     scene,
+    sceneExplicit: params.has("scene"),
     manifestUrl: "/cssmenger/manifest.json",
     publicRoute: publicRouteFor({ scene }),
     routeContract: "?scene=<scene-id>",

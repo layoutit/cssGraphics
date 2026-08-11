@@ -7,13 +7,14 @@ import { generatedPublicRoot } from "../src/prepare/cssmenger/paths.mjs";
 const root = resolve(import.meta.dirname, "..");
 const generated = generatedPublicRoot;
 
-test("generated manifest and scene expose one source-backed default path", async () => {
+test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared paths", async () => {
   const manifest = await readJson(join(generated, "manifest.json"));
   const scene = await readJson(join(generated, "scenes/depth-3.json"));
+  const mobileScene = await readJson(join(generated, "scenes/depth-2.json"));
   assert.equal(manifest.schema, "cssmenger-manifest@1");
   assert.equal(manifest.status, "ready");
   assert.equal(manifest.defaultScene.id, "depth-3");
-  assert.deepEqual(manifest.scenes.map((entry) => entry.id), ["depth-3"]);
+  assert.deepEqual(manifest.scenes.map((entry) => entry.id), ["depth-3", "depth-2"]);
   assert.equal(manifest.artifactMode, "prepared-polycss-snapshot");
   assert.equal(manifest.runtime.geometryPayload, false);
   assert.equal(scene.schema, "cssmenger-prepared-scene@1");
@@ -105,6 +106,22 @@ test("generated manifest and scene expose one source-backed default path", async
   assert.equal(scene.oracle.browserVisualCapture, "qualified-local-bit-exact-aa-common-prefix-0-45");
   assert.equal(scene.oracle.visualComparison, "exact-first-common-prefix-diverged");
   assert.doesNotMatch(JSON.stringify({ manifest, scene }), /\/(?:Users|home)\//u);
+  assert.equal(mobileScene.sourceProfile.depth, 2);
+  assert.equal(mobileScene.metrics.sourcePolygonCount, 1056);
+  assert.equal(mobileScene.metrics.preparedLeafCount, 30);
+  assert.equal(mobileScene.metrics.mergedSourceFaceCount, 1026);
+  assert.equal(mobileScene.metrics.sourceFaceCoverageExact, true);
+  assert.deepEqual(mobileScene.meshDescriptors.map((mesh) => mesh.polygonCount), [10, 10, 10]);
+  assert.equal(mobileScene.mobilePlaneAtlas.profile, "mobile");
+  assert.equal(mobileScene.mobilePlaneAtlas.byteLength, 416_630);
+  assert.equal(mobileScene.mobilePlaneAtlas.decodedBytes, 3_538_080);
+  assert.equal(mobileScene.mobilePlaneAtlas.leafCount, 30);
+  assert.equal(mobileScene.mobilePlaneAtlas.addressUpdateCount, 11_002);
+  assert.equal(mobileScene.mobilePlaneAtlas.lightingSampleIntervalTicks, 2);
+  assert.equal(mobileScene.mobilePlaneAtlas.addressWriteCountPerState.maximum, 18);
+  assert.equal(mobileScene.mobilePlaneAtlas.addressInitializationWriteCount, 0);
+  assert.equal(mobileScene.renderer.runtimeGeometryPayload, false);
+  assert.doesNotMatch(JSON.stringify(mobileScene), /\/(?:Users|home)\//u);
 });
 
 test("prepared snapshot is retained DOM without an alternate renderer", async () => {
@@ -132,6 +149,18 @@ test("prepared snapshot is retained DOM without an alternate renderer", async ()
   assert.doesNotMatch(html, /!important/iu);
   assert.doesNotMatch(html, /<script\b|<canvas\b|<svg\b/iu);
   assert.doesNotMatch(html, /\/(?:Users|home)\//u);
+});
+
+test("mobile snapshot is the reduced retained depth-2 graph", async () => {
+  const html = await readFile(join(generated, "scenes/depth-2.polycss.txt"), "utf8");
+  assert.equal((html.match(/<b(?:\s|>)/gu) ?? []).length, 30);
+  assert.equal((html.match(/<i(?:\s|>)/gu) ?? []).length, 0);
+  assert.equal((html.match(/<s(?:\s|>)/gu) ?? []).length, 0);
+  assert.equal((html.match(/<div(?:\s|>)/gu) ?? []).length, 2);
+  assert.equal((html.match(/<b style="transform: matrix3d\(/gu) ?? []).length, 30);
+  assert.match(html, /--cssmenger-tile-width:9px;--cssmenger-tile-height:9px/u);
+  assert.doesNotMatch(html, /cssmenger-(?:model|axis)|!important|\sdata-[\w-]+=/u);
+  assert.doesNotMatch(html, /<script\b|<canvas\b|<svg\b/iu);
 });
 
 test("product runtime CSS stays on the fast browser path", async () => {

@@ -40,6 +40,16 @@ test("source face counts match the known recursion sequence", () => {
   }
 });
 
+test("depth-2 mobile geometry keeps exact source coverage with thirty prepared planes", () => {
+  const geometry = buildMengerPreparedGeometry({ depth: 2, axisColors: COLORS });
+  assert.equal(geometry.cellsPerAxis, 9);
+  assert.equal(geometry.metrics.sourcePolygonCount, 1056);
+  assert.equal(geometry.metrics.preparedLeafCount, 30);
+  assert.equal(geometry.metrics.coplanarPlaneCount, 30);
+  assert.deepEqual(geometry.meshes.map((mesh) => mesh.polygons.length), [10, 10, 10]);
+  assert.equal(geometry.metrics.sourceFaceCoverageExact, true);
+});
+
 test("prepared face winding matches every adapted source normal", () => {
   const expected = new Map([
     ["X0", [-1, 0, 0]],

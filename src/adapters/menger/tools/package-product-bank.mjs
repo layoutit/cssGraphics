@@ -38,17 +38,19 @@ try {
 
 async function copyProductClosure(source, target) {
   const manifest = JSON.parse(await readFile(join(source, "manifest.json"), "utf8"));
-  const entry = manifest.scenes?.[0];
-  const scenePath = productPath(entry?.sceneUrl);
-  const snapshotPath = productPath(entry?.snapshotUrl);
-  const scene = JSON.parse(await readFile(join(source, scenePath), "utf8"));
-  const paths = new Set([
-    "manifest.json",
-    scenePath,
-    snapshotPath,
-    productPath(scene.planeAtlas?.assetUrl),
-    productPath(scene.mobilePlaneAtlas?.assetUrl),
-  ]);
+  if (!Array.isArray(manifest.scenes) || manifest.scenes.length !== 2) {
+    throw new Error("cssMenger product closure requires desktop and mobile prepared scenes");
+  }
+  const paths = new Set(["manifest.json"]);
+  for (const entry of manifest.scenes) {
+    const scenePath = productPath(entry?.sceneUrl);
+    const snapshotPath = productPath(entry?.snapshotUrl);
+    const scene = JSON.parse(await readFile(join(source, scenePath), "utf8"));
+    paths.add(scenePath);
+    paths.add(snapshotPath);
+    paths.add(productPath(scene.planeAtlas?.assetUrl));
+    paths.add(productPath(scene.mobilePlaneAtlas?.assetUrl));
+  }
   for (const path of paths) {
     await mkdir(dirname(join(target, path)), { recursive: true });
     await copyFile(join(source, path), join(target, path));

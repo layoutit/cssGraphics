@@ -13,8 +13,10 @@ export async function runBrowserMengerAa(options = {}) {
   await rm(outputDir, { recursive: true, force: true });
   const runA = await captureBrowserMengerFrames({ ticks, outputDir: join(outputDir, "run-a") });
   const runB = await captureBrowserMengerFrames({ ticks, outputDir: join(outputDir, "run-b") });
-  const runAStatesSha256 = sha256(await readFile(runA.statesPath));
-  const runBStatesSha256 = sha256(await readFile(runB.statesPath));
+  const runAStatesBytes = await readFile(runA.statesPath);
+  const runBStatesBytes = await readFile(runB.statesPath);
+  const runAStatesSha256 = sha256(runAStatesBytes);
+  const runBStatesSha256 = sha256(runBStatesBytes);
   const visualAa = await compareFrameSequences({
     expected: runA.framesDir,
     actual: runB.framesDir,
@@ -30,6 +32,7 @@ export async function runBrowserMengerAa(options = {}) {
       exact: runAStatesSha256 === runBStatesSha256,
       runASha256: runAStatesSha256,
       runBSha256: runBStatesSha256,
+      identity: "complete-deterministic-publication-state",
     },
     visualAa: {
       exact: visualAa.pass,

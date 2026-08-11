@@ -17,7 +17,11 @@ if (lock.schema !== "cssmenger-prepared-bank-lock@1" ||
     lock.retainedModelRootCount !== 0 || lock.retainedAxisRootCount !== 0 ||
     lock.preparedLeafCount !== 84 ||
     lock.sourceFaceCount !== 18_048 || lock.mergedSourceFaceCount !== 17_964 ||
-    lock.timelineStateCount !== 1_440 || lock.paletteStateCount !== 128) {
+    lock.timelineStateCount !== 1_440 || lock.paletteStateCount !== 128 ||
+    lock.atlasAssetCount !== 2 || lock.lightingAddressUpdateCount !== 30_989 ||
+    lock.redundantLightingAddressWriteCountRemoved !== 30_535 ||
+    lock.mobileLightingAddressUpdateCount !== 84 ||
+    lock.mobileRedundantLightingAddressWriteCountRemoved !== 61_440) {
   throw new Error("cssMenger prepared-bank lock does not bind the retained depth-3 product");
 }
 const generatedRoot = resolve(

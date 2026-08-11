@@ -28,7 +28,9 @@ async function main() {
     ambientLight: sceneData.lighting.ambient,
     directionalLight: sceneData.lighting.directional,
     textureLighting: "baked",
-    textureQuality: 1,
+    textureQuality: sceneData.textureQuality,
+    textureLeafSizing: sceneData.textureLeafSizing,
+    textureBackend: sceneData.renderer.textureBackend,
     autoCenter: false,
     strategies: { disable: ["u"] },
   });
@@ -77,9 +79,8 @@ async function main() {
   });
   const sanitized = sanitizeSnapshot(exported, sceneData);
   const html = sanitized.html;
-  if ((html.match(/<b\b/gu) ?? []).length !== 28 ||
-      (html.match(/<i\b/gu) ?? []).length !== 28 ||
-      (html.match(/<s\b/gu) ?? []).length !== 28 ||
+  if ((html.match(/<b\b/gu) ?? []).length !== 84 ||
+      /<i\b|<s\b/iu.test(html) ||
       /cssmenger-(?:model|axis)|<script\b|<canvas\b|<svg\b/iu.test(html) ||
       /\/(?:Users|home)\//u.test(html)) {
     throw new Error("Prepared cssMenger snapshot failed retained-root sanitization");
@@ -113,33 +114,17 @@ function sanitizeSnapshot(html, sceneData) {
   if (!perspective || !viewTransform || !modelTransform) {
     throw new Error("Exported cssMenger transform graph is incomplete");
   }
-  stylesheet.textContent +=
-    `.polycss-camera{perspective:${perspective}}` +
-    `.polycss-scene>b,.polycss-scene>i,.polycss-scene>s{position:absolute;display:block;` +
-    `transform-origin:0 0;transform-style:preserve-3d;margin:0;padding:0;font:inherit;` +
-    `font-weight:normal;font-style:normal;line-height:0;text-decoration:none;` +
-    `width:${planeAtlas.tileWidth}px;height:${planeAtlas.tileHeight}px;color:transparent!important;` +
-    `background-color:transparent!important;background-image:var(--a)!important;background-repeat:no-repeat!important;` +
-    `background-size:${planeAtlas.backgroundSize}!important;image-rendering:pixelated;backface-visibility:hidden!important}`;
   camera.removeAttribute("style");
   const view = preparedViewLonghands(viewTransform);
-  scene.style.translate = view.translate;
-  scene.style.scale = view.scale;
   scene.style.transform = modelTransform;
   const fragment = parsed.createDocumentFragment();
   const flattenedLeaves = [];
   for (let axis = 0; axis < axes.length; axis += 1) {
     const axisRoot = axes[axis];
-    const palettePosition = axisRoot.style.getPropertyValue("--axis-atlas-y");
-    if (!palettePosition) throw new Error(`Exported cssMenger axis ${axis} has no prepared palette row`);
-    const tagName = ["b", "i", "s"][axis];
     for (const leaf of axisRoot.querySelectorAll(":scope > b")) {
-      const flattened = parsed.createElement(tagName);
+      const flattened = parsed.createElement("b");
       flattened.style.transform = leaf.style.transform;
-      flattened.style.backgroundPositionX = leaf.style.backgroundPositionX;
-      flattened.style.backgroundPositionY = palettePosition;
-      if (!flattened.style.transform || !flattened.style.backgroundPositionX ||
-          !flattened.style.backgroundPositionY) {
+      if (!flattened.style.transform) {
         throw new Error("Exported cssMenger leaf is missing prepared placement");
       }
       fragment.append(flattened);
@@ -148,6 +133,16 @@ function sanitizeSnapshot(html, sceneData) {
   }
   model.remove();
   scene.append(fragment);
+  const frontFacingSchedule = prepareFrontFacingSchedule({
+    playback: sceneData.playback,
+    perspective,
+    planeAtlas,
+    view,
+    leaves: flattenedLeaves,
+  });
+  stylesheet.textContent +=
+    `.polycss-camera{perspective:${perspective}}` +
+    `.polycss-scene{translate:${view.translate};scale:${view.scale}}`;
   for (const element of parsed.querySelectorAll("*")) {
     for (const attribute of [...element.attributes]) {
       if (attribute.name.startsWith("data-")) element.removeAttribute(attribute.name);
@@ -156,13 +151,7 @@ function sanitizeSnapshot(html, sceneData) {
   for (const element of parsed.querySelectorAll("script, canvas, svg")) element.remove();
   return Object.freeze({
     html: `<!doctype html>${parsed.documentElement.outerHTML}\n`,
-    frontFacingSchedule: prepareFrontFacingSchedule({
-      playback: sceneData.playback,
-      perspective,
-      planeAtlas,
-      view,
-      leaves: flattenedLeaves,
-    }),
+    frontFacingSchedule,
   });
 }
 

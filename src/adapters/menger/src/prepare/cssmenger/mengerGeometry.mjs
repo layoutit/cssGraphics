@@ -309,6 +309,14 @@ export function preparedSourceFaceVertices(face, cellsPerAxis) {
   }, cellsPerAxis);
 }
 
+export function preparedSourceFaceNormal(face) {
+  const direction = DIRECTIONS.find((entry) => entry.id === face?.direction);
+  if (!direction) throw new Error(`Unknown Menger face direction ${face?.direction}`);
+  const normal = [0, 0, 0];
+  normal[direction.axisIndex] = direction.sign;
+  return Object.freeze(normal);
+}
+
 function preparedRectangleVertices(rectangle, cellsPerAxis) {
   const sourceVertices = nativeRectangleVertices(rectangle).map((vertex) =>
     vertex.map((value) => -1.5 + value * (3 / cellsPerAxis)));

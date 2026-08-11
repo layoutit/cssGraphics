@@ -21,6 +21,19 @@ body {
   background: linear-gradient(180deg, #0b1119 0%, #000 100%);
 }
 
+body:not(.ready):not(.error)::after {
+  content: "";
+  position: fixed;
+  inset: 50% auto auto 50%;
+  z-index: 20;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 1px solid rgb(240 240 240 / 18%);
+  border-top-color: rgb(240 240 240 / 70%);
+  border-radius: 50%;
+}
+
 .site-header {
   position: fixed;
   inset: 0 0 auto;
@@ -128,6 +141,28 @@ body > .polycss-camera {
   background: transparent;
 }
 
+body > .polycss-camera > .polycss-scene > b {
+  position: absolute;
+  display: block;
+  width: 27px;
+  height: 27px;
+  margin: 0;
+  padding: 0;
+  color: transparent;
+  font: inherit;
+  font-weight: normal;
+  font-style: normal;
+  line-height: 0;
+  text-decoration: none;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-size: var(--cssmenger-atlas-width) var(--cssmenger-atlas-height);
+  transform-origin: 0 0;
+  transform-style: preserve-3d;
+  image-rendering: pixelated;
+  backface-visibility: hidden;
+}
+
 .cssmenger-error-message {
   position: fixed;
   inset: 0;
@@ -146,12 +181,12 @@ body > .polycss-camera {
   }
 
   body > .polycss-camera > .polycss-scene {
-    scale: 1.05 !important;
+    scale: 0.82;
   }
 }
 
 @media (min-width: 361px) and (max-width: 430px) {
   body > .polycss-camera > .polycss-scene {
-    scale: 1.2 !important;
+    scale: 0.88;
   }
 }

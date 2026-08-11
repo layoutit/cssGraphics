@@ -30,9 +30,10 @@ try {
     const page = await browser.newPage({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 });
     const url = "http://127.0.0.1:" + port + "/";
     await page.goto(url, { waitUntil: "networkidle" });
-    await page.waitForFunction(() => ["ready", "error"].includes(document.body.dataset.portStatus), null, { timeout: 20_000 });
+    await page.waitForFunction(() => document.body.classList.contains("ready") || document.body.classList.contains("error"), null, { timeout: 20_000 });
     const initialState = await page.evaluate(() => ({
-      status: document.body.dataset.portStatus ?? "",
+      status: document.body.classList.contains("ready") ? "ready" :
+        document.body.classList.contains("error") ? "error" : "loading",
       message: document.getElementById("status")?.textContent ?? "",
       debugReady: Boolean(window.__cssMengerDebug),
       stats: window.__cssMengerDebug?.stats?.() ?? null,
@@ -52,7 +53,8 @@ try {
       await page.screenshot({ path: join(framesDir, frameName(index)) });
     }
     const finalState = await page.evaluate(() => ({
-      status: document.body.dataset.portStatus ?? "",
+      status: document.body.classList.contains("ready") ? "ready" :
+        document.body.classList.contains("error") ? "error" : "loading",
       debugReady: Boolean(window.__cssMengerDebug),
       stats: window.__cssMengerDebug?.stats?.() ?? null,
       meshes: window.__cssMengerDebug?.meshes?.() ?? [],

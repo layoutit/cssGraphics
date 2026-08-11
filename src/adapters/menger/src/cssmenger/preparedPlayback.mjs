@@ -1,4 +1,6 @@
-export const COLOR_PUBLICATION_INTERVAL_TICKS = 3;
+export const COLOR_PUBLICATION_INTERVAL_TICKS = 2;
+export const MOBILE_COLOR_PUBLICATION_INTERVAL_TICKS = 1_440;
+const LEGACY_COLOR_PUBLICATION_INTERVAL_TICKS = 4;
 
 export function timelineStateIndexForTick(tick, playback) {
   if (!Number.isSafeInteger(tick) || tick < 0) throw new RangeError("cssMenger tick must be a non-negative safe integer");
@@ -15,162 +17,85 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
   const cancelDelay = overrides.cancelDelay ?? globalThis.clearTimeout.bind(globalThis);
   const readNow = overrides.readNow ?? globalThis.performance.now.bind(globalThis.performance);
   const frameMilliseconds = playback.sourceFrameDelayMilliseconds;
+  const addressSchedule = decodePreparedAddressSchedule(planeAtlas);
+  const frozenLighting = planeAtlas.lightingSampleCount === 1;
   const schedulerLeadMilliseconds = Math.min(4, frameMilliseconds / 4);
   let paused = true;
   let tick = playback.initial.stateIndex;
-  let colorStateIndex = playback.initial.stateIndex;
-  let colorPublicationPhaseTicks = 0;
   let animationFrame = null;
   let delay = null;
   let nextFrameAt = null;
 
-  function publishAxisColor(stateIndex, axis, colorStateIndex = stateIndex) {
-    const backgroundPositionY = planeAtlas.paletteBackgroundPositionYs[playback.colorRows[colorStateIndex][axis]];
-    const schedule = playback.frontFacingSchedule;
-    const segmentIndex = stateIndex * schedule.axisCount + axis;
-    const start = schedule.offsets[segmentIndex];
-    const end = schedule.offsets[segmentIndex + 1];
-    for (let index = start; index < end; index += 1) {
-      leaves[schedule.leafIndices[index]].style.backgroundPositionY = backgroundPositionY;
-    }
-    return { scheduleStart: start, backgroundPositionY, targetCount: end - start };
+  function backgroundPositionForSlot(slotIndex) {
+    const column = slotIndex % planeAtlas.columns;
+    const row = Math.floor(slotIndex / planeAtlas.columns);
+    return `${-(column * planeAtlas.slotWidth + planeAtlas.gutterPixels)}px ` +
+      `${-(row * planeAtlas.slotHeight + planeAtlas.gutterPixels)}px`;
   }
 
-  function publishInitial(stateIndex) {
+  function publishAddressRange(start, end) {
+    for (let cursor = start; cursor < end; cursor += 1) {
+      leaves[addressSchedule.leafIndices[cursor]].style.backgroundPosition =
+        backgroundPositionForSlot(addressSchedule.slotIndices[cursor]);
+    }
+    return end - start;
+  }
+
+  function publishSequentialState(stateIndex, profile = null) {
+    const startedAt = profile ? readNow() : 0;
     publicationRoot.style.transform = playback.transforms[stateIndex];
-    const colorRow = playback.colorRows[stateIndex];
-    const leavesPerAxis = planeAtlas.leafCount / 3;
-    for (let axis = 0; axis < 3; axis += 1) {
-      const backgroundPositionY = planeAtlas.paletteBackgroundPositionYs[colorRow[axis]];
-      const end = (axis + 1) * leavesPerAxis;
-      for (let leafIndex = axis * leavesPerAxis; leafIndex < end; leafIndex += 1) {
-        leaves[leafIndex].style.backgroundPositionY = backgroundPositionY;
-      }
-    }
-    tick = stateIndex;
-    colorStateIndex = stateIndex;
-    colorPublicationPhaseTicks = 0;
-    return tick;
-  }
-
-  function publishAdjacentFast(stateIndex, advancedTickCount) {
-    const transform = playback.transforms[stateIndex];
-    publicationRoot.style.transform = transform;
-    const elapsedColorTicks = colorPublicationPhaseTicks + advancedTickCount;
-    colorPublicationPhaseTicks = elapsedColorTicks % COLOR_PUBLICATION_INTERVAL_TICKS;
-    if (elapsedColorTicks >= COLOR_PUBLICATION_INTERVAL_TICKS) {
-      colorStateIndex = colorStateIndex >= playback.segmentEndState
-        ? playback.segmentStartState
-        : colorStateIndex + 1;
-      for (let axis = 0; axis < 3; axis += 1) publishAxisColor(stateIndex, axis, colorStateIndex);
-    }
-    tick = stateIndex;
-    return tick;
-  }
-
-  function publish(stateIndex, profile = null, adjacentState = false) {
-    const publicationStartedAt = profile ? readNow() : 0;
-    const transform = playback.transforms[stateIndex];
-    const transformResolvedAt = profile ? readNow() : 0;
-    const previousTransform = playback.transforms[tick];
-    const transformComparedAt = profile ? readNow() : 0;
-    const transformChanged = adjacentState || previousTransform !== transform;
-    if (transformChanged) {
-      publicationRoot.style.transform = transform;
-    }
     const transformPublishedAt = profile ? readNow() : 0;
-    const colorRow = playback.colorRows[stateIndex];
-    const colorRowResolvedAt = profile ? readNow() : 0;
-    const axisPublications = profile ? [] : null;
-    let lastAxisPublishedAt = colorRowResolvedAt;
-    for (let axis = 0; axis < 3; axis += 1) {
-      const axisStartedAt = profile ? readNow() : 0;
-      const previousBackgroundPositionY = planeAtlas.paletteBackgroundPositionYs[playback.colorRows[colorStateIndex][axis]];
-      const axisComparedAt = profile ? readNow() : 0;
-      const axisChanged = adjacentState || tick !== stateIndex;
-      const publication = axisChanged
-        ? publishAxisColor(stateIndex, axis)
-        : {
-            scheduleStart: playback.frontFacingSchedule.offsets[
-              stateIndex * playback.frontFacingSchedule.axisCount + axis
-            ],
-            backgroundPositionY: previousBackgroundPositionY,
-            targetCount: 0,
-          };
-      const axisPublishedAt = profile ? readNow() : 0;
-      lastAxisPublishedAt = axisPublishedAt;
-      if (profile) {
-        axisPublications.push(Object.freeze({
-          axis,
-          paletteIndex: colorRow[axis],
-          previousBackgroundPositionY,
-          backgroundPositionY: publication.backgroundPositionY,
-          scheduleStart: publication.scheduleStart,
-          targetCount: publication.targetCount,
-          changed: axisChanged,
-          resolveAndCompareMilliseconds: axisComparedAt - axisStartedAt,
-          conditionalStyleWriteMilliseconds: axisPublishedAt - axisComparedAt,
-          totalMilliseconds: axisPublishedAt - axisStartedAt,
-        }));
-      }
-    }
+    const targetCount = frozenLighting ? 0 : publishAddressRange(
+      addressSchedule.offsets[stateIndex],
+      addressSchedule.offsets[stateIndex + 1],
+    );
     tick = stateIndex;
-    colorStateIndex = stateIndex;
-    colorPublicationPhaseTicks = 0;
     if (profile) {
-      const publicationCompletedAt = readNow();
       Object.assign(profile, {
-        schema: "cssmenger-profiled-publication@1",
+        schema: "cssmenger-profiled-publication@3",
         stateIndex,
-        modelTransform: Object.freeze({
-          previous: previousTransform,
-          next: transform,
-          changed: transformChanged,
-          preparedLookupMilliseconds: transformResolvedAt - publicationStartedAt,
-          comparisonMilliseconds: transformComparedAt - transformResolvedAt,
-          conditionalStyleWriteMilliseconds: transformPublishedAt - transformComparedAt,
-        }),
-        colorRow: Object.freeze([...colorRow]),
-        colorRowLookupMilliseconds: colorRowResolvedAt - transformPublishedAt,
-        axes: Object.freeze(axisPublications),
-        bookkeepingMilliseconds: publicationCompletedAt - lastAxisPublishedAt,
-        totalPublicationMilliseconds: publicationCompletedAt - publicationStartedAt,
+        preparedTransformPublicationMilliseconds: transformPublishedAt - startedAt,
+        preparedLightingAddressPublicationMilliseconds: readNow() - transformPublishedAt,
+        preparedLightingAddressWriteCount: targetCount,
+        totalPublicationMilliseconds: readNow() - startedAt,
       });
     }
     return tick;
   }
 
-  function advanceOne() {
-    return advancePreparedStates(1);
+  function publishAbsoluteState(stateIndex) {
+    if (frozenLighting) {
+      publicationRoot.style.transform = playback.transforms[stateIndex];
+      tick = stateIndex;
+      return tick;
+    }
+    const slotsByLeaf = new Int32Array(leaves.length).fill(-1);
+    const end = addressSchedule.offsets[stateIndex + 1];
+    for (let cursor = 0; cursor < end; cursor += 1) {
+      slotsByLeaf[addressSchedule.leafIndices[cursor]] = addressSchedule.slotIndices[cursor];
+    }
+    publicationRoot.style.transform = playback.transforms[stateIndex];
+    for (let leafIndex = 0; leafIndex < slotsByLeaf.length; leafIndex += 1) {
+      if (slotsByLeaf[leafIndex] >= 0) {
+        leaves[leafIndex].style.backgroundPosition = backgroundPositionForSlot(slotsByLeaf[leafIndex]);
+      }
+    }
+    tick = stateIndex;
+    return tick;
   }
 
-  function advancePreparedStates(count) {
-    if (!Number.isSafeInteger(count) || count < 1) {
-      throw new RangeError("cssMenger prepared advance count must be positive");
-    }
+  function advanceOne(profile = null) {
     if (!playback.loop && tick >= playback.segmentEndState) {
       paused = true;
       return tick;
     }
-    const previousTick = tick;
     const stateIndex = playback.loop
-      ? playback.segmentStartState + ((tick - playback.segmentStartState + count) % playback.stateCount)
-      : Math.min(playback.segmentEndState, tick + count);
-    const advancedTickCount = playback.loop ? count : stateIndex - previousTick;
-    if (advancedTickCount > 0) publishAdjacentFast(stateIndex, advancedTickCount);
+      ? playback.segmentStartState + ((tick - playback.segmentStartState + 1) % playback.stateCount)
+      : tick + 1;
+    if (stateIndex > tick) publishSequentialState(stateIndex, profile);
+    else publishAbsoluteState(stateIndex);
     if (!playback.loop && tick >= playback.segmentEndState) paused = true;
     return tick;
-  }
-
-  function advanceOneProfiled(profile) {
-    if (tick >= playback.segmentEndState) {
-      if (!playback.loop) {
-        paused = true;
-        return tick;
-      }
-      return publish(playback.segmentStartState, profile, true);
-    }
-    return publish(tick + 1, profile, true);
   }
 
   function scheduleNextDraw() {
@@ -189,14 +114,18 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
   function loopFast(timestamp) {
     animationFrame = null;
     if (paused) return;
-    const elapsedSteps = Math.max(1, Math.floor((timestamp - nextFrameAt) / frameMilliseconds) + 1);
-    advancePreparedStates(elapsedSteps);
+    advanceOne();
     if (paused) return;
-    nextFrameAt += elapsedSteps * frameMilliseconds;
+    nextFrameAt = Math.max(nextFrameAt + frameMilliseconds, timestamp);
     scheduleNextDraw();
   }
 
-  publishInitial(playback.initial.stateIndex);
+  if (frozenLighting) {
+    publicationRoot.style.transform = playback.transforms[tick];
+    publishAddressRange(0, addressSchedule.slotIndices.length);
+  } else {
+    publishSequentialState(tick);
+  }
   return Object.freeze({
     get tick() { return tick; },
     get paused() { return paused; },
@@ -210,7 +139,7 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
       return tick;
     },
     resume() {
-      if (!paused || tick >= playback.segmentEndState) return tick;
+      if (!paused || (!playback.loop && tick >= playback.segmentEndState)) return tick;
       paused = false;
       nextFrameAt = readNow() + frameMilliseconds;
       scheduleNextDraw();
@@ -225,77 +154,60 @@ export function createCssmengerPreparedPlayer({ playback, planeAtlas, publicatio
     },
     profileStep() {
       this.pause();
-      const before = Object.freeze({
-        tick,
-      });
+      const before = Object.freeze({ tick });
       const publication = {};
-      advanceOneProfiled(publication);
-      return Object.freeze({
-        ...publication,
-        before,
-        after: Object.freeze({
-          tick,
-        }),
-      });
+      advanceOne(publication);
+      return Object.freeze({ ...publication, before, after: Object.freeze({ tick }) });
     },
     setTick(value) {
       this.pause();
-      return publish(timelineStateIndexForTick(Math.trunc(Number(value)), playback));
+      return publishAbsoluteState(timelineStateIndexForTick(Math.trunc(Number(value)), playback));
     },
     stats() {
       return Object.freeze({
-        schema: "cssmenger-prepared-player-stats@1",
+        schema: "cssmenger-prepared-player-stats@3",
         paused,
         tick,
         sourceFrameDelayMilliseconds: frameMilliseconds,
         preparedTimelineStateCount: playback.stateCount,
         preparedPaletteColorCount: playback.palette.length,
-        runtimeInstrumentationEnabled: false,
-        preparedStatesApplied: null,
-        runtimeModelTransformWrites: null,
-        runtimeAxisColorWrites: null,
-        runtimeSchedulerCallbackCount: null,
-        runtimeHotPathDomStyleReadCount: 0,
-        runtimeAdjacentPublicationComparisonCount: 0,
-        runtimeHotPathProfilingBranchCount: 0,
-        runtimeHotPathDebugCounterWritesPerScheduledTick: 0,
-        preparedSchedulerCatchUpMode: "coalesced-latest-prepared-state",
-        preparedColorPublicationIntervalTicks: COLOR_PUBLICATION_INTERVAL_TICKS,
-        preparedColorPublicationDelayMilliseconds: frameMilliseconds * COLOR_PUBLICATION_INTERVAL_TICKS,
-        preparedColorPublicationMode: "fixed-prepared-source-state-interval",
-        preparedColorPaletteStepPerPublication: 1,
-        preparedColorPaletteCycleMilliseconds: playback.palette.length * frameMilliseconds *
-          COLOR_PUBLICATION_INTERVAL_TICKS,
-        preparedColorAdvanceMode: "one-adjacent-prepared-palette-row-per-publication",
-        preparedFrontFacingAxisSelectionsPerScheduledTick: Object.freeze({
-          minimum: 0,
-          maximum: 3,
-          nominalAverage: 3 / COLOR_PUBLICATION_INTERVAL_TICKS,
-        }),
+        preparedSchedulerCatchUpMode: "one-adjacent-prepared-state-no-skip",
+        preparedColorPublicationIntervalTicks: planeAtlas.lightingSampleIntervalTicks,
+        preparedColorPublicationDelayMilliseconds: planeAtlas.lightingSampleDelayMilliseconds,
+        preparedColorPublicationMode: frozenLighting
+          ? "prepared-frozen-lighting-all-leaf-initialization-only"
+          : "prepared-held-lighting-sample-plus-per-state-front-face-address",
+        preparedLightingAddressPublicationIntervalTicks: 1,
+        preparedLightingAddressPublicationDelayMilliseconds: frameMilliseconds,
+        preparedLightingAtlasSlotCount: planeAtlas.slotCount,
+        preparedLightingAtlasAssetCount: 1,
+        preparedFrontFacingAxisSelectionsPerScheduledTick: 3,
         preparedFrontFacingLeafWritesPerScheduledTick: Object.freeze({
-          minimum: 0,
-          maximum: playback.frontFacingSchedule.maximumSelectedLeafCountPerState,
-          nominalAverage: playback.frontFacingSchedule.averageSelectedLeafCountPerState /
-            COLOR_PUBLICATION_INTERVAL_TICKS,
-        }),
-        preparedFrontFacingLeafWritesPerColorPublication: Object.freeze({
           minimum: playback.frontFacingSchedule.minimumSelectedLeafCountPerState,
           maximum: playback.frontFacingSchedule.maximumSelectedLeafCountPerState,
           average: playback.frontFacingSchedule.averageSelectedLeafCountPerState,
         }),
-        preparedAdjacentPublicationMode: playback.adjacentPublicationMode,
+        preparedLightingAddressWritesPerScheduledTick: Object.freeze({
+          ...planeAtlas.addressWriteCountPerState,
+        }),
+        preparedLightingAddressUpdateCount: planeAtlas.addressUpdateCount,
+        preparedLightingInitializationAddressWriteCount: frozenLighting
+          ? planeAtlas.addressUpdateCount
+          : 0,
+        preparedRedundantLightingAddressWriteCountRemoved: planeAtlas.redundantAddressWriteCountRemoved,
+        runtimeLightingAddressComparisonCount: 0,
+        runtimeHotPathDomStyleReadCount: 0,
         runtimeGeometryConstructionCount: 0,
         runtimeRecursionCount: 0,
         runtimeMergeCount: 0,
         runtimeColorGenerationCount: 0,
+        runtimeLightingCalculationCount: 0,
         runtimeRotationCalculationCount: 0,
         runtimeCameraCalculationCount: 0,
         runtimeDomGrowth: false,
       });
     },
-    destroy() {
-      this.pause();
-    },
+    destroy() { this.pause(); },
   });
 }
 
@@ -320,11 +232,90 @@ function validatePlayback(playback, planeAtlas, publicationRoot, leaves) {
         !Number.isSafeInteger(offset) || offset < 0 || (index > 0 && offset < offsets[index - 1])) ||
       playback.frontFacingSchedule.leafIndices.some((leafIndex) =>
         !Number.isSafeInteger(leafIndex) || leafIndex < 0 || leafIndex >= planeAtlas.leafCount) ||
-      playback.adjacentPublicationMode !== "all-fields-change" ||
-      planeAtlas?.schema !== "cssmenger-prepared-coplanar-plane-atlas@1" ||
-      planeAtlas.paletteStateCount !== playback.palette.length ||
-      planeAtlas.paletteBackgroundPositionYs?.length !== playback.palette.length ||
+      planeAtlas?.schema !== "cssmenger-prepared-sparse-leaf-lighting-atlas@1" ||
+      planeAtlas.visibleLeafFieldCount !== playback.frontFacingSchedule.leafIndices.length ||
+      planeAtlas.slotCount > planeAtlas.visibleLeafFieldCount ||
+      planeAtlas.sourceStateCount !== playback.stateCount ||
+      ![
+        LEGACY_COLOR_PUBLICATION_INTERVAL_TICKS,
+        COLOR_PUBLICATION_INTERVAL_TICKS,
+        MOBILE_COLOR_PUBLICATION_INTERVAL_TICKS,
+      ]
+        .includes(planeAtlas.lightingSampleIntervalTicks) ||
+      planeAtlas.lightingSampleDelayMilliseconds !==
+        playback.sourceFrameDelayMilliseconds * planeAtlas.lightingSampleIntervalTicks ||
+      planeAtlas.lightingSampleCount !== Math.ceil(playback.stateCount / planeAtlas.lightingSampleIntervalTicks) ||
+      planeAtlas.transformPublicationIntervalTicks !== 1 ||
+      planeAtlas.transformPublicationDelayMilliseconds !== playback.sourceFrameDelayMilliseconds ||
+      planeAtlas.addressScheduleSchema !== "cssmenger-prepared-exact-delta-lighting-address-schedule@1" ||
+      planeAtlas.addressEncoding !==
+        "base64-u16le-state-offsets-plus-u8-leaf-indices-plus-u16le-exact-deduplicated-slot-indices" ||
+      planeAtlas.addressStateOffsetByteLength !== (playback.stateCount + 1) * 2 ||
+      planeAtlas.addressLeafIndexByteLength !== planeAtlas.addressUpdateCount ||
+      planeAtlas.addressSlotIndexByteLength !== planeAtlas.addressUpdateCount * 2 ||
+      planeAtlas.addressUpdateCount + planeAtlas.redundantAddressWriteCountRemoved !==
+        planeAtlas.visibleLeafFieldCount ||
+      !planeAtlas.addressWriteCountPerState ||
+      typeof planeAtlas.addressStateOffsetsBase64 !== "string" ||
+      typeof planeAtlas.addressLeafIndicesBase64 !== "string" ||
+      typeof planeAtlas.addressSlotIndicesBase64 !== "string" ||
       !(playback.sourceFrameDelayMilliseconds > 0)) {
     throw new Error("Prepared cssMenger playback contract is invalid");
   }
+}
+
+function decodePreparedAddressSchedule(planeAtlas) {
+  const offsetBytes = decodeBase64Bytes(
+    planeAtlas.addressStateOffsetsBase64,
+    planeAtlas.addressStateOffsetByteLength,
+  );
+  const leafIndices = decodeBase64Bytes(
+    planeAtlas.addressLeafIndicesBase64,
+    planeAtlas.addressLeafIndexByteLength,
+  );
+  const slotBytes = decodeBase64Bytes(
+    planeAtlas.addressSlotIndicesBase64,
+    planeAtlas.addressSlotIndexByteLength,
+  );
+  const offsets = new Uint16Array(planeAtlas.sourceStateCount + 1);
+  for (let index = 0; index < offsets.length; index += 1) {
+    offsets[index] = offsetBytes[index * 2] | offsetBytes[index * 2 + 1] << 8;
+    if (index > 0 && offsets[index] < offsets[index - 1]) {
+      throw new Error("Prepared cssMenger lighting address offsets are not monotonic");
+    }
+  }
+  if (offsets[0] !== 0 || offsets.at(-1) !== planeAtlas.addressUpdateCount) {
+    throw new Error("Prepared cssMenger lighting address offsets are invalid");
+  }
+  const slotIndices = new Uint16Array(planeAtlas.addressUpdateCount);
+  const seen = new Uint8Array(planeAtlas.slotCount);
+  for (let index = 0; index < slotIndices.length; index += 1) {
+    const slotIndex = slotBytes[index * 2] | slotBytes[index * 2 + 1] << 8;
+    if (leafIndices[index] >= planeAtlas.leafCount || slotIndex >= planeAtlas.slotCount) {
+      throw new Error("Prepared cssMenger lighting address index is invalid");
+    }
+    slotIndices[index] = slotIndex;
+    seen[slotIndex] = 1;
+  }
+  if (seen.some((selected) => selected === 0)) {
+    throw new Error("Prepared cssMenger lighting atlas contains an unreachable slot");
+  }
+  if (planeAtlas.lightingSampleCount === 1) {
+    const seenLeaves = new Uint8Array(planeAtlas.leafCount);
+    for (const leafIndex of leafIndices) seenLeaves[leafIndex] += 1;
+    if (leafIndices.length !== planeAtlas.leafCount || seenLeaves.some((count) => count !== 1)) {
+      throw new Error("Frozen cssMenger lighting must initialize every retained leaf exactly once");
+    }
+  }
+  return Object.freeze({ offsets, leafIndices, slotIndices });
+}
+
+function decodeBase64Bytes(value, expectedLength) {
+  const binary = globalThis.atob(value);
+  if (binary.length !== expectedLength) {
+    throw new Error("Prepared cssMenger lighting address byte length drifted");
+  }
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
 }

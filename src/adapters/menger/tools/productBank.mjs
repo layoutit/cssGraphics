@@ -312,7 +312,8 @@ async function inspectCssOpacityAtlasPair(root, scene, expectedLeafCount) {
   ]);
   assert(baseBytes.length === base?.byteLength && sha256(baseBytes) === base.assetSha256 &&
     base?.schema === "cssmenger-prepared-coplanar-plane-atlas@1" &&
-    base?.paletteRole === "css-opacity-base" && base?.encoding === "PNG-RGBA8" &&
+    base?.paletteRole === "css-opacity-base" &&
+    base?.rgbNormalization === "divide-by-maximum-rgb-channel" && base?.encoding === "PNG-RGBA8" &&
     base?.paletteStateCount === 128 && base?.leafCount === expectedLeafCount &&
     base?.sourceFaceCoverageExact === true &&
     /^\/cssmenger\/assets\/planes-opacity-base-[a-f0-9]{64}\.png$/u.test(base?.assetUrl),
@@ -321,8 +322,8 @@ async function inspectCssOpacityAtlasPair(root, scene, expectedLeafCount) {
     shadow?.schema === "cssmenger-prepared-sparse-leaf-lighting-atlas@1" &&
     shadow?.profile === "desktop" && shadow?.presentation === "css-black-alpha" &&
     shadow?.mimeType === "image/avif" && shadow?.leafCount === expectedLeafCount &&
-    shadow?.lightingSampleIntervalTicks === 2 && shadow?.lightingSampleCount === 720 &&
-    shadow?.addressPublicationIntervalTicks === 2 && shadow?.sourceFaceCoverageExact === true &&
+    shadow?.lightingSampleIntervalTicks === 1 && shadow?.lightingSampleCount === 1_440 &&
+    shadow?.addressPublicationIntervalTicks === 1 && shadow?.sourceFaceCoverageExact === true &&
     /^\/cssmenger\/assets\/lighting-shadow-grid-[a-f0-9]{64}\.avif$/u.test(shadow?.assetUrl),
   "prepared CSS opacity shadow atlas identity");
   return [basePath, shadowPath];

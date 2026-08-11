@@ -359,6 +359,7 @@ function validatePlayback(playback, planeAtlas, publicationRoot, leaves) {
       planeAtlas.addressedVisibleLeafFieldCount > planeAtlas.visibleLeafFieldCount ||
       planeAtlas.sourceStateCount !== playback.stateCount ||
       ![
+        1,
         LEGACY_COLOR_PUBLICATION_INTERVAL_TICKS,
         COLOR_PUBLICATION_INTERVAL_TICKS,
         MOBILE_COLOR_PUBLICATION_INTERVAL_TICKS,

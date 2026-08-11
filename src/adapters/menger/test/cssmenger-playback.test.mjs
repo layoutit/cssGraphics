@@ -190,7 +190,10 @@ test("CSS palette playback selects prepared rows and per-source-cell shadow addr
       },
     };
     const shadowAtlas = {
-      ...fakeSparseAtlas(playback.frontFacingSchedule, { addressPublicationIntervalTicks: 2 }),
+      ...fakeSparseAtlas(playback.frontFacingSchedule, {
+        addressPublicationIntervalTicks: 1,
+        lightingSampleIntervalTicks: 1,
+      }),
       presentation: "css-black-alpha",
       preparedAxisPaletteSourceIndices: [1, 0, 2],
       preparedPaletteColors: Array.from({ length: 128 }, (_, index) => `rgb(${index} ${index} ${index})`),
@@ -225,34 +228,36 @@ test("CSS palette playback selects prepared rows and per-source-cell shadow addr
     assert.match(leaves[0].style.backgroundPosition, /^0px 0px, -1px -\d+px$/u);
     player.step();
     assert.equal(transformWrites, 2);
-    assert.equal(lightingWrites, 84);
-    player.step();
-    assert.equal(transformWrites, 3);
     assert.equal(lightingWrites, 126);
     assert.match(leaves[0].style.backgroundPosition, /^0px -81px, -1px -\d+px$/u);
+    player.step();
+    assert.equal(transformWrites, 3);
+    assert.equal(lightingWrites, 168);
+    assert.match(leaves[0].style.backgroundPosition, /^0px -162px, -1px -\d+px$/u);
     const stats = player.stats();
-    assert.equal(stats.preparedColorPublicationIntervalTicks, 2);
-    assert.equal(stats.preparedColorPublicationDelayMilliseconds, 60);
-    assert.equal(stats.preparedLightingAddressPublicationIntervalTicks, 2);
-    assert.equal(stats.preparedLightingAddressPublicationDelayMilliseconds, 60);
+    assert.equal(stats.preparedColorPublicationIntervalTicks, 1);
+    assert.equal(stats.preparedColorPublicationDelayMilliseconds, 30);
+    assert.equal(stats.preparedLightingAddressPublicationIntervalTicks, 1);
+    assert.equal(stats.preparedLightingAddressPublicationDelayMilliseconds, 30);
     assert.equal(stats.preparedLightingAtlasAssetCount, 2);
     assert.equal(stats.preparedFlatSceneLeafLightingSeparation, true);
     assert.equal(stats.preparedCssOpacityWriteCountPerScheduledTick, 0);
-    assert.equal(stats.preparedCssPaletteWriteCountPerScheduledTick, 21);
-    assert.equal(stats.preparedLightingAddressWritesPerScheduledTick.average, 25.2);
+    assert.equal(stats.preparedCssPaletteWriteCountPerScheduledTick, 42);
+    assert.equal(stats.preparedLightingAddressWritesPerScheduledTick.average, 42);
     assert.equal(stats.runtimeLightingCalculationCount, 0);
 
     player.step(2);
     assert.equal(player.tick, 4);
-    assert.match(leaves[0].style.backgroundPosition, /^0px -162px, -1px -\d+px$/u);
+    assert.match(leaves[0].style.backgroundPosition, /^0px -324px, -1px -\d+px$/u);
     player.step();
     assert.equal(player.tick, 3);
-    assert.match(leaves[0].style.backgroundPosition, /^0px -81px, -1px -\d+px$/u);
+    assert.match(leaves[0].style.backgroundPosition, /^0px -243px, -1px -\d+px$/u);
     player.step(2);
     assert.equal(player.tick, 1);
-    assert.match(leaves[0].style.backgroundPosition, /^0px 0px, -1px -\d+px$/u);
+    assert.match(leaves[0].style.backgroundPosition, /^0px -81px, -1px -\d+px$/u);
     player.step();
     assert.equal(player.tick, 0);
+    assert.match(leaves[0].style.backgroundPosition, /^0px 0px, -1px -\d+px$/u);
     player.step();
     assert.equal(player.tick, 1);
     assert.equal(player.stats().preparedLoopPresentationMode,
@@ -440,7 +445,10 @@ function hash(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
-function fakeSparseAtlas(frontFacingSchedule, { addressPublicationIntervalTicks = 1 } = {}) {
+function fakeSparseAtlas(frontFacingSchedule, {
+  addressPublicationIntervalTicks = 1,
+  lightingSampleIntervalTicks = 2,
+} = {}) {
   const sourceStateCount = frontFacingSchedule.stateCount;
   const selectedLeafIndices = [];
   const stateOffsets = [0];
@@ -477,9 +485,9 @@ function fakeSparseAtlas(frontFacingSchedule, { addressPublicationIntervalTicks 
     visibleLeafFieldCount: frontFacingSchedule.leafIndices.length,
     addressedVisibleLeafFieldCount: slotCount,
     sourceStateCount,
-    lightingSampleIntervalTicks: 2,
-    lightingSampleDelayMilliseconds: 60,
-    lightingSampleCount: Math.ceil(sourceStateCount / 2),
+    lightingSampleIntervalTicks,
+    lightingSampleDelayMilliseconds: 30 * lightingSampleIntervalTicks,
+    lightingSampleCount: Math.ceil(sourceStateCount / lightingSampleIntervalTicks),
     transformPublicationIntervalTicks: 1,
     transformPublicationDelayMilliseconds: 30,
     addressPublicationIntervalTicks,

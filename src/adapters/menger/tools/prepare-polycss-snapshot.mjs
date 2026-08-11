@@ -18,6 +18,7 @@ import {
 } from "../src/prepare/cssmenger/preparedPlaneAtlas.mjs";
 import {
   buildPreparedMengerSparseLightingAtlas,
+  CSS_OPACITY_LIGHTING_SAMPLE_INTERVAL_TICKS,
   DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS,
   MOBILE_LIGHTING_SAMPLE_INTERVAL_TICKS,
   preparedMengerSparseLightingAtlasBytes,
@@ -253,7 +254,7 @@ async function prepareSparseLightingAtlases(frontFacingSchedule) {
     geometry,
     playback: scene.playback,
     frontFacingSchedule,
-    lightingSampleIntervalTicks: DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS,
+    lightingSampleIntervalTicks: CSS_OPACITY_LIGHTING_SAMPLE_INTERVAL_TICKS,
     profile: "desktop",
     presentation: "css-black-alpha",
   });

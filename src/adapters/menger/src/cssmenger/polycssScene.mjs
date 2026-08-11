@@ -1,6 +1,13 @@
 let mountedStyles = [];
 
-export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, planeAtlasAsset }) {
+export function mountPreparedPolycssSnapshot({
+  host,
+  sceneData,
+  snapshotHtml,
+  planeAtlas,
+  planeAtlasProfile,
+  planeAtlasAsset,
+}) {
   if (!(host instanceof HTMLElement)) throw new Error("Missing cssMenger host");
   if (typeof snapshotHtml !== "string") throw new Error("Prepared cssMenger snapshot is required");
   const snapshot = new DOMParser().parseFromString(snapshotHtml, "text/html");
@@ -22,15 +29,17 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, pl
     mountedStyles.push(imported);
   }
   const mountedCamera = document.importNode(camera, true);
-  for (const existing of host.querySelectorAll(":scope > .polycss-camera")) existing.remove();
-  host.append(mountedCamera);
   const mountedScene = mountedCamera.querySelector(".polycss-scene");
   const leaves = [...(mountedScene?.querySelectorAll(":scope > b") ?? [])];
   if (!(mountedScene instanceof HTMLElement) || leaves.length !== sceneData.metrics.preparedLeafCount ||
       mountedScene.querySelector(":scope > i, :scope > s")) {
     throw new Error("Prepared cssMenger retained target census drifted");
   }
-  if (planeAtlasAsset?.sha256 !== sceneData.planeAtlas?.assetSha256 || typeof planeAtlasAsset.url !== "string") {
+  mountedScene.classList.toggle("cssmenger-mobile-atlas", planeAtlasProfile === "mobile");
+  for (const existing of host.querySelectorAll(":scope > .polycss-camera")) existing.remove();
+  host.append(mountedCamera);
+  if (planeAtlasAsset?.sha256 !== planeAtlas?.assetSha256 || typeof planeAtlasAsset.url !== "string" ||
+      !["desktop", "mobile"].includes(planeAtlasProfile) || planeAtlas?.profile !== planeAtlasProfile) {
     throw new Error("Prepared cssMenger plane atlas asset is missing or unverified");
   }
   if (!getComputedStyle(leaves[0]).backgroundImage.includes(planeAtlasAsset.url)) {
@@ -79,6 +88,8 @@ export function mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, pl
         retainedPolygonLeafCount: leaves.length,
         preparedPlaneAtlasTextureLeafCount: leaves.length,
         preparedPlaneAtlasUniqueUrlCount: 1,
+        preparedPlaneAtlasProfile: planeAtlasProfile,
+        preparedPlaneAtlasDecodedBytes: planeAtlas.decodedBytes,
         preparedPlaneAtlasAssetBytes: planeAtlasAsset.byteLength,
         preparedPlaneAtlasAssetSha256: planeAtlasAsset.sha256,
         runtimeDomCreationCount,

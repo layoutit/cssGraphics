@@ -77,6 +77,7 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
   assert(atlasBytes.length === scene.planeAtlas?.byteLength &&
     sha256(atlasBytes) === scene.planeAtlas.assetSha256 &&
     scene.planeAtlas?.schema === "cssmenger-prepared-sparse-leaf-lighting-atlas@1" &&
+    scene.planeAtlas?.profile === "desktop" &&
     /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif$/u.test(scene.planeAtlas?.assetUrl) &&
     scene.planeAtlas?.mimeType === "image/avif" &&
     scene.planeAtlas?.width === 16_362 && scene.planeAtlas?.height === 1_323 &&
@@ -101,6 +102,29 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     scene.planeAtlas?.sourceFaceCoverageExact === true,
   "prepared atlas identity");
 
+  const mobileAtlasPath = productPath(scene.mobilePlaneAtlas?.assetUrl);
+  const mobileAtlasBytes = await readFile(join(root, mobileAtlasPath));
+  assert(mobileAtlasBytes.length === scene.mobilePlaneAtlas?.byteLength &&
+    sha256(mobileAtlasBytes) === scene.mobilePlaneAtlas.assetSha256 &&
+    scene.mobilePlaneAtlas?.schema === "cssmenger-prepared-sparse-leaf-lighting-atlas@1" &&
+    scene.mobilePlaneAtlas?.profile === "mobile" &&
+    /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.avif$/u.test(scene.mobilePlaneAtlas?.assetUrl) &&
+    scene.mobilePlaneAtlas?.mimeType === "image/avif" &&
+    scene.mobilePlaneAtlas?.width === 16_362 && scene.mobilePlaneAtlas?.height === 675 &&
+    scene.mobilePlaneAtlas?.decodedBytes === 44_177_400 &&
+    scene.mobilePlaneAtlas?.byteLength === 3_299_290 &&
+    scene.mobilePlaneAtlas?.leafCount === 84 &&
+    scene.mobilePlaneAtlas?.visibleLeafFieldCount === 61_524 &&
+    scene.mobilePlaneAtlas?.slotCount === 15_082 &&
+    scene.mobilePlaneAtlas?.lightingSampleIntervalTicks === 4 &&
+    scene.mobilePlaneAtlas?.lightingSampleDelayMilliseconds === 120 &&
+    scene.mobilePlaneAtlas?.lightingSampleCount === 360 &&
+    scene.mobilePlaneAtlas?.addressUpdateCount === 15_750 &&
+    scene.mobilePlaneAtlas?.redundantAddressWriteCountRemoved === 45_774 &&
+    scene.mobilePlaneAtlas?.addressWriteCountPerState?.zeroWriteStateCount === 811 &&
+    scene.mobilePlaneAtlas?.sourceFaceCoverageExact === true,
+  "prepared mobile atlas identity");
+
   const snapshot = await readFile(join(root, snapshotPath), "utf8");
   assert(count(snapshot, /<b\b/gu) === 84 &&
     count(snapshot, /<i\b/gu) === 0 &&
@@ -111,13 +135,14 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     count(snapshot, /<b><\/b>/gu) === 0 &&
     !/\.polycss-scene>b:nth-child\(\d+\)\{transform:/u.test(snapshot) &&
     /body>\.polycss-camera>\.polycss-scene>b\{background-image:url\("\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif"\)\}/u.test(snapshot) &&
+    /\.polycss-scene\.cssmenger-mobile-atlas.*lighting-grid-mobile-[a-f0-9]{64}\.avif/u.test(snapshot) &&
     !/cssmenger-(?:model|axis)/u.test(snapshot) &&
     !/var\(--[mxyz]\)|--[mxyz]:|!important/iu.test(snapshot),
   "retained DOM");
   assert(!/\sdata-[\w-]+=/u.test(snapshot) && !/<(?:script|canvas|svg)\b/iu.test(snapshot),
     "lean DOM");
 
-  const expectedFiles = new Set(["manifest.json", scenePath, snapshotPath, atlasPath]);
+  const expectedFiles = new Set(["manifest.json", scenePath, snapshotPath, atlasPath, mobileAtlasPath]);
   const files = (await walk(root))
     .map((path) => relative(root, path).split(sep).join("/"))
     .filter((path) => path !== "product-bank.json")
@@ -147,9 +172,12 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     mergedSourceFaceCount: 17_964,
     timelineStateCount: 1_440,
     paletteStateCount: 128,
-    atlasAssetCount: 1,
+    atlasAssetCount: 2,
     lightingAddressUpdateCount: scene.planeAtlas.addressUpdateCount,
     redundantLightingAddressWriteCountRemoved: scene.planeAtlas.redundantAddressWriteCountRemoved,
+    mobileLightingAddressUpdateCount: scene.mobilePlaneAtlas.addressUpdateCount,
+    mobileRedundantLightingAddressWriteCountRemoved:
+      scene.mobilePlaneAtlas.redundantAddressWriteCountRemoved,
   });
 
   if (verifyDescriptor) {

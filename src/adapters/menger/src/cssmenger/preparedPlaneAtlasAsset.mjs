@@ -1,6 +1,7 @@
 export async function loadPreparedMengerPlaneAtlasAsset(atlas) {
   if (atlas?.schema !== "cssmenger-prepared-sparse-leaf-lighting-atlas@1" ||
-      !/^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif$/u.test(atlas.assetUrl) ||
+      !/^\/cssmenger\/assets\/lighting-grid(?:-mobile)?-[a-f0-9]{64}\.avif$/u.test(atlas.assetUrl) ||
+      !["desktop", "mobile"].includes(atlas.profile) ||
       !/^[a-f0-9]{64}$/u.test(atlas.assetSha256) ||
       atlas.encoding !== "AVIF-lossy-q83-alpha-lossless-yuv444" ||
       atlas.quality !== 83 || atlas.alphaQuality !== 100 || atlas.chromaSubsampling !== "4:4:4" ||

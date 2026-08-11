@@ -32,6 +32,7 @@ test("generated manifest and scene expose one source-backed default path", async
   assert.equal(manifest.scenes[0].metrics.preparedModelRootCount, 0);
   assert.equal(manifest.scenes[0].metrics.preparedAxisRootCount, 0);
   assert.equal(scene.planeAtlas.leafCount, 84);
+  assert.equal(scene.planeAtlas.profile, "desktop");
   assert.equal(scene.planeAtlas.schema, "cssmenger-prepared-sparse-leaf-lighting-atlas@1");
   assert.match(scene.planeAtlas.assetUrl, /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif$/u);
   assert.equal(scene.planeAtlas.visibleLeafFieldCount, 61_524);
@@ -56,7 +57,26 @@ test("generated manifest and scene expose one source-backed default path", async
     average: 30_989 / 1_440,
     zeroWriteStateCount: 546,
   });
-  assert.equal(scene.metrics.atlasPageCount, 1);
+  assert.equal(scene.mobilePlaneAtlas.profile, "mobile");
+  assert.match(scene.mobilePlaneAtlas.assetUrl,
+    /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.avif$/u);
+  assert.equal(scene.mobilePlaneAtlas.byteLength, 3_299_290);
+  assert.equal(scene.mobilePlaneAtlas.decodedBytes, 44_177_400);
+  assert.equal(scene.mobilePlaneAtlas.width, 16_362);
+  assert.equal(scene.mobilePlaneAtlas.height, 675);
+  assert.equal(scene.mobilePlaneAtlas.slotCount, 15_082);
+  assert.equal(scene.mobilePlaneAtlas.lightingSampleIntervalTicks, 4);
+  assert.equal(scene.mobilePlaneAtlas.lightingSampleDelayMilliseconds, 120);
+  assert.equal(scene.mobilePlaneAtlas.lightingSampleCount, 360);
+  assert.equal(scene.mobilePlaneAtlas.addressUpdateCount, 15_750);
+  assert.equal(scene.mobilePlaneAtlas.redundantAddressWriteCountRemoved, 45_774);
+  assert.deepEqual(scene.mobilePlaneAtlas.addressWriteCountPerState, {
+    minimum: 0,
+    maximum: 49,
+    average: 15_750 / 1_440,
+    zeroWriteStateCount: 811,
+  });
+  assert.equal(scene.metrics.atlasPageCount, 2);
   assert.equal(scene.playback.frontFacingSchedule.schema, "cssmenger-prepared-front-facing-leaf-schedule@1");
   assert.equal(scene.playback.frontFacingSchedule.offsets.length, 1440 * 3 + 1);
   assert.equal(scene.playback.frontFacingSchedule.offsets.at(-1), scene.playback.frontFacingSchedule.leafIndices.length);
@@ -99,6 +119,8 @@ test("prepared snapshot is retained DOM without an alternate renderer", async ()
   assert.doesNotMatch(html, /\.polycss-scene>b:nth-child\(\d+\)\{transform:/u);
   assert.match(html,
     /body>\.polycss-camera>\.polycss-scene>b\{background-image:url\("\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif"\)\}/u);
+  assert.match(html,
+    /\.polycss-scene\.cssmenger-mobile-atlas.*lighting-grid-mobile-[a-f0-9]{64}\.avif/u);
   assert.match(html, /\.polycss-scene\{translate:0px 0px -980\.385px;scale:1\.4(?:;|\})/u);
   assert.match(html, /<div class="polycss-scene" aria-hidden="true" style="transform: rotateX/u);
   assert.doesNotMatch(html, /<b style="(?!transform: matrix3d\()[^"]+/u);

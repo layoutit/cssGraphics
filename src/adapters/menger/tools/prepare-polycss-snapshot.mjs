@@ -14,6 +14,8 @@ import {
 import { buildMengerPreparedGeometry } from "../src/prepare/cssmenger/mengerGeometry.mjs";
 import {
   buildPreparedMengerSparseLightingAtlas,
+  DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS,
+  MOBILE_LIGHTING_SAMPLE_INTERVAL_TICKS,
   preparedMengerSparseLightingAtlasBytes,
 } from "../src/prepare/cssmenger/sparseLightingAtlas.mjs";
 
@@ -48,21 +50,19 @@ try {
     );
     const snapshot = await page.evaluate(() => window.__cssMengerDebugSnapshot);
     if (snapshot.status !== "ready") throw new Error(snapshot.error || "cssMenger snapshot failed");
-    const sparseLightingAtlas = await prepareSparseLightingAtlas(snapshot.frontFacingSchedule);
+    const { desktopAtlas, mobileAtlas } = await prepareSparseLightingAtlases(snapshot.frontFacingSchedule);
     await mkdir(dirname(snapshotPath), { recursive: true });
-    await writeFile(snapshotPath, bindFinalAtlasDimensions(snapshot.html, sparseLightingAtlas));
+    await writeFile(snapshotPath, bindFinalAtlasDimensions(snapshot.html, desktopAtlas, mobileAtlas));
     await rm(join(dirname(snapshotPath), `${sceneId}.polycss.html`), { force: true });
-    await publishRuntimeScene(snapshot.frontFacingSchedule, sparseLightingAtlas);
+    await publishRuntimeScene(snapshot.frontFacingSchedule, desktopAtlas, mobileAtlas);
     console.log(JSON.stringify({
       snapshotPath,
       snapshotUrl,
       mountedLeaves: snapshot.mountedLeaves,
       stats: snapshot.stats,
-      sparseLightingAtlas: {
-        assetUrl: sparseLightingAtlas.assetUrl,
-        byteLength: sparseLightingAtlas.byteLength,
-        decodedBytes: sparseLightingAtlas.decodedBytes,
-        slotCount: sparseLightingAtlas.slotCount,
+      sparseLightingAtlases: {
+        desktop: atlasSummary(desktopAtlas),
+        mobile: atlasSummary(mobileAtlas),
       },
     }, null, 2));
   } finally {
@@ -72,18 +72,38 @@ try {
   server.kill("SIGTERM");
 }
 
-function bindFinalAtlasDimensions(html, atlas) {
+function bindFinalAtlasDimensions(html, desktopAtlas, mobileAtlas) {
   if (typeof html !== "string" || (html.match(/<\/style>/gu) ?? []).length !== 1 ||
-      !Number.isSafeInteger(atlas?.width) || !Number.isSafeInteger(atlas?.height) ||
-      !/^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif$/u.test(atlas.assetUrl)) {
+      !validResponsiveAtlas(desktopAtlas, "desktop") || !validResponsiveAtlas(mobileAtlas, "mobile") ||
+      desktopAtlas.slotWidth !== mobileAtlas.slotWidth || desktopAtlas.slotHeight !== mobileAtlas.slotHeight) {
     throw new Error("Prepared cssMenger snapshot cannot bind final atlas dimensions");
   }
   return html.replace(
     "</style>",
-    `.polycss-scene{--cssmenger-atlas-width:${atlas.width}px;` +
-      `--cssmenger-atlas-height:${atlas.height}px}` +
-      `body>.polycss-camera>.polycss-scene>b{background-image:url("${atlas.assetUrl}")}</style>`,
+    `.polycss-scene{--cssmenger-atlas-width:${desktopAtlas.width}px;` +
+      `--cssmenger-atlas-height:${desktopAtlas.height}px}` +
+      `body>.polycss-camera>.polycss-scene>b{background-image:url("${desktopAtlas.assetUrl}")}` +
+      `.polycss-scene.cssmenger-mobile-atlas{--cssmenger-atlas-width:${mobileAtlas.width}px;` +
+      `--cssmenger-atlas-height:${mobileAtlas.height}px}` +
+      `body>.polycss-camera>.polycss-scene.cssmenger-mobile-atlas>b{` +
+      `background-image:url("${mobileAtlas.assetUrl}")}</style>`,
   );
+}
+
+function validResponsiveAtlas(atlas, profile) {
+  const suffix = profile === "mobile" ? "-mobile" : "";
+  return atlas?.profile === profile && Number.isSafeInteger(atlas.width) && Number.isSafeInteger(atlas.height) &&
+    new RegExp(`^/cssmenger/assets/lighting-grid${suffix}-[a-f0-9]{64}\\.avif$`, "u").test(atlas.assetUrl);
+}
+
+function atlasSummary(atlas) {
+  return {
+    assetUrl: atlas.assetUrl,
+    byteLength: atlas.byteLength,
+    decodedBytes: atlas.decodedBytes,
+    slotCount: atlas.slotCount,
+    lightingSampleIntervalTicks: atlas.lightingSampleIntervalTicks,
+  };
 }
 
 async function stagePreparedScene() {
@@ -97,31 +117,42 @@ async function stagePreparedScene() {
   await writeFile(privateScenePath, `${JSON.stringify(scene, null, 2)}\n`);
 }
 
-async function prepareSparseLightingAtlas(frontFacingSchedule) {
+async function prepareSparseLightingAtlases(frontFacingSchedule) {
   const scene = JSON.parse(await readFile(privateScenePath, "utf8"));
   const initialColorRow = scene.playback.colorRows[scene.playback.initial.stateIndex];
   const geometry = buildMengerPreparedGeometry({
     depth: scene.sourceProfile.depth,
     axisColors: initialColorRow.map((index) => scene.playback.palette[index].material),
   });
-  const contract = await buildPreparedMengerSparseLightingAtlas({
+  const desktopAtlas = await buildPreparedMengerSparseLightingAtlas({
     geometry,
     playback: scene.playback,
     frontFacingSchedule,
+    lightingSampleIntervalTicks: DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS,
+    profile: "desktop",
   });
-  const bytes = preparedMengerSparseLightingAtlasBytes(contract);
-  if (!bytes || bytes.length !== contract.byteLength) {
-    throw new Error("Prepared cssMenger sparse lighting atlas bytes are unavailable");
+  const mobileAtlas = await buildPreparedMengerSparseLightingAtlas({
+    geometry,
+    playback: scene.playback,
+    frontFacingSchedule,
+    lightingSampleIntervalTicks: MOBILE_LIGHTING_SAMPLE_INTERVAL_TICKS,
+    profile: "mobile",
+  });
+  for (const contract of [desktopAtlas, mobileAtlas]) {
+    const bytes = preparedMengerSparseLightingAtlasBytes(contract);
+    if (!bytes || bytes.length !== contract.byteLength) {
+      throw new Error(`Prepared cssMenger ${contract.profile} lighting atlas bytes are unavailable`);
+    }
+    const assetPath = join(generatedPublicRoot, contract.assetUrl.replace(/^\/cssmenger\//u, ""));
+    await mkdir(dirname(assetPath), { recursive: true });
+    const temporary = `${assetPath}.tmp`;
+    await writeFile(temporary, bytes);
+    await rename(temporary, assetPath);
   }
-  const assetPath = join(generatedPublicRoot, contract.assetUrl.replace(/^\/cssmenger\//u, ""));
-  await mkdir(dirname(assetPath), { recursive: true });
-  const temporary = `${assetPath}.tmp`;
-  await writeFile(temporary, bytes);
-  await rename(temporary, assetPath);
-  return contract;
+  return { desktopAtlas, mobileAtlas };
 }
 
-async function publishRuntimeScene(frontFacingSchedule, sparseLightingAtlas) {
+async function publishRuntimeScene(frontFacingSchedule, desktopAtlas, mobileAtlas) {
   const scene = JSON.parse(await readFile(privateScenePath, "utf8"));
   if (frontFacingSchedule?.schema !== "cssmenger-prepared-front-facing-leaf-schedule@1" ||
       frontFacingSchedule.stateCount !== scene.playback?.stateCount ||
@@ -129,24 +160,30 @@ async function publishRuntimeScene(frontFacingSchedule, sparseLightingAtlas) {
       frontFacingSchedule.offsets.at(-1) !== frontFacingSchedule.leafIndices?.length) {
     throw new Error("Prepared cssMenger front-facing schedule is invalid");
   }
-  if (sparseLightingAtlas?.schema !== "cssmenger-prepared-sparse-leaf-lighting-atlas@1" ||
-      sparseLightingAtlas.visibleLeafFieldCount !== frontFacingSchedule.leafIndices.length ||
-      sparseLightingAtlas.slotCount > sparseLightingAtlas.visibleLeafFieldCount ||
-      sparseLightingAtlas.sourceStateCount !== scene.playback.stateCount) {
+  if (![desktopAtlas, mobileAtlas].every((atlas) =>
+    atlas?.schema === "cssmenger-prepared-sparse-leaf-lighting-atlas@1" &&
+    atlas.visibleLeafFieldCount === frontFacingSchedule.leafIndices.length &&
+    atlas.slotCount <= atlas.visibleLeafFieldCount &&
+    atlas.sourceStateCount === scene.playback.stateCount)) {
     throw new Error("Prepared cssMenger sparse lighting atlas is invalid");
   }
   const intermediateAtlas = scene.planeAtlas;
   const runtimeScene = {
     ...scene,
     playback: { ...scene.playback, frontFacingSchedule },
-    planeAtlas: sparseLightingAtlas,
+    planeAtlas: desktopAtlas,
+    mobilePlaneAtlas: mobileAtlas,
     metrics: {
       ...scene.metrics,
-      preparedPlaneAtlasWidth: sparseLightingAtlas.width,
-      preparedPlaneAtlasHeight: sparseLightingAtlas.height,
-      preparedPlaneAtlasDecodedBytes: sparseLightingAtlas.decodedBytes,
-      preparedPlaneAtlasTotalEncodedBytes: sparseLightingAtlas.byteLength,
-      atlasPageCount: 1,
+      preparedPlaneAtlasWidth: desktopAtlas.width,
+      preparedPlaneAtlasHeight: desktopAtlas.height,
+      preparedPlaneAtlasDecodedBytes: desktopAtlas.decodedBytes,
+      preparedPlaneAtlasTotalEncodedBytes: desktopAtlas.byteLength,
+      preparedMobilePlaneAtlasWidth: mobileAtlas.width,
+      preparedMobilePlaneAtlasHeight: mobileAtlas.height,
+      preparedMobilePlaneAtlasDecodedBytes: mobileAtlas.decodedBytes,
+      preparedMobilePlaneAtlasTotalEncodedBytes: mobileAtlas.byteLength,
+      atlasPageCount: 2,
       preparedRenderWrapperCount: 2,
       preparedModelRootCount: 0,
       preparedAxisRootCount: 0,
@@ -155,15 +192,18 @@ async function publishRuntimeScene(frontFacingSchedule, sparseLightingAtlas) {
         maximum: frontFacingSchedule.maximumSelectedLeafCountPerState,
         average: frontFacingSchedule.averageSelectedLeafCountPerState,
       }),
-      preparedVisibleLightingFieldCount: sparseLightingAtlas.visibleLeafFieldCount,
-      preparedOmittedBackFacingLightingFieldCount: sparseLightingAtlas.omittedBackFacingLeafFieldCount,
-      preparedLightingAddressUpdateCount: sparseLightingAtlas.addressUpdateCount,
+      preparedVisibleLightingFieldCount: desktopAtlas.visibleLeafFieldCount,
+      preparedOmittedBackFacingLightingFieldCount: desktopAtlas.omittedBackFacingLeafFieldCount,
+      preparedLightingAddressUpdateCount: desktopAtlas.addressUpdateCount,
       preparedRedundantLightingAddressWriteCountRemoved:
-        sparseLightingAtlas.redundantAddressWriteCountRemoved,
+        desktopAtlas.redundantAddressWriteCountRemoved,
+      preparedMobileLightingAddressUpdateCount: mobileAtlas.addressUpdateCount,
+      preparedMobileRedundantLightingAddressWriteCountRemoved:
+        mobileAtlas.redundantAddressWriteCountRemoved,
     },
     renderer: {
       ...scene.renderer,
-      representation: "retained-coplanar-plane-leaves-with-one-sparse-prepared-source-cell-lighting-grid",
+      representation: "retained-coplanar-plane-leaves-with-responsive-sparse-prepared-source-cell-lighting-grids",
       runtimeGeometryPayload: false,
       runtimeLightingCalculation: false,
     },

@@ -19,14 +19,23 @@ export function mountCssmengerClient(host) {
     state.route = route;
     state.manifest = await loadPreparedManifest(route);
     const { entry, sceneData, snapshotHtml } = await loadPreparedScene(state.manifest, route);
-    const planeAtlasAsset = await loadPreparedMengerPlaneAtlasAsset(sceneData.planeAtlas);
+    const planeAtlasProfile = matchMedia("(max-width: 430px)").matches ? "mobile" : "desktop";
+    const planeAtlas = planeAtlasProfile === "mobile" ? sceneData.mobilePlaneAtlas : sceneData.planeAtlas;
+    const planeAtlasAsset = await loadPreparedMengerPlaneAtlasAsset(planeAtlas);
     state.sceneData = sceneData;
     state.route = Object.freeze({ ...route, selectedScene: entry.id });
     setStatus("loading");
-    const snapshot = mountPreparedPolycssSnapshot({ host, sceneData, snapshotHtml, planeAtlasAsset });
+    const snapshot = mountPreparedPolycssSnapshot({
+      host,
+      sceneData,
+      snapshotHtml,
+      planeAtlas,
+      planeAtlasProfile,
+      planeAtlasAsset,
+    });
     const player = createCssmengerPreparedPlayer({
       playback: sceneData.playback,
-      planeAtlas: sceneData.planeAtlas,
+      planeAtlas,
       publicationRoot: snapshot.publicationRoot,
       leaves: snapshot.leaves,
     });

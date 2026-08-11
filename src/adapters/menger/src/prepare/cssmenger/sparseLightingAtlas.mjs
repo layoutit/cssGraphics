@@ -7,11 +7,18 @@ import {
 } from "./mengerGeometry.mjs";
 
 const GUTTER = 0;
-const LIGHTING_SAMPLE_INTERVAL_TICKS = 2;
+export const DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS = 2;
+export const MOBILE_LIGHTING_SAMPLE_INTERVAL_TICKS = 4;
 const MAXIMUM_TEXTURE_DIMENSION = 16_384;
 const preparedBytes = new WeakMap();
 
-export async function buildPreparedMengerSparseLightingAtlas({ geometry, playback, frontFacingSchedule }) {
+export async function buildPreparedMengerSparseLightingAtlas({
+  geometry,
+  playback,
+  frontFacingSchedule,
+  lightingSampleIntervalTicks = DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS,
+  profile = "desktop",
+}) {
   if (!geometry?.metrics?.sourceFaceCoverageExact || !Array.isArray(geometry.bundles) ||
       playback?.schema !== "cssmenger-prepared-playback@1" ||
       !Array.isArray(playback.nativeRotationDegrees) ||
@@ -19,7 +26,10 @@ export async function buildPreparedMengerSparseLightingAtlas({ geometry, playbac
       frontFacingSchedule?.schema !== "cssmenger-prepared-front-facing-leaf-schedule@1" ||
       frontFacingSchedule.stateCount !== playback.stateCount ||
       frontFacingSchedule.offsets?.length !== playback.stateCount * 3 + 1 ||
-      frontFacingSchedule.offsets.at(-1) !== frontFacingSchedule.leafIndices?.length) {
+      frontFacingSchedule.offsets.at(-1) !== frontFacingSchedule.leafIndices?.length ||
+      ![DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS, MOBILE_LIGHTING_SAMPLE_INTERVAL_TICKS]
+        .includes(lightingSampleIntervalTicks) ||
+      !["desktop", "mobile"].includes(profile)) {
     throw new TypeError("Complete cssMenger geometry, playback, and front-facing schedule are required");
   }
   const tileWidth = geometry.cellsPerAxis;
@@ -55,7 +65,7 @@ export async function buildPreparedMengerSparseLightingAtlas({ geometry, playbac
   const uniqueTiles = [];
   const slotsBySha256 = new Map();
   for (const field of fields) {
-    const lightingStateIndex = field.stateIndex - field.stateIndex % LIGHTING_SAMPLE_INTERVAL_TICKS;
+    const lightingStateIndex = field.stateIndex - field.stateIndex % lightingSampleIntervalTicks;
     const tile = Buffer.alloc(tileWidth * tileHeight * 4);
     writeLightingTile({
       rgba: tile,
@@ -124,8 +134,9 @@ export async function buildPreparedMengerSparseLightingAtlas({ geometry, playbac
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const contract = Object.freeze({
     schema: "cssmenger-prepared-sparse-leaf-lighting-atlas@1",
-    technique: "exact-deduplicated-one-source-cell-texel-per-visible-coplanar-leaf-held-two-source-ticks-addressed-by-front-facing-schedule-cursor",
-    assetUrl: `/cssmenger/assets/lighting-grid-${sha256}.avif`,
+    technique: `exact-deduplicated-one-source-cell-texel-per-visible-coplanar-leaf-held-${lightingSampleIntervalTicks}-source-ticks-addressed-by-front-facing-schedule-cursor`,
+    profile,
+    assetUrl: `/cssmenger/assets/lighting-grid${profile === "mobile" ? "-mobile" : ""}-${sha256}.avif`,
     assetSha256: sha256,
     encoding: "AVIF-lossy-q83-alpha-lossless-yuv444",
     mimeType: "image/avif",
@@ -169,10 +180,10 @@ export async function buildPreparedMengerSparseLightingAtlas({ geometry, playbac
     exactUniqueTileCount: slotCount,
     exactDuplicateTileCount: visibleLeafFieldCount - slotCount,
     exactTileDeduplicationRatio: (visibleLeafFieldCount - slotCount) / visibleLeafFieldCount,
-    lightingSampleIntervalTicks: LIGHTING_SAMPLE_INTERVAL_TICKS,
+    lightingSampleIntervalTicks,
     lightingSampleDelayMilliseconds:
-      playback.sourceFrameDelayMilliseconds * LIGHTING_SAMPLE_INTERVAL_TICKS,
-    lightingSampleCount: Math.ceil(playback.stateCount / LIGHTING_SAMPLE_INTERVAL_TICKS),
+      playback.sourceFrameDelayMilliseconds * lightingSampleIntervalTicks,
+    lightingSampleCount: Math.ceil(playback.stateCount / lightingSampleIntervalTicks),
     transformPublicationIntervalTicks: 1,
     transformPublicationDelayMilliseconds: playback.sourceFrameDelayMilliseconds,
     imageRendering: "pixelated",

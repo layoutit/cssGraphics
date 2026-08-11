@@ -10,6 +10,7 @@ const smokeDir = join("bench", "results", "cssmenger", "smoke");
 const screenshotPath = join(smokeDir, "default-route.png");
 const narrowMobileScreenshotPath = join(smokeDir, "mobile-360-default-route.png");
 const mobileScreenshotPath = join(smokeDir, "mobile-390-default-route.png");
+const mobileDesktopAtlasScreenshotPath = join(smokeDir, "mobile-390-desktop-atlas-baseline.png");
 const statePath = join(smokeDir, "state.json");
 const port = await freePort();
 const route = `http://127.0.0.1:${port}/`;
@@ -159,7 +160,7 @@ try {
         !evidence.computed.backgroundImage.includes(evidence.atlasUrl) ||
         evidence.computed.backgroundSize !== evidence.expectedBackgroundSize ||
         evidence.sceneVariableWidth !== `${evidence.atlasWidth}px` ||
-        evidence.sceneVariableHeight !== `${evidence.atlasHeight}px` || evidence.atlasPageCount !== 1 ||
+        evidence.sceneVariableHeight !== `${evidence.atlasHeight}px` || evidence.atlasPageCount !== 2 ||
         new Set(atlasRequests).size !== 1 || pageRequests.length !== 0 ||
         sampledStates.some((sample, index) => sample.tick !== [0, 36, 420, 1_439][index] ||
           !sample.paused || sample.matrixMaxDelta > 1e-5) ||
@@ -176,7 +177,7 @@ try {
     const mobileFraming = [];
     for (const viewport of [
       { width: 360, height: 780, expectedScale: "0.82", screenshotPath: narrowMobileScreenshotPath },
-      { width: 390, height: 844, expectedScale: "0.88", screenshotPath: mobileScreenshotPath },
+      { width: 390, height: 844, expectedScale: "0.88", screenshotPath: mobileDesktopAtlasScreenshotPath },
     ]) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       for (const tick of [0, 320, 720, 1_439]) {
@@ -199,12 +200,66 @@ try {
           };
         }, { stateIndex: tick, expectedScale: viewport.expectedScale }));
       }
+      await page.evaluate(() => globalThis.__cssMengerDebug.seek(720));
       await page.screenshot({ path: viewport.screenshotPath });
     }
     if (mobileFraming.some((frame) => frame.tick === null || frame.computedScale !== frame.expectedScale ||
         frame.left < 0 || frame.right > frame.viewportWidth || frame.top < 50 ||
         frame.bottom > frame.viewportHeight)) {
       throw new Error(`cssMenger mobile framing failed: ${JSON.stringify(mobileFraming)}`);
+    }
+    const mobilePage = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+    const mobileRequests = [];
+    const mobileErrors = [];
+    mobilePage.on("request", (request) => mobileRequests.push(new URL(request.url()).pathname));
+    mobilePage.on("pageerror", (error) => mobileErrors.push(error.stack || error.message));
+    mobilePage.on("console", (message) => { if (message.type() === "error") mobileErrors.push(message.text()); });
+    await mobilePage.goto(route, { waitUntil: "networkidle" });
+    await mobilePage.waitForFunction(() => document.body.classList.contains("ready") || document.body.classList.contains("error"), null,
+      { timeout: 30_000 });
+    const mobileEvidence = await mobilePage.evaluate(async () => {
+      const debug = globalThis.__cssMengerDebug;
+      debug.seek(720);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const scene = document.querySelector(".polycss-camera > .polycss-scene");
+      const firstLeaf = scene.querySelector(":scope > b");
+      const atlas = debug.scene.mobilePlaneAtlas;
+      return {
+        ready: debug.ready,
+        errors: debug.errors(),
+        bodyDataAttributes: [...document.body.attributes]
+          .filter((attribute) => attribute.name.startsWith("data-"))
+          .map((attribute) => attribute.name),
+        selectedProfile: debug.stats().preparedPlaneAtlasProfile,
+        selectedDecodedBytes: debug.stats().preparedPlaneAtlasDecodedBytes,
+        selectedAssetBytes: debug.stats().preparedPlaneAtlasAssetBytes,
+        selectedLightingIntervalTicks: debug.stats().preparedColorPublicationIntervalTicks,
+        selectedLightingAddressUpdateCount: debug.stats().preparedLightingAddressUpdateCount,
+        desktopUrl: debug.scene.planeAtlas.assetUrl,
+        mobileUrl: atlas.assetUrl,
+        backgroundImage: getComputedStyle(firstLeaf).backgroundImage,
+        backgroundSize: getComputedStyle(firstLeaf).backgroundSize,
+        expectedBackgroundSize: `${atlas.width}px ${atlas.height}px`,
+        tick: debug.state().tick,
+      };
+    });
+    await mobilePage.screenshot({ path: mobileScreenshotPath });
+    await mobilePage.close();
+    const requestedDesktopAtlases = mobileRequests.filter((path) =>
+      /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif$/u.test(path));
+    const requestedMobileAtlases = mobileRequests.filter((path) =>
+      /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.avif$/u.test(path));
+    if (mobileErrors.length || !mobileEvidence.ready || mobileEvidence.errors.length ||
+        mobileEvidence.bodyDataAttributes.length !== 0 || mobileEvidence.selectedProfile !== "mobile" ||
+        mobileEvidence.selectedDecodedBytes !== 44_177_400 || mobileEvidence.selectedAssetBytes !== 3_299_290 ||
+        mobileEvidence.selectedLightingIntervalTicks !== 4 ||
+        mobileEvidence.selectedLightingAddressUpdateCount !== 15_750 || mobileEvidence.tick !== 720 ||
+        !mobileEvidence.backgroundImage.includes(mobileEvidence.mobileUrl) ||
+        mobileEvidence.backgroundSize !== mobileEvidence.expectedBackgroundSize ||
+        requestedDesktopAtlases.length !== 0 || new Set(requestedMobileAtlases).size !== 1) {
+      throw new Error(`cssMenger responsive mobile atlas failed: ${JSON.stringify({
+        mobileEvidence, requestedDesktopAtlases, requestedMobileAtlases, mobileErrors,
+      })}`);
     }
     const result = {
       route,
@@ -214,6 +269,9 @@ try {
       playbackProgress,
       loopProgress,
       mobileFraming,
+      mobileEvidence,
+      requestedDesktopAtlases,
+      requestedMobileAtlases,
       atlasRequests,
       pageRequests,
       pageErrors,
@@ -224,6 +282,7 @@ try {
       screenshotPath,
       narrowMobileScreenshotPath,
       mobileScreenshotPath,
+      mobileDesktopAtlasScreenshotPath,
       statePath,
       ...result,
     }, null, 2));

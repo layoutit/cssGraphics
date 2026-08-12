@@ -77,7 +77,10 @@ export async function captureBrowserMengerFrames(options = {}) {
           )];
           const planeAtlas = debug.scene.planeAtlas;
           const expectedTransformMatrix = new DOMMatrix(playback.transforms[tick]).toFloat64Array();
-          const publishedTransformMatrix = new DOMMatrix(rotationRoot?.style.transform).toFloat64Array();
+          const publishedTransform = rotationRoot instanceof HTMLElement
+            ? getComputedStyle(rotationRoot).transform
+            : "none";
+          const publishedTransformMatrix = new DOMMatrix(publishedTransform).toFloat64Array();
           const offsets = decodeU16(planeAtlas.addressStateOffsetsBase64);
           const leafIndices = decodeU8(planeAtlas.addressLeafIndicesBase64);
           const slotIndices = decodeU16(planeAtlas.addressSlotIndicesBase64);
@@ -91,11 +94,13 @@ export async function captureBrowserMengerFrames(options = {}) {
             actual: leaf.style.backgroundPosition,
           })).filter((address) => address.expected);
           const mismatchedAddresses = publishedAddresses.filter((address) => address.actual !== address.expected);
+          const deterministicStats = { ...debug.stats() };
+          delete deterministicStats.runtimePreparedTimelineCallbackCount;
           return {
             tick: debug.state().tick,
             paused: debug.state().paused,
             preparedTransform: playback.transforms[tick],
-            publishedTransform: rotationRoot?.style.transform ?? null,
+            publishedTransform,
             publishedTransformMatrixMaxDelta: Math.max(...publishedTransformMatrix.map((value, index) =>
               Math.abs(value - expectedTransformMatrix[index]))),
             paletteIndices: playback.colorRows[tick],
@@ -103,7 +108,7 @@ export async function captureBrowserMengerFrames(options = {}) {
             preparedLightingAddressCount: publishedAddresses.length,
             mismatchedLightingAddressCount: mismatchedAddresses.length,
             mismatchedLightingAddresses: mismatchedAddresses,
-            stats: debug.stats(),
+            stats: deterministicStats,
             errors: debug.errors(),
             stableDom: debug.assertStableDomIdentity(),
           };

@@ -81,6 +81,7 @@ export function mountPreparedPolycssSnapshot({
   }
   const rotationAnimation = rotationAnimations[0];
   rotationAnimation.pause();
+  rotationAnimation.cancel();
   const stableNodes = Object.freeze([mountedCamera, mountedScene, ...leaves]);
   const axisLeafCounts = sceneData.meshDescriptors?.map((mesh) => mesh.polygonCount);
   if (!Array.isArray(axisLeafCounts) || axisLeafCounts.length !== 3 ||
@@ -120,7 +121,7 @@ export function mountPreparedPolycssSnapshot({
     camera: mountedCamera,
     scene: mountedScene,
     publicationRoot: mountedScene,
-    rotationAnimation,
+    rotationAnimation: null,
     axisLeaves,
     leaves: Object.freeze(leaves),
     assertStableDomIdentity,
@@ -140,7 +141,7 @@ export function mountPreparedPolycssSnapshot({
         preparedPlaneAtlasUniqueUrlCount: renderAtlases.length,
         preparedPlaneAtlasProfile: planeAtlasProfile,
         preparedLightingPresentation: lightingPresentation,
-        preparedCompositorRotationAnimationCount: 1,
+        preparedCompositorRotationAnimationCount: 0,
         preparedPlaneAtlasDecodedBytes:
           renderAtlases.reduce((sum, atlas) => sum + atlas.decodedBytes, 0),
         preparedPlaneAtlasAssetBytes:

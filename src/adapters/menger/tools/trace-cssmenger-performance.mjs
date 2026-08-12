@@ -179,6 +179,9 @@ try {
   const longTasks = sample.longTasks.filter((entry) => Number.isFinite(entry.duration));
   const calibrationFrameIntervals = calibrationSample.frameIntervals.filter((value) => Number.isFinite(value) && value >= 0);
   const calibrationLongTasks = calibrationSample.longTasks.filter((entry) => Number.isFinite(entry.duration));
+  const calibrationFrameSummary = summarizeDurations(calibrationFrameIntervals);
+  const missedDisplayFrameThresholdMilliseconds =
+    calibrationFrameSummary.p50Milliseconds * 1.5;
   const steadyImageDecodes = summarizeTraceWindowEvents(
     traceEvents,
     steadyTraceStartMark,
@@ -186,20 +189,24 @@ try {
     "ImageDecodeTask",
   );
   const summary = {
-    schema: "cssmenger-browser-performance-trace@2",
+    schema: "cssmenger-browser-performance-trace@4",
     capturedAt: new Date().toISOString(),
     route,
     build: "vite-production-preview",
     browser: { name: "Google Chrome", version: browserVersion, channel: "chrome", headless: true },
     viewport: { ...viewport, deviceScaleFactor },
     cpuThrottlingRate,
+    displayCadence: {
+      calibratedFrameIntervalMilliseconds: calibrationFrameSummary.p50Milliseconds,
+      missedFrameThresholdMilliseconds: missedDisplayFrameThresholdMilliseconds,
+    },
     startup: {
       ...startup,
       readyWallMilliseconds,
     },
     pausedCalibration: {
       durationMilliseconds: calibrationDurationMilliseconds,
-      requestAnimationFrame: summarizeDurations(calibrationFrameIntervals),
+      requestAnimationFrame: calibrationFrameSummary,
       overBudgetFrameCount: {
         above16_7Milliseconds: calibrationFrameIntervals.filter((value) => value > 16.7).length,
         above33_3Milliseconds: calibrationFrameIntervals.filter((value) => value > 33.3).length,
@@ -231,7 +238,10 @@ try {
       lightingAddressWriteExpectedFromPreparedAverage:
         (afterState.state.tick - beforeState.state.tick) *
         afterState.stats.preparedLightingAddressWritesPerScheduledTick.average,
-      schedulerCallbackCount: null,
+      schedulerCallbackCount:
+        afterState.stats.runtimePreparedTimelineCallbackCount -
+        beforeState.stats.runtimePreparedTimelineCallbackCount,
+      schedulerTransport: afterState.stats.runtimeSchedulerTransport,
       preparedLightingAddressUpdateCount: afterState.stats.preparedLightingAddressUpdateCount,
       preparedRedundantLightingAddressWriteCountRemoved:
         afterState.stats.preparedRedundantLightingAddressWriteCountRemoved,
@@ -239,6 +249,8 @@ try {
       runtimeLightingAddressComparisonCount: afterState.stats.runtimeLightingAddressComparisonCount,
       requestAnimationFrame: summarizeDurations(frameIntervals),
       overBudgetFrameCount: {
+        aboveCalibratedMissedFrameThreshold:
+          frameIntervals.filter((value) => value > missedDisplayFrameThresholdMilliseconds).length,
         above16_7Milliseconds: frameIntervals.filter((value) => value > 16.7).length,
         above33_3Milliseconds: frameIntervals.filter((value) => value > 33.3).length,
         atLeast50Milliseconds: frameIntervals.filter((value) => value >= 50).length,
@@ -271,6 +283,12 @@ try {
       path: tracePath,
       eventCount: traceEvents.length,
       rendererMainThread: summarizeRendererMainThread(traceEvents),
+      steadyFramePipeline: summarizeSteadyFramePipeline(
+        traceEvents,
+        steadyTraceStartMark,
+        steadyTraceEndMark,
+        missedDisplayFrameThresholdMilliseconds,
+      ),
       steadyImageDecodes,
     },
     errors: [...pageErrors, ...startup.errors, ...afterState.errors],
@@ -286,6 +304,23 @@ try {
       summary.steadyAnimation.runtimeLightingAddressComparisonCount === 0,
     noLongTasksDuringSteadyAnimation: summary.steadyAnimation.longTasks.count === 0,
     noFiftyMillisecondFrames: summary.steadyAnimation.overBudgetFrameCount.atLeast50Milliseconds === 0,
+    continuousSchedulerCallbacksCoverPreparedStates:
+      summary.steadyAnimation.schedulerTransport ===
+        "continuous-requestAnimationFrame-prepared-timeline-publication" &&
+      summary.steadyAnimation.schedulerCallbackCount >
+        summary.steadyAnimation.preparedStateAdvanceCount,
+    noDroppedOrSmoothnessAffectingCompositorFrames:
+      (summary.trace.steadyFramePipeline.pipeline.states.STATE_DROPPED ?? 0) === 0 &&
+      summary.trace.steadyFramePipeline.pipeline.affectsSmoothnessCount === 0,
+    noMissedDisplayCallbacks:
+      summary.steadyAnimation.overBudgetFrameCount
+        .aboveCalibratedMissedFrameThreshold === 0,
+    noFortyFiveMillisecondPublicationGaps:
+      summary.trace.steadyFramePipeline.compositorDrawFrame.overBudgetFrameCount
+        .above45Milliseconds === 0,
+    noFiftyMillisecondCompositorDrawGaps:
+      summary.trace.steadyFramePipeline.compositorDrawFrame.overBudgetFrameCount
+        .atLeast50Milliseconds === 0,
     noImageDecodesDuringSteadyAnimation: summary.trace.steadyImageDecodes.count === 0,
     noErrors: summary.errors.length === 0,
   };
@@ -341,11 +376,7 @@ function summarizeRendererMainThread(events) {
 }
 
 function summarizeTraceWindowEvents(events, startMark, endMark, eventName) {
-  const start = events.find((event) => event.name === startMark)?.ts;
-  const end = events.find((event) => event.name === endMark)?.ts;
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
-    throw new Error(`Trace is missing the ${startMark}..${endMark} measurement window`);
-  }
+  const { start, end } = traceWindowBounds(events, startMark, endMark);
   const durations = events
     .filter((event) => {
       if (event.name !== eventName || event.ph !== "X" || !Number.isFinite(event.ts) || !Number.isFinite(event.dur)) return false;
@@ -357,6 +388,74 @@ function summarizeTraceWindowEvents(events, startMark, endMark, eventName) {
     totalDurationMilliseconds: sum(durations),
     maximumDurationMilliseconds: maximum(durations),
   };
+}
+
+function summarizeSteadyFramePipeline(
+  events,
+  startMark,
+  endMark,
+  missedDisplayFrameThresholdMilliseconds,
+) {
+  const { start, end } = traceWindowBounds(events, startMark, endMark);
+  const threadNames = new Map(events
+    .filter((event) => event.ph === "M" && event.name === "thread_name")
+    .map((event) => [`${event.pid}:${event.tid}`, event.args?.name ?? "unnamed"]));
+  const reporters = [];
+  const reporterKeys = new Set();
+  for (const event of events) {
+    if (event.name !== "PipelineReporter" || event.ph !== "b" ||
+        !Number.isFinite(event.ts) || event.ts < start || event.ts > end) continue;
+    const report = event.args?.frame_reporter;
+    const key = `${event.ts}:${report?.frame_sequence}:${report?.state}`;
+    if (reporterKeys.has(key)) continue;
+    reporterKeys.add(key);
+    reporters.push(event);
+  }
+  reporters.sort((left, right) => left.ts - right.ts);
+  const states = {};
+  for (const event of reporters) {
+    const state = event.args?.frame_reporter?.state ?? "STATE_UNKNOWN";
+    states[state] = (states[state] ?? 0) + 1;
+  }
+  const drawTimes = events
+    .filter((event) => event.name === "DrawFrame" && Number.isFinite(event.ts) &&
+      event.ts >= start && event.ts <= end &&
+      threadNames.get(`${event.pid}:${event.tid}`) === "Compositor")
+    .map((event) => event.ts)
+    .sort((left, right) => left - right);
+  const drawIntervals = drawTimes.slice(1).map((value, index) => (value - drawTimes[index]) / 1000);
+  return {
+    pipeline: {
+      count: reporters.length,
+      states,
+      noUpdateDesiredRate: reporters.length
+        ? (states.STATE_NO_UPDATE_DESIRED ?? 0) / reporters.length
+        : null,
+      affectsSmoothnessCount: reporters.filter((event) =>
+        event.args?.frame_reporter?.affects_smoothness === true).length,
+    },
+    compositorDrawFrame: {
+      count: drawTimes.length,
+      intervals: summarizeDurations(drawIntervals),
+      overBudgetFrameCount: {
+        aboveCalibratedMissedFrameThreshold:
+          drawIntervals.filter((value) => value > missedDisplayFrameThresholdMilliseconds).length,
+        above16_7Milliseconds: drawIntervals.filter((value) => value > 16.7).length,
+        above33_3Milliseconds: drawIntervals.filter((value) => value > 33.3).length,
+        above45Milliseconds: drawIntervals.filter((value) => value > 45).length,
+        atLeast50Milliseconds: drawIntervals.filter((value) => value >= 50).length,
+      },
+    },
+  };
+}
+
+function traceWindowBounds(events, startMark, endMark) {
+  const start = events.find((event) => event.name === startMark)?.ts;
+  const end = events.find((event) => event.name === endMark)?.ts;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    throw new Error(`Trace is missing the ${startMark}..${endMark} measurement window`);
+  }
+  return { start, end };
 }
 
 function percentile(sorted, fraction) {

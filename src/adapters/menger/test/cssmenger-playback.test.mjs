@@ -399,7 +399,7 @@ test("frozen mobile lighting initializes every leaf once and never publishes lig
   }
 });
 
-test("compositor time owns lighting state and collapses missed prepared states into one publication", () => {
+test("anchored prepared time publishes without rAF and collapses missed states once", () => {
   const originalHTMLElement = globalThis.HTMLElement;
   let requestedFrame = null;
   let requestedDelay = null;
@@ -464,20 +464,19 @@ test("compositor time owns lighting state and collapses missed prepared states i
     assert.equal(animationPlayCount, 1);
     animationCurrentTime = 29;
     requestedDelay();
-    requestedFrame(29);
     assert.equal(player.tick, 0);
     assert.equal(lightingAddressWrites, 42);
+    assert.equal(requestedFrame, null);
 
     animationCurrentTime = 30;
     now = 33;
-    requestedFrame(33);
+    requestedDelay();
     assert.equal(player.tick, 1);
     assert.equal(lightingAddressWrites, 84);
 
     animationCurrentTime = 270;
     now = 270;
     requestedDelay();
-    requestedFrame(270);
     assert.equal(player.tick, 9);
     assert.equal(lightingAddressWrites, 126);
     assert.equal(leaves[0].style.backgroundPosition, "0px -729px");
@@ -487,7 +486,6 @@ test("compositor time owns lighting state and collapses missed prepared states i
     animationCurrentTime = 330;
     now = 330;
     requestedDelay();
-    requestedFrame(330);
     assert.equal(player.tick, 11);
     assert.equal(lightingAddressWrites, 168);
     assert.equal(player.stats().preparedCollapsedLightingResyncCount, 2);
@@ -495,32 +493,34 @@ test("compositor time owns lighting state and collapses missed prepared states i
     animationCurrentTime = 360;
     now = 360;
     requestedDelay();
-    requestedFrame(360);
     assert.equal(player.tick, 0);
     assert.equal(lightingAddressWrites, 210);
 
     animationCurrentTime = 390;
     now = 390;
     requestedDelay();
-    requestedFrame(390);
     player.pause();
     assert.equal(player.tick, 1);
     assert.equal(lightingAddressWrites, 252);
     assert.equal(leaves[0].style.backgroundPosition, "0px -81px");
     assert.equal(animationCurrentTimeWrites, 1);
-    assert.equal(player.stats().runtimeCompositorClockReadCount, 6);
+    assert.equal(player.stats().runtimePreparedTimelineCallbackCount, 6);
     assert.equal(player.stats().preparedSchedulerCatchUpMode,
-      "compositor-clock-adjacent-or-collapsed-prepared-resync");
+      "anchored-prepared-timeline-adjacent-or-collapsed-resync");
+    assert.equal(player.stats().runtimeSchedulerTransport,
+      "anchored-deadline-setTimeout-prepared-timeline-publication");
   } finally {
     if (originalHTMLElement === undefined) delete globalThis.HTMLElement;
     else globalThis.HTMLElement = originalHTMLElement;
   }
 });
 
-test("late playback still advances one adjacent prepared state per scheduled draw", () => {
+test("continuous rAF publishes only changed prepared states and collapses missed states atomically", () => {
   const originalHTMLElement = globalThis.HTMLElement;
   let requestedFrame = null;
-  let requestedDelay = null;
+  let requestedFrameCount = 0;
+  let canceledFrameCount = 0;
+  let now = 0;
   let modelTransformWrites = 0;
   let lightingAddressWrites = 0;
   class FakeHTMLElement {
@@ -569,31 +569,58 @@ test("late playback still advances one adjacent prepared state per scheduled dra
       planeAtlas: fakeSparseAtlas(playback.frontFacingSchedule),
       publicationRoot: new FakeHTMLElement(),
       leaves,
-      readNow: () => 0,
-      requestFrame: (callback) => { requestedFrame = callback; return 1; },
-      cancelFrame: () => {},
-      requestDelay: (callback) => { requestedDelay = callback; return 2; },
-      cancelDelay: () => {},
+      readNow: () => now,
+      requestFrame: (callback) => {
+        requestedFrame = callback;
+        requestedFrameCount += 1;
+        return requestedFrameCount;
+      },
+      cancelFrame: () => { canceledFrameCount += 1; },
+      requestDelay: () => { throw new Error("atomic playback requested a timer"); },
+      cancelDelay: () => { throw new Error("atomic playback canceled a timer"); },
     });
+    const fireFrame = (timestamp) => {
+      const callback = requestedFrame;
+      requestedFrame = null;
+      callback(timestamp);
+    };
     player.resume();
-    requestedDelay();
-    requestedFrame(125);
+    assert.equal(requestedFrameCount, 1);
+    fireFrame(16);
+    assert.equal(player.tick, 0);
+    assert.equal(modelTransformWrites, 1);
+    assert.equal(lightingAddressWrites, 42);
+    fireFrame(31);
     assert.equal(player.tick, 1);
     assert.equal(modelTransformWrites, 2);
     assert.equal(lightingAddressWrites, 84);
     assert.equal(leaves[0].style.backgroundPosition, "0px -81px");
-    requestedDelay();
-    requestedFrame(245);
-    player.pause();
+    fireFrame(47);
+    assert.equal(player.tick, 1);
+    assert.equal(modelTransformWrites, 2);
+    assert.equal(lightingAddressWrites, 84);
+    fireFrame(61);
     assert.equal(player.tick, 2);
     assert.equal(modelTransformWrites, 3);
     assert.equal(lightingAddressWrites, 126);
-    assert.equal(leaves[0].style.backgroundPosition, "0px -162px");
-    assert.equal(player.stats().preparedSchedulerCatchUpMode, "one-adjacent-prepared-state-no-skip");
+    fireFrame(245);
+    assert.equal(player.tick, 8);
+    assert.equal(modelTransformWrites, 4);
+    assert.equal(lightingAddressWrites, 168);
+    assert.equal(leaves[0].style.backgroundPosition, "0px -648px");
+    assert.equal(player.stats().preparedCollapsedLightingResyncCount, 1);
+    assert.equal(player.stats().preparedMaximumCollapsedLightingStateCount, 6);
+    player.pause();
+    assert.equal(canceledFrameCount, 1);
+    assert.equal(player.stats().runtimePreparedTimelineCallbackCount, 5);
+    assert.equal(player.stats().preparedSchedulerCatchUpMode,
+      "anchored-prepared-timeline-adjacent-or-collapsed-resync");
+    assert.equal(player.stats().runtimeSchedulerTransport,
+      "continuous-requestAnimationFrame-prepared-timeline-publication");
     player.setTick(11);
+    now = 300;
     player.resume();
-    requestedDelay();
-    requestedFrame(400);
+    fireFrame(330);
     assert.equal(player.tick, 0);
     assert.equal(player.paused, false);
     player.pause();

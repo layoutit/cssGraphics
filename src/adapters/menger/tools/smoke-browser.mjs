@@ -170,20 +170,16 @@ try {
     const seamEvidence = await page.evaluate(() => {
       const debug = globalThis.__cssMengerDebug;
       const scene = document.querySelector(".polycss-camera > .polycss-scene");
-      const animation = scene.getAnimations()
-        .find((candidate) => candidate.animationName === "cssmenger-prepared-rotation");
-      const frameMilliseconds = debug.scene.playback.sourceFrameDelayMilliseconds;
       const finalStateIndex = debug.scene.playback.stateCount - 1;
-      const cycleMilliseconds = debug.scene.playback.stateCount * frameMilliseconds;
       debug.pause();
-      const matrixAt = (currentTime) => {
-        animation.currentTime = currentTime;
+      const matrixAt = (stateIndex) => {
+        debug.seek(stateIndex);
         return [...new DOMMatrix(getComputedStyle(scene).transform).toFloat64Array()];
       };
       const zero = matrixAt(0);
-      const before = matrixAt(cycleMilliseconds - frameMilliseconds);
-      const boundary = matrixAt(cycleMilliseconds);
-      const after = matrixAt(cycleMilliseconds + frameMilliseconds);
+      const before = matrixAt(finalStateIndex);
+      const boundary = matrixAt(0);
+      const after = matrixAt(1);
       const incomingVelocity = boundary.map((value, index) => value - before[index]);
       const outgoingVelocity = after.map((value, index) => value - boundary[index]);
       const incomingMagnitude = Math.hypot(...incomingVelocity);
@@ -269,12 +265,14 @@ try {
         evidence.stats.preparedLightingAtlasAssetCount !== 1 ||
         evidence.stats.preparedCssOpacityWriteCountPerScheduledTick !== 0 ||
         evidence.stats.preparedSchedulerCatchUpMode !==
-          "compositor-clock-adjacent-or-collapsed-prepared-resync" ||
+          "anchored-prepared-timeline-adjacent-or-collapsed-resync" ||
+        evidence.stats.runtimeSchedulerTransport !==
+          "continuous-requestAnimationFrame-prepared-timeline-publication" ||
         evidence.stats.preparedLoopPresentationMode !== "prepared-forward-cyclic-c2-no-turnaround-no-reset" ||
         evidence.stats.preparedCompositorRotationMode !==
-          "prepared-css-keyframes-on-existing-scene-node" ||
-        evidence.stats.runtimeRotationStyleWriteCountPerScheduledTick !== 0 ||
-        evidence.stats.preparedCompositorRotationAnimationCount !== 1 ||
+          "prepared-inline-transform-publication" ||
+        evidence.stats.runtimeRotationStyleWriteCountPerScheduledTick !== 1 ||
+        evidence.stats.preparedCompositorRotationAnimationCount !== 0 ||
         evidence.stats.preparedFlatSceneLeafLightingSeparation !== true ||
         evidence.stats.retainedRotationRootCount !== 0 || evidence.stats.retainedLightingRootCount !== 0 ||
         evidence.stats.runtimeLightingCalculationCount !== 0 || evidence.stats.runtimeGeometryConstructionCount !== 0) {
@@ -412,8 +410,8 @@ try {
         mobileEvidence.transformAnimationDuration !== "46.08s" ||
         mobileEvidence.transformAnimationTimingFunction !== "linear" ||
         mobileEvidence.transformAnimationDirection !== "normal" ||
-        mobileEvidence.transformAnimationCount !== 1 ||
-        mobileEvidence.transformAnimationPlayState !== "paused" ||
+        mobileEvidence.transformAnimationCount !== 0 ||
+        mobileEvidence.transformAnimationPlayState !== undefined ||
         requestedDesktopAtlases.length !== 0 || requestedMobileAtlases.length !== 1) {
       throw new Error(`cssMenger responsive mobile atlas failed: ${JSON.stringify({
         mobileEvidence, requestedDesktopAtlases, requestedMobileAtlases, mobileErrors,

@@ -48,15 +48,13 @@ export function createCssmengerPreparedPlayer({
   const baseBackgroundPositions = cssOpacityMode ? Array(leaves.length).fill("0px 0px") : null;
   const currentSlotIndices = new Int32Array(leaves.length).fill(-1);
   const deferredAddressLeaves = new Uint8Array(leaves.length);
-  const schedulerLeadMilliseconds = compositorRotationMode
-    ? 1
-    : Math.min(4, frameMilliseconds / 4);
   let paused = true;
   let tick = playback.initial.stateIndex;
   let animationFrame = null;
   let delay = null;
-  let nextFrameAt = null;
-  let compositorClockReadCount = 0;
+  let preparedTimelineOrigin = null;
+  let nextCompositorBoundary = null;
+  let preparedTimelineCallbackCount = 0;
   let collapsedLightingResyncCount = 0;
   let maximumCollapsedStateCount = 0;
 
@@ -201,6 +199,7 @@ export function createCssmengerPreparedPlayer({
       stateIndex = (stateIndex + 1) % playback.stateCount;
       publishPreparedAddressState(stateIndex, deferredAddressLeaves);
     }
+    publishPreparedRotation(targetStateIndex);
     if (cssOpacityMode) {
       publishCssOpacityBasePositions(targetStateIndex);
     } else {
@@ -217,8 +216,9 @@ export function createCssmengerPreparedPlayer({
     return tick;
   }
 
-  function publishCompositorClockState(stateIndex) {
+  function publishPreparedTimelineState(stateIndex) {
     if (frozenLighting) {
+      publishPreparedRotation(stateIndex);
       tick = stateIndex;
       return tick;
     }
@@ -249,38 +249,33 @@ export function createCssmengerPreparedPlayer({
 
   function scheduleNextDraw() {
     if (paused || animationFrame !== null || delay !== null) return;
-    const animationTime = compositorRotationMode ? Number(rotationAnimation.currentTime) : null;
-    const nextAnimationBoundary = compositorRotationMode && Number.isFinite(animationTime)
-      ? (Math.floor(animationTime / frameMilliseconds) + 1) * frameMilliseconds
-      : null;
-    const wait = Math.max(0, (nextAnimationBoundary ?? nextFrameAt) -
-      (nextAnimationBoundary === null ? readNow() : animationTime) - schedulerLeadMilliseconds);
-    if (wait <= 1) {
-      animationFrame = requestFrame(loopFast);
+    if (compositorRotationMode) {
+      const animationTime = readNow() - preparedTimelineOrigin;
+      if (!Number.isFinite(nextCompositorBoundary)) {
+        nextCompositorBoundary = (Math.floor(animationTime / frameMilliseconds) + 1) * frameMilliseconds;
+      }
+      const wait = Math.max(0, nextCompositorBoundary - animationTime);
+      delay = requestDelay(() => {
+        delay = null;
+        if (!paused) loopFast(readNow());
+      }, Math.max(1, Math.ceil(wait)));
       return;
     }
-    delay = requestDelay(() => {
-      delay = null;
-      if (!paused) animationFrame = requestFrame(loopFast);
-    }, wait);
+    animationFrame = requestFrame(loopFast);
   }
 
   function loopFast(timestamp) {
     animationFrame = null;
     if (paused) return;
+    preparedTimelineCallbackCount += 1;
+    const animationTime = timestamp - preparedTimelineOrigin;
+    const stateCode = preparedStateCodeForAnimationTime(animationTime);
+    if (stateCode !== null) publishPreparedTimelineState(stateCode);
     if (compositorRotationMode) {
-      compositorClockReadCount += 1;
-      const stateCode = preparedStateCodeForAnimationTime(rotationAnimation.currentTime);
-      if (stateCode !== null) {
-        publishCompositorClockState(stateCode);
-      }
-    } else {
-      advanceOne();
+      nextCompositorBoundary =
+        (Math.floor(animationTime / frameMilliseconds) + 1) * frameMilliseconds;
     }
     if (paused) return;
-    if (!compositorRotationMode) {
-      nextFrameAt = Math.max(nextFrameAt + frameMilliseconds, timestamp);
-    }
     scheduleNextDraw();
   }
 
@@ -298,7 +293,8 @@ export function createCssmengerPreparedPlayer({
     pause() {
       paused = true;
       if (compositorRotationMode) rotationAnimation.pause();
-      nextFrameAt = null;
+      preparedTimelineOrigin = null;
+      nextCompositorBoundary = null;
       if (animationFrame !== null) cancelFrame(animationFrame);
       if (delay !== null) cancelDelay(delay);
       animationFrame = null;
@@ -308,8 +304,17 @@ export function createCssmengerPreparedPlayer({
     resume() {
       if (!paused || (!playback.loop && tick >= playback.segmentEndState)) return tick;
       paused = false;
-      nextFrameAt = compositorRotationMode ? null : readNow() + frameMilliseconds;
-      if (compositorRotationMode) rotationAnimation.play();
+      const now = readNow();
+      if (compositorRotationMode) {
+        const animationTime = Number(rotationAnimation.currentTime);
+        preparedTimelineOrigin = now -
+          (Number.isFinite(animationTime) ? animationTime : tick * frameMilliseconds);
+        nextCompositorBoundary =
+          (Math.floor((now - preparedTimelineOrigin) / frameMilliseconds) + 1) * frameMilliseconds;
+        rotationAnimation.play();
+      } else {
+        preparedTimelineOrigin = now - tick * frameMilliseconds;
+      }
       scheduleNextDraw();
       return tick;
     },
@@ -339,10 +344,11 @@ export function createCssmengerPreparedPlayer({
         sourceFrameDelayMilliseconds: frameMilliseconds,
         preparedTimelineStateCount: playback.stateCount,
         preparedPaletteColorCount: playback.palette.length,
-        preparedSchedulerCatchUpMode: compositorRotationMode
-          ? "compositor-clock-adjacent-or-collapsed-prepared-resync"
-          : "one-adjacent-prepared-state-no-skip",
-        runtimeCompositorClockReadCount: compositorClockReadCount,
+        preparedSchedulerCatchUpMode: "anchored-prepared-timeline-adjacent-or-collapsed-resync",
+        runtimeSchedulerTransport: compositorRotationMode
+          ? "anchored-deadline-setTimeout-prepared-timeline-publication"
+          : "continuous-requestAnimationFrame-prepared-timeline-publication",
+        runtimePreparedTimelineCallbackCount: preparedTimelineCallbackCount,
         preparedCollapsedLightingResyncCount: collapsedLightingResyncCount,
         preparedMaximumCollapsedLightingStateCount: maximumCollapsedStateCount,
         preparedLoopPresentationMode: playback.loop

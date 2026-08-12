@@ -174,7 +174,10 @@ function preparedCssOpacityStyles({ baseAtlas, shadowAtlas }) {
 function validResponsiveAtlas(atlas, profile) {
   const suffix = profile === "mobile" ? "-mobile" : "";
   return atlas?.profile === profile && Number.isSafeInteger(atlas.width) && Number.isSafeInteger(atlas.height) &&
-    new RegExp(`^/cssmenger/assets/lighting-grid${suffix}-[a-f0-9]{64}\\.avif$`, "u").test(atlas.assetUrl);
+    new RegExp(`^/cssmenger/assets/lighting-grid${suffix}-[a-f0-9]{64}\\.webp$`, "u").test(atlas.assetUrl) &&
+    atlas.presentation === "source-rgb" && atlas.mimeType === "image/webp" &&
+    atlas.encoding === "WebP-lossless-transcode-of-AVIF-q83-alpha-lossless-yuv444" &&
+    atlas.lossless === true;
 }
 
 function atlasSummary(atlas) {
@@ -204,7 +207,7 @@ async function pruneUnreferencedGeneratedAtlasAssets() {
     }
   }
   const assetsRoot = join(generatedPublicRoot, "assets");
-  const generatedAtlasName = /^(?:lighting-grid(?:-mobile)?|lighting-shadow-grid)-[a-f0-9]{64}\.avif$|^planes-opacity-(?:base|mask|shadow)-[a-f0-9]{64}\.png$/u;
+  const generatedAtlasName = /^(?:lighting-grid(?:-mobile)?-[a-f0-9]{64}\.webp|lighting-shadow-grid-[a-f0-9]{64}\.avif|planes-opacity-(?:base|mask|shadow)-[a-f0-9]{64}\.png)$/u;
   for (const filename of await readdir(assetsRoot)) {
     if (generatedAtlasName.test(filename) && !retainedUrls.has(`/cssmenger/assets/${filename}`)) {
       await rm(join(assetsRoot, filename));

@@ -148,10 +148,14 @@ export async function buildPreparedMengerSparseLightingAtlas({
     .update(addressLeafIndexBytes)
     .update(addressSlotIndexBytes)
     .digest("hex");
-  const bytes = await sharp(rgba, {
+  const avifBytes = await sharp(rgba, {
     raw: { width, height, channels: 4 },
     limitInputPixels: false,
   }).avif({ quality: 83, effort: 6, chromaSubsampling: "4:4:4" }).toBuffer();
+  const sourceRgbPresentation = presentation === "source-rgb";
+  const bytes = sourceRgbPresentation
+    ? await encodeLosslessWebpFromPreparedAvif(avifBytes, width, height)
+    : avifBytes;
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const contract = Object.freeze({
     schema: "cssmenger-prepared-sparse-leaf-lighting-atlas@1",
@@ -162,14 +166,20 @@ export async function buildPreparedMengerSparseLightingAtlas({
     profile,
     assetUrl: presentation === "css-black-alpha"
       ? `/cssmenger/assets/lighting-shadow-grid-${sha256}.avif`
-      : `/cssmenger/assets/lighting-grid${profile === "mobile" ? "-mobile" : ""}-${sha256}.avif`,
+      : `/cssmenger/assets/lighting-grid${profile === "mobile" ? "-mobile" : ""}-${sha256}.webp`,
     assetSha256: sha256,
-    encoding: "AVIF-lossy-q83-alpha-lossless-yuv444",
-    mimeType: "image/avif",
+    encoding: sourceRgbPresentation
+      ? "WebP-lossless-transcode-of-AVIF-q83-alpha-lossless-yuv444"
+      : "AVIF-lossy-q83-alpha-lossless-yuv444",
+    mimeType: sourceRgbPresentation ? "image/webp" : "image/avif",
+    lossless: sourceRgbPresentation,
     quality: 83,
     alphaQuality: 100,
     chromaSubsampling: "4:4:4",
     exactPreparedPixels: false,
+    visiblePixelIdentity: sourceRgbPresentation
+      ? "byte-exact-to-prepared-avif-decode-where-alpha-is-nonzero"
+      : "prepared-avif-decode",
     width,
     height,
     decodedBytes: width * height * 4,
@@ -259,6 +269,37 @@ export async function buildPreparedMengerSparseLightingAtlas({
 
 export function preparedMengerSparseLightingAtlasBytes(contract) {
   return preparedBytes.get(contract) ?? null;
+}
+
+async function encodeLosslessWebpFromPreparedAvif(avifBytes, width, height) {
+  const decodedRgba = await sharp(avifBytes, { limitInputPixels: false })
+    .ensureAlpha()
+    .raw()
+    .toBuffer();
+  if (decodedRgba.length !== width * height * 4) {
+    throw new Error("Prepared cssMenger AVIF transcode dimensions drifted");
+  }
+  const webpBytes = await sharp(decodedRgba, {
+    raw: { width, height, channels: 4 },
+    limitInputPixels: false,
+  }).webp({ lossless: true, effort: 6 }).toBuffer();
+  const decodedWebp = await sharp(webpBytes, { limitInputPixels: false })
+    .ensureAlpha()
+    .raw()
+    .toBuffer();
+  if (decodedWebp.length !== decodedRgba.length) {
+    throw new Error("Prepared cssMenger WebP transcode dimensions drifted");
+  }
+  for (let offset = 0; offset < decodedRgba.length; offset += 4) {
+    if (decodedRgba[offset + 3] !== decodedWebp[offset + 3] ||
+        decodedRgba[offset + 3] !== 0 && (
+          decodedRgba[offset] !== decodedWebp[offset] ||
+          decodedRgba[offset + 1] !== decodedWebp[offset + 1] ||
+          decodedRgba[offset + 2] !== decodedWebp[offset + 2])) {
+      throw new Error("Prepared cssMenger WebP changed a visible AVIF pixel");
+    }
+  }
+  return webpBytes;
 }
 
 function prepareExactDeltaAddressSchedule({

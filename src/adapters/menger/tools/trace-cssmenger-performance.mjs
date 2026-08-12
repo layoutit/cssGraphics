@@ -17,6 +17,8 @@ const viewport = {
 };
 const deviceScaleFactor = positiveNumber("CSSMENGER_PERF_DEVICE_SCALE_FACTOR", 1);
 const cpuThrottlingRate = positiveNumber("CSSMENGER_PERF_CPU_THROTTLE", 1);
+const steadyTraceStartMark = "cssmenger-steady-animation-start";
+const steadyTraceEndMark = "cssmenger-steady-animation-end";
 const routeQuery = process.env.CSSMENGER_PERF_ROUTE_QUERY ?? "";
 if (routeQuery && !/^\?[a-z0-9=&-]+$/u.test(routeQuery)) {
   throw new Error("CSSMENGER_PERF_ROUTE_QUERY must be a safe query string beginning with ?");
@@ -149,12 +151,14 @@ try {
     state: globalThis.__cssMengerDebug.state(),
     stats: globalThis.__cssMengerDebug.stats(),
   }));
-  await page.evaluate(() => {
+  await page.evaluate((traceStartMark) => {
+    performance.mark(traceStartMark);
     globalThis.__cssMengerPerformanceSample.start();
     globalThis.__cssMengerDebug.resume();
-  });
+  }, steadyTraceStartMark);
   await page.waitForTimeout(durationMilliseconds);
-  const sampledState = await page.evaluate(() => {
+  const sampledState = await page.evaluate((traceEndMark) => {
+    performance.mark(traceEndMark);
     const sample = globalThis.__cssMengerPerformanceSample.stop();
     return {
       sample,
@@ -163,7 +167,7 @@ try {
       stableDom: globalThis.__cssMengerDebug.assertStableDomIdentity(),
       errors: globalThis.__cssMengerDebug.errors(),
     };
-  });
+  }, steadyTraceEndMark);
   const afterMetrics = metricMap(await cdp.send("Performance.getMetrics"));
   await cdp.send("Tracing.end");
   await tracingComplete;
@@ -175,6 +179,12 @@ try {
   const longTasks = sample.longTasks.filter((entry) => Number.isFinite(entry.duration));
   const calibrationFrameIntervals = calibrationSample.frameIntervals.filter((value) => Number.isFinite(value) && value >= 0);
   const calibrationLongTasks = calibrationSample.longTasks.filter((entry) => Number.isFinite(entry.duration));
+  const steadyImageDecodes = summarizeTraceWindowEvents(
+    traceEvents,
+    steadyTraceStartMark,
+    steadyTraceEndMark,
+    "ImageDecodeTask",
+  );
   const summary = {
     schema: "cssmenger-browser-performance-trace@2",
     capturedAt: new Date().toISOString(),
@@ -261,6 +271,7 @@ try {
       path: tracePath,
       eventCount: traceEvents.length,
       rendererMainThread: summarizeRendererMainThread(traceEvents),
+      steadyImageDecodes,
     },
     errors: [...pageErrors, ...startup.errors, ...afterState.errors],
   };
@@ -275,6 +286,7 @@ try {
       summary.steadyAnimation.runtimeLightingAddressComparisonCount === 0,
     noLongTasksDuringSteadyAnimation: summary.steadyAnimation.longTasks.count === 0,
     noFiftyMillisecondFrames: summary.steadyAnimation.overBudgetFrameCount.atLeast50Milliseconds === 0,
+    noImageDecodesDuringSteadyAnimation: summary.trace.steadyImageDecodes.count === 0,
     noErrors: summary.errors.length === 0,
   };
   await writeFile(tracePath, `${JSON.stringify({ traceEvents }, null, 0)}\n`);
@@ -326,6 +338,25 @@ function summarizeRendererMainThread(events) {
     totals[event.name] = row;
   }
   return { threadCount: mainThreads.size, events: totals };
+}
+
+function summarizeTraceWindowEvents(events, startMark, endMark, eventName) {
+  const start = events.find((event) => event.name === startMark)?.ts;
+  const end = events.find((event) => event.name === endMark)?.ts;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    throw new Error(`Trace is missing the ${startMark}..${endMark} measurement window`);
+  }
+  const durations = events
+    .filter((event) => {
+      if (event.name !== eventName || event.ph !== "X" || !Number.isFinite(event.ts) || !Number.isFinite(event.dur)) return false;
+      return event.ts < end && event.ts + event.dur > start;
+    })
+    .map((event) => event.dur / 1000);
+  return {
+    count: durations.length,
+    totalDurationMilliseconds: sum(durations),
+    maximumDurationMilliseconds: maximum(durations),
+  };
 }
 
 function percentile(sorted, fraction) {

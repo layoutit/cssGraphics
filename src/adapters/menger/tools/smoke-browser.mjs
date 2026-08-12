@@ -258,7 +258,7 @@ try {
         evidence.stats.runtimeDomMutationCount !== 0 || evidence.stats.runtimeDomGrowth !== false ||
         evidence.stats.preparedPlaneAtlasProfile !== "desktop" ||
         evidence.stats.preparedPlaneAtlasAssetBytes !== evidence.expectedAssetBytes ||
-        evidence.stats.preparedPlaneAtlasDecodedBytes !== 90_121_896 ||
+        evidence.stats.preparedPlaneAtlasDecodedBytes !== 89_812_800 ||
         evidence.stats.preparedPlaneAtlasCssImageBinding !== "prepared-direct-stylesheet-url" ||
         evidence.stats.preparedColorPublicationMode !==
           "prepared-held-lighting-sample-plus-per-state-front-face-address" ||
@@ -390,7 +390,7 @@ try {
         mobileEvidence.bodyDataAttributes.length !== 0 || mobileEvidence.selectedProfile !== "mobile" ||
         mobileEvidence.devicePixelRatio !== 3 ||
         mobileEvidence.selectedScene !== "depth-2" || mobileEvidence.leafCount !== 30 ||
-        mobileEvidence.selectedDecodedBytes !== 4_127_760 ||
+        mobileEvidence.selectedDecodedBytes !== 3_572_100 ||
         mobileEvidence.selectedAssetBytes !== mobileEvidence.expectedAssetBytes ||
         mobileEvidence.selectedLightingIntervalTicks !== 2 ||
         mobileEvidence.selectedLightingAddressUpdateCount !== 11_680 ||

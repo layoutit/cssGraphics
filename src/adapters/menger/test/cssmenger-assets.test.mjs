@@ -97,7 +97,11 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
   assert.equal(scene.planeAtlas.lossless, true);
   assert.equal(scene.planeAtlas.encoding,
     "WebP-lossless-transcode-of-AVIF-q83-alpha-lossless-yuv444");
-  assert.equal(scene.planeAtlas.byteLength, 8_643_642);
+  assert.equal(scene.planeAtlas.byteLength, 8_507_944);
+  assert.equal(scene.planeAtlas.decodedBytes, 89_812_800);
+  assert.equal(scene.planeAtlas.width, 4_752);
+  assert.equal(scene.planeAtlas.height, 4_725);
+  assert.equal(scene.planeAtlas.packing, "balanced-near-square-pixel-surface");
   assert.equal(scene.planeAtlas.visiblePixelIdentity,
     "byte-exact-to-prepared-avif-decode-where-alpha-is-nonzero");
   assert.equal(scene.planeAtlas.visibleLeafFieldCount, 65_436);
@@ -126,10 +130,11 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
   assert.equal(scene.mobilePlaneAtlas.profile, "mobile");
   assert.match(scene.mobilePlaneAtlas.assetUrl,
     /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.webp$/u);
-  assert.equal(scene.mobilePlaneAtlas.byteLength, 19_686);
-  assert.equal(scene.mobilePlaneAtlas.decodedBytes, 218_700);
-  assert.equal(scene.mobilePlaneAtlas.width, 2_025);
-  assert.equal(scene.mobilePlaneAtlas.height, 27);
+  assert.equal(scene.mobilePlaneAtlas.byteLength, 20_034);
+  assert.equal(scene.mobilePlaneAtlas.decodedBytes, 236_196);
+  assert.equal(scene.mobilePlaneAtlas.width, 243);
+  assert.equal(scene.mobilePlaneAtlas.height, 243);
+  assert.equal(scene.mobilePlaneAtlas.packing, "balanced-near-square-pixel-surface");
   assert.equal(scene.mobilePlaneAtlas.slotCount, 75);
   assert.equal(scene.mobilePlaneAtlas.lightingSampleIntervalTicks, 1_536);
   assert.equal(scene.mobilePlaneAtlas.lightingSampleDelayMilliseconds, 46_080);
@@ -157,10 +162,10 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
     /^\/cssmenger\/assets\/planes-opacity-base-[a-f0-9]{64}\.png$/u);
   assert.equal(scene.cssOpacityShadowAtlas.schema, "cssmenger-prepared-sparse-leaf-lighting-atlas@1");
   assert.equal(scene.cssOpacityShadowAtlas.presentation, "css-black-alpha");
-  assert.equal(scene.cssOpacityShadowAtlas.byteLength, 5_980_235);
-  assert.equal(scene.cssOpacityShadowAtlas.decodedBytes, 195_421_488);
-  assert.equal(scene.cssOpacityShadowAtlas.width, 16_356);
-  assert.equal(scene.cssOpacityShadowAtlas.height, 2_987);
+  assert.equal(scene.cssOpacityShadowAtlas.byteLength, 5_857_995);
+  assert.equal(scene.cssOpacityShadowAtlas.decodedBytes, 195_384_484);
+  assert.equal(scene.cssOpacityShadowAtlas.width, 6_989);
+  assert.equal(scene.cssOpacityShadowAtlas.height, 6_989);
   assert.equal(scene.cssOpacityShadowAtlas.gutterPixels, 1);
   assert.equal(scene.cssOpacityShadowAtlas.slotCount, 58_080);
   assert.match(scene.cssOpacityShadowAtlas.assetUrl,
@@ -228,8 +233,11 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
   assert.equal(mobileScene.metrics.sourceFaceCoverageExact, true);
   assert.deepEqual(mobileScene.meshDescriptors.map((mesh) => mesh.polygonCount), [10, 10, 10]);
   assert.equal(mobileScene.mobilePlaneAtlas.profile, "mobile");
-  assert.equal(mobileScene.mobilePlaneAtlas.byteLength, 748_646);
-  assert.equal(mobileScene.mobilePlaneAtlas.decodedBytes, 4_127_760);
+  assert.equal(mobileScene.mobilePlaneAtlas.byteLength, 783_408);
+  assert.equal(mobileScene.mobilePlaneAtlas.decodedBytes, 3_572_100);
+  assert.equal(mobileScene.mobilePlaneAtlas.width, 945);
+  assert.equal(mobileScene.mobilePlaneAtlas.height, 945);
+  assert.equal(mobileScene.mobilePlaneAtlas.packing, "balanced-near-square-pixel-surface");
   assert.equal(mobileScene.mobilePlaneAtlas.leafCount, 30);
   assert.equal(mobileScene.mobilePlaneAtlas.addressUpdateCount, 11_680);
   assert.equal(mobileScene.mobilePlaneAtlas.lightingSampleIntervalTicks, 2);

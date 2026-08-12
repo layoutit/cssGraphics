@@ -3,10 +3,18 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { brotliDecompressSync } from "node:zlib";
 import { CSSGRAVITYWELL_TRANSFORM_BLOCK_COUNT } from "../src/cssgravitywell/renderContract.mjs";
+import {
+  CSSGRAVITYWELL_VIEWPORT_PROFILES,
+  CSSGRAVITYWELL_VISIBILITY_ENCODING,
+  CSSGRAVITYWELL_VISIBILITY_SCHEMA,
+} from "../src/prepare/cssgravitywell/visibilitySchedule.mjs";
 
 export const CSSGRAVITYWELL_PRODUCT_BANK_SCHEMA = "cssgravitywell-product-bank@2";
 const RETAINED_LEAF_COUNT = 1_922;
 const PREPARED_COLOR_COUNT = 4_096;
+const LEGACY_VISIBILITY_SCHEMA = "cssgravitywell-prepared-viewport-visibility@1";
+const LEGACY_VISIBILITY_ENCODING = "gzip-cgwv1-square-profile-sparse-visibility-assignments";
+const LEGACY_VISIBILITY_PROFILE_SIZES = Object.freeze([1_024, 1_536, 1_920, 2_560, 3_840]);
 
 export async function inspectCssgravitywellProductBank(root, { verifyDescriptor = true } = {}) {
   const expectedFiles = new Set(["catalog.json", "model/catalog.json"]);
@@ -147,15 +155,22 @@ export async function inspectCssgravitywellProductBank(root, { verifyDescriptor 
     `bank ${bankIndex} changes`);
     changeAssetCount += 1;
     const visibility = scene.playback.visibilityAsset;
-    assert(visibility?.schema === "cssgravitywell-prepared-viewport-visibility@1" &&
+    const legacySquareVisibility = visibility?.schema === LEGACY_VISIBILITY_SCHEMA;
+    const preparedVisibilityContract = legacySquareVisibility
+      ? visibility.encoding === LEGACY_VISIBILITY_ENCODING &&
+        visibility.selection === "smallest-square-profile-covering-maximum-css-viewport-axis-or-disabled" &&
+        JSON.stringify(visibility.profileSizes) === JSON.stringify(LEGACY_VISIBILITY_PROFILE_SIZES) &&
+        visibility.profiles?.length === visibility.profileSizes.length
+      : visibility?.schema === CSSGRAVITYWELL_VISIBILITY_SCHEMA &&
+        visibility.encoding === CSSGRAVITYWELL_VISIBILITY_ENCODING &&
+        visibility.selection === "smallest-area-rectangular-profile-covering-css-viewport-or-disabled" &&
+        JSON.stringify(visibility.profileDimensions) === JSON.stringify(CSSGRAVITYWELL_VIEWPORT_PROFILES) &&
+        visibility.profiles?.length === visibility.profileDimensions.length;
+    assert(preparedVisibilityContract &&
       visibility.distribution === "embedded-prepared-bank-scene" &&
-      visibility.encoding === "gzip-cgwv1-square-profile-sparse-visibility-assignments" &&
-      visibility.selection === "smallest-square-profile-covering-maximum-css-viewport-axis-or-disabled" &&
       visibility.frameCount === scene.playback.frameCount &&
       visibility.leafCount === RETAINED_LEAF_COUNT &&
-      visibility.marginPixels === 8 && visibility.dilationFrames === 1 &&
-      JSON.stringify(visibility.profileSizes) === JSON.stringify([1024, 1536, 1920, 2560, 3840]) &&
-      visibility.profiles?.length === visibility.profileSizes.length,
+      visibility.marginPixels === 8 && visibility.dilationFrames === 1,
     `bank ${bankIndex} viewport visibility`);
     verifyEmbeddedAsset(visibility, `bank ${bankIndex} viewport visibility`);
     visibilityAssetCount += 1;
@@ -232,7 +247,7 @@ export async function writeCssgravitywellProductBankDescriptor(root, summary) {
       deployUnpacksStaticFiles: true,
       preparedTransformEncoding: "content-addressed-gzip-field-major-delta-varint-fixed2-matrix-color-and-index-schedules",
       preparedScheduleEncoding: "selected-bank-transform-block-zero-shared-gzip-container",
-      preparedVisibilityEncoding: "embedded-gzip-cgwv1-square-profile-sparse-visibility-assignments",
+      preparedVisibilityEncoding: "embedded-gzip-cgwv2-rectangular-profile-sparse-visibility-assignments",
       preparedModelEncoding: "content-addressed-brotli-json-expanded-by-http-content-encoding",
       startupFetch: "selected-bank-first-next-bank-prefetch",
     },

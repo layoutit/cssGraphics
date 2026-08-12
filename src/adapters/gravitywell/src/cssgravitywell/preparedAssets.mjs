@@ -98,7 +98,7 @@ export async function loadPreparedGravityWellBankScene(catalog, bankIndex) {
   return Object.freeze(scene);
 }
 
-export function createTransformBlockLoader(playback) {
+export function createTransformBlockLoader(playback, scheduling = {}) {
   const records = new Map();
   const frameView = { transforms: null, start: 0, count: 0, mode: "full" };
   const colorFrameView = { values: null, start: 0, count: 0, mode: "full" };
@@ -145,14 +145,29 @@ export function createTransformBlockLoader(playback) {
   let randomAccessReconstructionCount = 0;
   let randomAccessTransformAssignmentCount = 0;
   let randomAccessColorAssignmentCount = 0;
+  let activationWaitCount = 0;
+  let incrementalDecodeRequestCount = 0;
+  let incrementalDecodeCompletedBlockCount = 0;
+  let incrementalDecodeSliceCount = 0;
+  let incrementalDecodeOperationCount = 0;
+  let incrementalDecodeMaximumSliceMilliseconds = 0;
   let destroyed = false;
-
+  const requestIdle = scheduling.requestIdle ?? defaultRequestIdle;
+  const setDelay = scheduling.setDelay ?? globalThis.setTimeout.bind(globalThis);
+  const readNow = scheduling.readNow ?? defaultReadNow;
+  const incrementalSliceBudgetMilliseconds = scheduling.incrementalSliceBudgetMilliseconds ?? 2;
+  if (typeof requestIdle !== "function" || typeof setDelay !== "function" ||
+      typeof readNow !== "function" ||
+      !Number.isFinite(incrementalSliceBudgetMilliseconds) ||
+      incrementalSliceBudgetMilliseconds <= 0 || incrementalSliceBudgetMilliseconds > 4) {
+    throw new TypeError("Gravity Well incremental transform decoder scheduling is invalid");
+  }
   function nextBlockIndex(blockIndex) {
     const next = blockIndex + 1;
     return next < playback.blocks.length ? next : -1;
   }
 
-  async function ensure(blockIndex) {
+  async function ensure(blockIndex, { incremental = false } = {}) {
     if (destroyed) throw new Error("Gravity Well transform loader is destroyed");
     const descriptor = playback.blocks[blockIndex];
     if (!descriptor || descriptor.index !== blockIndex) throw new RangeError(`Missing transform block ${blockIndex}`);
@@ -166,7 +181,30 @@ export function createTransformBlockLoader(playback) {
       if (decoded.byteLength !== descriptor.decodedByteLength) {
         throw new Error(`Decoded transform block ${blockIndex} byte length drifted`);
       }
-      const prepared = decodePreparedTransformBlock(decoded, descriptor, playback, transformIndices);
+      const prepared = incremental
+        ? await decodePreparedTransformBlockIncrementally(
+          decoded,
+          descriptor,
+          playback,
+          transformIndices,
+          {
+            requestIdle,
+            setDelay,
+            readNow,
+            sliceBudgetMilliseconds: incrementalSliceBudgetMilliseconds,
+            isCurrent: () => !destroyed && (blockIndex === desiredCurrent || blockIndex === desiredNext),
+            onSlice(operationCount, durationMilliseconds) {
+              incrementalDecodeSliceCount += 1;
+              incrementalDecodeOperationCount += operationCount;
+              incrementalDecodeMaximumSliceMilliseconds = Math.max(
+                incrementalDecodeMaximumSliceMilliseconds,
+                durationMilliseconds,
+              );
+            },
+          },
+        )
+        : decodePreparedTransformBlock(decoded, descriptor, playback, transformIndices);
+      if (prepared === null) throw new Error(`Transform block ${blockIndex} incremental decode was cancelled`);
       if (prepared.bankSchedule && transformIndices === null) {
         transformIndices = prepared.bankSchedule.transformIndices;
         changeSchedule = createPreparedChangeSchedule(
@@ -186,6 +224,7 @@ export function createTransformBlockLoader(playback) {
       });
       records.set(blockIndex, record);
       loadCount += 1;
+      if (incremental) incrementalDecodeCompletedBlockCount += 1;
       residentDecodedBytes += descriptor.preparedCssStringByteLength;
       peakResidentDecodedBytes = Math.max(peakResidentDecodedBytes, residentDecodedBytes);
       if (blockIndex !== desiredCurrent && blockIndex !== desiredNext) release(blockIndex);
@@ -213,22 +252,24 @@ export function createTransformBlockLoader(playback) {
     desiredNext = next;
     activeBlockIndex = current;
     activeRecord = record;
-    if (next >= 0 && !records.has(next)) void ensure(next).catch(() => undefined);
+    if (next >= 0 && !records.has(next)) {
+      incrementalDecodeRequestCount += 1;
+      void ensure(next, { incremental: true }).catch(() => undefined);
+    }
     for (const blockIndex of records.keys()) {
       if (blockIndex !== current && blockIndex !== next) release(blockIndex);
     }
   }
 
   return Object.freeze({
-    async prime(frameIndex = 0, { lookahead = false } = {}) {
+    async prime(frameIndex = 0, { lookahead = false, incremental = false } = {}) {
       const current = Math.trunc(frameIndex / playback.blockFrameCount);
       if (current !== 0) throw new Error("Gravity Well prepared bank must prime from block zero");
       const next = lookahead ? nextBlockIndex(current) : -1;
       desiredCurrent = current;
       desiredNext = next;
-      const requests = [ensure(current)];
-      if (next >= 0) requests.push(ensure(next));
-      const [record] = await Promise.all(requests);
+      const record = await ensure(current, { incremental });
+      if (next >= 0) await ensure(next, { incremental });
       activeBlockIndex = current;
       activeRecord = record;
     },
@@ -242,7 +283,8 @@ export function createTransformBlockLoader(playback) {
       const next = nextBlockIndex(activeBlockIndex);
       desiredNext = next;
       if (next < 0 || records.has(next)) return null;
-      return ensure(next);
+      incrementalDecodeRequestCount += 1;
+      return ensure(next, { incremental: true });
     },
     activate(frameIndex) {
       const current = Math.trunc(frameIndex / playback.blockFrameCount);
@@ -255,7 +297,8 @@ export function createTransformBlockLoader(playback) {
         adopt(current, next, existing);
         return null;
       }
-      return ensure(current).then((record) => adopt(current, next, record));
+      activationWaitCount += 1;
+      return ensure(current, { incremental: true }).then((record) => adopt(current, next, record));
     },
     selectFrame(frameIndex, sequential = false) {
       const current = Math.trunc(frameIndex / playback.blockFrameCount);
@@ -356,6 +399,12 @@ export function createTransformBlockLoader(playback) {
         randomAccessReconstructionCount,
         randomAccessTransformAssignmentCount,
         randomAccessColorAssignmentCount,
+        activationWaitCount,
+        incrementalDecodeRequestCount,
+        incrementalDecodeCompletedBlockCount,
+        incrementalDecodeSliceCount,
+        incrementalDecodeOperationCount,
+        incrementalDecodeMaximumSliceMilliseconds,
       });
     },
     destroy() {
@@ -419,14 +468,22 @@ function decodeBase64(value) {
 }
 
 async function decodePreparedViewportVisibility(descriptor) {
-  if (descriptor?.schema !== CSSGRAVITYWELL_VISIBILITY_SCHEMA ||
+  const legacySquare = descriptor?.schema === "cssgravitywell-prepared-viewport-visibility@1";
+  const dimensions = legacySquare
+    ? descriptor.profileSizes?.map((size) => ({ width: size, height: size }))
+    : descriptor?.profileDimensions;
+  if ((!legacySquare && descriptor?.schema !== CSSGRAVITYWELL_VISIBILITY_SCHEMA) ||
       descriptor.distribution !== "embedded-prepared-bank-scene" ||
-      descriptor.encoding !== CSSGRAVITYWELL_VISIBILITY_ENCODING ||
-      descriptor.selection !== "smallest-square-profile-covering-maximum-css-viewport-axis-or-disabled" ||
+      descriptor.encoding !== (legacySquare
+        ? "gzip-cgwv1-square-profile-sparse-visibility-assignments"
+        : CSSGRAVITYWELL_VISIBILITY_ENCODING) ||
+      descriptor.selection !== (legacySquare
+        ? "smallest-square-profile-covering-maximum-css-viewport-axis-or-disabled"
+        : "smallest-area-rectangular-profile-covering-css-viewport-or-disabled") ||
       descriptor.marginPixels !== CSSGRAVITYWELL_VIEWPORT_MARGIN_PIXELS ||
       descriptor.dilationFrames !== CSSGRAVITYWELL_VIEWPORT_DILATION_FRAMES ||
-      !Array.isArray(descriptor.profileSizes) || descriptor.profileSizes.length < 1 ||
-      descriptor.profiles?.length !== descriptor.profileSizes.length) {
+      !Array.isArray(dimensions) || dimensions.length < 1 ||
+      descriptor.profiles?.length !== dimensions.length) {
     throw new Error("Gravity Well prepared viewport visibility descriptor drifted");
   }
   const encoded = decodeBase64(descriptor.encodedBase64);
@@ -434,24 +491,27 @@ async function decodePreparedViewportVisibility(descriptor) {
   const bytes = await decompressGzip(encoded);
   if (bytes.byteLength !== descriptor.decodedByteLength || bytes.byteLength < 8 ||
       String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) !== "CGWV" ||
-      bytes[4] !== 1 || bytes[5] !== descriptor.profileSizes.length || bytes[6] !== 0 || bytes[7] !== 0) {
+      bytes[4] !== (legacySquare ? 1 : 2) || bytes[5] !== dimensions.length || bytes[6] !== 0 || bytes[7] !== 0) {
     throw new Error("Gravity Well prepared viewport visibility header drifted");
   }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const profiles = [];
   let offset = 8;
-  for (let profileIndex = 0; profileIndex < descriptor.profileSizes.length; profileIndex += 1) {
-    if (offset + 16 > bytes.byteLength) throw new Error("Gravity Well viewport visibility profile is truncated");
-    const size = view.getUint16(offset, true);
-    const marginPixels = view.getUint16(offset + 2, true);
-    const dilationFrames = bytes[offset + 4];
-    const reserved = bytes[offset + 5];
-    const frameCount = view.getUint16(offset + 6, true);
-    const leafCount = view.getUint16(offset + 8, true);
-    const initialVisibleCount = view.getUint16(offset + 10, true);
-    const visibilityChangeCount = view.getUint32(offset + 12, true);
-    offset += 16;
-    if (size !== descriptor.profileSizes[profileIndex] || marginPixels !== descriptor.marginPixels ||
+  for (let profileIndex = 0; profileIndex < dimensions.length; profileIndex += 1) {
+    const headerBytes = legacySquare ? 16 : 18;
+    if (offset + headerBytes > bytes.byteLength) throw new Error("Gravity Well viewport visibility profile is truncated");
+    const profileDimensions = dimensions[profileIndex];
+    const width = legacySquare ? view.getUint16(offset, true) : view.getUint16(offset, true);
+    const height = legacySquare ? width : view.getUint16(offset + 2, true);
+    const marginPixels = view.getUint16(offset + (legacySquare ? 2 : 4), true);
+    const dilationFrames = bytes[offset + (legacySquare ? 4 : 6)];
+    const reserved = bytes[offset + (legacySquare ? 5 : 7)];
+    const frameCount = view.getUint16(offset + (legacySquare ? 6 : 8), true);
+    const leafCount = view.getUint16(offset + (legacySquare ? 8 : 10), true);
+    const initialVisibleCount = view.getUint16(offset + (legacySquare ? 10 : 12), true);
+    const visibilityChangeCount = view.getUint32(offset + (legacySquare ? 12 : 14), true);
+    offset += headerBytes;
+    if (width !== profileDimensions.width || height !== profileDimensions.height || marginPixels !== descriptor.marginPixels ||
         dilationFrames !== descriptor.dilationFrames || reserved !== 0 ||
         frameCount !== descriptor.frameCount || leafCount !== descriptor.leafCount ||
         initialVisibleCount !== descriptor.profiles[profileIndex].initialVisibleCount ||
@@ -471,7 +531,8 @@ async function decodePreparedViewportVisibility(descriptor) {
     const assignments = readPreparedUint16Rows(bytes, offset, visibilityChangeCount);
     offset += assignments.byteLength;
     validatePreparedVisibilityProfile({
-      size,
+      width,
+      height,
       frameCount,
       leafCount,
       initialVisibleIndices,
@@ -479,7 +540,8 @@ async function decodePreparedViewportVisibility(descriptor) {
       assignments,
     });
     profiles.push(Object.freeze({
-      size,
+      width,
+      height,
       frameCount,
       leafCount,
       initialVisibleIndices,
@@ -489,8 +551,8 @@ async function decodePreparedViewportVisibility(descriptor) {
   }
   if (offset !== bytes.byteLength) throw new Error("Gravity Well viewport visibility payload has trailing bytes");
   return Object.freeze({
-    schema: descriptor.schema,
-    selection: descriptor.selection,
+    schema: CSSGRAVITYWELL_VISIBILITY_SCHEMA,
+    selection: "smallest-area-rectangular-profile-covering-css-viewport-or-disabled",
     frameCount: descriptor.frameCount,
     leafCount: descriptor.leafCount,
     marginPixels: descriptor.marginPixels,
@@ -555,7 +617,63 @@ async function decompressGzip(encoded) {
   ).arrayBuffer());
 }
 
+function defaultRequestIdle(callback, options) {
+  if (typeof globalThis.requestIdleCallback === "function") {
+    return globalThis.requestIdleCallback(callback, options);
+  }
+  return globalThis.setTimeout(() => callback(Object.freeze({
+    didTimeout: true,
+    timeRemaining: () => 0,
+  })), 0);
+}
+
+function defaultReadNow() {
+  return globalThis.performance.now();
+}
+
 function decodePreparedTransformBlock(bytes, descriptor, playback, loadedTransformIndices) {
+  const decoder = createPreparedTransformBlockDecoder(bytes, descriptor, playback, loadedTransformIndices);
+  while (!decoder.done()) decoder.step(Number.MAX_SAFE_INTEGER, () => false);
+  return decoder.result();
+}
+
+async function decodePreparedTransformBlockIncrementally(
+  bytes,
+  descriptor,
+  playback,
+  loadedTransformIndices,
+  {
+    requestIdle,
+    setDelay,
+    readNow,
+    sliceBudgetMilliseconds,
+    isCurrent,
+    onSlice,
+  },
+) {
+  const decoder = createPreparedTransformBlockDecoder(bytes, descriptor, playback, loadedTransformIndices);
+  let firstSlice = true;
+  while (!decoder.done()) {
+    if (!firstSlice) {
+      await new Promise((resolveDelay) => setDelay(resolveDelay, playback.frameMilliseconds));
+      if (!isCurrent()) return null;
+    }
+    firstSlice = false;
+    const deadline = await new Promise((resolveIdle) => requestIdle(resolveIdle, {
+      timeout: Math.max(50, Math.ceil(playback.frameMilliseconds * 4)),
+    }));
+    if (!isCurrent()) return null;
+    const startedAt = readNow();
+    const operationCount = decoder.step(8_192, (processed) =>
+      processed >= 64 && processed % 64 === 0 &&
+      ((typeof deadline?.timeRemaining === "function" && deadline.timeRemaining() <= 1) ||
+        readNow() - startedAt >= sliceBudgetMilliseconds));
+    onSlice(operationCount, readNow() - startedAt);
+  }
+  return decoder.result();
+}
+
+function createPreparedTransformBlockDecoder(bytes, descriptor, playback, loadedTransformIndices) {
   if (!(bytes instanceof Uint8Array) || bytes.byteLength < MATRIX_BLOCK_HEADER_BYTES ||
       String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) !== "CGWM" ||
       bytes[4] !== 2 || bytes[5] !== MATRIX_DECIMAL_PLACES ||
@@ -611,56 +729,93 @@ function decodePreparedTransformBlock(bytes, descriptor, playback, loadedTransfo
   }
   const componentCount = MATRIX_COMPONENTS.length;
   const state = new Int32Array(descriptor.keyframeTransformCount * componentCount);
-  for (let component = 0; component < componentCount; component += 1) {
-    const stream = streams[component];
-    let previous = 0;
-    for (let leafIndex = 0; leafIndex < descriptor.keyframeTransformCount; leafIndex += 1) {
-      previous = checkedInt32(previous + readSignedVarint(bytes, stream), descriptor.index);
-      state[leafIndex * componentCount + component] = previous;
-    }
-    assertStreamConsumed(stream, descriptor.index);
-  }
   const transforms = new Array(descriptor.transformCount);
   let preparedCssStringByteLength = 0;
-  for (let leafIndex = 0; leafIndex < descriptor.keyframeTransformCount; leafIndex += 1) {
-    const transform = formatPreparedMatrix(state, leafIndex * componentCount);
-    transforms[leafIndex] = transform;
-    preparedCssStringByteLength += transform.length;
-  }
   const maskStream = streams[componentCount];
   if (maskStream.end - maskStream.offset !== descriptor.deltaTransformCount * Uint16Array.BYTES_PER_ELEMENT) {
     throw new Error(`Transform block ${descriptor.index} mask stream drifted`);
   }
   const componentStreams = streams.slice(componentCount + 1, MATRIX_DATA_STREAM_COUNT);
-  for (let rowIndex = 0; rowIndex < descriptor.deltaTransformCount; rowIndex += 1) {
-    const mask = bytes[maskStream.offset] | (bytes[maskStream.offset + 1] << 8);
-    maskStream.offset += Uint16Array.BYTES_PER_ELEMENT;
-    if ((mask >>> componentCount) !== 0) {
-      throw new Error(`Transform block ${descriptor.index} component mask drifted`);
+  let stage = "components";
+  let component = 0;
+  let leafIndex = 0;
+  let previous = 0;
+  let rowIndex = 0;
+
+  function finish() {
+    assertStreamConsumed(maskStream, descriptor.index);
+    for (const stream of componentStreams) assertStreamConsumed(stream, descriptor.index);
+    if (preparedCssStringByteLength !== descriptor.preparedCssStringByteLength) {
+      throw new Error(`Transform block ${descriptor.index} prepared CSS byte length drifted`);
     }
-    const changeIndex = descriptor.transformChangeStart + rowIndex;
-    const leafIndex = transformIndices[changeIndex];
-    if (!Number.isSafeInteger(leafIndex) || leafIndex < 0 || leafIndex >= descriptor.keyframeTransformCount) {
-      throw new Error(`Transform block ${descriptor.index} prepared leaf index drifted`);
-    }
-    const stateOffset = leafIndex * componentCount;
-    for (let component = 0; component < componentCount; component += 1) {
-      if ((mask & (1 << component)) === 0) continue;
-      state[stateOffset + component] = checkedInt32(
-        state[stateOffset + component] + readSignedVarint(bytes, componentStreams[component]),
-        descriptor.index,
-      );
-    }
-    const transform = formatPreparedMatrix(state, stateOffset);
-    transforms[descriptor.keyframeTransformCount + rowIndex] = transform;
-    preparedCssStringByteLength += transform.length;
+    stage = "done";
   }
-  assertStreamConsumed(maskStream, descriptor.index);
-  for (const stream of componentStreams) assertStreamConsumed(stream, descriptor.index);
-  if (preparedCssStringByteLength !== descriptor.preparedCssStringByteLength) {
-    throw new Error(`Transform block ${descriptor.index} prepared CSS byte length drifted`);
-  }
-  return Object.freeze({ transforms, colorValues, bankSchedule });
+
+  return Object.freeze({
+    done() {
+      return stage === "done";
+    },
+    step(maximumOperations, shouldYield) {
+      let processed = 0;
+      while (stage !== "done" && processed < maximumOperations && !shouldYield(processed)) {
+        if (stage === "components") {
+          const stream = streams[component];
+          previous = checkedInt32(previous + readSignedVarint(bytes, stream), descriptor.index);
+          state[leafIndex * componentCount + component] = previous;
+          leafIndex += 1;
+          if (leafIndex === descriptor.keyframeTransformCount) {
+            assertStreamConsumed(stream, descriptor.index);
+            component += 1;
+            leafIndex = 0;
+            previous = 0;
+            if (component === componentCount) stage = "keyframes";
+          }
+        } else if (stage === "keyframes") {
+          const transform = formatPreparedMatrix(state, leafIndex * componentCount);
+          transforms[leafIndex] = transform;
+          preparedCssStringByteLength += transform.length;
+          leafIndex += 1;
+          if (leafIndex === descriptor.keyframeTransformCount) {
+            leafIndex = 0;
+            stage = descriptor.deltaTransformCount === 0 ? "done" : "deltas";
+            if (stage === "done") finish();
+          }
+        } else {
+          const mask = bytes[maskStream.offset] | (bytes[maskStream.offset + 1] << 8);
+          maskStream.offset += Uint16Array.BYTES_PER_ELEMENT;
+          if ((mask >>> componentCount) !== 0) {
+            throw new Error(`Transform block ${descriptor.index} component mask drifted`);
+          }
+          const changeIndex = descriptor.transformChangeStart + rowIndex;
+          const changedLeafIndex = transformIndices[changeIndex];
+          if (!Number.isSafeInteger(changedLeafIndex) || changedLeafIndex < 0 ||
+              changedLeafIndex >= descriptor.keyframeTransformCount) {
+            throw new Error(`Transform block ${descriptor.index} prepared leaf index drifted`);
+          }
+          const stateOffset = changedLeafIndex * componentCount;
+          for (let changedComponent = 0; changedComponent < componentCount; changedComponent += 1) {
+            if ((mask & (1 << changedComponent)) === 0) continue;
+            state[stateOffset + changedComponent] = checkedInt32(
+              state[stateOffset + changedComponent] +
+                readSignedVarint(bytes, componentStreams[changedComponent]),
+              descriptor.index,
+            );
+          }
+          const transform = formatPreparedMatrix(state, stateOffset);
+          transforms[descriptor.keyframeTransformCount + rowIndex] = transform;
+          preparedCssStringByteLength += transform.length;
+          rowIndex += 1;
+          if (rowIndex === descriptor.deltaTransformCount) finish();
+        }
+        processed += 1;
+      }
+      return processed;
+    },
+    result() {
+      if (stage !== "done") throw new Error(`Transform block ${descriptor.index} decode is incomplete`);
+      return Object.freeze({ transforms, colorValues, bankSchedule });
+    },
+  });
 }
 
 function readPreparedIndexRows(bytes, stream, offsets) {

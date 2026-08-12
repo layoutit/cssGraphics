@@ -110,6 +110,59 @@ XScreenSaver textures under the upstream copyright and permission notice.
 The source checkout, native helpers, captures, and traces remain local and
 ignored.
 
+## FrameSleuth
+
+FrameSleuth turns a Chrome DevTools `.json` or `.json.gz` performance trace
+into an evidence-backed frame report. It selects the active renderer, finds the
+slowest compositor DrawFrame intervals, attributes their renderer/compositor/raster/
+GPU work, correlates timer-to-rAF delay and pipeline drops, and distinguishes
+nested event totals from non-overlapping trace-slice occupancy. Missing trace
+categories are reported as unavailable rather than zero. Renderer-main garbage
+collection, V8 CPU-profile samples, and captured screenshots are included when
+present. CPU samples expose JavaScript self time hidden inside broad task and
+microtask envelopes.
+
+FrameSleuth Tracer creates comparable evidence without the old warm benchmark
+seam. By default it launches the installed Chrome headlessly without opening a
+window, begins tracing on `about:blank`, performs a cold navigation, and leaves
+the page untouched for eight seconds. It writes the raw gzip trace, full-run and
+post-startup FrameSleuth reports, and matching frame-time SVG line charts. No network-idle/readiness wait, seek, step, pause, or
+application-specific debug API participates in the capture.
+
+```sh
+pnpm framesleuth:trace -- http://127.0.0.1:5173/gravitywell/
+pnpm framesleuth:trace -- https://css.graphics/gravitywell/ --duration-ms 10000
+pnpm framesleuth:trace -- http://127.0.0.1:5173/gravitywell/ --screenshots
+pnpm framesleuth -- ~/Downloads/Trace.json.gz
+pnpm framesleuth -- before.json.gz --compare after.json.gz
+pnpm framesleuth -- Trace.json.gz --question "what work did we do on the worst frame?"
+pnpm framesleuth -- Trace.json.gz --format json --output analysis.json
+pnpm framesleuth -- Trace.json.gz --rank 2 --screenshots /tmp/frame-evidence
+```
+
+Use `--headed` only when visible Chrome and possible focus changes are explicitly
+wanted. It is closer to a manually recorded interactive trace, but still uses a
+fresh browser process rather than the user's existing tabs/profile. Screenshot
+events are opt-in because they add recording overhead. Headless captures are
+useful reproducible diagnostics, but they are not proof of physical-display
+presentation and can miss behavior that depends on the interactive compositor.
+
+Use `--frame <index>`, `--rank <slowest-rank>`, or `--around-ms <time>` to
+select one DrawFrame interval; use `--url <substring>` when a trace contains
+multiple active renderer pages. The JSON form uses the versioned
+`cssgraphics-frame-sleuth@1` schema so an agent can answer follow-up questions
+without reparsing the trace.
+
+Question routing covers worst-frame work, scheduler smoothness, lighting and
+rendering cost, dropped-frame/artifact markers, JavaScript functions, garbage
+collection, global GPU correlation, long tasks, missing evidence, screenshots,
+and before/after regressions.
+
+`DrawFrame` spacing is compositor evidence, not proof of physical display
+presentation. GPU/browser process activity is global to the trace and is never
+claimed as page-exclusive work. FrameSleuth lists missing evidence channels and
+keeps inclusive nested duration separate from interval-unioned occupancy.
+
 
 
 ## License

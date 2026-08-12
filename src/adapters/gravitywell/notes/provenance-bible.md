@@ -57,19 +57,25 @@ native profile, not a claim about the default `grid-size = 1` raster.
 
 The browser loads the verified static Morph package and bank catalog, chooses
 the initial bank with `crypto.getRandomValues`, adopts its 1,922 retained
-solid-quad line leaves with `createPolyMorphPreparedDomTarget`, and loads only
-that bank's descriptor and first self-contained block for first paint. Its
-lookahead block starts halfway through block zero. The next shuffled bank starts
-prefetching only after the active bank's 240-frame source-authority window. The active
-bank retains only its current and one lookahead transform block. The shuffle
-visits the other 23 banks without replacement.
+solid-quad line leaves with `createPolyMorphPreparedDomTarget`, and expands the
+initial bank's current and lookahead blocks beneath the loader. Later lookahead
+blocks are fetched, verified, decompressed, decoded, and formatted ahead of
+activation. Decoding and fixed-two-decimal `matrix3d` formatting run in bounded
+request-idle slices with a two-millisecond target budget, outside frame
+publication. As in cssElectroPaint's prepared horizon, successive slices are
+separated by one source frame so they cannot bunch inside one idle window. The
+next shuffled bank starts prefetching only after the active
+bank's 240-frame source-authority window and uses the same incremental path.
+The active bank retains only its current and one lookahead transform block. The
+shuffle visits the other 23 banks without replacement.
 Sequential frames visit only their independently prepared transform and color
-write indices. Five conservative square viewport profiles prepare visible-leaf
-membership for every bank frame, including one-frame temporal dilation and
-sparse visibility assignments. Runtime chooses one profile on load or resize,
-keeps exact prepared transform and color state for hidden leaves, publishes
-styles only to selected leaves, and catches each newly selected leaf up before
-showing it. It performs no per-frame projection or viewport leaf scan. At the
+write indices. Twenty-five conservative rectangular viewport profiles prepare
+visible-leaf membership for every bank frame, including one-frame temporal
+dilation and sparse visibility assignments. Runtime chooses the smallest-area
+profile covering the CSS viewport on load or resize, keeps exact prepared
+transform and color state for hidden leaves, publishes styles only to selected
+leaves, and catches each newly selected leaf up before showing it. It performs
+no per-frame projection or viewport leaf scan. At the
 terminal flat frame, the player adopts the next bank at
 its identical frame 0 without a style write or DOM mutation. The absolute timer
 publishes one prepared frame per callback.
@@ -88,6 +94,17 @@ p95, and `9.2 ms` display-interval p95, with a `17.6 ms` maximum, no long tasks,
 no empty scheduler callbacks, no transform-block load, and no DOM growth. The
 same four deterministic browser frames remain pixel-exact against the deployed
 pre-optimization product.
+
+In the locally generated rectangular-profile candidate, a 390 by 844 viewport
+uses the 430 by 960 profile instead of the legacy 1,024-pixel square. Across
+three controlled FrameSleuth runs, the worst-transition selected transform
+writes fall from 1,113 to 753 and selected color writes from 811 to 519. Median
+total player publication work over the 1.8-second trial falls from 329.548 ms to
+220.656 ms; median maximum player callback work falls from 11.101 ms to 6.991
+ms. Four deterministic browser captures remain byte-identical to the legacy
+product. The 24-bank archive grows by 211,695 bytes. Browser compositor cadence
+does not materially change, so this is a page-owned work and headroom
+improvement rather than a claim that external compositor stalls are eliminated.
 
 At 960 by 600, a 5.5-second production/candidate streaming trace over the same
 bank reduces current-plus-lookahead prepared CSS string residency from

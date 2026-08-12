@@ -48,6 +48,8 @@ export async function buildCssmengerFirstSliceScene({ dataSource, sceneId = "dep
       randomProvider: "utils/yarandom.c 55-word additive generator",
       paletteProvider: "utils/colors.c make_smooth_colormap plus utils/hsv.c",
       motionProvider: "hacks/glx/rotator.c spin with wander disabled for the first slice",
+      preparedLoopClosure:
+        "native rotator prefix followed by a prepare-time C2 cyclic closure; no browser interpolation or rotation calculation",
     }),
     renderer: Object.freeze({
       package: "@layoutit/polycss",
@@ -129,7 +131,7 @@ export async function buildCssmengerFirstSliceScene({ dataSource, sceneId = "dep
     }),
     warnings: Object.freeze([
       `This prepared product scene fixes source depth at ${depth}; the XScreenSaver depth-change sequence remains outside this slice.`,
-      "The prepared source rotator segment reverses at its endpoints for continuous endless playback without a final-to-first transform jump.",
+      "The prepared source rotator prefix closes through a prepare-time C2 forward cycle without an endpoint reversal or final-to-first transform jump.",
       "Wander and interactive trackball input are disabled in this first slice.",
       "Axis material colors follow the prepared XScreenSaver palette rows; fixed-function two-light moving highlights are not yet a native visual-parity claim.",
       "Coplanar bundles preserve an exact one-to-one census of all source faces before merging.",

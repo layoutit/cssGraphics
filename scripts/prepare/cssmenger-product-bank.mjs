@@ -19,11 +19,13 @@ if (lock.schema !== "cssmenger-prepared-bank-lock@1" ||
     lock.preparedLeafCount !== 84 || lock.mobilePreparedLeafCount !== 30 ||
     lock.sourceFaceCount !== 18_048 || lock.mergedSourceFaceCount !== 17_964 ||
     lock.mobileSourceFaceCount !== 1_056 || lock.mobileMergedSourceFaceCount !== 1_026 ||
-    lock.timelineStateCount !== 1_440 || lock.paletteStateCount !== 128 ||
-    lock.atlasAssetCount !== 8 || lock.lightingAddressUpdateCount !== 30_989 ||
-    lock.redundantLightingAddressWriteCountRemoved !== 30_535 ||
-    lock.mobileLightingAddressUpdateCount !== 11_002 ||
-    lock.mobileRedundantLightingAddressWriteCountRemoved !== 10_826) {
+    lock.timelineStateCount !== 1_536 ||
+    lock.playbackLoopMode !== "prepared-forward-cyclic-c2-rotation-and-palette" ||
+    lock.paletteStateCount !== 128 ||
+    lock.atlasAssetCount !== 8 || lock.lightingAddressUpdateCount !== 32_889 ||
+    lock.redundantLightingAddressWriteCountRemoved !== 32_547 ||
+    lock.mobileLightingAddressUpdateCount !== 11_680 ||
+    lock.mobileRedundantLightingAddressWriteCountRemoved !== 11_554) {
   throw new Error("cssMenger prepared-bank lock does not bind the retained desktop/mobile product");
 }
 const generatedRoot = resolve(

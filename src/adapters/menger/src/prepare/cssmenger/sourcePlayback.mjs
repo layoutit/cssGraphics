@@ -14,14 +14,15 @@ const RANDOM_VECTOR = Object.freeze([
 
 export const CSSMENGER_SEED = 26080801;
 export const SOURCE_FRAME_DELAY_MILLISECONDS = 30;
-export const PREPARED_STATE_COUNT = 1440;
+export const PREPARED_STATE_COUNT = 1536;
+export const CYCLIC_CLOSURE_START_STATE = 992;
 
 export function buildPreparedMengerPlayback({
   seed = CSSMENGER_SEED,
   stateCount = PREPARED_STATE_COUNT,
 } = {}) {
   if (!Number.isSafeInteger(seed) || seed <= 0) throw new RangeError("cssMenger seed must be a positive safe integer");
-  if (!Number.isSafeInteger(stateCount) || stateCount < 2) throw new RangeError("cssMenger state count must be at least two");
+  if (!Number.isSafeInteger(stateCount) || stateCount < 5) throw new RangeError("cssMenger state count must be at least five");
   const rng = createYaRandom(seed);
   const rotator = makeRotator(rng, {
     spinXSpeed: 1,
@@ -32,29 +33,50 @@ export function buildPreparedMengerPlayback({
     randomizeInitialState: true,
   });
   const palette = makeSmoothColormap(rng, 128);
-  const transforms = [];
+  const sourceTransformDegrees = [];
   const nativeRotationDegrees = [];
   const colorRows = [];
   let previousTransformDegrees = null;
   const colorOffset1 = Math.trunc(palette.length / 3);
   const colorOffset2 = colorOffset1 * 2;
-  for (let tick = 0; tick < stateCount; tick += 1) {
+  for (let tick = 0; tick <= stateCount; tick += 1) {
     const [x, y, z] = getRotation(rotator, rng, true);
     const sourceRotationDegrees = [x * 360, y * 360, z * 360];
     const wrappedTransformDegrees = [-sourceRotationDegrees[0], sourceRotationDegrees[1], -sourceRotationDegrees[2]];
     const transformDegrees = previousTransformDegrees
       ? wrappedTransformDegrees.map((value, axis) => nearestEquivalentDegrees(value, previousTransformDegrees[axis]))
       : wrappedTransformDegrees;
-    transforms.push(`rotateX(${number(transformDegrees[0])}deg) rotateY(${number(transformDegrees[1])}deg) rotateZ(${number(transformDegrees[2])}deg)`);
+    sourceTransformDegrees.push(Object.freeze(transformDegrees));
     nativeRotationDegrees.push(Object.freeze(sourceRotationDegrees));
     previousTransformDegrees = transformDegrees;
+    if (tick === stateCount) continue;
     colorRows.push(Object.freeze([
       tick % palette.length,
       (tick + colorOffset1) % palette.length,
       (tick + colorOffset2) % palette.length,
     ]));
   }
-  assertEveryAdjacentStateChangesAllPublications(transforms, colorRows);
+  const closureStartState = Math.min(CYCLIC_CLOSURE_START_STATE, Math.max(0, stateCount - 5));
+  const cyclicClosure = closePreparedRotationCycle(sourceTransformDegrees, closureStartState);
+  const cyclicTransformDegrees = cyclicClosure.degrees;
+  const transforms = cyclicTransformDegrees.slice(0, stateCount).map(transformForDegrees);
+  const cycleClosureTransform = transformForDegrees(cyclicTransformDegrees[stateCount]);
+  const preparedRotationDegrees = cyclicTransformDegrees.slice(0, stateCount)
+    .map((degrees) => Object.freeze([-degrees[0], degrees[1], -degrees[2]]));
+  const cycleClosureRotationDegrees = Object.freeze([
+    -cyclicTransformDegrees[stateCount][0],
+    cyclicTransformDegrees[stateCount][1],
+    -cyclicTransformDegrees[stateCount][2],
+  ]);
+  const nativePrefixStateCount = Math.min(stateCount, closureStartState + 3);
+  const cycleClosure = preparedCycleClosureContract({
+    cyclicTransformDegrees,
+    closureStartState,
+    nativePrefixStateCount,
+    stateCount,
+    targetTurnCounts: cyclicClosure.targetTurnCounts,
+  });
+  assertEveryAdjacentStateChangesAllPublications(transforms, colorRows, cycleClosureTransform);
   return Object.freeze({
     schema: "cssmenger-prepared-playback@1",
     seed,
@@ -66,26 +88,178 @@ export function buildPreparedMengerPlayback({
     initial: Object.freeze({ stateIndex: 0 }),
     palette: Object.freeze(palette),
     transforms: Object.freeze(transforms),
-    nativeRotationDegrees: Object.freeze(nativeRotationDegrees),
+    cycleClosureTransform,
+    nativeRotationDegrees: Object.freeze(nativeRotationDegrees.slice(0, stateCount)),
+    preparedRotationDegrees: Object.freeze(preparedRotationDegrees),
+    cycleClosureRotationDegrees,
+    nativePrefixStateCount,
+    cycleClosure,
     colorRows: Object.freeze(colorRows),
     adjacentPublicationMode: "all-fields-change",
-    transformAngleMode: "prepared-nearest-equivalent-unwrapped-degrees",
+    loopMode: "prepared-forward-cyclic-c2-rotation-and-palette",
+    transformAngleMode: "prepared-native-prefix-quintic-c2-cyclic-closure-unwrapped-degrees",
     runtimeInterpolation: false,
     runtimeColorGeneration: false,
     runtimeRotationCalculation: false,
   });
 }
 
+function closePreparedRotationCycle(sourceDegrees, closureStartState) {
+  const finalStateIndex = sourceDegrees.length - 1;
+  const closureStepCount = finalStateIndex - closureStartState;
+  if (finalStateIndex < 5 || closureStepCount < 5) {
+    throw new RangeError("cssMenger cyclic closure requires at least five prepared transitions");
+  }
+  const closed = sourceDegrees.map((degrees) => [...degrees]);
+  const targetTurnCounts = [];
+  const nodes = [0, 1, 2, closureStepCount - 2, closureStepCount - 1, closureStepCount];
+  for (let axis = 0; axis < 3; axis += 1) {
+    const selected = selectSmoothCycleClosureAxis({
+      axis,
+      closureStartState,
+      finalStateIndex,
+      nodes,
+      sourceDegrees,
+    });
+    targetTurnCounts.push(selected.targetTurnCount);
+    for (let stateIndex = closureStartState; stateIndex <= finalStateIndex; stateIndex += 1) {
+      closed[stateIndex][axis] = selected.degrees[stateIndex - closureStartState];
+    }
+  }
+  return Object.freeze({
+    degrees: Object.freeze(closed.map((degrees) => Object.freeze(degrees))),
+    targetTurnCounts: Object.freeze(targetTurnCounts),
+  });
+}
+
+function selectSmoothCycleClosureAxis({
+  axis,
+  closureStartState,
+  finalStateIndex,
+  nodes,
+  sourceDegrees,
+}) {
+  const initialVelocity = sourceDegrees[1][axis] - sourceDegrees[0][axis];
+  const initialAcceleration = sourceDegrees[2][axis] - 2 * sourceDegrees[1][axis] + sourceDegrees[0][axis];
+  const nominalTurnCount = Math.round(
+    (sourceDegrees[finalStateIndex][axis] - sourceDegrees[0][axis]) / 360,
+  );
+  let prefixMaximumStepDegrees = 0;
+  for (let stateIndex = 1; stateIndex < closureStartState; stateIndex += 1) {
+    prefixMaximumStepDegrees = Math.max(
+      prefixMaximumStepDegrees,
+      Math.abs(sourceDegrees[stateIndex][axis] - sourceDegrees[stateIndex - 1][axis]),
+    );
+  }
+  let selected = null;
+  for (let targetTurnCount = nominalTurnCount - 3;
+    targetTurnCount <= nominalTurnCount + 3;
+    targetTurnCount += 1) {
+    const closureTarget = sourceDegrees[0][axis] + targetTurnCount * 360;
+    const corrections = [
+      0,
+      0,
+      0,
+      closureTarget - 2 * initialVelocity + initialAcceleration - sourceDegrees[finalStateIndex - 2][axis],
+      closureTarget - initialVelocity - sourceDegrees[finalStateIndex - 1][axis],
+      closureTarget - sourceDegrees[finalStateIndex][axis],
+    ];
+    const degrees = [];
+    let maximumStepDegrees = prefixMaximumStepDegrees;
+    let correctionEnergy = 0;
+    let previousDegrees = sourceDegrees[Math.max(0, closureStartState - 1)][axis];
+    for (let stateIndex = closureStartState; stateIndex <= finalStateIndex; stateIndex += 1) {
+      const correction = lagrangeInterpolation(stateIndex - closureStartState, nodes, corrections);
+      const preparedDegrees = sourceDegrees[stateIndex][axis] + correction;
+      degrees.push(preparedDegrees);
+      maximumStepDegrees = Math.max(maximumStepDegrees, Math.abs(preparedDegrees - previousDegrees));
+      correctionEnergy += correction * correction;
+      previousDegrees = preparedDegrees;
+    }
+    const candidate = { correctionEnergy, degrees, maximumStepDegrees, targetTurnCount };
+    if (selected === null ||
+        candidate.maximumStepDegrees < selected.maximumStepDegrees - 1e-6 ||
+        Math.abs(candidate.maximumStepDegrees - selected.maximumStepDegrees) <= 1e-6 &&
+          candidate.correctionEnergy < selected.correctionEnergy) {
+      selected = candidate;
+    }
+  }
+  return selected;
+}
+
+function lagrangeInterpolation(value, nodes, samples) {
+  let result = 0;
+  for (let sampleIndex = 0; sampleIndex < samples.length; sampleIndex += 1) {
+    let basis = 1;
+    for (let nodeIndex = 0; nodeIndex < nodes.length; nodeIndex += 1) {
+      if (nodeIndex !== sampleIndex) {
+        basis *= (value - nodes[nodeIndex]) / (nodes[sampleIndex] - nodes[nodeIndex]);
+      }
+    }
+    result += samples[sampleIndex] * basis;
+  }
+  return result;
+}
+
+function preparedCycleClosureContract({
+  cyclicTransformDegrees,
+  closureStartState,
+  nativePrefixStateCount,
+  stateCount,
+  targetTurnCounts,
+}) {
+  const initialVelocity = delta(cyclicTransformDegrees[1], cyclicTransformDegrees[0]);
+  const closureVelocity = delta(cyclicTransformDegrees[stateCount], cyclicTransformDegrees[stateCount - 1]);
+  const initialAcceleration = delta(
+    delta(cyclicTransformDegrees[2], cyclicTransformDegrees[1]),
+    initialVelocity,
+  );
+  const closureAcceleration = delta(
+    closureVelocity,
+    delta(cyclicTransformDegrees[stateCount - 1], cyclicTransformDegrees[stateCount - 2]),
+  );
+  return Object.freeze({
+    schema: "cssmenger-prepared-cyclic-rotation-closure@1",
+    closureStartState,
+    nativePrefixStateCount,
+    stateCount,
+    targetTurnCounts,
+    cycleDurationMilliseconds: stateCount * SOURCE_FRAME_DELAY_MILLISECONDS,
+    interpolation: "prepare-time-quintic-through-two-position-velocity-acceleration-boundaries",
+    orientationMaximumEquivalentDeltaDegrees: Math.max(...cyclicTransformDegrees[stateCount]
+      .map((value, axis) => equivalentAngleDelta(value, cyclicTransformDegrees[0][axis]))),
+    velocityMaximumDeltaDegreesPerTick: Math.max(...closureVelocity
+      .map((value, axis) => Math.abs(value - initialVelocity[axis]))),
+    accelerationMaximumDeltaDegreesPerTickSquared: Math.max(...closureAcceleration
+      .map((value, axis) => Math.abs(value - initialAcceleration[axis]))),
+  });
+}
+
+function delta(left, right) {
+  return left.map((value, axis) => value - right[axis]);
+}
+
+function equivalentAngleDelta(left, right) {
+  return Math.abs(((left - right + 180) % 360 + 360) % 360 - 180);
+}
+
+function transformForDegrees(degrees) {
+  return `rotateX(${number(degrees[0])}deg) rotateY(${number(degrees[1])}deg) rotateZ(${number(degrees[2])}deg)`;
+}
+
 function nearestEquivalentDegrees(value, previousValue) {
   return value - Math.round((value - previousValue) / 360) * 360;
 }
 
-function assertEveryAdjacentStateChangesAllPublications(transforms, colorRows) {
+function assertEveryAdjacentStateChangesAllPublications(transforms, colorRows, cycleClosureTransform) {
   for (let stateIndex = 1; stateIndex < transforms.length; stateIndex += 1) {
     if (transforms[stateIndex] === transforms[stateIndex - 1] ||
         colorRows[stateIndex].some((paletteIndex, axis) => paletteIndex === colorRows[stateIndex - 1][axis])) {
       throw new Error(`Prepared cssMenger state ${stateIndex} cannot use the direct adjacent-publication path`);
     }
+  }
+  if (cycleClosureTransform === transforms.at(-1)) {
+    throw new Error("Prepared cssMenger cycle boundary cannot hold a publication state");
   }
 }
 

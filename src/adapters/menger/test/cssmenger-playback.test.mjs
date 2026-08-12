@@ -8,33 +8,76 @@ import {
 } from "../src/cssmenger/preparedPlayback.mjs";
 import { buildPreparedMengerPlayback } from "../src/prepare/cssmenger/sourcePlayback.mjs";
 
-test("prepared XScreenSaver random, palette, and rotator segment is deterministic", () => {
+test("prepared XScreenSaver prefix and forward cyclic closure are deterministic and C2-seamless", () => {
   const playback = buildPreparedMengerPlayback();
   assert.equal(playback.seed, 26080801);
-  assert.equal(playback.stateCount, 1440);
+  assert.equal(playback.stateCount, 1536);
   assert.equal(playback.palette.length, 128);
-  assert.equal(playback.transforms.length, 1440);
-  assert.equal(playback.nativeRotationDegrees.length, 1440);
-  assert.equal(playback.colorRows.length, 1440);
+  assert.equal(playback.transforms.length, 1536);
+  assert.equal(playback.nativeRotationDegrees.length, 1536);
+  assert.equal(playback.preparedRotationDegrees.length, 1536);
+  assert.equal(playback.colorRows.length, 1536);
   assert.equal(hash(playback.palette), "84d4a563fb968f6e084dd7e7d88e40dc5953a86b0794c5b0e19283ab47d5b55f");
-  assert.equal(hash(playback.transforms), "92d277579d2e3af381b8ed3e25fcd90a64e81998047ae58b027952d1e4123bc3");
-  assert.equal(hash(playback.colorRows), "eca63f6fa95d349ff7963628ebad2f8bbb2924e02a0e3c22055d9b718297d224");
+  assert.equal(hash(playback.transforms), "4f2822dd83e0026c4c6e28b6dfb9f73f47e17e84953c902942f544f7a949d78c");
+  assert.equal(hash(playback.preparedRotationDegrees),
+    "761e701cbaac483898fd92c8f7e19dd0c0c546d3461324177a9767b9651f51de");
+  assert.equal(hash(playback.colorRows), "0628ace81c94f76899615a5f262b2d97b29600390711a757c9176e00768785e0");
   assert.equal(playback.transforms[0], "rotateX(-95.527948277deg) rotateY(94.637081676deg) rotateZ(-94.183856868deg)");
   assert.deepEqual(playback.colorRows[0], [0, 42, 84]);
+  assert.deepEqual(playback.colorRows.at(-1), [127, 41, 83]);
   assert.equal(playback.adjacentPublicationMode, "all-fields-change");
-  assert.equal(playback.transformAngleMode, "prepared-nearest-equivalent-unwrapped-degrees");
+  assert.equal(playback.loopMode, "prepared-forward-cyclic-c2-rotation-and-palette");
+  assert.equal(playback.transformAngleMode,
+    "prepared-native-prefix-quintic-c2-cyclic-closure-unwrapped-degrees");
   for (let stateIndex = 1; stateIndex < playback.stateCount; stateIndex += 1) {
     assert.notEqual(playback.transforms[stateIndex], playback.transforms[stateIndex - 1]);
     const previousDegrees = transformDegrees(playback.transforms[stateIndex - 1]);
     const currentDegrees = transformDegrees(playback.transforms[stateIndex]);
     assert.equal(currentDegrees.every((value, axis) => Math.abs(value - previousDegrees[axis]) < 180), true);
-    const nativeDegrees = playback.nativeRotationDegrees[stateIndex];
-    const sourceTransformDegrees = [-nativeDegrees[0], nativeDegrees[1], -nativeDegrees[2]];
-    assert.equal(currentDegrees.every((value, axis) => equivalentAngleDelta(value, sourceTransformDegrees[axis]) < 1e-7), true);
+    const preparedDegrees = playback.preparedRotationDegrees[stateIndex];
+    const preparedTransformDegrees = [-preparedDegrees[0], preparedDegrees[1], -preparedDegrees[2]];
+    assert.equal(currentDegrees.every((value, axis) =>
+      equivalentAngleDelta(value, preparedTransformDegrees[axis]) < 1e-7), true);
+    if (stateIndex < playback.nativePrefixStateCount) {
+      const nativeDegrees = playback.nativeRotationDegrees[stateIndex];
+      const nativeTransformDegrees = [-nativeDegrees[0], nativeDegrees[1], -nativeDegrees[2]];
+      assert.equal(currentDegrees.every((value, axis) =>
+        equivalentAngleDelta(value, nativeTransformDegrees[axis]) < 1e-7), true);
+    }
     for (let axis = 0; axis < 3; axis += 1) {
       assert.notEqual(playback.colorRows[stateIndex][axis], playback.colorRows[stateIndex - 1][axis]);
     }
   }
+  const first = transformDegrees(playback.transforms[0]);
+  const second = transformDegrees(playback.transforms[1]);
+  const third = transformDegrees(playback.transforms[2]);
+  const beforeClosure = transformDegrees(playback.transforms.at(-1));
+  const beforeBeforeClosure = transformDegrees(playback.transforms.at(-2));
+  const closure = transformDegrees(playback.cycleClosureTransform);
+  const initialVelocity = second.map((value, axis) => value - first[axis]);
+  const closureVelocity = closure.map((value, axis) => value - beforeClosure[axis]);
+  const initialAcceleration = third.map((value, axis) => value - 2 * second[axis] + first[axis]);
+  const closureAcceleration = closure.map((value, axis) =>
+    value - 2 * beforeClosure[axis] + beforeBeforeClosure[axis]);
+  assert.equal(closure.every((value, axis) => equivalentAngleDelta(value, first[axis]) < 1e-7), true);
+  assert.equal(closureVelocity.every((value, axis) => Math.abs(value - initialVelocity[axis]) < 1e-7), true);
+  assert.equal(closureAcceleration.every((value, axis) =>
+    Math.abs(value - initialAcceleration[axis]) < 1e-7), true);
+  assert.deepEqual(playback.cycleClosure, {
+    schema: "cssmenger-prepared-cyclic-rotation-closure@1",
+    closureStartState: 992,
+    nativePrefixStateCount: 995,
+    stateCount: 1536,
+    targetTurnCounts: [3, -3, 1],
+    cycleDurationMilliseconds: 46080,
+    interpolation: "prepare-time-quintic-through-two-position-velocity-acceleration-boundaries",
+    orientationMaximumEquivalentDeltaDegrees: 0,
+    velocityMaximumDeltaDegreesPerTick: playback.cycleClosure.velocityMaximumDeltaDegreesPerTick,
+    accelerationMaximumDeltaDegreesPerTickSquared:
+      playback.cycleClosure.accelerationMaximumDeltaDegreesPerTickSquared,
+  });
+  assert.equal(playback.cycleClosure.velocityMaximumDeltaDegreesPerTick < 1e-9, true);
+  assert.equal(playback.cycleClosure.accelerationMaximumDeltaDegreesPerTickSquared < 1e-9, true);
   assert.equal(playback.runtimeInterpolation, false);
   assert.equal(playback.runtimeColorGeneration, false);
   assert.equal(playback.runtimeRotationCalculation, false);
@@ -114,7 +157,7 @@ test("steady playback publishes one prepared sparse-lighting address set per sou
     assert.equal(defaultStats.preparedLightingAddressPublicationIntervalTicks, 1);
     assert.equal(defaultStats.preparedLightingAddressPublicationDelayMilliseconds, 30);
     assert.equal(defaultStats.preparedLoopPresentationMode,
-      "prepared-adjacent-state-ping-pong-no-reset");
+      "prepared-forward-cyclic-c2-no-turnaround-no-reset");
     assert.equal(defaultStats.preparedFlatSceneLeafLightingSeparation, true);
     assert.equal(defaultStats.preparedFrontFacingAxisSelectionsPerScheduledTick, 3);
     assert.equal(modelTransformWrites, 1);
@@ -251,18 +294,18 @@ test("CSS palette playback selects prepared rows and per-source-cell shadow addr
     assert.equal(player.tick, 4);
     assert.match(leaves[0].style.backgroundPosition, /^0px -324px, -1px -\d+px$/u);
     player.step();
-    assert.equal(player.tick, 3);
-    assert.match(leaves[0].style.backgroundPosition, /^0px -243px, -1px -\d+px$/u);
-    player.step(2);
-    assert.equal(player.tick, 1);
-    assert.match(leaves[0].style.backgroundPosition, /^0px -81px, -1px -\d+px$/u);
-    player.step();
     assert.equal(player.tick, 0);
     assert.match(leaves[0].style.backgroundPosition, /^0px 0px, -1px -\d+px$/u);
+    player.step(2);
+    assert.equal(player.tick, 2);
+    assert.match(leaves[0].style.backgroundPosition, /^0px -162px, -1px -\d+px$/u);
     player.step();
-    assert.equal(player.tick, 1);
+    assert.equal(player.tick, 3);
+    assert.match(leaves[0].style.backgroundPosition, /^0px -243px, -1px -\d+px$/u);
+    player.step();
+    assert.equal(player.tick, 4);
     assert.equal(player.stats().preparedLoopPresentationMode,
-      "prepared-adjacent-state-ping-pong-no-reset");
+      "prepared-forward-cyclic-c2-no-turnaround-no-reset");
   } finally {
     if (originalHTMLElement === undefined) delete globalThis.HTMLElement;
     else globalThis.HTMLElement = originalHTMLElement;
@@ -337,11 +380,11 @@ test("frozen mobile lighting initializes every leaf once and never publishes lig
     assert.equal(initialAddresses.every(Boolean), true);
     player.step(4);
     player.step();
-    assert.equal(player.tick, 3);
-    player.step(3);
     assert.equal(player.tick, 0);
+    player.step(3);
+    assert.equal(player.tick, 3);
     player.step();
-    assert.equal(player.tick, 1);
+    assert.equal(player.tick, 4);
     player.setTick(3);
     assert.equal(transformWrites, 11);
     assert.equal(lightingAddressWrites, 84);
@@ -349,7 +392,7 @@ test("frozen mobile lighting initializes every leaf once and never publishes lig
     assert.equal(player.stats().preparedColorPublicationMode,
       "prepared-frozen-lighting-all-leaf-initialization-only");
     assert.equal(player.stats().preparedLoopPresentationMode,
-      "prepared-adjacent-state-ping-pong-no-reset");
+      "prepared-forward-cyclic-c2-no-turnaround-no-reset");
   } finally {
     if (originalHTMLElement === undefined) delete globalThis.HTMLElement;
     else globalThis.HTMLElement = originalHTMLElement;
@@ -441,23 +484,31 @@ test("compositor time owns lighting state and collapses missed prepared states i
     assert.equal(player.stats().preparedCollapsedLightingResyncCount, 1);
     assert.equal(player.stats().preparedMaximumCollapsedLightingStateCount, 8);
 
+    animationCurrentTime = 330;
+    now = 330;
+    requestedDelay();
+    requestedFrame(330);
+    assert.equal(player.tick, 11);
+    assert.equal(lightingAddressWrites, 168);
+    assert.equal(player.stats().preparedCollapsedLightingResyncCount, 2);
+
+    animationCurrentTime = 360;
+    now = 360;
+    requestedDelay();
+    requestedFrame(360);
+    assert.equal(player.tick, 0);
+    assert.equal(lightingAddressWrites, 210);
+
     animationCurrentTime = 390;
     now = 390;
     requestedDelay();
     requestedFrame(390);
-    assert.equal(player.tick, 9);
-    assert.equal(lightingAddressWrites, 126);
-
-    animationCurrentTime = 420;
-    now = 420;
-    requestedDelay();
-    requestedFrame(420);
     player.pause();
-    assert.equal(player.tick, 8);
-    assert.equal(lightingAddressWrites, 168);
-    assert.equal(leaves[0].style.backgroundPosition, "0px -648px");
+    assert.equal(player.tick, 1);
+    assert.equal(lightingAddressWrites, 252);
+    assert.equal(leaves[0].style.backgroundPosition, "0px -81px");
     assert.equal(animationCurrentTimeWrites, 1);
-    assert.equal(player.stats().runtimeCompositorClockReadCount, 5);
+    assert.equal(player.stats().runtimeCompositorClockReadCount, 6);
     assert.equal(player.stats().preparedSchedulerCatchUpMode,
       "compositor-clock-adjacent-or-collapsed-prepared-resync");
   } finally {
@@ -543,7 +594,7 @@ test("late playback still advances one adjacent prepared state per scheduled dra
     player.resume();
     requestedDelay();
     requestedFrame(400);
-    assert.equal(player.tick, 10);
+    assert.equal(player.tick, 0);
     assert.equal(player.paused, false);
     player.pause();
   } finally {
@@ -579,16 +630,6 @@ function fakeSparseAtlas(frontFacingSchedule, {
   const leafIndexBytes = Buffer.from(selectedLeafIndices);
   const slotIndices = Array.from({ length: slotCount }, (_, index) => index);
   const slotIndexBytes = u16leBytes(slotIndices);
-  const reverse = reverseFakeAddressSchedule({
-    stateOffsets,
-    leafIndices: selectedLeafIndices,
-    slotIndices,
-    stateCount: sourceStateCount,
-    leafCount: 84,
-  });
-  const reverseStateOffsetBytes = u16leBytes(reverse.offsets);
-  const reverseLeafIndexBytes = Buffer.from(reverse.leafIndices);
-  const reverseSlotIndexBytes = u16leBytes(reverse.slotIndices);
   return {
     schema: "cssmenger-prepared-sparse-leaf-lighting-atlas@1",
     leafCount: 84,
@@ -617,16 +658,6 @@ function fakeSparseAtlas(frontFacingSchedule, {
     addressSlotIndexByteLength: slotIndexBytes.length,
     addressSlotIndicesBase64: slotIndexBytes.toString("base64"),
     addressUpdateCount: slotCount,
-    reverseAddressScheduleSchema:
-      "cssmenger-prepared-exact-reverse-delta-lighting-address-schedule@1",
-    reverseAddressStateOffsetByteLength: reverseStateOffsetBytes.length,
-    reverseAddressStateOffsetsBase64: reverseStateOffsetBytes.toString("base64"),
-    reverseAddressLeafIndexByteLength: reverseLeafIndexBytes.length,
-    reverseAddressLeafIndicesBase64: reverseLeafIndexBytes.toString("base64"),
-    reverseAddressSlotIndexByteLength: reverseSlotIndexBytes.length,
-    reverseAddressSlotIndicesBase64: reverseSlotIndexBytes.toString("base64"),
-    reverseAddressUpdateCount: reverse.slotIndices.length,
-    reverseAddressWriteCountPerState: reverse.writeCountPerState,
     addressWriteCountPerState: {
       minimum: Math.min(...writeCounts),
       maximum: Math.max(...writeCounts),
@@ -643,7 +674,6 @@ function fakeFrozenMobileAtlas(frontFacingSchedule) {
   const stateOffsetBytes = u16leBytes(stateOffsets);
   const leafIndexBytes = Buffer.from(Array.from({ length: 84 }, (_, index) => index));
   const slotIndexBytes = u16leBytes(Array.from({ length: 84 }, (_, index) => index));
-  const reverseStateOffsetBytes = u16leBytes(Array.from({ length: sourceStateCount + 1 }, () => 0));
   return {
     schema: "cssmenger-prepared-sparse-leaf-lighting-atlas@1",
     leafCount: 84,
@@ -651,8 +681,8 @@ function fakeFrozenMobileAtlas(frontFacingSchedule) {
     visibleLeafFieldCount: frontFacingSchedule.leafIndices.length,
     addressedVisibleLeafFieldCount: frontFacingSchedule.leafIndices.length,
     sourceStateCount,
-    lightingSampleIntervalTicks: 1_440,
-    lightingSampleDelayMilliseconds: 43_200,
+    lightingSampleIntervalTicks: 1_536,
+    lightingSampleDelayMilliseconds: 46_080,
     lightingSampleCount: 1,
     transformPublicationIntervalTicks: 1,
     transformPublicationDelayMilliseconds: 30,
@@ -672,21 +702,6 @@ function fakeFrozenMobileAtlas(frontFacingSchedule) {
     addressSlotIndexByteLength: slotIndexBytes.length,
     addressSlotIndicesBase64: slotIndexBytes.toString("base64"),
     addressUpdateCount: 84,
-    reverseAddressScheduleSchema:
-      "cssmenger-prepared-exact-reverse-delta-lighting-address-schedule@1",
-    reverseAddressStateOffsetByteLength: reverseStateOffsetBytes.length,
-    reverseAddressStateOffsetsBase64: reverseStateOffsetBytes.toString("base64"),
-    reverseAddressLeafIndexByteLength: 0,
-    reverseAddressLeafIndicesBase64: "",
-    reverseAddressSlotIndexByteLength: 0,
-    reverseAddressSlotIndicesBase64: "",
-    reverseAddressUpdateCount: 0,
-    reverseAddressWriteCountPerState: {
-      minimum: 0,
-      maximum: 0,
-      average: 0,
-      zeroWriteStateCount: sourceStateCount,
-    },
     addressWriteCountPerState: {
       minimum: 0,
       maximum: 84,
@@ -694,51 +709,6 @@ function fakeFrozenMobileAtlas(frontFacingSchedule) {
       zeroWriteStateCount: sourceStateCount - 1,
     },
     redundantAddressWriteCountRemoved: frontFacingSchedule.leafIndices.length - 84,
-  };
-}
-
-function reverseFakeAddressSchedule({
-  stateOffsets,
-  leafIndices,
-  slotIndices,
-  stateCount,
-  leafCount,
-}) {
-  const slotsByState = [];
-  const currentSlots = new Int32Array(leafCount).fill(-1);
-  for (let stateIndex = 0; stateIndex < stateCount; stateIndex += 1) {
-    for (let cursor = stateOffsets[stateIndex]; cursor < stateOffsets[stateIndex + 1]; cursor += 1) {
-      currentSlots[leafIndices[cursor]] = slotIndices[cursor];
-    }
-    slotsByState.push(Int32Array.from(currentSlots));
-  }
-  const offsets = [0];
-  const reverseLeafIndices = [];
-  const reverseSlotIndices = [];
-  const writeCounts = [];
-  for (let stateIndex = 0; stateIndex < stateCount; stateIndex += 1) {
-    const before = reverseLeafIndices.length;
-    if (stateIndex < stateCount - 1) {
-      for (let leafIndex = 0; leafIndex < leafCount; leafIndex += 1) {
-        const target = slotsByState[stateIndex][leafIndex];
-        if (target < 0 || slotsByState[stateIndex + 1][leafIndex] === target) continue;
-        reverseLeafIndices.push(leafIndex);
-        reverseSlotIndices.push(target);
-      }
-    }
-    writeCounts.push(reverseLeafIndices.length - before);
-    offsets.push(reverseLeafIndices.length);
-  }
-  return {
-    offsets,
-    leafIndices: reverseLeafIndices,
-    slotIndices: reverseSlotIndices,
-    writeCountPerState: {
-      minimum: Math.min(...writeCounts),
-      maximum: Math.max(...writeCounts),
-      average: reverseSlotIndices.length / stateCount,
-      zeroWriteStateCount: writeCounts.filter((count) => count === 0).length,
-    },
   };
 }
 

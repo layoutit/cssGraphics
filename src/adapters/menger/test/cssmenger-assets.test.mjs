@@ -10,13 +10,30 @@ import { PREPARED_STATE_COUNT } from "../src/prepare/cssmenger/sourcePlayback.mj
 const root = resolve(import.meta.dirname, "..");
 const generated = generatedPublicRoot;
 
-test("prepared lighting atlas uses one direct stylesheet URL without a runtime fetch", async () => {
+test("prepared lighting atlas decodes and retains one direct stylesheet URL without a runtime fetch", async () => {
   const originalFetch = globalThis.fetch;
+  const originalImage = globalThis.Image;
   const assetSha256 = "a".repeat(64);
   let fetchCount = 0;
+  const decodedUrls = [];
   globalThis.fetch = async () => {
     fetchCount += 1;
     throw new Error("Prepared CSS atlas binding must not fetch at runtime");
+  };
+  globalThis.Image = class PreparedTestImage {
+    complete = true;
+    naturalWidth = 27;
+    naturalHeight = 27;
+    decoding = "auto";
+    src = "";
+
+    async decode() {
+      decodedUrls.push(this.src);
+    }
+
+    removeAttribute(name) {
+      if (name === "src") this.src = "";
+    }
   };
   try {
     const asset = await loadPreparedMengerPlaneAtlasAsset({
@@ -37,6 +54,9 @@ test("prepared lighting atlas uses one direct stylesheet URL without a runtime f
     });
     assert.equal(asset.url, `/cssmenger/assets/lighting-grid-${assetSha256}.webp`);
     assert.equal(asset.cssImageBinding, "prepared-direct-stylesheet-url");
+    assert.equal(asset.decodeReadiness, "awaited-image-decode-before-mount");
+    assert.equal(asset.decodedImageRetention, "javascript-image-object-no-dom-node");
+    assert.deepEqual(decodedUrls, [`/cssmenger/assets/lighting-grid-${assetSha256}.webp`]);
     assert.equal(fetchCount, 0);
     assert.equal(asset.retained, true);
     asset.destroy();
@@ -54,11 +74,17 @@ test("prepared lighting atlas uses one direct stylesheet URL without a runtime f
       height: 27,
     });
     assert.equal(cssOpacityAsset.paletteRole, "css-opacity-base");
+    assert.deepEqual(decodedUrls, [
+      `/cssmenger/assets/lighting-grid-${assetSha256}.webp`,
+      `/cssmenger/assets/planes-opacity-base-${assetSha256}.png`,
+    ]);
     assert.equal(fetchCount, 0);
     cssOpacityAsset.destroy();
     assert.equal(cssOpacityAsset.retained, false);
   } finally {
     globalThis.fetch = originalFetch;
+    if (originalImage === undefined) delete globalThis.Image;
+    else globalThis.Image = originalImage;
   }
 });
 

@@ -5,6 +5,19 @@ export async function loadPreparedMengerPlaneAtlasAsset(atlas) {
       !Number.isSafeInteger(atlas.width) || !Number.isSafeInteger(atlas.height)) {
     throw new Error("Prepared cssMenger plane atlas contract is invalid");
   }
+  const image = new Image();
+  image.decoding = "sync";
+  image.src = atlas.assetUrl;
+  try {
+    await image.decode();
+  } catch (error) {
+    throw new Error(`Prepared cssMenger plane atlas decode failed (${atlas.assetUrl})`, {
+      cause: error,
+    });
+  }
+  if (!image.complete || image.naturalWidth !== atlas.width || image.naturalHeight !== atlas.height) {
+    throw new Error(`Prepared cssMenger plane atlas decoded dimensions drifted (${atlas.assetUrl})`);
+  }
   let retained = true;
   return Object.freeze({
     url: atlas.assetUrl,
@@ -13,9 +26,12 @@ export async function loadPreparedMengerPlaneAtlasAsset(atlas) {
     contractSchema: atlas.schema,
     paletteRole: atlas.paletteRole ?? null,
     cssImageBinding: "prepared-direct-stylesheet-url",
+    decodeReadiness: "awaited-image-decode-before-mount",
+    decodedImageRetention: "javascript-image-object-no-dom-node",
     destroy() {
       if (!retained) return;
       retained = false;
+      image.removeAttribute("src");
     },
     get retained() { return retained; },
   });

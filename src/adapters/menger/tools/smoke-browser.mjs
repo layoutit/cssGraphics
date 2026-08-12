@@ -260,6 +260,9 @@ try {
         evidence.stats.preparedPlaneAtlasAssetBytes !== evidence.expectedAssetBytes ||
         evidence.stats.preparedPlaneAtlasDecodedBytes !== 89_812_800 ||
         evidence.stats.preparedPlaneAtlasCssImageBinding !== "prepared-direct-stylesheet-url" ||
+        evidence.stats.preparedPlaneAtlasDecodeReadiness !== "awaited-image-decode-before-mount" ||
+        evidence.stats.preparedPlaneAtlasDecodedImageRetention !==
+          "javascript-image-object-no-dom-node" ||
         evidence.stats.preparedColorPublicationMode !==
           "prepared-held-lighting-sample-plus-per-state-front-face-address" ||
         evidence.stats.preparedLightingAddressPublicationIntervalTicks !== 1 ||
@@ -357,6 +360,8 @@ try {
         leafCount: scene.querySelectorAll(":scope > b").length,
         selectedDecodedBytes: debug.stats().preparedPlaneAtlasDecodedBytes,
         selectedAssetBytes: debug.stats().preparedPlaneAtlasAssetBytes,
+        selectedDecodeReadiness: debug.stats().preparedPlaneAtlasDecodeReadiness,
+        selectedDecodedImageRetention: debug.stats().preparedPlaneAtlasDecodedImageRetention,
         selectedLightingIntervalTicks: debug.stats().preparedColorPublicationIntervalTicks,
         selectedLightingAddressUpdateCount: debug.stats().preparedLightingAddressUpdateCount,
         lightingAddressesChange: lightingAddresses.slice(1).some((addresses) =>
@@ -392,6 +397,8 @@ try {
         mobileEvidence.selectedScene !== "depth-2" || mobileEvidence.leafCount !== 30 ||
         mobileEvidence.selectedDecodedBytes !== 3_572_100 ||
         mobileEvidence.selectedAssetBytes !== mobileEvidence.expectedAssetBytes ||
+        mobileEvidence.selectedDecodeReadiness !== "awaited-image-decode-before-mount" ||
+        mobileEvidence.selectedDecodedImageRetention !== "javascript-image-object-no-dom-node" ||
         mobileEvidence.selectedLightingIntervalTicks !== 2 ||
         mobileEvidence.selectedLightingAddressUpdateCount !== 11_680 ||
         !mobileEvidence.lightingAddressesChange ||

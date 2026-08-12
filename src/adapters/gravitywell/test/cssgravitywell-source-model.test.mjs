@@ -15,7 +15,7 @@ import {
   SOURCE,
 } from "../src/prepare/cssgravitywell/sourceModel.mjs";
 import {
-  CSSGRAVITYWELL_VIEWPORT_PROFILE_SIZES,
+  CSSGRAVITYWELL_VIEWPORT_PROFILES,
   encodeGravityWellViewportVisibility,
   prepareGravityWellViewportVisibility,
 } from "../src/prepare/cssgravitywell/visibilitySchedule.mjs";
@@ -81,13 +81,16 @@ test("prepared palette is a green through red source-depth ramp", () => {
   assert.equal(fogged[31], "rgb(0 255 0 / 0.6)");
 });
 
-test("viewport visibility is prepared as sparse conservative square profiles", () => {
+test("viewport visibility is prepared as sparse conservative rectangular profiles", () => {
   const states = buildPreparedGravityWellBankStates({ seed: CSSGRAVITYWELL_SEEDS[0] });
   const timeline = buildPreparedGravityWellTimeline(states);
   const quadsByFrame = timeline.frames.map((frame) => preparedGridLineQuads(states, frame.depths));
   const schedule = prepareGravityWellViewportVisibility(quadsByFrame);
   const encoded = encodeGravityWellViewportVisibility(schedule);
-  assert.deepEqual(schedule.profiles.map((profile) => profile.size), CSSGRAVITYWELL_VIEWPORT_PROFILE_SIZES);
+  assert.deepEqual(
+    schedule.profiles.map(({ width, height }) => ({ width, height })),
+    CSSGRAVITYWELL_VIEWPORT_PROFILES,
+  );
   assert.equal(schedule.frameCount, timeline.frameCount);
   assert.equal(schedule.leafCount, 1_922);
   assert.ok(schedule.profiles.every((profile) =>
@@ -96,6 +99,6 @@ test("viewport visibility is prepared as sparse conservative square profiles", (
     profile.minimumVisibleCount > 500 &&
     profile.maximumVisibleCount < schedule.leafCount));
   assert.equal(String.fromCharCode(...encoded.subarray(0, 4)), "CGWV");
-  assert.equal(encoded[4], 1);
-  assert.equal(encoded[5], CSSGRAVITYWELL_VIEWPORT_PROFILE_SIZES.length);
+  assert.equal(encoded[4], 2);
+  assert.equal(encoded[5], CSSGRAVITYWELL_VIEWPORT_PROFILES.length);
 });

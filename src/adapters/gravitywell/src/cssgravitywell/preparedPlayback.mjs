@@ -10,10 +10,12 @@ export async function createGravityWellPreparedPlayer({
   randomUint32 = cryptoRandomUint32,
   onBankChange = () => undefined,
   onError = () => undefined,
+  requestFrame = globalThis.requestAnimationFrame.bind(globalThis),
+  cancelFrame = globalThis.cancelAnimationFrame.bind(globalThis),
   setDelay = globalThis.setTimeout.bind(globalThis),
   clearDelay = globalThis.clearTimeout.bind(globalThis),
   readNow = globalThis.performance.now.bind(globalThis.performance),
-  viewportMaxAxis = defaultViewportMaxAxis(),
+  viewportSize = defaultViewportSize(),
 }) {
   const leaves = mounted.model.render.leaves.map((leaf) => mounted.leafHandles.get(leaf.id)?.element);
   const shapes = mounted.model.render.shapes.map((shape) => mounted.shapeElements.get(shape.id));
@@ -47,16 +49,22 @@ export async function createGravityWellPreparedPlayer({
   let playback = activeBank.playback;
   let transformBlocks = activeBank.transformBlocks;
   let changeSchedule = activeBank.changeSchedule;
-  let selectedViewportMaxAxis = validateViewportMaxAxis(viewportMaxAxis);
+  let selectedViewportSize = validateViewportSize(viewportSize.width, viewportSize.height);
   let visibilitySchedule = playback.visibilitySchedule;
-  let selectedVisibilityProfile = selectVisibilityProfile(visibilitySchedule, selectedViewportMaxAxis);
+  let selectedVisibilityProfile = selectVisibilityProfile(
+    visibilitySchedule,
+    selectedViewportSize.width,
+    selectedViewportSize.height,
+  );
   let presentedVisibilityFrameIndex = -1;
   let visibilityInitialized = false;
   let currentVisibleLeafCount = 0;
   let firstBlockLookaheadFrameIndex = Math.max(1, Math.floor(playback.blockFrameCount / 2));
   const frameMilliseconds = playback.frameMilliseconds;
+  const schedulerLeadMilliseconds = Math.min(10, frameMilliseconds / 3);
   let paused = true;
   let destroyed = false;
+  let frameRequest = null;
   let delayRequest = null;
   let nextFrameAt = null;
   let tick = 0;
@@ -73,6 +81,8 @@ export async function createGravityWellPreparedPlayer({
   let viewportProfileSwitchCount = 0;
   let viewportProfileRebuildLeafScanCount = 0;
   let schedulerCallbacks = 0;
+  let schedulerFrameRequests = 0;
+  let schedulerTimerCallbacks = 0;
   let schedulerTimerSchedules = 0;
   let bankSwitchCount = 0;
   let runtimeBankWaitCount = 0;
@@ -262,7 +272,10 @@ export async function createGravityWellPreparedPlayer({
   function queueNextBank() {
     if (!cycleBanks || bankCount === 1 || pendingBankPromise || pendingBank) return pendingBankPromise;
     pendingBankIndex = nextBankIndex();
-    pendingBankPromise = Promise.resolve(loadBank(pendingBankIndex)).then((loaded) => {
+    pendingBankPromise = Promise.resolve(loadBank(pendingBankIndex, {
+      lookahead: true,
+      incremental: true,
+    })).then((loaded) => {
       pendingBank = validateBank(loaded, pendingBankIndex, leaves.length);
       pendingBankPromise = null;
       return pendingBank;
@@ -286,7 +299,11 @@ export async function createGravityWellPreparedPlayer({
     transformBlocks = activeBank.transformBlocks;
     changeSchedule = activeBank.changeSchedule;
     visibilitySchedule = playback.visibilitySchedule;
-    selectedVisibilityProfile = selectVisibilityProfile(visibilitySchedule, selectedViewportMaxAxis);
+    selectedVisibilityProfile = selectVisibilityProfile(
+      visibilitySchedule,
+      selectedViewportSize.width,
+      selectedViewportSize.height,
+    );
     firstBlockLookaheadFrameIndex = Math.max(1, Math.floor(playback.blockFrameCount / 2));
     frameIndex = 0;
     selectVisibilityFrame(frameIndex, -1);
@@ -308,27 +325,30 @@ export async function createGravityWellPreparedPlayer({
     return applyFrame(frameIndex + 1);
   }
 
-  function schedule() {
-    if (paused || delayRequest !== null) return;
-    const delay = nextFrameAt === null ? 0 : Math.ceil(Math.max(0, nextFrameAt - readNow()));
-    schedulerTimerSchedules += 1;
-    delayRequest = setDelay(loop, delay);
+  function requestPaintAlignedPublication() {
+    frameRequest = requestFrame(loop);
+    schedulerFrameRequests += 1;
   }
 
-  function loop() {
-    delayRequest = null;
+  function schedule() {
+    if (paused || frameRequest !== null || delayRequest !== null) return;
+    const delay = Math.max(0, nextFrameAt - readNow() - schedulerLeadMilliseconds);
+    if (delay <= 1) {
+      requestPaintAlignedPublication();
+      return;
+    }
+    schedulerTimerSchedules += 1;
+    delayRequest = setDelay(() => {
+      delayRequest = null;
+      schedulerTimerCallbacks += 1;
+      if (!paused && frameRequest === null) requestPaintAlignedPublication();
+    }, delay);
+  }
+
+  function loop(timestamp) {
+    frameRequest = null;
     schedulerCallbacks += 1;
     if (paused) return;
-    const timestamp = readNow();
-    if (nextFrameAt === null) {
-      nextFrameAt = timestamp + frameMilliseconds;
-      schedule();
-      return;
-    }
-    if (timestamp < nextFrameAt) {
-      schedule();
-      return;
-    }
     nextFrameAt += frameMilliseconds;
     if (nextFrameAt <= timestamp) nextFrameAt = timestamp + frameMilliseconds;
     const pending = advanceOne();
@@ -339,6 +359,8 @@ export async function createGravityWellPreparedPlayer({
   function pause() {
     paused = true;
     nextFrameAt = null;
+    if (frameRequest !== null) cancelFrame(frameRequest);
+    frameRequest = null;
     if (delayRequest !== null) clearDelay(delayRequest);
     delayRequest = null;
     return tick;
@@ -358,7 +380,7 @@ export async function createGravityWellPreparedPlayer({
     resume() {
       if (!paused) return tick;
       paused = false;
-      nextFrameAt = null;
+      nextFrameAt = readNow() + frameMilliseconds;
       schedule();
       return tick;
     },
@@ -385,16 +407,20 @@ export async function createGravityWellPreparedPlayer({
       }
       return this.setTick(activeBank.scene.timeline.sourceFrameStartIndex + sourceTick);
     },
-    setViewportMaxAxis(value) {
-      const nextViewportMaxAxis = validateViewportMaxAxis(value);
-      const nextProfile = selectVisibilityProfile(visibilitySchedule, nextViewportMaxAxis);
-      selectedViewportMaxAxis = nextViewportMaxAxis;
-      if (nextProfile === selectedVisibilityProfile) return nextProfile?.size ?? null;
+    setViewportSize(width, height) {
+      const nextViewportSize = validateViewportSize(width, height);
+      const nextProfile = selectVisibilityProfile(
+        visibilitySchedule,
+        nextViewportSize.width,
+        nextViewportSize.height,
+      );
+      selectedViewportSize = nextViewportSize;
+      if (nextProfile === selectedVisibilityProfile) return profileDimensions(nextProfile);
       selectedVisibilityProfile = nextProfile;
       viewportProfileSwitchCount += 1;
       selectVisibilityFrame(frameIndex, -1);
       publishNewlyVisibleLeaves();
-      return nextProfile?.size ?? null;
+      return profileDimensions(nextProfile);
     },
     assertStableDomIdentity() {
       target.assertStableDomIdentity();
@@ -428,12 +454,17 @@ export async function createGravityWellPreparedPlayer({
         visibilityCatchupColorWrites,
         viewportProfileSwitchCount,
         viewportProfileRebuildLeafScanCount,
-        selectedViewportMaxAxis,
-        selectedViewportProfileSize: selectedVisibilityProfile?.size ?? null,
+        selectedViewportWidth: selectedViewportSize.width,
+        selectedViewportHeight: selectedViewportSize.height,
+        selectedViewportProfileWidth: selectedVisibilityProfile?.width ?? null,
+        selectedViewportProfileHeight: selectedVisibilityProfile?.height ?? null,
         currentVisibleLeafCount,
         schedulerCallbacks,
-        schedulerTimerCallbacks: schedulerCallbacks,
+        schedulerFrameRequests,
+        schedulerTimerCallbacks,
         schedulerTimerSchedules,
+        schedulerLeadMilliseconds,
+        runtimeSchedulerTransport: "deadline-setTimeout-requestAnimationFrame-prepared-publication",
         preparedTransformChangeIndexCount: changeSchedule.transformCount,
         preparedColorChangeIndexCount: changeSchedule.colorCount,
         runtimeGeometryConstructionCount: 0,
@@ -464,7 +495,7 @@ function validateBank(bank, bankIndex, leafCount) {
       typeof bank.transformBlocks?.activate !== "function" ||
       typeof bank.transformBlocks?.selectColorFrame !== "function" ||
       typeof bank.changeSchedule?.selectFrame !== "function" ||
-      bank.playback.visibilitySchedule?.schema !== "cssgravitywell-prepared-viewport-visibility@1" ||
+      bank.playback.visibilitySchedule?.schema !== "cssgravitywell-prepared-viewport-visibility@2" ||
       bank.playback.visibilitySchedule.frameCount !== bank.playback.frameCount ||
       bank.playback.visibilitySchedule.leafCount !== leafCount ||
       bank.scene.timeline?.firstAndLastGroundFlat !== true ||
@@ -474,28 +505,37 @@ function validateBank(bank, bankIndex, leafCount) {
   return bank;
 }
 
-function defaultViewportMaxAxis() {
+function defaultViewportSize() {
   const width = Number(globalThis.innerWidth);
   const height = Number(globalThis.innerHeight);
   return Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0
-    ? Math.max(width, height)
-    : Infinity;
+    ? Object.freeze({ width, height })
+    : Object.freeze({ width: Infinity, height: Infinity });
 }
 
-function validateViewportMaxAxis(value) {
-  const axis = Number(value);
-  if (axis !== Infinity && (!Number.isFinite(axis) || axis <= 0)) {
-    throw new RangeError("Gravity Well viewport maximum axis must be positive");
+function validateViewportSize(widthValue, heightValue) {
+  const width = Number(widthValue);
+  const height = Number(heightValue);
+  if ((width !== Infinity && (!Number.isFinite(width) || width <= 0)) ||
+      (height !== Infinity && (!Number.isFinite(height) || height <= 0))) {
+    throw new RangeError("Gravity Well viewport dimensions must be positive");
   }
-  return axis;
+  return Object.freeze({ width, height });
 }
 
-function selectVisibilityProfile(schedule, viewportMaxAxis) {
-  if (schedule?.schema !== "cssgravitywell-prepared-viewport-visibility@1" ||
+function selectVisibilityProfile(schedule, viewportWidth, viewportHeight) {
+  if (schedule?.schema !== "cssgravitywell-prepared-viewport-visibility@2" ||
       !Array.isArray(schedule.profiles) || schedule.profiles.length < 1) {
     throw new Error("Gravity Well prepared viewport visibility schedule is incomplete");
   }
-  return schedule.profiles.find((profile) => profile.size >= viewportMaxAxis) ?? null;
+  return schedule.profiles
+    .filter((profile) => profile.width >= viewportWidth && profile.height >= viewportHeight)
+    .sort((left, right) => left.width * left.height - right.width * right.height ||
+      left.width + left.height - right.width - right.height)[0] ?? null;
+}
+
+function profileDimensions(profile) {
+  return profile ? Object.freeze({ width: profile.width, height: profile.height }) : null;
 }
 
 function cryptoRandomUint32() {

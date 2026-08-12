@@ -1,16 +1,32 @@
-export const CSSGRAVITYWELL_VIEWPORT_PROFILE_SIZES = Object.freeze([1_024, 1_536, 1_920, 2_560, 3_840]);
+export const CSSGRAVITYWELL_VIEWPORT_PROFILES = Object.freeze([
+  [430, 960], [960, 430],
+  [480, 960], [960, 480],
+  [640, 1_024], [1_024, 640],
+  [768, 1_024], [1_024, 768],
+  [1_024, 1_024],
+  [800, 1_280], [1_280, 800],
+  [900, 1_440], [1_440, 900],
+  [1_024, 1_536], [1_536, 1_024],
+  [1_536, 1_536],
+  [1_080, 1_920], [1_920, 1_080],
+  [1_920, 1_920],
+  [1_440, 2_560], [2_560, 1_440],
+  [2_560, 2_560],
+  [2_160, 3_840], [3_840, 2_160],
+  [3_840, 3_840],
+].map(([width, height]) => Object.freeze({ width, height })));
 export const CSSGRAVITYWELL_VIEWPORT_MARGIN_PIXELS = 8;
 export const CSSGRAVITYWELL_VIEWPORT_DILATION_FRAMES = 1;
-export const CSSGRAVITYWELL_VISIBILITY_SCHEMA = "cssgravitywell-prepared-viewport-visibility@1";
-export const CSSGRAVITYWELL_VISIBILITY_ENCODING = "gzip-cgwv1-square-profile-sparse-visibility-assignments";
+export const CSSGRAVITYWELL_VISIBILITY_SCHEMA = "cssgravitywell-prepared-viewport-visibility@2";
+export const CSSGRAVITYWELL_VISIBILITY_ENCODING = "gzip-cgwv2-rectangular-profile-sparse-visibility-assignments";
 
 const MAGIC = "CGWV";
 const HEADER_BYTES = 8;
-const PROFILE_HEADER_BYTES = 16;
+const PROFILE_HEADER_BYTES = 18;
 const PERSPECTIVE = 600 / (2 * Math.tan(20 * Math.PI / 180));
 
 export function prepareGravityWellViewportVisibility(quadsByFrame, {
-  profileSizes = CSSGRAVITYWELL_VIEWPORT_PROFILE_SIZES,
+  profileDimensions = CSSGRAVITYWELL_VIEWPORT_PROFILES,
   marginPixels = CSSGRAVITYWELL_VIEWPORT_MARGIN_PIXELS,
   dilationFrames = CSSGRAVITYWELL_VIEWPORT_DILATION_FRAMES,
 } = {}) {
@@ -18,17 +34,18 @@ export function prepareGravityWellViewportVisibility(quadsByFrame, {
   const leafCount = quadsByFrame?.[0]?.length ?? 0;
   if (!Array.isArray(quadsByFrame) || frameCount < 2 || leafCount < 1 ||
       quadsByFrame.some((quads) => !Array.isArray(quads) || quads.length !== leafCount) ||
-      !Array.isArray(profileSizes) || profileSizes.length < 1 ||
-      profileSizes.some((size, index) => !Number.isSafeInteger(size) || size < 1 ||
-        (index > 0 && size <= profileSizes[index - 1])) ||
+      !Array.isArray(profileDimensions) || profileDimensions.length < 1 ||
+      profileDimensions.some((profile) => !Number.isSafeInteger(profile?.width) || profile.width < 1 ||
+        !Number.isSafeInteger(profile?.height) || profile.height < 1) ||
+      new Set(profileDimensions.map((profile) => `${profile.width}x${profile.height}`)).size !== profileDimensions.length ||
       !Number.isSafeInteger(marginPixels) || marginPixels < 0 ||
       !Number.isSafeInteger(dilationFrames) || dilationFrames < 0 || dilationFrames > 4) {
     throw new TypeError("Complete prepared Gravity Well viewport visibility inputs are required");
   }
-  const profiles = profileSizes.map((size) => {
+  const profiles = profileDimensions.map(({ width, height }) => {
     const rawFrames = quadsByFrame.map((quads) => Uint8Array.from(
       quads,
-      (quad) => preparedQuadIntersectsSquareViewport(quad, size, marginPixels) ? 1 : 0,
+      (quad) => preparedQuadIntersectsViewport(quad, width, height, marginPixels) ? 1 : 0,
     ));
     const frames = rawFrames.map((frame, frameIndex) => Uint8Array.from(frame, (selected, leafIndex) => {
       if (selected === 1 || dilationFrames === 0) return selected;
@@ -64,7 +81,8 @@ export function prepareGravityWellViewportVisibility(quadsByFrame, {
     }
     changeOffsets[frameCount] = assignments.length;
     return Object.freeze({
-      size,
+      width,
+      height,
       frameCount,
       leafCount,
       initialVisibleIndices: Uint16Array.from(initialVisibleIndices),
@@ -78,7 +96,7 @@ export function prepareGravityWellViewportVisibility(quadsByFrame, {
   return Object.freeze({
     schema: CSSGRAVITYWELL_VISIBILITY_SCHEMA,
     encoding: CSSGRAVITYWELL_VISIBILITY_ENCODING,
-    selection: "smallest-square-profile-covering-maximum-css-viewport-axis-or-disabled",
+    selection: "smallest-area-rectangular-profile-covering-css-viewport-or-disabled",
     frameCount,
     leafCount,
     marginPixels,
@@ -101,18 +119,19 @@ export function encodeGravityWellViewportVisibility(schedule) {
   const bytes = new Uint8Array(byteLength);
   const view = new DataView(bytes.buffer);
   for (let index = 0; index < MAGIC.length; index += 1) bytes[index] = MAGIC.charCodeAt(index);
-  bytes[4] = 1;
+  bytes[4] = 2;
   bytes[5] = schedule.profiles.length;
   let offset = HEADER_BYTES;
   for (const profile of schedule.profiles) {
-    view.setUint16(offset, profile.size, true);
-    view.setUint16(offset + 2, schedule.marginPixels, true);
-    bytes[offset + 4] = schedule.dilationFrames;
-    bytes[offset + 5] = 0;
-    view.setUint16(offset + 6, profile.frameCount, true);
-    view.setUint16(offset + 8, profile.leafCount, true);
-    view.setUint16(offset + 10, profile.initialVisibleIndices.length, true);
-    view.setUint32(offset + 12, profile.assignments.length, true);
+    view.setUint16(offset, profile.width, true);
+    view.setUint16(offset + 2, profile.height, true);
+    view.setUint16(offset + 4, schedule.marginPixels, true);
+    bytes[offset + 6] = schedule.dilationFrames;
+    bytes[offset + 7] = 0;
+    view.setUint16(offset + 8, profile.frameCount, true);
+    view.setUint16(offset + 10, profile.leafCount, true);
+    view.setUint16(offset + 12, profile.initialVisibleIndices.length, true);
+    view.setUint32(offset + 14, profile.assignments.length, true);
     offset += PROFILE_HEADER_BYTES;
     offset = writeUint16Rows(bytes, offset, profile.initialVisibleIndices);
     for (const value of profile.changeOffsets) {
@@ -125,7 +144,7 @@ export function encodeGravityWellViewportVisibility(schedule) {
   return bytes;
 }
 
-function preparedQuadIntersectsSquareViewport(quad, size, marginPixels) {
+function preparedQuadIntersectsViewport(quad, width, height, marginPixels) {
   if (!Array.isArray(quad?.points) || quad.points.length !== 4) {
     throw new TypeError("Prepared Gravity Well line quad is incomplete");
   }
@@ -146,9 +165,10 @@ function preparedQuadIntersectsSquareViewport(quad, size, marginPixels) {
     minimumY = Math.min(minimumY, y);
     maximumY = Math.max(maximumY, y);
   }
-  const halfExtent = size / 2 + marginPixels;
-  return maximumX >= -halfExtent && minimumX <= halfExtent &&
-    maximumY >= -halfExtent && minimumY <= halfExtent;
+  const halfWidth = width / 2 + marginPixels;
+  const halfHeight = height / 2 + marginPixels;
+  return maximumX >= -halfWidth && minimumX <= halfWidth &&
+    maximumY >= -halfHeight && minimumY <= halfHeight;
 }
 
 function writeUint16Rows(target, offset, values) {

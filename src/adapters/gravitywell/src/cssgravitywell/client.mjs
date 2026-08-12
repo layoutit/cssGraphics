@@ -26,7 +26,7 @@ export function mountGravityWellClient(host) {
   window.addEventListener("error", (event) => recordError(event.message || String(event.error || "error")));
   window.addEventListener("unhandledrejection", (event) => recordError(String(event.reason?.stack || event.reason || "unhandled rejection")));
   window.addEventListener("resize", () => {
-    state.player?.setViewportMaxAxis(Math.max(window.innerWidth, window.innerHeight));
+    state.player?.setViewportSize(window.innerWidth, window.innerHeight);
   }, { passive: true });
   main().catch((error) => recordError(error.stack || error.message || String(error)));
 
@@ -38,14 +38,14 @@ export function mountGravityWellClient(host) {
       loadPreparedGravityWellCatalog(),
     ]);
     const selection = selectInitialGravityWellBank(catalog);
-    const loadBank = async (bankIndex, { lookahead = false } = {}) => {
+    const loadBank = async (bankIndex, { lookahead = false, incremental = lookahead } = {}) => {
       const scene = await loadPreparedGravityWellBankScene(catalog, bankIndex);
       const transformBlocks = createTransformBlockLoader(scene.playback);
-      await transformBlocks.prime(0, { lookahead });
+      await transformBlocks.prime(0, { lookahead, incremental });
       const { changeSchedule } = transformBlocks.bankData();
       return Object.freeze({ scene, playback: scene.playback, transformBlocks, changeSchedule });
     };
-    const initialBank = await loadBank(selection.bankIndex);
+    const initialBank = await loadBank(selection.bankIndex, { lookahead: true, incremental: false });
     const scene = initialBank.scene;
     if (loaded.model.identity.id !== "gravitywell" ||
         loaded.model.render.leaves.length !== scene.metrics.preparedLeafCount) {

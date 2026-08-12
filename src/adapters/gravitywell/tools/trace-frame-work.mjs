@@ -2,6 +2,7 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { chromium } from "playwright";
+import { analyzeTrace, loadTrace, renderMarkdown } from "../../../../scripts/frame-sleuth.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..", "..");
 const generatedRoot = resolve(repositoryRoot, "build/generated/public/cssgravitywell");
@@ -15,9 +16,13 @@ const viewport = Object.freeze({
   height: positiveIntegerEnvironment("CSSGRAVITYWELL_TRACE_HEIGHT", 600),
   deviceScaleFactor: positiveNumberEnvironment("CSSGRAVITYWELL_TRACE_DPR", 1),
 });
-const outputRoot = resolve(repositoryRoot, "bench/results/cssgravitywell/performance");
+const outputRoot = resolve(
+  repositoryRoot,
+  process.env.CSSGRAVITYWELL_TRACE_OUTPUT_ROOT ?? "bench/results/cssgravitywell/performance",
+);
 const tracePath = resolve(outputRoot, "worst-frame-chrome-trace.json");
 const summaryPath = resolve(outputRoot, "worst-frame-summary.json");
+const frameSleuthReportPath = resolve(outputRoot, "frame-sleuth-report.md");
 await mkdir(outputRoot, { recursive: true });
 
 const browser = await chromium.launch({ channel: "chrome", headless: true });
@@ -179,8 +184,6 @@ try {
   });
   const afterMetrics = metricMap(await cdp.send("Performance.getMetrics"));
   await page.waitForTimeout(100);
-  await cdp.send("Tracing.end");
-  await tracingComplete;
   const schedulerBefore = await page.evaluate(() => {
     const debug = globalThis.__cssGravityWellDebug;
     const stats = debug.stats();
@@ -192,6 +195,7 @@ try {
       observer: null,
       startedAt: performance.now(),
     };
+    performance.mark("cssgravitywell-steady-playback-start");
     const sampleFrame = (timestamp) => {
       if (recorder.lastFrameAt !== null) recorder.intervals.push(timestamp - recorder.lastFrameAt);
       recorder.lastFrameAt = timestamp;
@@ -219,18 +223,30 @@ try {
     const recorder = globalThis.__cssGravityWellTraceRecorder;
     recorder.running = false;
     recorder.observer?.disconnect();
+    performance.mark("cssgravitywell-steady-playback-end");
     return { stats: debug.stats(), intervals: recorder.intervals, longTasks: recorder.longTasks };
   });
+  await cdp.send("Tracing.end");
+  await tracingComplete;
   const schedulerAfter = schedulerResult.stats;
   const schedulerTrial = {
     durationMilliseconds: 1_800,
     preparedFrameCount: schedulerAfter.preparedFramesApplied - schedulerBefore.preparedFramesApplied,
     callbackCount: schedulerAfter.schedulerCallbacks - schedulerBefore.schedulerCallbacks,
     transformBlockLoads: schedulerAfter.transformBlocks.loadCount - schedulerBefore.transformBlocks.loadCount,
+    activationWaits:
+      schedulerAfter.transformBlocks.activationWaitCount - schedulerBefore.transformBlocks.activationWaitCount,
+    visibilityProfile: {
+      viewportWidth: schedulerBefore.selectedViewportWidth,
+      viewportHeight: schedulerBefore.selectedViewportHeight,
+      profileWidth: schedulerBefore.selectedViewportProfileWidth,
+      profileHeight: schedulerBefore.selectedViewportProfileHeight,
+      visibleLeafCount: schedulerBefore.currentVisibleLeafCount,
+    },
     frameIntervals: summarizeNumbers(schedulerResult.intervals),
     longTasks: schedulerResult.longTasks,
   };
-  schedulerTrial.emptyCallbackCount = schedulerTrial.callbackCount - schedulerTrial.preparedFrameCount - 1;
+  schedulerTrial.emptyCallbackCount = schedulerTrial.callbackCount - schedulerTrial.preparedFrameCount;
   const marks = Object.fromEntries(events
     .filter((event) => event.cat?.includes("blink.user_timing") && event.name?.startsWith("cssgravitywell-"))
     .map((event) => [event.name, event.ts]));
@@ -275,6 +291,7 @@ try {
       noRedundantColorAttempts:
         publication.delta.leafColorAttempts === publication.delta.leafColorWrites,
       noEmptySchedulerCallbacks: schedulerTrial.emptyCallbackCount === 0,
+      noScheduledTransformBlockWait: schedulerTrial.activationWaits === 0,
       exactPreparedSelectedTransformPublication:
         worstTransitionPublication.actualTransformChanges === worstTransitionPublication.samples[0].transformWrites,
       exactPreparedSelectedColorPublication:
@@ -295,6 +312,24 @@ try {
   };
   await writeFile(tracePath, `${JSON.stringify({ traceEvents: events })}\n`);
   summary.trace.sizeBytes = (await stat(tracePath)).size;
+  const frameSleuthAnalysis = analyzeTrace(await loadTrace(tracePath), {
+    question: "what work did we do on the worst frame?",
+    top: 5,
+    url: "/gravitywell/",
+  });
+  await writeFile(frameSleuthReportPath, renderMarkdown(frameSleuthAnalysis));
+  summary.frameSleuth = {
+    reportPath: frameSleuthReportPath,
+    schema: frameSleuthAnalysis.schema,
+    window: frameSleuthAnalysis.window,
+    displayCadence: frameSleuthAnalysis.cadence.display,
+    drawFrame: frameSleuthAnalysis.cadence.drawFrame,
+    drawGapsAboveBaselineMultiples: frameSleuthAnalysis.cadence.drawGapsAboveBaselineMultiples,
+    worstFrame: frameSleuthAnalysis.worstFrames[0] ?? null,
+    longTasks: frameSleuthAnalysis.longTasks,
+    pipeline: frameSleuthAnalysis.pipeline,
+    evidenceWarnings: frameSleuthAnalysis.capabilities.warnings,
+  };
   await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
   if (errors.length || Object.values(summary.proof).some((value) => value !== true)) {
     throw new Error(`Gravity Well frame trace contract failed: ${JSON.stringify(summary)}`);

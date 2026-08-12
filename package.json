@@ -33,6 +33,8 @@
     "node": ">=22.12.0"
   },
   "scripts": {
+    "framesleuth": "node scripts/frame-sleuth.mjs",
+    "framesleuth:trace": "node scripts/frame-sleuth-trace.mjs",
     "dev": "vite --host 127.0.0.1",
     "dev:3dpipes": "vite --config src/adapters/3dpipes/vite.config.mjs --host 127.0.0.1",
     "dev:flowerbox": "vite --config src/adapters/flowerbox/vite.config.mjs --host 127.0.0.1",
@@ -139,6 +141,7 @@
     "compare:maze:frames": "node src/adapters/maze/tools/compare-frame-sequence.mjs",
     "perf:maze:trace": "node src/adapters/maze/tools/trace-performance.mjs",
     "test:site": "node --test site/test/*.test.mjs",
+    "test:framesleuth": "node --test scripts/frame-sleuth*.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -33,6 +33,9 @@ test("proof tools use the canonical gravitywell route", async () => {
   const trace = await readFile(resolve(adapterRoot, "tools/trace-frame-work.mjs"), "utf8");
   const oracle = await readFile(resolve(adapterRoot, "tools/oracle/run-visual-oracle.mjs"), "utf8");
   assert.match(trace, /127\.0\.0\.1:5174\/gravitywell\//u);
+  assert.match(trace, /cssgravitywell-steady-playback-start/u);
+  assert.match(trace, /analyzeTrace/u);
+  assert.match(trace, /noScheduledTransformBlockWait/u);
   assert.match(oracle, /127\.0\.0\.1:\$\{port\}\/gravitywell\//u);
 });
 
@@ -56,6 +59,7 @@ test("product runtime has one retained DOM renderer and no forbidden geometry ro
     assert.doesNotMatch(source, forbidden);
   }
   assert.match(source, /createPolyMorphPreparedDomTarget/u);
+  assert.match(source, /setViewportSize/u);
   assert.match(source, /leafStyles\[leafIndex\]\.transform\s*=/u);
   assert.match(source, /changes\.transformIndices/u);
   assert.match(source, /changes\.colorIndices/u);
@@ -73,7 +77,7 @@ test("product frame loop publishes only separately prepared writes", async () =>
     playback.indexOf("function schedule"),
   );
   const schedule = playback.slice(
-    playback.indexOf("function schedule"),
+    playback.indexOf("function requestPaintAlignedPublication"),
     playback.indexOf("function pause"),
   );
   const activate = assets.slice(
@@ -82,19 +86,31 @@ test("product frame loop publishes only separately prepared writes", async () =>
   );
   assert.doesNotMatch(publishFrame, /assertStableDomIdentity/u);
   assert.doesNotMatch(publishFrame, /selectedColorRows/u);
-  assert.doesNotMatch(playback, /requestAnimationFrame/u);
+  assert.match(schedule, /requestPaintAlignedPublication/u);
+  assert.match(schedule, /nextFrameAt - readNow\(\) - schedulerLeadMilliseconds/u);
+  assert.match(schedule, /requestFrame\(loop\)/u);
+  assert.match(schedule, /nextFrameAt \+= frameMilliseconds/u);
   assert.doesNotMatch(activate, /new Set/u);
   assert.doesNotMatch(assets, /verifyBytes\(decoded/u);
   assert.doesNotMatch(assets, /transforms\.some/u);
   assert.doesNotMatch(preparer, /decodedSha256/u);
-  assert.match(schedule, /setDelay\(loop, delay\)/u);
+  assert.match(schedule, /setDelay\(\(\) =>/u);
+  assert.match(playback, /deadline-setTimeout-requestAnimationFrame-prepared-publication/u);
   assert.match(assets, /frame-major-reset-delta-varint-transform-indices-then-color-indices/u);
   assert.match(assets, /decoded\.byteLength !== descriptor\.decodedByteLength/u);
   assert.match(assets, /transforms\.length !== descriptor\.transformCount/u);
   assert.match(assets, /gzip-field-major-delta-varint-fixed2-matrix-and-bank-schedule@2/u);
   assert.match(assets, /decodePreparedTransformBlock\(decoded, descriptor, playback, transformIndices\)/u);
+  assert.match(assets, /decodePreparedTransformBlockIncrementally/u);
+  assert.match(assets, /requestIdle/u);
+  assert.match(assets, /setDelay\(resolveDelay, playback\.frameMilliseconds\)/u);
+  assert.match(assets, /incrementalSliceBudgetMilliseconds/u);
+  assert.match(assets, /incrementalDecodeMaximumSliceMilliseconds/u);
   assert.match(assets, /preparedCssStringByteLength !== descriptor\.preparedCssStringByteLength/u);
   assert.match(assets, /frameView\.mode = "delta"/u);
+  assert.match(assets, /activationWaitCount/u);
+  assert.match(assets, /rectangular-profile/u);
+  assert.match(playback, /lookahead:\s*true[\s\S]*incremental:\s*true/u);
   assert.match(preparer, /content-addressed/u);
   assert.match(preparer, /field-major fixed-point varints/u);
   assert.match(preparer, /prepared-transform-block-0/u);

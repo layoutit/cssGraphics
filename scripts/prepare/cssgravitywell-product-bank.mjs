@@ -24,7 +24,8 @@ if (lock.schema !== "cssgravitywell-prepared-bank-lock@2" || lock.bankCount !== 
     lock.maximumTransformBlockPreparedCssStringBytes >= 4_000_000 ||
     lock.maximumResidentTransformPreparedCssStringBytes >= 8_000_000 ||
     lock.colorAssetCount !== 24 || lock.changeAssetCount !== 24 ||
-    lock.visibilityAssetCount !== 24 || lock.visibilityEncodedBytes !== 109_999) {
+    lock.visibilityAssetCount !== 24 || !Number.isSafeInteger(lock.visibilityEncodedBytes) ||
+    lock.visibilityEncodedBytes < 100_000 || lock.visibilityEncodedBytes > 500_000) {
   throw new Error("cssGravityWell prepared-bank lock does not bind the retained 24-bank product");
 }
 const generatedRoot = resolve(

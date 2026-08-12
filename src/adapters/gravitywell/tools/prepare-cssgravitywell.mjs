@@ -463,9 +463,13 @@ async function prepareBank({ bankIndex, seed, fixedViewQuaternion }) {
         leafCount: viewportVisibility.leafCount,
         marginPixels: CSSGRAVITYWELL_VIEWPORT_MARGIN_PIXELS,
         dilationFrames: CSSGRAVITYWELL_VIEWPORT_DILATION_FRAMES,
-        profileSizes: Object.freeze(viewportVisibility.profiles.map((profile) => profile.size)),
+        profileDimensions: Object.freeze(viewportVisibility.profiles.map((profile) => Object.freeze({
+          width: profile.width,
+          height: profile.height,
+        }))),
         profiles: Object.freeze(viewportVisibility.profiles.map((profile) => Object.freeze({
-          size: profile.size,
+          width: profile.width,
+          height: profile.height,
           initialVisibleCount: profile.initialVisibleIndices.length,
           visibilityChangeCount: profile.assignments.length,
           meanVisibleCount: profile.meanVisibleCount,

@@ -47,7 +47,6 @@ export async function writeCssmengerPreparedOutput({
     warnings,
     runtime: {
       debugApi,
-      routeContract: "?scene=<scene-id>&lighting=<atlas|opacity>",
       geometryPayload: false,
       runtimeDomGrowth: false,
     },

@@ -17,7 +17,11 @@ test("verified lighting atlas bytes stay bound to the CSS background lifetime", 
   const bytes = Uint8Array.from([17, 34, 51, 68]);
   const assetSha256 = createHash("sha256").update(bytes).digest("hex");
   class FakeImage {
-    constructor() { throw new Error("asset verification must not decode an off-DOM duplicate"); }
+    set src(value) { this.url = value; }
+    get naturalWidth() { return 27; }
+    get naturalHeight() { return 27; }
+    async decode() { this.decoded = true; }
+    removeAttribute(name) { if (name === "src") this.url = ""; }
   }
   globalThis.fetch = async () => ({
     ok: true,
@@ -38,7 +42,8 @@ test("verified lighting atlas bytes stay bound to the CSS background lifetime", 
       width: 27,
       height: 27,
     });
-    assert.equal(asset.decodedImageRetention, "css-background-lifetime");
+    assert.match(asset.url, /^blob:/u);
+    assert.equal(asset.decodedImageRetention, "verified-decoded-object-url-lifetime");
     assert.equal(asset.retained, true);
     asset.destroy();
     assert.equal(asset.retained, false);

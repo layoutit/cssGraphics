@@ -2,64 +2,42 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DEFAULT_SCENE_ID,
+  canonicalizeCssmengerRoute,
   createRouteState,
-  publicRouteFor,
 } from "../src/cssmenger/routeState.mjs";
 import { selectCssmengerPlaneAtlasProfile } from "../src/cssmenger/profileSelection.mjs";
 
 test("cssmenger route defaults to the first slice", () => {
   const route = createRouteState("");
   assert.equal(route.scene, DEFAULT_SCENE_ID);
-  assert.equal(route.sceneExplicit, false);
   assert.equal(route.manifestUrl, "/cssmenger/manifest.json");
 });
 
-test("cssmenger route accepts safe scene ids", () => {
-  const route = createRouteState("?scene=demo-room_01");
-  assert.equal(route.scene, "demo-room_01");
-  assert.equal(route.sceneExplicit, true);
-  assert.equal(publicRouteFor({ scene: route.scene }), "/?scene=demo-room_01");
-});
-
-test("cssmenger route exposes the prepared CSS opacity A/B presentation", () => {
-  const route = createRouteState("?lighting=opacity");
-  assert.equal(route.lighting, "opacity");
-  assert.equal(route.lightingExplicit, true);
-  assert.equal(route.publicRoute, "/?lighting=opacity");
-  assert.equal(publicRouteFor({ scene: "depth-2", lighting: "opacity" }),
-    "/?scene=depth-2&lighting=opacity");
-  assert.equal(createRouteState("?lighting=filter").lighting, "atlas");
-});
-
-test("cssmenger route rejects unsafe scene ids", () => {
-  const route = createRouteState("?scene=../../retail");
+test("cssmenger route has no query-selectable product variants", () => {
+  const route = createRouteState();
   assert.equal(route.scene, DEFAULT_SCENE_ID);
+  assert.equal(Object.hasOwn(route, "params"), false);
+  assert.equal(Object.hasOwn(route, "lighting"), false);
 });
 
-test("cssmenger profile selection supports explicit preview overrides", () => {
-  assert.equal(selectCssmengerPlaneAtlasProfile({
-    search: "?profile=mobile",
-    mediaMatches: () => false,
-  }), "mobile");
-  assert.equal(selectCssmengerPlaneAtlasProfile({
-    search: "?profile=desktop",
-    mediaMatches: () => true,
-    userAgentDataMobile: true,
-  }), "desktop");
+test("cssmenger strips obsolete query selectors without reloading", () => {
+  const calls = [];
+  assert.equal(canonicalizeCssmengerRoute({
+    location: { search: "?obsolete=1", pathname: "/menger/", hash: "#x" },
+    history: { state: { stable: true }, replaceState: (...args) => calls.push(args) },
+  }), true);
+  assert.deepEqual(calls, [[{ stable: true }, "", "/menger/#x"]]);
 });
 
 test("cssmenger profile selection recognizes phones beyond the portrait breakpoint", () => {
   assert.equal(selectCssmengerPlaneAtlasProfile({
-    search: "",
     mediaMatches: (query) => query.includes("pointer: coarse"),
   }), "mobile");
   assert.equal(selectCssmengerPlaneAtlasProfile({
-    search: "",
     mediaMatches: () => false,
     userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
   }), "mobile");
   assert.equal(selectCssmengerPlaneAtlasProfile({
-    search: "",
     mediaMatches: () => false,
   }), "desktop");
 });

@@ -94,10 +94,12 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.webp$/u.test(scene.planeAtlas?.assetUrl) &&
     scene.planeAtlas?.mimeType === "image/webp" && scene.planeAtlas?.lossless === true &&
     scene.planeAtlas?.encoding === "WebP-lossless-transcode-of-AVIF-q83-alpha-lossless-yuv444" &&
-    scene.planeAtlas?.byteLength === 8_643_642 &&
+    scene.planeAtlas?.byteLength === 8_507_944 &&
     scene.planeAtlas?.visiblePixelIdentity ===
       "byte-exact-to-prepared-avif-decode-where-alpha-is-nonzero" &&
-    scene.planeAtlas?.width === 16_362 && scene.planeAtlas?.height === 1_377 &&
+    scene.planeAtlas?.width === 4_752 && scene.planeAtlas?.height === 4_725 &&
+    scene.planeAtlas?.decodedBytes === 89_812_800 &&
+    scene.planeAtlas?.packing === "balanced-near-square-pixel-surface" &&
     scene.planeAtlas?.leafCount === 84 &&
     scene.planeAtlas?.visibleLeafFieldCount === 65_436 &&
     scene.planeAtlas?.slotCount === 30_744 &&
@@ -129,9 +131,10 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     scene.mobilePlaneAtlas?.mimeType === "image/webp" && scene.mobilePlaneAtlas?.lossless === true &&
     scene.mobilePlaneAtlas?.encoding ===
       "WebP-lossless-transcode-of-AVIF-q83-alpha-lossless-yuv444" &&
-    scene.mobilePlaneAtlas?.width === 2_025 && scene.mobilePlaneAtlas?.height === 27 &&
-    scene.mobilePlaneAtlas?.decodedBytes === 218_700 &&
-    scene.mobilePlaneAtlas?.byteLength === 19_686 &&
+    scene.mobilePlaneAtlas?.width === 243 && scene.mobilePlaneAtlas?.height === 243 &&
+    scene.mobilePlaneAtlas?.decodedBytes === 236_196 &&
+    scene.mobilePlaneAtlas?.byteLength === 20_034 &&
+    scene.mobilePlaneAtlas?.packing === "balanced-near-square-pixel-surface" &&
     scene.mobilePlaneAtlas?.leafCount === 84 &&
     scene.mobilePlaneAtlas?.visibleLeafFieldCount === 65_436 &&
     scene.mobilePlaneAtlas?.slotCount === 75 &&
@@ -217,7 +220,7 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     const reducedAtlasPath = productPath(reducedAtlas?.assetUrl);
     const reducedAtlasBytes = await readFile(join(root, reducedAtlasPath));
     const suffix = profile === "mobile" ? "-mobile" : "";
-    assert(reducedAtlasBytes.length === 748_646 && reducedAtlas?.byteLength === 748_646 &&
+    assert(reducedAtlasBytes.length === 783_408 && reducedAtlas?.byteLength === 783_408 &&
       sha256(reducedAtlasBytes) === reducedAtlas.assetSha256 &&
       reducedAtlas?.schema === "cssmenger-prepared-sparse-leaf-lighting-atlas@1" &&
       reducedAtlas?.profile === profile &&
@@ -226,8 +229,10 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
       reducedAtlas?.mimeType === "image/webp" && reducedAtlas?.lossless === true &&
       reducedAtlas?.encoding ===
         "WebP-lossless-transcode-of-AVIF-q83-alpha-lossless-yuv444" &&
-      reducedAtlas?.width === 16_380 && reducedAtlas?.height === 63 &&
-      reducedAtlas?.decodedBytes === 4_127_760 && reducedAtlas?.leafCount === 30 &&
+      reducedAtlas?.width === 945 && reducedAtlas?.height === 945 &&
+      reducedAtlas?.decodedBytes === 3_572_100 &&
+      reducedAtlas?.packing === "balanced-near-square-pixel-surface" &&
+      reducedAtlas?.leafCount === 30 &&
       reducedAtlas?.visibleLeafFieldCount === 23_234 && reducedAtlas?.slotCount === 10_962 &&
       reducedAtlas?.lightingSampleIntervalTicks === 2 &&
       reducedAtlas?.lightingSampleDelayMilliseconds === 60 &&

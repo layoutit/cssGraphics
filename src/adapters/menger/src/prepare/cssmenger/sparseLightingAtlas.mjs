@@ -110,12 +110,12 @@ export async function buildPreparedMengerSparseLightingAtlas({
     slotByScheduleCursor[field.cursor] = slotIndex;
   }
   const slotCount = uniqueTiles.length;
-  const columns = Math.min(slotCount, Math.floor(MAXIMUM_TEXTURE_DIMENSION / slotWidth));
+  const columns = balancedAtlasColumns({ slotCount, slotWidth, slotHeight });
   const rows = Math.ceil(slotCount / columns);
   const width = columns * slotWidth;
   const height = rows * slotHeight;
   if (width > MAXIMUM_TEXTURE_DIMENSION || height > MAXIMUM_TEXTURE_DIMENSION) {
-    throw new Error(`Prepared cssMenger sparse lighting grid ${width}x${height} exceeds the AVIF contract`);
+    throw new Error(`Prepared cssMenger sparse lighting grid ${width}x${height} exceeds the image contract`);
   }
   const rgba = Buffer.alloc(width * height * 4);
   for (let slotIndex = 0; slotIndex < uniqueTiles.length; slotIndex += 1) {
@@ -190,6 +190,7 @@ export async function buildPreparedMengerSparseLightingAtlas({
     slotHeight,
     columns,
     rows,
+    packing: "balanced-near-square-pixel-surface",
     gutterPixels,
     slotCount,
     addressEncoding: "base64-u16le-state-offsets-plus-u8-leaf-indices-plus-u16le-exact-deduplicated-slot-indices",
@@ -265,6 +266,18 @@ export async function buildPreparedMengerSparseLightingAtlas({
   });
   preparedBytes.set(contract, bytes);
   return contract;
+}
+
+function balancedAtlasColumns({ slotCount, slotWidth, slotHeight }) {
+  const maximumColumns = Math.floor(MAXIMUM_TEXTURE_DIMENSION / slotWidth);
+  const maximumRows = Math.floor(MAXIMUM_TEXTURE_DIMENSION / slotHeight);
+  const minimumColumns = Math.ceil(slotCount / maximumRows);
+  const squarePixelColumns = Math.ceil(Math.sqrt(slotCount * slotHeight / slotWidth));
+  const columns = Math.max(minimumColumns, Math.min(slotCount, maximumColumns, squarePixelColumns));
+  if (!Number.isSafeInteger(columns) || columns < 1) {
+    throw new Error("Prepared cssMenger sparse lighting grid cannot fit the image contract");
+  }
+  return columns;
 }
 
 export function preparedMengerSparseLightingAtlasBytes(contract) {

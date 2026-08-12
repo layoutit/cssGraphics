@@ -32,20 +32,28 @@ export function mountGravityWellClient(host) {
 
   async function main() {
     if (!(host instanceof HTMLElement)) throw new Error("Missing Gravity Well host");
-    document.body.dataset.portStatus = "loading";
+    setStatus("loading");
     const [loaded, catalog] = await Promise.all([
       loadPolyMorphPackage("/cssgravitywell/model/"),
       loadPreparedGravityWellCatalog(),
     ]);
     const selection = selectInitialGravityWellBank(catalog);
-    const loadBank = async (bankIndex, { lookahead = false, incremental = lookahead } = {}) => {
+    const loadBank = async (bankIndex, {
+      lookahead = false,
+      incremental = lookahead,
+      complete = false,
+    } = {}) => {
       const scene = await loadPreparedGravityWellBankScene(catalog, bankIndex);
       const transformBlocks = createTransformBlockLoader(scene.playback);
-      await transformBlocks.prime(0, { lookahead, incremental });
+      await transformBlocks.prime(0, { lookahead, incremental, complete });
       const { changeSchedule } = transformBlocks.bankData();
       return Object.freeze({ scene, playback: scene.playback, transformBlocks, changeSchedule });
     };
-    const initialBank = await loadBank(selection.bankIndex, { lookahead: true, incremental: false });
+    const initialBank = await loadBank(selection.bankIndex, {
+      lookahead: true,
+      incremental: false,
+      complete: true,
+    });
     const scene = initialBank.scene;
     if (loaded.model.identity.id !== "gravitywell" ||
         loaded.model.render.leaves.length !== scene.metrics.preparedLeafCount) {
@@ -85,7 +93,7 @@ export function mountGravityWellClient(host) {
     state.mounted = mounted;
     state.player = player;
     state.ready = true;
-    document.body.dataset.portStatus = "ready";
+    setStatus("ready");
     document.body.dataset.productView = "1";
     document.body.dataset.gameView = "polycss";
     document.body.dataset.portSlug = "cssgravitywell";
@@ -96,7 +104,7 @@ export function mountGravityWellClient(host) {
 
   function recordError(message) {
     state.errors.push(message);
-    document.body.dataset.portStatus = "error";
+    setStatus("error");
     if (document.querySelector(".cssgravitywell-error-message")) return;
     const output = document.createElement("p");
     output.className = "cssgravitywell-error-message";
@@ -104,6 +112,12 @@ export function mountGravityWellClient(host) {
     output.textContent = message;
     host.append(output);
   }
+}
+
+function setStatus(kind) {
+  document.body.classList.remove("loading", "ready", "error");
+  document.body.classList.add(kind);
+  document.body.dataset.portStatus = kind;
 }
 
 function cleanPreparedDom(mounted) {

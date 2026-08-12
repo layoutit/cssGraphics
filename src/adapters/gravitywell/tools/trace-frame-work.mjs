@@ -3,13 +3,13 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { chromium } from "playwright";
 import { analyzeTrace, loadTrace, renderMarkdown } from "../../../../scripts/frame-sleuth.mjs";
+import { traceCategories } from "../../../../scripts/frame-sleuth-trace.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..", "..");
 const generatedRoot = resolve(repositoryRoot, "build/generated/public/cssgravitywell");
 const preparedWorstTransition = await findPreparedWorstTransition(generatedRoot);
 const routeUrl = new URL(process.env.CSSGRAVITYWELL_TRACE_URL ?? "http://127.0.0.1:5174/gravitywell/");
 routeUrl.searchParams.set("bank", String(preparedWorstTransition.bankIndex));
-routeUrl.searchParams.set("cycle", "0");
 const route = routeUrl.href;
 const viewport = Object.freeze({
   width: positiveIntegerEnvironment("CSSGRAVITYWELL_TRACE_WIDTH", 960),
@@ -20,7 +20,8 @@ const outputRoot = resolve(
   repositoryRoot,
   process.env.CSSGRAVITYWELL_TRACE_OUTPUT_ROOT ?? "bench/results/cssgravitywell/performance",
 );
-const tracePath = resolve(outputRoot, "worst-frame-chrome-trace.json");
+const tracePath = resolve(outputRoot, "continuous-playback-chrome-trace.json");
+const focusedTracePath = resolve(outputRoot, "worst-frame-chrome-trace.json");
 const summaryPath = resolve(outputRoot, "worst-frame-summary.json");
 const frameSleuthReportPath = resolve(outputRoot, "frame-sleuth-report.md");
 await mkdir(outputRoot, { recursive: true });
@@ -39,6 +40,82 @@ try {
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
   await page.goto(route, { waitUntil: "networkidle" });
   await page.waitForFunction(() => globalThis.__cssGravityWellDebug?.ready === true, null, { timeout: 30_000 });
+  const continuousEvents = [];
+  const collectContinuousEvents = ({ value }) => continuousEvents.push(...value);
+  cdp.on("Tracing.dataCollected", collectContinuousEvents);
+  const continuousTracingComplete = new Promise(
+    (resolveComplete) => cdp.once("Tracing.tracingComplete", resolveComplete),
+  );
+  await cdp.send("Tracing.start", {
+    categories: traceCategories().join(","),
+    options: "sampling-frequency=10000",
+    transferMode: "ReportEvents",
+  });
+  const continuousStart = await page.evaluate(() => {
+    const debug = globalThis.__cssGravityWellDebug;
+    const recorder = {
+      intervals: [],
+      longTasks: [],
+      lastFrameAt: null,
+      running: true,
+      observer: null,
+      startedAt: performance.now(),
+    };
+    const sampleFrame = (timestamp) => {
+      if (recorder.lastFrameAt !== null) recorder.intervals.push(timestamp - recorder.lastFrameAt);
+      recorder.lastFrameAt = timestamp;
+      if (recorder.running) requestAnimationFrame(sampleFrame);
+    };
+    requestAnimationFrame(sampleFrame);
+    if (globalThis.PerformanceObserver?.supportedEntryTypes?.includes("longtask")) {
+      recorder.observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          if (entry.startTime >= recorder.startedAt) {
+            recorder.longTasks.push({ startTime: entry.startTime, duration: entry.duration });
+          }
+        }
+      });
+      recorder.observer.observe({ type: "longtask" });
+    }
+    globalThis.__cssGravityWellContinuousRecorder = recorder;
+    return { stats: debug.stats(), blockFrameCount: debug.scene().playback.blockFrameCount };
+  });
+  const continuousBefore = continuousStart.stats;
+  await page.waitForTimeout(7_000);
+  const continuousResult = await page.evaluate(() => {
+    const debug = globalThis.__cssGravityWellDebug;
+    const recorder = globalThis.__cssGravityWellContinuousRecorder;
+    recorder.running = false;
+    recorder.observer?.disconnect();
+    return { stats: debug.stats(), intervals: recorder.intervals, longTasks: recorder.longTasks };
+  });
+  await cdp.send("Tracing.end");
+  await continuousTracingComplete;
+  cdp.off("Tracing.dataCollected", collectContinuousEvents);
+  const continuousAfter = continuousResult.stats;
+  const continuousPlayback = {
+    durationMilliseconds: 7_000,
+    untouchedBeforeMeasurement: true,
+    frameSleuthStartupTrimMilliseconds: 500,
+    preparedFrameCount: continuousAfter.preparedFramesApplied - continuousBefore.preparedFramesApplied,
+    callbackCount: continuousAfter.schedulerCallbacks - continuousBefore.schedulerCallbacks,
+    transformBlockLoads:
+      continuousAfter.transformBlocks.loadCount - continuousBefore.transformBlocks.loadCount,
+    activationWaits:
+      continuousAfter.transformBlocks.activationWaitCount - continuousBefore.transformBlocks.activationWaitCount,
+    frameIntervals: summarizeNumbers(continuousResult.intervals),
+    longTasks: continuousResult.longTasks,
+    crossedTransformBlockCount: Math.floor(
+      (continuousAfter.frameIndex - continuousBefore.frameIndex) / continuousStart.blockFrameCount,
+    ),
+  };
+  await writeFile(tracePath, `${JSON.stringify({ traceEvents: continuousEvents })}\n`);
+  const frameSleuthAnalysis = analyzeTrace(await loadTrace(tracePath), {
+    question: "why does untouched continuous playback freeze?",
+    top: 10,
+    url: "/gravitywell/",
+    startMs: 500,
+  });
   const steadyStatePublication = await page.evaluate(async () => {
     const debug = globalThis.__cssGravityWellDebug;
     debug.pause();
@@ -263,6 +340,7 @@ try {
     preparedWorstTransition,
     worstTransitionPublication,
     steadyStatePublication,
+    continuousPlayback,
     schedulerTrial,
     publication,
     traceWindowMilliseconds: (end - start) / 1000,
@@ -292,6 +370,12 @@ try {
         publication.delta.leafColorAttempts === publication.delta.leafColorWrites,
       noEmptySchedulerCallbacks: schedulerTrial.emptyCallbackCount === 0,
       noScheduledTransformBlockWait: schedulerTrial.activationWaits === 0,
+      continuousPlaybackCrossesMultipleBlocks: continuousPlayback.crossedTransformBlockCount >= 5,
+      noUntouchedPlaybackBlockLoad: continuousPlayback.transformBlockLoads === 0,
+      noUntouchedPlaybackActivationWait: continuousPlayback.activationWaits === 0,
+      noUntouchedPlaybackLongTask: continuousPlayback.longTasks.length === 0,
+      noUntouchedPlaybackFreezeGap: continuousPlayback.frameIntervals.over50Milliseconds === 0,
+      noFrameSleuthFreezeGap: frameSleuthAnalysis.cadence.drawGapsAboveMs["50"] === 0,
       exactPreparedSelectedTransformPublication:
         worstTransitionPublication.actualTransformChanges === worstTransitionPublication.samples[0].transformWrites,
       exactPreparedSelectedColorPublication:
@@ -308,15 +392,16 @@ try {
         publication.after.frameIndex === preparedWorstTransition.frameIndex,
     },
     errors,
-    trace: { path: tracePath, eventCount: events.length, marks },
+    trace: {
+      path: tracePath,
+      eventCount: continuousEvents.length,
+      sizeBytes: (await stat(tracePath)).size,
+      untouchedContinuousPlayback: true,
+    },
+    focusedTrace: { path: focusedTracePath, eventCount: events.length, marks },
   };
-  await writeFile(tracePath, `${JSON.stringify({ traceEvents: events })}\n`);
-  summary.trace.sizeBytes = (await stat(tracePath)).size;
-  const frameSleuthAnalysis = analyzeTrace(await loadTrace(tracePath), {
-    question: "what work did we do on the worst frame?",
-    top: 5,
-    url: "/gravitywell/",
-  });
+  await writeFile(focusedTracePath, `${JSON.stringify({ traceEvents: events })}\n`);
+  summary.focusedTrace.sizeBytes = (await stat(focusedTracePath)).size;
   await writeFile(frameSleuthReportPath, renderMarkdown(frameSleuthAnalysis));
   summary.frameSleuth = {
     reportPath: frameSleuthReportPath,

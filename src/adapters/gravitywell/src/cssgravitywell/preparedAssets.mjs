@@ -136,6 +136,7 @@ export function createTransformBlockLoader(playback, scheduling = {}) {
   }
   let desiredCurrent = -1;
   let desiredNext = -1;
+  let preparedCompleteBank = false;
   let activeBlockIndex = -1;
   let activeRecord = null;
   let loadCount = 0;
@@ -152,12 +153,10 @@ export function createTransformBlockLoader(playback, scheduling = {}) {
   let incrementalDecodeOperationCount = 0;
   let incrementalDecodeMaximumSliceMilliseconds = 0;
   let destroyed = false;
-  const requestIdle = scheduling.requestIdle ?? defaultRequestIdle;
   const setDelay = scheduling.setDelay ?? globalThis.setTimeout.bind(globalThis);
   const readNow = scheduling.readNow ?? defaultReadNow;
   const incrementalSliceBudgetMilliseconds = scheduling.incrementalSliceBudgetMilliseconds ?? 2;
-  if (typeof requestIdle !== "function" || typeof setDelay !== "function" ||
-      typeof readNow !== "function" ||
+  if (typeof setDelay !== "function" || typeof readNow !== "function" ||
       !Number.isFinite(incrementalSliceBudgetMilliseconds) ||
       incrementalSliceBudgetMilliseconds <= 0 || incrementalSliceBudgetMilliseconds > 4) {
     throw new TypeError("Gravity Well incremental transform decoder scheduling is invalid");
@@ -188,11 +187,11 @@ export function createTransformBlockLoader(playback, scheduling = {}) {
           playback,
           transformIndices,
           {
-            requestIdle,
             setDelay,
             readNow,
             sliceBudgetMilliseconds: incrementalSliceBudgetMilliseconds,
-            isCurrent: () => !destroyed && (blockIndex === desiredCurrent || blockIndex === desiredNext),
+            isCurrent: () => !destroyed &&
+              (preparedCompleteBank || blockIndex === desiredCurrent || blockIndex === desiredNext),
             onSlice(operationCount, durationMilliseconds) {
               incrementalDecodeSliceCount += 1;
               incrementalDecodeOperationCount += operationCount;
@@ -227,7 +226,7 @@ export function createTransformBlockLoader(playback, scheduling = {}) {
       if (incremental) incrementalDecodeCompletedBlockCount += 1;
       residentDecodedBytes += descriptor.preparedCssStringByteLength;
       peakResidentDecodedBytes = Math.max(peakResidentDecodedBytes, residentDecodedBytes);
-      if (blockIndex !== desiredCurrent && blockIndex !== desiredNext) release(blockIndex);
+      if (!preparedCompleteBank && blockIndex !== desiredCurrent && blockIndex !== desiredNext) release(blockIndex);
       return record;
     })();
     records.set(blockIndex, { promise });
@@ -256,20 +255,36 @@ export function createTransformBlockLoader(playback, scheduling = {}) {
       incrementalDecodeRequestCount += 1;
       void ensure(next, { incremental: true }).catch(() => undefined);
     }
-    for (const blockIndex of records.keys()) {
-      if (blockIndex !== current && blockIndex !== next) release(blockIndex);
+    if (preparedCompleteBank) {
+      for (const blockIndex of records.keys()) {
+        if (blockIndex < current) release(blockIndex);
+      }
+    } else {
+      for (const blockIndex of records.keys()) {
+        if (blockIndex !== current && blockIndex !== next) release(blockIndex);
+      }
     }
   }
 
   return Object.freeze({
-    async prime(frameIndex = 0, { lookahead = false, incremental = false } = {}) {
+    async prime(frameIndex = 0, { lookahead = false, incremental = false, complete = false } = {}) {
       const current = Math.trunc(frameIndex / playback.blockFrameCount);
       if (current !== 0) throw new Error("Gravity Well prepared bank must prime from block zero");
       const next = lookahead ? nextBlockIndex(current) : -1;
       desiredCurrent = current;
       desiredNext = next;
+      preparedCompleteBank = complete;
       const record = await ensure(current, { incremental });
-      if (next >= 0) await ensure(next, { incremental });
+      if (complete) {
+        const remaining = playback.blocks.slice(1).map((block) => block.index);
+        if (incremental) {
+          for (const blockIndex of remaining) await ensure(blockIndex, { incremental: true });
+        } else {
+          await Promise.all(remaining.map((blockIndex) => ensure(blockIndex)));
+        }
+      } else if (next >= 0) {
+        await ensure(next, { incremental });
+      }
       activeBlockIndex = current;
       activeRecord = record;
     },
@@ -394,6 +409,7 @@ export function createTransformBlockLoader(playback, scheduling = {}) {
         releaseCount,
         activeBlockIndex,
         residentBlockCount: [...records.values()].filter((record) => record?.transforms).length,
+        preparedCompleteBank,
         residentDecodedBytes,
         peakResidentDecodedBytes,
         randomAccessReconstructionCount,
@@ -617,16 +633,6 @@ async function decompressGzip(encoded) {
   ).arrayBuffer());
 }
 
-function defaultRequestIdle(callback, options) {
-  if (typeof globalThis.requestIdleCallback === "function") {
-    return globalThis.requestIdleCallback(callback, options);
-  }
-  return globalThis.setTimeout(() => callback(Object.freeze({
-    didTimeout: true,
-    timeRemaining: () => 0,
-  })), 0);
-}
-
 function defaultReadNow() {
   return globalThis.performance.now();
 }
@@ -643,7 +649,6 @@ async function decodePreparedTransformBlockIncrementally(
   playback,
   loadedTransformIndices,
   {
-    requestIdle,
     setDelay,
     readNow,
     sliceBudgetMilliseconds,
@@ -659,15 +664,11 @@ async function decodePreparedTransformBlockIncrementally(
       if (!isCurrent()) return null;
     }
     firstSlice = false;
-    const deadline = await new Promise((resolveIdle) => requestIdle(resolveIdle, {
-      timeout: Math.max(50, Math.ceil(playback.frameMilliseconds * 4)),
-    }));
     if (!isCurrent()) return null;
     const startedAt = readNow();
     const operationCount = decoder.step(8_192, (processed) =>
       processed >= 64 && processed % 64 === 0 &&
-      ((typeof deadline?.timeRemaining === "function" && deadline.timeRemaining() <= 1) ||
-        readNow() - startedAt >= sliceBudgetMilliseconds));
+      readNow() - startedAt >= sliceBudgetMilliseconds);
     onSlice(operationCount, readNow() - startedAt);
   }
   return decoder.result();

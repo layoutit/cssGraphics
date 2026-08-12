@@ -38,6 +38,7 @@ function validLightingAtlas(atlas) {
 function validCssOpacityAtlas(atlas) {
   return atlas?.schema === "cssmenger-prepared-coplanar-plane-atlas@1" &&
     atlas.paletteRole === "css-opacity-base" &&
+    atlas.rgbScale === 0.75 &&
     /^\/cssmenger\/assets\/planes-opacity-base-[a-f0-9]{64}\.png$/u.test(atlas.assetUrl) &&
     atlas.encoding === "PNG-RGBA8";
 }

@@ -201,6 +201,7 @@ test("CSS palette playback selects prepared rows and per-source-cell shadow addr
     const baseAtlas = {
       schema: "cssmenger-prepared-coplanar-plane-atlas@1",
       paletteRole: "css-opacity-base",
+      rgbScale: 0.75,
       paletteStateCount: 128,
       leafCount: 84,
       patternCount: 1,
@@ -349,6 +350,116 @@ test("frozen mobile lighting initializes every leaf once and never publishes lig
       "prepared-frozen-lighting-all-leaf-initialization-only");
     assert.equal(player.stats().preparedLoopPresentationMode,
       "prepared-adjacent-state-ping-pong-no-reset");
+  } finally {
+    if (originalHTMLElement === undefined) delete globalThis.HTMLElement;
+    else globalThis.HTMLElement = originalHTMLElement;
+  }
+});
+
+test("compositor time owns lighting state and collapses missed prepared states into one publication", () => {
+  const originalHTMLElement = globalThis.HTMLElement;
+  let requestedFrame = null;
+  let requestedDelay = null;
+  let now = 0;
+  let lightingAddressWrites = 0;
+  let animationCurrentTime = 0;
+  let animationCurrentTimeWrites = 0;
+  let animationPlayCount = 0;
+  class FakeHTMLElement {
+    constructor() {
+      let backgroundPosition = "";
+      this.style = {};
+      Object.defineProperty(this.style, "backgroundPosition", {
+        get: () => backgroundPosition,
+        set: (value) => { backgroundPosition = value; lightingAddressWrites += 1; },
+      });
+    }
+  }
+  globalThis.HTMLElement = FakeHTMLElement;
+  try {
+    const sourcePlayback = buildPreparedMengerPlayback({ stateCount: 12 });
+    const playback = {
+      ...sourcePlayback,
+      frontFacingSchedule: {
+        schema: "cssmenger-prepared-front-facing-leaf-schedule@1",
+        encoding: "state-axis-offsets-plus-global-leaf-indices",
+        stateCount: sourcePlayback.stateCount,
+        axisCount: 3,
+        offsets: Array.from({ length: sourcePlayback.stateCount * 3 + 1 }, (_, index) => index * 14),
+        leafIndices: Array.from({ length: sourcePlayback.stateCount }, () =>
+          Array.from({ length: 3 }, (_, axis) =>
+            Array.from({ length: 14 }, (_, index) => axis * 28 + index))).flat(2),
+        minimumSelectedLeafCountPerState: 42,
+        maximumSelectedLeafCountPerState: 42,
+        averageSelectedLeafCountPerState: 42,
+        frontFaceDilationTicks: 1,
+      },
+    };
+    const rotationAnimation = {
+      get currentTime() { return animationCurrentTime; },
+      set currentTime(value) { animationCurrentTime = value; animationCurrentTimeWrites += 1; },
+      play() { animationPlayCount += 1; },
+      pause() {},
+    };
+    const leaves = Array.from({ length: 84 }, () => new FakeHTMLElement());
+    const player = createCssmengerPreparedPlayer({
+      playback,
+      planeAtlas: fakeSparseAtlas(playback.frontFacingSchedule),
+      publicationRoot: new FakeHTMLElement(),
+      rotationAnimation,
+      leaves,
+      readNow: () => now,
+      requestFrame: (callback) => { requestedFrame = callback; return 1; },
+      cancelFrame: () => {},
+      requestDelay: (callback) => { requestedDelay = callback; return 2; },
+      cancelDelay: () => {},
+    });
+    assert.equal(animationCurrentTimeWrites, 1);
+    assert.equal(lightingAddressWrites, 42);
+
+    player.resume();
+    assert.equal(animationPlayCount, 1);
+    animationCurrentTime = 29;
+    requestedDelay();
+    requestedFrame(29);
+    assert.equal(player.tick, 0);
+    assert.equal(lightingAddressWrites, 42);
+
+    animationCurrentTime = 30;
+    now = 33;
+    requestedFrame(33);
+    assert.equal(player.tick, 1);
+    assert.equal(lightingAddressWrites, 84);
+
+    animationCurrentTime = 270;
+    now = 270;
+    requestedDelay();
+    requestedFrame(270);
+    assert.equal(player.tick, 9);
+    assert.equal(lightingAddressWrites, 126);
+    assert.equal(leaves[0].style.backgroundPosition, "0px -729px");
+    assert.equal(player.stats().preparedCollapsedLightingResyncCount, 1);
+    assert.equal(player.stats().preparedMaximumCollapsedLightingStateCount, 8);
+
+    animationCurrentTime = 390;
+    now = 390;
+    requestedDelay();
+    requestedFrame(390);
+    assert.equal(player.tick, 9);
+    assert.equal(lightingAddressWrites, 126);
+
+    animationCurrentTime = 420;
+    now = 420;
+    requestedDelay();
+    requestedFrame(420);
+    player.pause();
+    assert.equal(player.tick, 8);
+    assert.equal(lightingAddressWrites, 168);
+    assert.equal(leaves[0].style.backgroundPosition, "0px -648px");
+    assert.equal(animationCurrentTimeWrites, 1);
+    assert.equal(player.stats().runtimeCompositorClockReadCount, 5);
+    assert.equal(player.stats().preparedSchedulerCatchUpMode,
+      "compositor-clock-adjacent-or-collapsed-prepared-resync");
   } finally {
     if (originalHTMLElement === undefined) delete globalThis.HTMLElement;
     else globalThis.HTMLElement = originalHTMLElement;

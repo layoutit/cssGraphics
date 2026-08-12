@@ -45,6 +45,7 @@ test("verified lighting atlas bytes stay bound to the CSS background lifetime", 
     const cssOpacityAsset = await loadPreparedMengerPlaneAtlasAsset({
       schema: "cssmenger-prepared-coplanar-plane-atlas@1",
       paletteRole: "css-opacity-base",
+      rgbScale: 0.75,
       assetUrl: `/cssmenger/assets/planes-opacity-base-${assetSha256}.png`,
       assetSha256,
       encoding: "PNG-RGBA8",
@@ -147,6 +148,9 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
   assert.equal(scene.cssOpacityBaseAtlas.schema, "cssmenger-prepared-coplanar-plane-atlas@1");
   assert.equal(scene.cssOpacityBaseAtlas.paletteRole, "css-opacity-base");
   assert.equal(scene.cssOpacityBaseAtlas.rgbNormalization, "divide-by-maximum-rgb-channel");
+  assert.equal(scene.cssOpacityBaseAtlas.rgbScale, 0.75);
+  assert.equal(scene.cssOpacityBaseAtlas.rgbCalibration,
+    "native-oracle-common-prefix-display-range-scale");
   assert.equal(scene.cssOpacityBaseAtlas.paletteStateCount, 128);
   assert.equal(scene.cssOpacityBaseAtlas.leafCount, 84);
   assert.equal(scene.cssOpacityBaseAtlas.decodedBytes, 3_444_736);
@@ -180,7 +184,8 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
       scene.cssOpacityBaseAtlas.gutterPixels;
     const opaquePixel = firstOpaquePixelInRow(opacityBaseImage, contentY);
     assert.ok(opaquePixel, `missing CSS-opacity base pixel for palette ${paletteIndex}`);
-    assert.equal(Math.max(...opaquePixel.slice(0, 3)), 255);
+    assert.equal(Math.max(...opaquePixel.slice(0, 3)),
+      Math.round(255 * scene.cssOpacityBaseAtlas.rgbScale));
   }
   assert.equal(scene.cssOpacityLighting, undefined);
   assert.equal(scene.metrics.atlasPageCount, 2);

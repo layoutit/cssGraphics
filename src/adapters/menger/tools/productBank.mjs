@@ -313,7 +313,9 @@ async function inspectCssOpacityAtlasPair(root, scene, expectedLeafCount) {
   assert(baseBytes.length === base?.byteLength && sha256(baseBytes) === base.assetSha256 &&
     base?.schema === "cssmenger-prepared-coplanar-plane-atlas@1" &&
     base?.paletteRole === "css-opacity-base" &&
-    base?.rgbNormalization === "divide-by-maximum-rgb-channel" && base?.encoding === "PNG-RGBA8" &&
+    base?.rgbNormalization === "divide-by-maximum-rgb-channel" && base?.rgbScale === 0.75 &&
+    base?.rgbCalibration === "native-oracle-common-prefix-display-range-scale" &&
+    base?.encoding === "PNG-RGBA8" &&
     base?.paletteStateCount === 128 && base?.leafCount === expectedLeafCount &&
     base?.sourceFaceCoverageExact === true &&
     /^\/cssmenger\/assets\/planes-opacity-base-[a-f0-9]{64}\.png$/u.test(base?.assetUrl),

@@ -29,7 +29,9 @@ export function mountPreparedPolycssSnapshot({
       renderAtlases.length !== renderAtlasAssets.length || renderAtlases.length < 1 ||
       renderAtlases.some((atlas, index) => renderAtlasAssets[index]?.sha256 !== atlas?.assetSha256 ||
         renderAtlasAssets[index].url !== atlas.assetUrl ||
-        renderAtlasAssets[index].cssImageBinding !== "prepared-direct-stylesheet-url") ||
+        renderAtlasAssets[index].cssImageBinding !== "prepared-direct-stylesheet-url" ||
+        renderAtlasAssets[index].decodeReadiness !== "awaited-image-decode-before-mount" ||
+        renderAtlasAssets[index].decodedImageRetention !== "javascript-image-object-no-dom-node") ||
       !["atlas", "css-opacity"].includes(lightingPresentation) ||
       !["desktop", "mobile"].includes(planeAtlasProfile) || planeAtlas?.profile !== planeAtlasProfile ||
       (lightingPresentation === "atlas" &&
@@ -148,6 +150,8 @@ export function mountPreparedPolycssSnapshot({
           asset.cssImageBinding === "prepared-direct-stylesheet-url")
           ? "prepared-direct-stylesheet-url"
           : "invalid",
+        preparedPlaneAtlasDecodeReadiness: "awaited-image-decode-before-mount",
+        preparedPlaneAtlasDecodedImageRetention: "javascript-image-object-no-dom-node",
         runtimeDomCreationCount,
         runtimeDomRemovalCount,
         runtimeDomMutationCount: runtimeDomCreationCount + runtimeDomRemovalCount,

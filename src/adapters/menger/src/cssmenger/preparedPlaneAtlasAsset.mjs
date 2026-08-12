@@ -12,15 +12,35 @@ export async function loadPreparedMengerPlaneAtlasAsset(atlas) {
   if (bytes.byteLength !== atlas.byteLength || actualSha256 !== atlas.assetSha256) {
     throw new Error(`Prepared cssMenger plane atlas hash drifted (${actualSha256})`);
   }
+  const mimeType = validLightingAtlas(atlas) ? "image/avif" : "image/png";
+  const url = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+  const decodedImage = new Image();
+  decodedImage.decoding = "async";
+  decodedImage.src = url;
+  try {
+    await decodedImage.decode();
+    if (decodedImage.naturalWidth !== atlas.width || decodedImage.naturalHeight !== atlas.height) {
+      throw new Error(
+        `Prepared cssMenger plane atlas dimensions drifted (${decodedImage.naturalWidth}x${decodedImage.naturalHeight})`,
+      );
+    }
+  } catch (error) {
+    decodedImage.removeAttribute("src");
+    URL.revokeObjectURL(url);
+    throw error;
+  }
   let retained = true;
   return Object.freeze({
-    url: atlas.assetUrl,
+    url,
     byteLength: bytes.byteLength,
     sha256: actualSha256,
     contractSchema: atlas.schema,
     paletteRole: atlas.paletteRole ?? null,
-    decodedImageRetention: "css-background-lifetime",
+    decodedImageRetention: "verified-decoded-object-url-lifetime",
     destroy() {
+      if (!retained) return;
+      decodedImage.removeAttribute("src");
+      URL.revokeObjectURL(url);
       retained = false;
     },
     get retained() { return retained; },

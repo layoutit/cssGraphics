@@ -4,7 +4,7 @@ import { createCssmengerPreparedPlayer } from "./preparedPlayback.mjs";
 import { mountPreparedPolycssSnapshot } from "./polycssScene.mjs";
 import { selectCssmengerPlaneAtlasProfile } from "./profileSelection.mjs";
 import { loadPreparedMengerPlaneAtlasAsset } from "./preparedPlaneAtlasAsset.mjs";
-import { createRouteState, MOBILE_SCENE_ID } from "./routeState.mjs";
+import { canonicalizeCssmengerRoute, createRouteState, MOBILE_SCENE_ID } from "./routeState.mjs";
 
 export function mountCssmengerClient(host) {
   const state = { ready: false, route: null, manifest: null, sceneData: null, mount: null, errors: [] };
@@ -16,18 +16,15 @@ export function mountCssmengerClient(host) {
   async function main() {
     if (!(host instanceof HTMLElement)) throw new Error("Missing cssMenger host");
     setStatus("loading");
+    canonicalizeCssmengerRoute();
     const route = createRouteState();
     state.route = route;
     state.manifest = await loadPreparedManifest(route);
     const deviceProfile = selectCssmengerPlaneAtlasProfile();
-    const preparedRoute = deviceProfile === "mobile" && !route.sceneExplicit
-      ? { ...route, scene: MOBILE_SCENE_ID }
-      : route;
+    const preparedRoute = { ...route, scene: deviceProfile === "mobile" ? MOBILE_SCENE_ID : route.scene };
     const { entry, sceneData, snapshotHtml } = await loadPreparedScene(state.manifest, preparedRoute);
     const planeAtlasProfile = deviceProfile;
-    const lightingPresentation = route.lighting === "opacity" && deviceProfile === "desktop"
-      ? "css-opacity"
-      : "atlas";
+    const lightingPresentation = deviceProfile === "desktop" ? "css-opacity" : "atlas";
     const planeAtlas = lightingPresentation === "css-opacity"
       ? sceneData.cssOpacityShadowAtlas
       : planeAtlasProfile === "mobile" ? sceneData.mobilePlaneAtlas : sceneData.planeAtlas;
@@ -38,6 +35,7 @@ export function mountCssmengerClient(host) {
     state.sceneData = sceneData;
     state.route = Object.freeze({
       ...route,
+      scene: preparedRoute.scene,
       preparedScene: preparedRoute.scene,
       selectedScene: entry.id,
       selectedDeviceProfile: deviceProfile,
@@ -95,15 +93,7 @@ export function mountCssmengerClient(host) {
 
 function waitForPreparedCssPaint() {
   return new Promise((resolvePaint) => {
-    // A CSS background decode starts after its first requested paint. Waiting
-    // across four display frames keeps that single decode behind the loader.
-    let remainingFrames = 4;
-    function frame() {
-      remainingFrames -= 1;
-      if (remainingFrames === 0) resolvePaint();
-      else requestAnimationFrame(frame);
-    }
-    requestAnimationFrame(frame);
+    requestAnimationFrame(() => requestAnimationFrame(resolvePaint));
   });
 }
 

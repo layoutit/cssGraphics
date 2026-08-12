@@ -25,9 +25,30 @@ export function mountPreparedPolycssSnapshot({
       scene.children.length !== snapshotLeaves.length || scene.querySelector(":scope > i, :scope > s, :scope > div")) {
     throw new Error("Prepared cssMenger snapshot is missing its retained PolyCSS graph");
   }
+  if (!Array.isArray(renderAtlases) || !Array.isArray(renderAtlasAssets) ||
+      renderAtlases.length !== renderAtlasAssets.length || renderAtlases.length < 1 ||
+      renderAtlases.some((atlas, index) => renderAtlasAssets[index]?.sha256 !== atlas?.assetSha256 ||
+        typeof renderAtlasAssets[index].url !== "string" ||
+        renderAtlasAssets[index].decodedImageRetention !== "verified-decoded-object-url-lifetime") ||
+      !["atlas", "css-opacity"].includes(lightingPresentation) ||
+      !["desktop", "mobile"].includes(planeAtlasProfile) || planeAtlas?.profile !== planeAtlasProfile ||
+      (lightingPresentation === "atlas" &&
+        (renderAtlases.length !== 1 || renderAtlases[0] !== planeAtlas) ||
+      lightingPresentation === "css-opacity" &&
+        (renderAtlases.length !== 2 || renderAtlases[0]?.paletteRole !== "css-opacity-base" ||
+          renderAtlases[1]?.presentation !== "css-black-alpha"))) {
+    throw new Error("Prepared cssMenger plane atlas asset is missing or unverified");
+  }
+  const preparedCssText = styles.map((style) => style.textContent).join("\n");
+  for (const atlas of renderAtlases) {
+    if (!preparedCssText.includes(atlas.assetUrl)) {
+      throw new Error(`Prepared cssMenger plane atlas URL is missing from its stylesheet (${atlas.assetUrl})`);
+    }
+  }
   removePreparedSnapshotStyles();
   for (const style of styles) {
     const imported = document.importNode(style, true);
+    imported.textContent = bindVerifiedAtlasUrls(imported.textContent, renderAtlases, renderAtlasAssets);
     document.head.append(imported);
     mountedStyles.push(imported);
   }
@@ -43,20 +64,6 @@ export function mountPreparedPolycssSnapshot({
   mountedScene.classList.toggle("cssmenger-css-opacity", lightingPresentation === "css-opacity");
   for (const existing of host.querySelectorAll(":scope > .polycss-camera")) existing.remove();
   host.append(mountedCamera);
-  if (!Array.isArray(renderAtlases) || !Array.isArray(renderAtlasAssets) ||
-      renderAtlases.length !== renderAtlasAssets.length || renderAtlases.length < 1 ||
-      renderAtlases.some((atlas, index) => renderAtlasAssets[index]?.sha256 !== atlas?.assetSha256 ||
-        typeof renderAtlasAssets[index].url !== "string" ||
-        renderAtlasAssets[index].decodedImageRetention !== "css-background-lifetime") ||
-      !["atlas", "css-opacity"].includes(lightingPresentation) ||
-      !["desktop", "mobile"].includes(planeAtlasProfile) || planeAtlas?.profile !== planeAtlasProfile ||
-      (lightingPresentation === "atlas" &&
-        (renderAtlases.length !== 1 || renderAtlases[0] !== planeAtlas) ||
-      lightingPresentation === "css-opacity" &&
-        (renderAtlases.length !== 2 || renderAtlases[0]?.paletteRole !== "css-opacity-base" ||
-          renderAtlases[1]?.presentation !== "css-black-alpha"))) {
-    throw new Error("Prepared cssMenger plane atlas asset is missing or unverified");
-  }
   const computedLeaf = getComputedStyle(leaves[0]);
   if ((lightingPresentation === "atlas" &&
         !computedLeaf.backgroundImage.includes(renderAtlasAssets[0].url)) ||
@@ -139,8 +146,8 @@ export function mountPreparedPolycssSnapshot({
           renderAtlasAssets.reduce((sum, asset) => sum + asset.byteLength, 0),
         preparedPlaneAtlasAssetSha256: renderAtlasAssets.map((asset) => asset.sha256).join(","),
         preparedPlaneAtlasDecodedImageRetention: renderAtlasAssets.every((asset) =>
-          asset.decodedImageRetention === "css-background-lifetime")
-          ? "css-background-lifetime"
+          asset.decodedImageRetention === "verified-decoded-object-url-lifetime")
+          ? "verified-decoded-object-url-lifetime"
           : "invalid",
         runtimeDomCreationCount,
         runtimeDomRemovalCount,
@@ -155,6 +162,12 @@ export function mountPreparedPolycssSnapshot({
       removePreparedSnapshotStyles();
     },
   });
+}
+
+function bindVerifiedAtlasUrls(cssText, renderAtlases, renderAtlasAssets) {
+  return renderAtlases.reduce((boundCss, atlas, index) => {
+    return boundCss.split(atlas.assetUrl).join(renderAtlasAssets[index].url);
+  }, cssText);
 }
 
 function removePreparedSnapshotStyles() {

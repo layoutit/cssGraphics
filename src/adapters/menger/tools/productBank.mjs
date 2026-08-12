@@ -41,11 +41,20 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     scene.metrics?.preparedPlaneTexturePatternCount === 8,
   "exact prepared coverage and merge");
   assert(scene.playback?.schema === "cssmenger-prepared-playback@1" &&
-    scene.playback?.stateCount === 1_440 &&
-    scene.playback?.transforms?.length === 1_440 &&
-    scene.playback?.colorRows?.length === 1_440 &&
+    scene.playback?.stateCount === 1_536 &&
+    scene.playback?.transforms?.length === 1_536 &&
+    scene.playback?.colorRows?.length === 1_536 &&
+    scene.playback?.preparedRotationDegrees?.length === 1_536 &&
+    scene.playback?.nativePrefixStateCount === 995 &&
+    scene.playback?.loopMode === "prepared-forward-cyclic-c2-rotation-and-palette" &&
+    scene.playback?.cycleClosure?.schema === "cssmenger-prepared-cyclic-rotation-closure@1" &&
+    scene.playback?.cycleClosure?.stateCount === 1_536 &&
+    scene.playback?.cycleClosure?.cycleDurationMilliseconds === 46_080 &&
+    scene.playback?.cycleClosure?.orientationMaximumEquivalentDeltaDegrees === 0 &&
+    scene.playback?.cycleClosure?.velocityMaximumDeltaDegreesPerTick < 1e-9 &&
+    scene.playback?.cycleClosure?.accelerationMaximumDeltaDegreesPerTickSquared < 1e-9 &&
     scene.playback?.frontFacingSchedule?.schema === "cssmenger-prepared-front-facing-leaf-schedule@1" &&
-    scene.playback?.frontFacingSchedule?.offsets?.length === 1_440 * 3 + 1 &&
+    scene.playback?.frontFacingSchedule?.offsets?.length === 1_536 * 3 + 1 &&
     scene.playback.frontFacingSchedule.offsets.at(-1) === scene.playback.frontFacingSchedule.leafIndices?.length &&
     scene.playback.frontFacingSchedule.frontFaceDilationTicks === 1 &&
     scene.playback?.sourceFrameDelayMilliseconds === 30 &&
@@ -84,25 +93,25 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     scene.planeAtlas?.profile === "desktop" &&
     /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif$/u.test(scene.planeAtlas?.assetUrl) &&
     scene.planeAtlas?.mimeType === "image/avif" &&
-    scene.planeAtlas?.width === 16_362 && scene.planeAtlas?.height === 1_323 &&
+    scene.planeAtlas?.width === 16_362 && scene.planeAtlas?.height === 1_377 &&
     scene.planeAtlas?.leafCount === 84 &&
-    scene.planeAtlas?.visibleLeafFieldCount === 61_524 &&
-    scene.planeAtlas?.slotCount === 29_406 &&
-    scene.planeAtlas?.exactDuplicateTileCount === 32_118 &&
+    scene.planeAtlas?.visibleLeafFieldCount === 65_436 &&
+    scene.planeAtlas?.slotCount === 30_744 &&
+    scene.planeAtlas?.exactDuplicateTileCount === 34_692 &&
     scene.planeAtlas?.lightingSampleIntervalTicks === 2 &&
     scene.planeAtlas?.lightingSampleDelayMilliseconds === 60 &&
-    scene.planeAtlas?.lightingSampleCount === 720 &&
+    scene.planeAtlas?.lightingSampleCount === 768 &&
     scene.planeAtlas?.transformPublicationIntervalTicks === 1 &&
     scene.planeAtlas?.transformPublicationDelayMilliseconds === 30 &&
     scene.planeAtlas?.gutterPixels === 0 &&
     scene.planeAtlas?.addressScheduleSchema ===
       "cssmenger-prepared-exact-delta-lighting-address-schedule@1" &&
-    scene.planeAtlas?.addressUpdateCount === 30_989 &&
-    scene.planeAtlas?.addressStateOffsetByteLength === (1_440 + 1) * 2 &&
-    scene.planeAtlas?.addressLeafIndexByteLength === 30_989 &&
-    scene.planeAtlas?.addressSlotIndexByteLength === 30_989 * 2 &&
-    scene.planeAtlas?.redundantAddressWriteCountRemoved === 30_535 &&
-    scene.planeAtlas?.addressWriteCountPerState?.zeroWriteStateCount === 546 &&
+    scene.planeAtlas?.addressUpdateCount === 32_889 &&
+    scene.planeAtlas?.addressStateOffsetByteLength === (1_536 + 1) * 2 &&
+    scene.planeAtlas?.addressLeafIndexByteLength === 32_889 &&
+    scene.planeAtlas?.addressSlotIndexByteLength === 32_889 * 2 &&
+    scene.planeAtlas?.redundantAddressWriteCountRemoved === 32_547 &&
+    scene.planeAtlas?.addressWriteCountPerState?.zeroWriteStateCount === 607 &&
     scene.planeAtlas?.sourceFaceCoverageExact === true,
   "prepared atlas identity");
 
@@ -118,17 +127,17 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     scene.mobilePlaneAtlas?.decodedBytes === 218_700 &&
     scene.mobilePlaneAtlas?.byteLength === 15_028 &&
     scene.mobilePlaneAtlas?.leafCount === 84 &&
-    scene.mobilePlaneAtlas?.visibleLeafFieldCount === 61_524 &&
+    scene.mobilePlaneAtlas?.visibleLeafFieldCount === 65_436 &&
     scene.mobilePlaneAtlas?.slotCount === 75 &&
-    scene.mobilePlaneAtlas?.lightingSampleIntervalTicks === 1_440 &&
-    scene.mobilePlaneAtlas?.lightingSampleDelayMilliseconds === 43_200 &&
+    scene.mobilePlaneAtlas?.lightingSampleIntervalTicks === 1_536 &&
+    scene.mobilePlaneAtlas?.lightingSampleDelayMilliseconds === 46_080 &&
     scene.mobilePlaneAtlas?.lightingSampleCount === 1 &&
     scene.mobilePlaneAtlas?.addressUpdateCount === 84 &&
     scene.mobilePlaneAtlas?.addressInitializationWriteCount === 84 &&
-    scene.mobilePlaneAtlas?.redundantAddressWriteCountRemoved === 61_440 &&
+    scene.mobilePlaneAtlas?.redundantAddressWriteCountRemoved === 65_352 &&
     scene.mobilePlaneAtlas?.addressWriteCountPerState?.maximum === 0 &&
     scene.mobilePlaneAtlas?.addressWriteCountPerState?.average === 0 &&
-    scene.mobilePlaneAtlas?.addressWriteCountPerState?.zeroWriteStateCount === 1_440 &&
+    scene.mobilePlaneAtlas?.addressWriteCountPerState?.zeroWriteStateCount === 1_536 &&
     scene.mobilePlaneAtlas?.addressInitialization === "all-leaf-addresses-before-playback" &&
     scene.mobilePlaneAtlas?.sourceFaceCoverageExact === true,
   "prepared mobile atlas identity");
@@ -148,8 +157,8 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     /\.polycss-scene\.cssmenger-mobile-atlas.*lighting-grid-mobile-[a-f0-9]{64}\.avif/u.test(snapshot) &&
     snapshot.includes(scene.cssOpacityBaseAtlas.assetUrl) &&
     snapshot.includes(scene.cssOpacityShadowAtlas.assetUrl) &&
-    count(snapshot, /%\{transform:rotateX/gu) === 1_440 &&
-    /--cssmenger-rotation-duration:43170ms/u.test(snapshot) &&
+    count(snapshot, /%\{transform:rotateX/gu) === 1_537 &&
+    /--cssmenger-rotation-duration:46080ms/u.test(snapshot) &&
     !/mask-image|-webkit-mask/u.test(snapshot) &&
     !/cssmenger-(?:model|axis)/u.test(snapshot) &&
     !/var\(--[mxyz]\)|--[mxyz]:|!important/iu.test(snapshot),
@@ -180,9 +189,10 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     reducedScene.metrics?.preparedPlaneTexturePatternCount === 4,
   "reduced exact prepared coverage and merge");
   assert(reducedScene.playback?.schema === "cssmenger-prepared-playback@1" &&
-    reducedScene.playback?.stateCount === 1_440 && reducedScene.playback?.loop === true &&
+    reducedScene.playback?.stateCount === 1_536 && reducedScene.playback?.loop === true &&
+    reducedScene.playback?.loopMode === "prepared-forward-cyclic-c2-rotation-and-palette" &&
     reducedScene.playback?.sourceFrameDelayMilliseconds === 30 &&
-    reducedScene.playback?.frontFacingSchedule?.offsets?.length === 1_440 * 3 + 1 &&
+    reducedScene.playback?.frontFacingSchedule?.offsets?.length === 1_536 * 3 + 1 &&
     reducedScene.playback.frontFacingSchedule.offsets.at(-1) ===
       reducedScene.playback.frontFacingSchedule.leafIndices?.length &&
     reducedScene.renderer?.stableDom === true && reducedScene.renderer?.runtimeGeometryPayload === false &&
@@ -201,21 +211,21 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     const reducedAtlasPath = productPath(reducedAtlas?.assetUrl);
     const reducedAtlasBytes = await readFile(join(root, reducedAtlasPath));
     const suffix = profile === "mobile" ? "-mobile" : "";
-    assert(reducedAtlasBytes.length === 416_630 && reducedAtlas?.byteLength === 416_630 &&
+    assert(reducedAtlasBytes.length === 447_767 && reducedAtlas?.byteLength === 447_767 &&
       sha256(reducedAtlasBytes) === reducedAtlas.assetSha256 &&
       reducedAtlas?.schema === "cssmenger-prepared-sparse-leaf-lighting-atlas@1" &&
       reducedAtlas?.profile === profile &&
       new RegExp(`^/cssmenger/assets/lighting-grid${suffix}-[a-f0-9]{64}\\.avif$`, "u")
         .test(reducedAtlas?.assetUrl) &&
-      reducedAtlas?.width === 16_380 && reducedAtlas?.height === 54 &&
-      reducedAtlas?.decodedBytes === 3_538_080 && reducedAtlas?.leafCount === 30 &&
-      reducedAtlas?.visibleLeafFieldCount === 21_828 && reducedAtlas?.slotCount === 10_479 &&
+      reducedAtlas?.width === 16_380 && reducedAtlas?.height === 63 &&
+      reducedAtlas?.decodedBytes === 4_127_760 && reducedAtlas?.leafCount === 30 &&
+      reducedAtlas?.visibleLeafFieldCount === 23_234 && reducedAtlas?.slotCount === 10_962 &&
       reducedAtlas?.lightingSampleIntervalTicks === 2 &&
       reducedAtlas?.lightingSampleDelayMilliseconds === 60 &&
-      reducedAtlas?.lightingSampleCount === 720 && reducedAtlas?.addressUpdateCount === 11_002 &&
+      reducedAtlas?.lightingSampleCount === 768 && reducedAtlas?.addressUpdateCount === 11_680 &&
       reducedAtlas?.addressInitializationWriteCount === 0 &&
       reducedAtlas?.addressWriteCountPerState?.maximum === 18 &&
-      reducedAtlas?.addressWriteCountPerState?.zeroWriteStateCount === 627 &&
+      reducedAtlas?.addressWriteCountPerState?.zeroWriteStateCount === 690 &&
       reducedAtlas?.sourceFaceCoverageExact === true,
     `reduced ${profile} atlas identity`);
     reducedAtlasPaths.push(reducedAtlasPath);
@@ -230,7 +240,7 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     /--cssmenger-tile-width:9px;--cssmenger-tile-height:9px/u.test(reducedSnapshot) &&
     reducedSnapshot.includes(reducedScene.cssOpacityBaseAtlas.assetUrl) &&
     reducedSnapshot.includes(reducedScene.cssOpacityShadowAtlas.assetUrl) &&
-    count(reducedSnapshot, /%\{transform:rotateX/gu) === 1_440 &&
+    count(reducedSnapshot, /%\{transform:rotateX/gu) === 1_537 &&
     !/mask-image|-webkit-mask/u.test(reducedSnapshot) &&
     !/cssmenger-(?:model|axis)|!important|\sdata-[\w-]+=/u.test(reducedSnapshot) &&
     !/<(?:script|canvas|svg)\b/iu.test(reducedSnapshot),
@@ -274,7 +284,8 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     mergedSourceFaceCount: 17_964,
     mobileSourceFaceCount: 1_056,
     mobileMergedSourceFaceCount: 1_026,
-    timelineStateCount: 1_440,
+    timelineStateCount: 1_536,
+    playbackLoopMode: "prepared-forward-cyclic-c2-rotation-and-palette",
     paletteStateCount: 128,
     atlasAssetCount: 8,
     lightingAddressUpdateCount: scene.planeAtlas.addressUpdateCount,
@@ -324,7 +335,7 @@ async function inspectCssOpacityAtlasPair(root, scene, expectedLeafCount) {
     shadow?.schema === "cssmenger-prepared-sparse-leaf-lighting-atlas@1" &&
     shadow?.profile === "desktop" && shadow?.presentation === "css-black-alpha" &&
     shadow?.mimeType === "image/avif" && shadow?.leafCount === expectedLeafCount &&
-    shadow?.lightingSampleIntervalTicks === 1 && shadow?.lightingSampleCount === 1_440 &&
+    shadow?.lightingSampleIntervalTicks === 1 && shadow?.lightingSampleCount === 1_536 &&
     shadow?.addressPublicationIntervalTicks === 1 && shadow?.sourceFaceCoverageExact === true &&
     /^\/cssmenger\/assets\/lighting-shadow-grid-[a-f0-9]{64}\.avif$/u.test(shadow?.assetUrl),
   "prepared CSS opacity shadow atlas identity");

@@ -11,7 +11,7 @@ const SOURCE_RGB_GUTTER = 0;
 const CSS_BLACK_ALPHA_GUTTER = 1;
 export const DESKTOP_LIGHTING_SAMPLE_INTERVAL_TICKS = 2;
 export const CSS_OPACITY_LIGHTING_SAMPLE_INTERVAL_TICKS = 1;
-export const MOBILE_LIGHTING_SAMPLE_INTERVAL_TICKS = 1_440;
+export const MOBILE_LIGHTING_SAMPLE_INTERVAL_TICKS = 1_536;
 const MAXIMUM_TEXTURE_DIMENSION = 16_384;
 const preparedBytes = new WeakMap();
 
@@ -25,8 +25,8 @@ export async function buildPreparedMengerSparseLightingAtlas({
 }) {
   if (!geometry?.metrics?.sourceFaceCoverageExact || !Array.isArray(geometry.bundles) ||
       playback?.schema !== "cssmenger-prepared-playback@1" ||
-      !Array.isArray(playback.nativeRotationDegrees) ||
-      playback.nativeRotationDegrees.length !== playback.stateCount ||
+      !Array.isArray(playback.preparedRotationDegrees) ||
+      playback.preparedRotationDegrees.length !== playback.stateCount ||
       frontFacingSchedule?.schema !== "cssmenger-prepared-front-facing-leaf-schedule@1" ||
       frontFacingSchedule.stateCount !== playback.stateCount ||
       frontFacingSchedule.offsets?.length !== playback.stateCount * 3 + 1 ||
@@ -140,11 +140,6 @@ export async function buildPreparedMengerSparseLightingAtlas({
     addressPublicationIntervalTicks,
     initializeAllLeafAddresses: Math.ceil(playback.stateCount / lightingSampleIntervalTicks) === 1,
   });
-  const reverseAddressSchedule = prepareExactReverseDeltaAddressSchedule({
-    addressSchedule,
-    stateCount: playback.stateCount,
-    leafCount: geometry.bundles.length,
-  });
   const addressStateOffsetBytes = u16leBytes(addressSchedule.offsets);
   const addressLeafIndexBytes = Buffer.from(addressSchedule.leafIndices);
   const addressSlotIndexBytes = u16leBytes(addressSchedule.slotIndices);
@@ -152,14 +147,6 @@ export async function buildPreparedMengerSparseLightingAtlas({
     .update(addressStateOffsetBytes)
     .update(addressLeafIndexBytes)
     .update(addressSlotIndexBytes)
-    .digest("hex");
-  const reverseAddressStateOffsetBytes = u16leBytes(reverseAddressSchedule.offsets);
-  const reverseAddressLeafIndexBytes = Buffer.from(reverseAddressSchedule.leafIndices);
-  const reverseAddressSlotIndexBytes = u16leBytes(reverseAddressSchedule.slotIndices);
-  const reverseAddressSha256 = createHash("sha256")
-    .update(reverseAddressStateOffsetBytes)
-    .update(reverseAddressLeafIndexBytes)
-    .update(reverseAddressSlotIndexBytes)
     .digest("hex");
   const bytes = await sharp(rgba, {
     raw: { width, height, channels: 4 },
@@ -205,15 +192,6 @@ export async function buildPreparedMengerSparseLightingAtlas({
     addressSlotIndexByteLength: addressSlotIndexBytes.length,
     addressSlotIndicesBase64: addressSlotIndexBytes.toString("base64"),
     addressUpdateCount: addressSchedule.updateCount,
-    reverseAddressScheduleSchema: "cssmenger-prepared-exact-reverse-delta-lighting-address-schedule@1",
-    reverseAddressScheduleSha256: reverseAddressSha256,
-    reverseAddressStateOffsetByteLength: reverseAddressStateOffsetBytes.length,
-    reverseAddressStateOffsetsBase64: reverseAddressStateOffsetBytes.toString("base64"),
-    reverseAddressLeafIndexByteLength: reverseAddressLeafIndexBytes.length,
-    reverseAddressLeafIndicesBase64: reverseAddressLeafIndexBytes.toString("base64"),
-    reverseAddressSlotIndexByteLength: reverseAddressSlotIndexBytes.length,
-    reverseAddressSlotIndicesBase64: reverseAddressSlotIndexBytes.toString("base64"),
-    reverseAddressUpdateCount: reverseAddressSchedule.updateCount,
     addressInitializationWriteCount: addressSchedule.initializationWriteCount,
     addressInitialization: addressSchedule.initializeAllLeafAddresses
       ? "all-leaf-addresses-before-playback"
@@ -225,12 +203,6 @@ export async function buildPreparedMengerSparseLightingAtlas({
       maximum: addressSchedule.maximumWriteCountPerState,
       average: addressSchedule.averageWriteCountPerState,
       zeroWriteStateCount: addressSchedule.zeroWriteStateCount,
-    }),
-    reverseAddressWriteCountPerState: Object.freeze({
-      minimum: reverseAddressSchedule.minimumWriteCountPerState,
-      maximum: reverseAddressSchedule.maximumWriteCountPerState,
-      average: reverseAddressSchedule.averageWriteCountPerState,
-      zeroWriteStateCount: reverseAddressSchedule.zeroWriteStateCount,
     }),
     addressedVisibleLeafFieldCount: fields.length,
     redundantAddressWriteCountRemoved: fields.length - addressSchedule.updateCount,
@@ -367,58 +339,6 @@ function prepareExactDeltaAddressSchedule({
   });
 }
 
-function prepareExactReverseDeltaAddressSchedule({
-  addressSchedule,
-  stateCount,
-  leafCount,
-}) {
-  const slotsByState = [];
-  const currentSlots = new Int32Array(leafCount).fill(-1);
-  for (let stateIndex = 0; stateIndex < stateCount; stateIndex += 1) {
-    const start = addressSchedule.offsets[stateIndex];
-    const end = addressSchedule.offsets[stateIndex + 1];
-    for (let cursor = start; cursor < end; cursor += 1) {
-      currentSlots[addressSchedule.leafIndices[cursor]] = addressSchedule.slotIndices[cursor];
-    }
-    slotsByState.push(Int32Array.from(currentSlots));
-  }
-  const offsets = [0];
-  const leafIndices = [];
-  const slotIndices = [];
-  const writeCounts = [];
-  for (let stateIndex = 0; stateIndex < stateCount; stateIndex += 1) {
-    const stateStart = leafIndices.length;
-    if (stateIndex < stateCount - 1) {
-      const sourceSlots = slotsByState[stateIndex + 1];
-      const targetSlots = slotsByState[stateIndex];
-      for (let leafIndex = 0; leafIndex < leafCount; leafIndex += 1) {
-        const slotIndex = targetSlots[leafIndex];
-        if (slotIndex < 0 || sourceSlots[leafIndex] === slotIndex) continue;
-        leafIndices.push(leafIndex);
-        slotIndices.push(slotIndex);
-      }
-    }
-    writeCounts.push(leafIndices.length - stateStart);
-    offsets.push(leafIndices.length);
-  }
-  const updateCount = leafIndices.length;
-  if (updateCount > 65_535 || offsets.at(-1) !== updateCount) {
-    throw new Error("Prepared cssMenger reverse delta address schedule exceeds its u16 contract");
-  }
-  return Object.freeze({
-    offsets: Object.freeze(offsets),
-    leafIndices: Object.freeze(leafIndices),
-    slotIndices: Object.freeze(slotIndices),
-    updateCount,
-    minimumWriteCountPerState:
-      writeCounts.reduce((minimum, count) => Math.min(minimum, count), Infinity),
-    maximumWriteCountPerState:
-      writeCounts.reduce((maximum, count) => Math.max(maximum, count), 0),
-    averageWriteCountPerState: updateCount / stateCount,
-    zeroWriteStateCount: writeCounts.reduce((count, value) => count + Number(value === 0), 0),
-  });
-}
-
 function u16leBytes(values) {
   const bytes = Buffer.alloc(values.length * 2);
   for (let index = 0; index < values.length; index += 1) bytes.writeUInt16LE(values[index], index * 2);
@@ -490,7 +410,7 @@ function writeLightingTile({
   const slotY = Math.floor(slotIndex / columns) * slotHeight;
   const contentX = slotX + gutterPixels;
   const contentY = slotY + gutterPixels;
-  const rotation = playback.nativeRotationDegrees[stateIndex];
+  const rotation = playback.preparedRotationDegrees[stateIndex];
   const materialIndices = playback.colorRows[stateIndex];
   const rotatedNormals = new Map();
   for (const face of layout.faces) {

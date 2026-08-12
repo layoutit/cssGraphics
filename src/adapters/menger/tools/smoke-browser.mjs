@@ -130,7 +130,7 @@ try {
     });
 
     const sampledStates = [];
-    for (const tick of [0, 36, 420, 1_439]) {
+    for (const tick of [0, 36, 420, 1_535]) {
       sampledStates.push(await page.evaluate((stateIndex) => {
         const debug = globalThis.__cssMengerDebug;
         debug.seek(stateIndex);
@@ -154,12 +154,58 @@ try {
     });
     const loopProgress = await page.evaluate(async () => {
       const debug = globalThis.__cssMengerDebug;
-      debug.seek(1_439);
+      debug.seek(1_535);
       debug.resume();
       await new Promise((resolve) => setTimeout(resolve, 90));
       const state = debug.state();
       debug.pause();
       return state;
+    });
+    const seamEvidence = await page.evaluate(() => {
+      const debug = globalThis.__cssMengerDebug;
+      const scene = document.querySelector(".polycss-camera > .polycss-scene");
+      const animation = scene.getAnimations()
+        .find((candidate) => candidate.animationName === "cssmenger-prepared-rotation");
+      const frameMilliseconds = debug.scene.playback.sourceFrameDelayMilliseconds;
+      const finalStateIndex = debug.scene.playback.stateCount - 1;
+      const cycleMilliseconds = debug.scene.playback.stateCount * frameMilliseconds;
+      debug.pause();
+      const matrixAt = (currentTime) => {
+        animation.currentTime = currentTime;
+        return [...new DOMMatrix(getComputedStyle(scene).transform).toFloat64Array()];
+      };
+      const zero = matrixAt(0);
+      const before = matrixAt(cycleMilliseconds - frameMilliseconds);
+      const boundary = matrixAt(cycleMilliseconds);
+      const after = matrixAt(cycleMilliseconds + frameMilliseconds);
+      const incomingVelocity = boundary.map((value, index) => value - before[index]);
+      const outgoingVelocity = after.map((value, index) => value - boundary[index]);
+      const incomingMagnitude = Math.hypot(...incomingVelocity);
+      const outgoingMagnitude = Math.hypot(...outgoingVelocity);
+      const velocityCosine = incomingVelocity.reduce((sum, value, index) =>
+        sum + value * outgoingVelocity[index], 0) / (incomingMagnitude * outgoingMagnitude);
+      const schedule = debug.scene.playback.frontFacingSchedule;
+      const visibleStateZeroLeaves = schedule.leafIndices.slice(schedule.offsets[0], schedule.offsets[3]);
+      debug.seek(0);
+      const expectedLightingAddresses = visibleStateZeroLeaves.map((leafIndex) =>
+        scene.children[leafIndex].style.backgroundPosition);
+      debug.seek(finalStateIndex);
+      debug.step();
+      const actualLightingAddresses = visibleStateZeroLeaves.map((leafIndex) =>
+        scene.children[leafIndex].style.backgroundPosition);
+      const wrappedTick = debug.state().tick;
+      debug.seek(0);
+      return {
+        boundaryOrientationMatrixMaxDelta: Math.max(...boundary.map((value, index) =>
+          Math.abs(value - zero[index]))),
+        incomingMagnitude,
+        outgoingMagnitude,
+        velocityCosine,
+        velocityMagnitudeRatio: outgoingMagnitude / incomingMagnitude,
+        visibleLightingAddressMismatchCount: actualLightingAddresses.reduce((count, value, index) =>
+          count + Number(value !== expectedLightingAddresses[index]), 0),
+        wrappedTick,
+      };
     });
     const desktopAtlasRequests = requests.filter((path) =>
       /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif$/u.test(path));
@@ -186,19 +232,23 @@ try {
         evidence.sceneVariableWidth !== `${evidence.atlasWidth}px` ||
         evidence.sceneVariableHeight !== `${evidence.atlasHeight}px` || evidence.atlasPageCount !== 2 ||
         new Set(desktopAtlasRequests).size !== 1 || frozenAtlasRequests.length !== 0 || pageRequests.length !== 0 ||
-        sampledStates.some((sample, index) => sample.tick !== [0, 36, 420, 1_439][index] ||
+        sampledStates.some((sample, index) => sample.tick !== [0, 36, 420, 1_535][index] ||
           !sample.paused || sample.matrixMaxDelta > 5e-5) ||
         playbackProgress.tick < 25 || playbackProgress.tick > 45 || !playbackProgress.paused ||
-        loopProgress.tick < 1_435 || loopProgress.tick > 1_438 || loopProgress.paused ||
+        loopProgress.tick < 0 || loopProgress.tick > 5 || loopProgress.paused ||
+        seamEvidence.boundaryOrientationMatrixMaxDelta > 5e-5 ||
+        seamEvidence.velocityCosine < 0.995 || seamEvidence.velocityMagnitudeRatio < 0.95 ||
+        seamEvidence.velocityMagnitudeRatio > 1.05 ||
+        seamEvidence.visibleLightingAddressMismatchCount !== 0 || seamEvidence.wrappedTick !== 0 ||
         evidence.stats.runtimeDomMutationCount !== 0 || evidence.stats.runtimeDomGrowth !== false ||
         evidence.stats.preparedPlaneAtlasProfile !== "desktop" ||
-        evidence.stats.preparedPlaneAtlasAssetBytes !== 6_241_355 ||
-        evidence.stats.preparedPlaneAtlasDecodedBytes !== 86_587_704 ||
+        evidence.stats.preparedPlaneAtlasAssetBytes !== 6_542_470 ||
+        evidence.stats.preparedPlaneAtlasDecodedBytes !== 90_121_896 ||
         evidence.stats.preparedPlaneAtlasDecodedImageRetention !== "css-background-lifetime" ||
         evidence.stats.preparedColorPublicationMode !== "prepared-held-lighting-sample-plus-per-state-front-face-address" ||
         evidence.stats.preparedSchedulerCatchUpMode !==
           "compositor-clock-adjacent-or-collapsed-prepared-resync" ||
-        evidence.stats.preparedLoopPresentationMode !== "prepared-adjacent-state-ping-pong-no-reset" ||
+        evidence.stats.preparedLoopPresentationMode !== "prepared-forward-cyclic-c2-no-turnaround-no-reset" ||
         evidence.stats.preparedCompositorRotationMode !==
           "prepared-css-keyframes-on-existing-scene-node" ||
         evidence.stats.runtimeRotationStyleWriteCountPerScheduledTick !== 0 ||
@@ -207,7 +257,7 @@ try {
         evidence.stats.retainedRotationRootCount !== 0 || evidence.stats.retainedLightingRootCount !== 0 ||
         evidence.stats.runtimeLightingCalculationCount !== 0 || evidence.stats.runtimeGeometryConstructionCount !== 0) {
       throw new Error(`cssMenger browser smoke failed: ${JSON.stringify({
-        evidence, sampledStates, playbackProgress, loopProgress,
+        evidence, sampledStates, playbackProgress, loopProgress, seamEvidence,
         desktopAtlasRequests, frozenAtlasRequests, pageRequests, pageErrors,
       })}`);
     }
@@ -261,12 +311,29 @@ try {
       /^\/cssmenger\/assets\/lighting-grid(?:-mobile)?-[a-f0-9]{64}\.avif$/u.test(path));
     const cssOpacityLoopProgress = await cssOpacityPage.evaluate(async () => {
       const debug = globalThis.__cssMengerDebug;
-      debug.seek(1_439);
+      debug.seek(1_535);
       debug.resume();
       await new Promise((resolve) => setTimeout(resolve, 90));
       const state = debug.state();
       debug.pause();
       return state;
+    });
+    const cssOpacitySeamEvidence = await cssOpacityPage.evaluate(() => {
+      const debug = globalThis.__cssMengerDebug;
+      const scene = document.querySelector(".polycss-camera > .polycss-scene");
+      const schedule = debug.scene.playback.frontFacingSchedule;
+      const visibleStateZeroLeaves = schedule.leafIndices.slice(schedule.offsets[0], schedule.offsets[3]);
+      debug.seek(0);
+      const expected = visibleStateZeroLeaves.map((leafIndex) =>
+        scene.children[leafIndex].style.backgroundPosition);
+      debug.seek(debug.scene.playback.stateCount - 1);
+      debug.step();
+      const actual = visibleStateZeroLeaves.map((leafIndex) =>
+        scene.children[leafIndex].style.backgroundPosition);
+      return {
+        mismatchCount: actual.reduce((count, value, index) => count + Number(value !== expected[index]), 0),
+        wrappedTick: debug.state().tick,
+      };
     });
     if (cssOpacityErrors.length || cssOpacityEvidence.status !== "ready" ||
         cssOpacityEvidence.route.selectedLightingPresentation !== "css-opacity" ||
@@ -292,12 +359,13 @@ try {
         cssOpacityEvidence.stats.preparedLightingAtlasAssetCount !== 2 ||
         cssOpacityEvidence.stats.preparedFlatSceneLeafLightingSeparation !== true ||
         cssOpacityEvidence.stats.preparedLoopPresentationMode !==
-          "prepared-adjacent-state-ping-pong-no-reset" ||
+          "prepared-forward-cyclic-c2-no-turnaround-no-reset" ||
         cssOpacityEvidence.stats.preparedCompositorRotationMode !==
           "prepared-css-keyframes-on-existing-scene-node" ||
         cssOpacityEvidence.stats.runtimeRotationStyleWriteCountPerScheduledTick !== 0 ||
-        cssOpacityLoopProgress.tick < 1_435 || cssOpacityLoopProgress.tick > 1_438 ||
+        cssOpacityLoopProgress.tick < 0 || cssOpacityLoopProgress.tick > 5 ||
         cssOpacityLoopProgress.paused ||
+        cssOpacitySeamEvidence.mismatchCount !== 0 || cssOpacitySeamEvidence.wrappedTick !== 0 ||
         cssOpacityEvidence.stats.runtimeDomMutationCount !== 0 ||
         new Set(cssOpacityBaseRequests).size !== 1 || new Set(cssOpacityShadowRequests).size !== 1 ||
         cssOpacityRgbRequests.length !== 0) {
@@ -307,6 +375,7 @@ try {
         cssOpacityShadowRequests,
         cssOpacityRgbRequests,
         cssOpacityLoopProgress,
+        cssOpacitySeamEvidence,
         cssOpacityErrors,
       })}`);
     }
@@ -318,7 +387,7 @@ try {
       { width: 390, height: 844, expectedScale: "0.88", screenshotPath: mobileDesktopAtlasScreenshotPath },
     ]) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
-      for (const tick of [0, 320, 720, 1_439]) {
+      for (const tick of [0, 320, 720, 1_535]) {
         mobileFraming.push(await page.evaluate(({ stateIndex, expectedScale }) => {
           const debug = globalThis.__cssMengerDebug;
           debug.seek(stateIndex);
@@ -360,7 +429,7 @@ try {
     const mobileEvidence = await mobilePage.evaluate(async () => {
       const debug = globalThis.__cssMengerDebug;
       debug.pause();
-      const lightingAddresses = [0, 1, 2, 186, 720, 1_439].map((stateIndex) => {
+      const lightingAddresses = [0, 1, 2, 186, 720, 1_535].map((stateIndex) => {
         debug.seek(stateIndex);
         return [...document.querySelectorAll(
           ".polycss-camera > .polycss-scene > b",
@@ -417,9 +486,9 @@ try {
         mobileEvidence.bodyDataAttributes.length !== 0 || mobileEvidence.selectedProfile !== "mobile" ||
         mobileEvidence.devicePixelRatio !== 3 ||
         mobileEvidence.selectedScene !== "depth-2" || mobileEvidence.leafCount !== 30 ||
-        mobileEvidence.selectedDecodedBytes !== 3_538_080 || mobileEvidence.selectedAssetBytes !== 416_630 ||
+        mobileEvidence.selectedDecodedBytes !== 4_127_760 || mobileEvidence.selectedAssetBytes !== 447_767 ||
         mobileEvidence.selectedLightingIntervalTicks !== 2 ||
-        mobileEvidence.selectedLightingAddressUpdateCount !== 11_002 ||
+        mobileEvidence.selectedLightingAddressUpdateCount !== 11_680 ||
         !mobileEvidence.lightingAddressesChange ||
         mobileEvidence.lightingSteps?.length !== 2 ||
         mobileEvidence.lightingSteps.some((step) => step.preparedLightingAddressWriteCount > 18) ||
@@ -428,9 +497,9 @@ try {
         !mobileEvidence.backgroundImage.includes(mobileEvidence.mobileUrl) ||
         mobileEvidence.backgroundSize !== mobileEvidence.expectedBackgroundSize ||
         mobileEvidence.transformAnimationName !== "cssmenger-prepared-rotation" ||
-        mobileEvidence.transformAnimationDuration !== "43.17s" ||
+        mobileEvidence.transformAnimationDuration !== "46.08s" ||
         mobileEvidence.transformAnimationTimingFunction !== "linear" ||
-        mobileEvidence.transformAnimationDirection !== "alternate" ||
+        mobileEvidence.transformAnimationDirection !== "normal" ||
         mobileEvidence.transformAnimationCount !== 1 ||
         mobileEvidence.transformAnimationPlayState !== "paused" ||
         requestedDesktopAtlases.length !== 0 || new Set(requestedMobileAtlases).size !== 1) {
@@ -475,7 +544,7 @@ try {
       /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.avif$/u.test(path));
     if (widePhoneErrors.length || widePhoneEvidence.errors.length || widePhoneEvidence.viewportWidth <= 430 ||
         widePhoneEvidence.profile !== "mobile" || widePhoneEvidence.scene !== "depth-2" ||
-        widePhoneEvidence.leaves !== 30 || widePhoneEvidence.assetBytes !== 416_630 ||
+        widePhoneEvidence.leaves !== 30 || widePhoneEvidence.assetBytes !== 447_767 ||
         widePhoneEvidence.colorMode !== "prepared-held-lighting-sample-plus-per-state-front-face-address" ||
         widePhoneDesktopAtlases.length !== 0 || new Set(widePhoneMobileAtlases).size !== 1) {
       throw new Error(`cssMenger wide-phone profile selection failed: ${JSON.stringify({
@@ -489,6 +558,7 @@ try {
       sampledStates,
       playbackProgress,
       loopProgress,
+      seamEvidence,
       mobileFraming,
       mobileEvidence,
       requestedDesktopAtlases,

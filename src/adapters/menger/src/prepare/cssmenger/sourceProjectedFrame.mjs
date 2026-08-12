@@ -26,7 +26,7 @@ export async function prepareMengerSourceProjectedFrame({
     throw new TypeError("Complete prepared cssMenger source frame inputs are required");
   }
   const faces = sourceFacesFor(geometry);
-  const rotation = playback.nativeRotationDegrees[stateIndex];
+  const rotation = playback.preparedRotationDegrees[stateIndex];
   const materialIndices = playback.colorRows[stateIndex];
   const focalPixels = viewport.height / 2 / Math.tan(SOURCE_FOV_DEGREES * Math.PI / 360);
   const frame = Buffer.alloc(viewport.width * viewport.height * 4);

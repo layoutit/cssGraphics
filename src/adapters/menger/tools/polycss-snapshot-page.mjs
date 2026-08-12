@@ -229,9 +229,15 @@ function prepareFrontFacingSchedule({ playback, perspective, planeAtlas, view, l
     axisLeafCounts.slice(0, axis).reduce((sum, value) => sum + value, 0));
   for (let stateIndex = 0; stateIndex < playback.stateCount; stateIndex += 1) {
     const stateStart = leafIndices.length;
-    const previous = visibleByState[Math.max(0, stateIndex - 1)];
+    const previousStateIndex = playback.loop
+      ? (stateIndex - 1 + playback.stateCount) % playback.stateCount
+      : Math.max(0, stateIndex - 1);
+    const nextStateIndex = playback.loop
+      ? (stateIndex + 1) % playback.stateCount
+      : Math.min(playback.stateCount - 1, stateIndex + 1);
+    const previous = visibleByState[previousStateIndex];
     const current = visibleByState[stateIndex];
-    const next = visibleByState[Math.min(playback.stateCount - 1, stateIndex + 1)];
+    const next = visibleByState[nextStateIndex];
     for (let axis = 0; axis < 3; axis += 1) {
       const axisStart = axisOffsets[axis];
       for (let leafIndex = axisStart; leafIndex < axisStart + axisLeafCounts[axis]; leafIndex += 1) {

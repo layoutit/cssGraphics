@@ -1,5 +1,5 @@
 export const COLOR_PUBLICATION_INTERVAL_TICKS = 2;
-export const MOBILE_COLOR_PUBLICATION_INTERVAL_TICKS = 1_440;
+export const MOBILE_COLOR_PUBLICATION_INTERVAL_TICKS = 1_536;
 const LEGACY_COLOR_PUBLICATION_INTERVAL_TICKS = 4;
 
 export function timelineStateIndexForTick(tick, playback) {
@@ -38,13 +38,9 @@ export function createCssmengerPreparedPlayer({
   const cancelDelay = overrides.cancelDelay ?? globalThis.clearTimeout.bind(globalThis);
   const readNow = overrides.readNow ?? globalThis.performance.now.bind(globalThis.performance);
   const frameMilliseconds = playback.sourceFrameDelayMilliseconds;
-  const addressSchedule = decodePreparedAddressSchedule(planeAtlas, "forward");
-  const reverseAddressSchedule = decodePreparedAddressSchedule(planeAtlas, "reverse");
+  const addressSchedule = decodePreparedAddressSchedule(planeAtlas);
   const frozenLighting = !cssOpacityMode && planeAtlas.lightingSampleCount === 1;
-  const animationFinalStateIndex = playback.stateCount - 1;
-  const animationIterationMilliseconds = animationFinalStateIndex * frameMilliseconds;
-  const animationCycleMilliseconds = animationIterationMilliseconds * 2;
-  const animationCycleStateCount = animationFinalStateIndex * 2;
+  const animationCycleMilliseconds = playback.stateCount * frameMilliseconds;
   const axisLeafOffsets = cssOpacityMode
     ? [0, axisLeafCounts[0], axisLeafCounts[0] + axisLeafCounts[1], leaves.length]
     : null;
@@ -60,7 +56,6 @@ export function createCssmengerPreparedPlayer({
   let animationFrame = null;
   let delay = null;
   let nextFrameAt = null;
-  let loopDirection = 1;
   let compositorClockReadCount = 0;
   let collapsedLightingResyncCount = 0;
   let maximumCollapsedStateCount = 0;
@@ -73,12 +68,9 @@ export function createCssmengerPreparedPlayer({
     publicationRoot.style.transform = playback.transforms[stateIndex];
   }
 
-  function publishCssOpacityBasePositions(stateIndex, force = false, direction = 1) {
+  function publishCssOpacityBasePositions(stateIndex, force = false) {
     const preparedStateIndex = stateIndex - stateIndex % planeAtlas.lightingSampleIntervalTicks;
-    const publicationRemainder = direction > 0
-      ? 0
-      : planeAtlas.lightingSampleIntervalTicks - 1;
-    if (!force && stateIndex % planeAtlas.lightingSampleIntervalTicks !== publicationRemainder) return 0;
+    if (!force && stateIndex % planeAtlas.lightingSampleIntervalTicks !== 0) return 0;
     const colorRow = playback.colorRows[preparedStateIndex];
     let writeCount = 0;
     for (let axis = 0; axis < planeAtlas.preparedAxisPaletteSourceIndices.length; axis += 1) {
@@ -135,30 +127,29 @@ export function createCssmengerPreparedPlayer({
     return end - start;
   }
 
-  function publishPreparedAddressState(stateIndex, direction, deferredLeaves = null) {
-    const selectedAddressSchedule = direction > 0 ? addressSchedule : reverseAddressSchedule;
+  function publishPreparedAddressState(stateIndex, deferredLeaves = null) {
     return publishAddressRange(
-      selectedAddressSchedule,
-      selectedAddressSchedule.offsets[stateIndex],
-      selectedAddressSchedule.offsets[stateIndex + 1],
+      addressSchedule,
+      addressSchedule.offsets[stateIndex],
+      addressSchedule.offsets[stateIndex + 1],
       deferredLeaves,
     );
   }
 
-  function publishSequentialState(stateIndex, profile = null, direction = 1) {
+  function publishSequentialState(stateIndex, profile = null) {
     const startedAt = profile ? readNow() : 0;
     publishPreparedRotation(stateIndex);
     const transformPublishedAt = profile ? readNow() : 0;
-    const targetCount = frozenLighting ? 0 : publishPreparedAddressState(stateIndex, direction);
+    const targetCount = frozenLighting ? 0 : publishPreparedAddressState(stateIndex);
     const colorWriteCount = cssOpacityMode
-      ? publishCssOpacityBasePositions(stateIndex, false, direction)
+      ? publishCssOpacityBasePositions(stateIndex)
       : 0;
     tick = stateIndex;
     if (profile) {
       Object.assign(profile, {
         schema: "cssmenger-profiled-publication@3",
         stateIndex,
-        preparedPlaybackDirection: direction,
+        preparedPlaybackDirection: 1,
         preparedTransformPublicationMilliseconds: transformPublishedAt - startedAt,
         preparedLightingAddressPublicationMilliseconds: readNow() - transformPublishedAt,
         preparedLightingAddressWriteCount: targetCount,
@@ -200,44 +191,18 @@ export function createCssmengerPreparedPlayer({
     const currentTime = Number(value);
     if (!Number.isFinite(currentTime) || currentTime < 0 || animationCycleMilliseconds <= 0) return null;
     const cycleTime = currentTime % animationCycleMilliseconds;
-    if (cycleTime <= animationIterationMilliseconds) {
-      return Math.min(animationFinalStateIndex, Math.floor((cycleTime + 0.001) / frameMilliseconds));
-    }
-    const reverseElapsed = cycleTime - animationIterationMilliseconds;
-    const stateIndex = Math.max(0,
-      animationFinalStateIndex - Math.floor((reverseElapsed + 0.001) / frameMilliseconds));
-    return -stateIndex - 1;
+    return Math.min(playback.stateCount - 1, Math.floor((cycleTime + 0.001) / frameMilliseconds));
   }
 
-  function animationPhaseForState(stateIndex, direction) {
-    return direction > 0
-      ? stateIndex
-      : (animationCycleStateCount - stateIndex) % animationCycleStateCount;
-  }
-
-  function stateIndexForAnimationPhase(phase) {
-    return phase <= animationFinalStateIndex
-      ? phase
-      : animationCycleStateCount - phase;
-  }
-
-  function transitionDirectionForAnimationPhase(phase) {
-    return phase !== 0 && phase <= animationFinalStateIndex ? 1 : -1;
-  }
-
-  function publishCollapsedPreparedState(targetStateIndex, targetDirection, stateCount) {
+  function publishCollapsedPreparedState(targetStateIndex, stateCount) {
     deferredAddressLeaves.fill(0);
-    let phase = animationPhaseForState(tick, loopDirection);
+    let stateIndex = tick;
     for (let index = 0; index < stateCount; index += 1) {
-      phase = (phase + 1) % animationCycleStateCount;
-      publishPreparedAddressState(
-        stateIndexForAnimationPhase(phase),
-        transitionDirectionForAnimationPhase(phase),
-        deferredAddressLeaves,
-      );
+      stateIndex = (stateIndex + 1) % playback.stateCount;
+      publishPreparedAddressState(stateIndex, deferredAddressLeaves);
     }
     if (cssOpacityMode) {
-      publishCssOpacityBasePositions(targetStateIndex, false, targetDirection);
+      publishCssOpacityBasePositions(targetStateIndex);
     } else {
       for (let leafIndex = 0; leafIndex < deferredAddressLeaves.length; leafIndex += 1) {
         if (deferredAddressLeaves[leafIndex] !== 0) {
@@ -247,35 +212,23 @@ export function createCssmengerPreparedPlayer({
       }
     }
     tick = targetStateIndex;
-    loopDirection = targetDirection;
     collapsedLightingResyncCount += 1;
     maximumCollapsedStateCount = Math.max(maximumCollapsedStateCount, stateCount);
     return tick;
   }
 
-  function publishCompositorClockState(stateIndex, direction) {
+  function publishCompositorClockState(stateIndex) {
     if (frozenLighting) {
       tick = stateIndex;
-      loopDirection = direction;
       return tick;
     }
-    if (stateIndex === tick) {
-      loopDirection = direction;
-      return tick;
-    }
-    const currentPhase = animationPhaseForState(tick, loopDirection);
-    const targetPhase = animationPhaseForState(stateIndex, direction);
-    const stateCount = (targetPhase - currentPhase + animationCycleStateCount) % animationCycleStateCount;
-    if (stateCount === 0) {
-      loopDirection = direction;
-      return tick;
-    }
+    if (stateIndex === tick) return tick;
+    const stateCount = (stateIndex - tick + playback.stateCount) % playback.stateCount;
     if (stateCount === 1) {
-      publishSequentialState(stateIndex, null, transitionDirectionForAnimationPhase(targetPhase));
-      loopDirection = direction;
+      publishSequentialState(stateIndex);
       return tick;
     }
-    return publishCollapsedPreparedState(stateIndex, direction, stateCount);
+    return publishCollapsedPreparedState(stateIndex, stateCount);
   }
 
   function advanceOne(profile = null) {
@@ -285,13 +238,11 @@ export function createCssmengerPreparedPlayer({
     }
     let stateIndex;
     if (playback.loop) {
-      if (tick >= playback.segmentEndState) loopDirection = -1;
-      else if (tick <= playback.segmentStartState) loopDirection = 1;
-      stateIndex = tick + loopDirection;
+      stateIndex = tick >= playback.segmentEndState ? playback.segmentStartState : tick + 1;
     } else {
       stateIndex = tick + 1;
     }
-    publishSequentialState(stateIndex, profile, loopDirection);
+    publishSequentialState(stateIndex, profile);
     if (!playback.loop && tick >= playback.segmentEndState) paused = true;
     return tick;
   }
@@ -321,9 +272,7 @@ export function createCssmengerPreparedPlayer({
       compositorClockReadCount += 1;
       const stateCode = preparedStateCodeForAnimationTime(rotationAnimation.currentTime);
       if (stateCode !== null) {
-        const direction = stateCode >= 0 ? 1 : -1;
-        const stateIndex = stateCode >= 0 ? stateCode : -stateCode - 1;
-        publishCompositorClockState(stateIndex, direction);
+        publishCompositorClockState(stateCode);
       }
     } else {
       advanceOne();
@@ -380,7 +329,6 @@ export function createCssmengerPreparedPlayer({
     },
     setTick(value) {
       this.pause();
-      loopDirection = 1;
       return publishAbsoluteState(timelineStateIndexForTick(Math.trunc(Number(value)), playback));
     },
     stats() {
@@ -398,7 +346,7 @@ export function createCssmengerPreparedPlayer({
         preparedCollapsedLightingResyncCount: collapsedLightingResyncCount,
         preparedMaximumCollapsedLightingStateCount: maximumCollapsedStateCount,
         preparedLoopPresentationMode: playback.loop
-          ? "prepared-adjacent-state-ping-pong-no-reset"
+          ? "prepared-forward-cyclic-c2-no-turnaround-no-reset"
           : "prepared-forward-once",
         preparedCompositorRotationMode: compositorRotationMode
           ? "prepared-css-keyframes-on-existing-scene-node"
@@ -432,9 +380,6 @@ export function createCssmengerPreparedPlayer({
         preparedLightingAddressWritesPerScheduledTick:
           Object.freeze({ ...planeAtlas.addressWriteCountPerState }),
         preparedLightingAddressUpdateCount: planeAtlas.addressUpdateCount,
-        preparedReverseLightingAddressWritesPerScheduledTick:
-          Object.freeze({ ...planeAtlas.reverseAddressWriteCountPerState }),
-        preparedReverseLightingAddressUpdateCount: planeAtlas.reverseAddressUpdateCount,
         preparedLightingInitializationAddressWriteCount: frozenLighting
           ? planeAtlas.addressUpdateCount
           : 0,
@@ -507,20 +452,9 @@ function validatePlayback(playback, planeAtlas, publicationRoot, leaves) {
       planeAtlas.addressUpdateCount + planeAtlas.redundantAddressWriteCountRemoved !==
         planeAtlas.addressedVisibleLeafFieldCount ||
       !planeAtlas.addressWriteCountPerState ||
-      planeAtlas.reverseAddressScheduleSchema !==
-        "cssmenger-prepared-exact-reverse-delta-lighting-address-schedule@1" ||
-      !Number.isSafeInteger(planeAtlas.reverseAddressUpdateCount) ||
-      planeAtlas.reverseAddressUpdateCount < 0 ||
-      planeAtlas.reverseAddressStateOffsetByteLength !== (playback.stateCount + 1) * 2 ||
-      planeAtlas.reverseAddressLeafIndexByteLength !== planeAtlas.reverseAddressUpdateCount ||
-      planeAtlas.reverseAddressSlotIndexByteLength !== planeAtlas.reverseAddressUpdateCount * 2 ||
-      !planeAtlas.reverseAddressWriteCountPerState ||
       typeof planeAtlas.addressStateOffsetsBase64 !== "string" ||
       typeof planeAtlas.addressLeafIndicesBase64 !== "string" ||
       typeof planeAtlas.addressSlotIndicesBase64 !== "string" ||
-      typeof planeAtlas.reverseAddressStateOffsetsBase64 !== "string" ||
-      typeof planeAtlas.reverseAddressLeafIndicesBase64 !== "string" ||
-      typeof planeAtlas.reverseAddressSlotIndicesBase64 !== "string" ||
       !(playback.sourceFrameDelayMilliseconds > 0)) {
     throw new Error("Prepared cssMenger playback contract is invalid");
   }
@@ -554,20 +488,19 @@ function validCssOpacityPlayback({
     axisLeafCounts.reduce((sum, count) => sum + count, 0) === leaves.length;
 }
 
-function decodePreparedAddressSchedule(planeAtlas, direction) {
-  const reverse = direction === "reverse";
-  const updateCount = reverse ? planeAtlas.reverseAddressUpdateCount : planeAtlas.addressUpdateCount;
+function decodePreparedAddressSchedule(planeAtlas) {
+  const updateCount = planeAtlas.addressUpdateCount;
   const offsetBytes = decodeBase64Bytes(
-    reverse ? planeAtlas.reverseAddressStateOffsetsBase64 : planeAtlas.addressStateOffsetsBase64,
-    reverse ? planeAtlas.reverseAddressStateOffsetByteLength : planeAtlas.addressStateOffsetByteLength,
+    planeAtlas.addressStateOffsetsBase64,
+    planeAtlas.addressStateOffsetByteLength,
   );
   const leafIndices = decodeBase64Bytes(
-    reverse ? planeAtlas.reverseAddressLeafIndicesBase64 : planeAtlas.addressLeafIndicesBase64,
-    reverse ? planeAtlas.reverseAddressLeafIndexByteLength : planeAtlas.addressLeafIndexByteLength,
+    planeAtlas.addressLeafIndicesBase64,
+    planeAtlas.addressLeafIndexByteLength,
   );
   const slotBytes = decodeBase64Bytes(
-    reverse ? planeAtlas.reverseAddressSlotIndicesBase64 : planeAtlas.addressSlotIndicesBase64,
-    reverse ? planeAtlas.reverseAddressSlotIndexByteLength : planeAtlas.addressSlotIndexByteLength,
+    planeAtlas.addressSlotIndicesBase64,
+    planeAtlas.addressSlotIndexByteLength,
   );
   const offsets = new Uint16Array(planeAtlas.sourceStateCount + 1);
   for (let index = 0; index < offsets.length; index += 1) {
@@ -589,10 +522,10 @@ function decodePreparedAddressSchedule(planeAtlas, direction) {
     slotIndices[index] = slotIndex;
     seen[slotIndex] = 1;
   }
-  if (!reverse && seen.some((selected) => selected === 0)) {
+  if (seen.some((selected) => selected === 0)) {
     throw new Error("Prepared cssMenger lighting atlas contains an unreachable slot");
   }
-  if (!reverse && planeAtlas.lightingSampleCount === 1) {
+  if (planeAtlas.lightingSampleCount === 1) {
     const seenLeaves = new Uint8Array(planeAtlas.leafCount);
     for (const leafIndex of leafIndices) seenLeaves[leafIndex] += 1;
     if (leafIndices.length !== planeAtlas.leafCount || seenLeaves.some((count) => count !== 1)) {

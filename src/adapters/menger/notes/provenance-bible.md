@@ -50,15 +50,17 @@ is reference-only and is not vendored.
 
 The canonical product prepares one deterministic depth-3 sponge with the exact
 `menger_recurs_1` face-mask traversal. Its 18,048 source quads are preserved in
-the coverage ledger and emitted as 84 directional-plane alpha-atlas bundles across
-three semantic `b`/`i`/`s` leaf bands directly under the retained scene root. The coverage hash is
+the coverage ledger and emitted as 84 directional-plane atlas bundles as direct
+`b` leaves under the retained scene root. The coverage hash is
 `5bb98301f900af4b1b15ae73ffbd7338836b67bb0bd48b26da6017b1874b60ea`.
 
 Seed `26080801` drives the prepared `yarandom.c`, `rotator.c`, `colors.c`, and
-`hsv.c` semantics. Preparation exports 128 palette colors and 1,440 transform
-and axis-color rows at the source 30 ms frame delay. The finite segment clamps
-at its last state; it does not claim a false loop. Wander, trackball input, and
-depth transitions remain outside this first slice.
+`hsv.c` semantics. Preparation exports 128 palette colors and 1,536 transform
+and axis-color rows at the source 30 ms frame delay. States 0-994 retain the
+native rotator exactly; the remaining prepared tail forms a forward C2 cycle
+whose orientation, velocity, acceleration, and 128-row palette cadence match
+at the 46.08 second boundary. Wander, trackball input, and depth transitions
+remain outside this first slice.
 
 ## Preparation/runtime boundary
 
@@ -86,7 +88,7 @@ Proven now:
 - reproducible fail-closed provenance verification;
 - exact 18,048-face depth-3 source census and exact coverage through 84
   prepared coplanar bundles;
-- deterministic 128-color palette and 1,440-state prepared playback hashes;
+- deterministic 128-color palette and 1,536-state forward cyclic prepared playback hashes;
 - a source-built, no-window macOS CGL oracle using the real pinned `menger.c`,
   `rotator.c`, `yarandom.c`, `colors.c`, and `hsv.c` behavior;
 - byte-exact native state A/A and pixel-exact native frame A/A across ticks
@@ -106,9 +108,8 @@ Proven now:
 
 Pending:
 
-- preparation of the native moving fixed-function two-light contribution;
 - depth transitions, wander/trackball behavior, and native/browser pixel
-  parity.
+  parity beyond the qualified exact native prefix.
 
 Describe cssMenger as a working source-backed first slice, not a visually
 qualified full XScreenSaver reproduction, until those later gates close.

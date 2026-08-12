@@ -299,14 +299,16 @@ function preparedRotationAnimationStyles(playback) {
           .test(transform))) {
     throw new Error("Prepared cssMenger compositor rotation keyframes are invalid");
   }
-  const finalStateIndex = playback.stateCount - 1;
-  const durationMilliseconds = finalStateIndex * playback.sourceFrameDelayMilliseconds;
+  if (typeof playback.cycleClosureTransform !== "string" ||
+      playback.cycleClosure?.schema !== "cssmenger-prepared-cyclic-rotation-closure@1" ||
+      playback.cycleClosure.stateCount !== playback.stateCount) {
+    throw new Error("Prepared cssMenger cyclic compositor rotation contract is invalid");
+  }
+  const durationMilliseconds = playback.stateCount * playback.sourceFrameDelayMilliseconds;
   const keyframes = playback.transforms.map((transform, stateIndex) => {
-    const percentage = stateIndex === finalStateIndex
-      ? "100"
-      : (stateIndex / finalStateIndex * 100).toFixed(9).replace(/\.?0+$/u, "");
+    const percentage = (stateIndex / playback.stateCount * 100).toFixed(9).replace(/\.?0+$/u, "");
     return `${percentage}%{transform:${transform}}`;
-  }).join("");
+  }).join("") + `100%{transform:${playback.cycleClosureTransform}}`;
   return `body>.polycss-camera>.polycss-scene{--cssmenger-rotation-duration:${durationMilliseconds}ms}` +
     `@keyframes cssmenger-prepared-rotation{${keyframes}}`;
 }
@@ -363,10 +365,7 @@ async function publishRuntimeScene({
       preparedCssOpacityLightingScheduleBytes:
         cssOpacityShadowAtlas.addressStateOffsetByteLength +
         cssOpacityShadowAtlas.addressLeafIndexByteLength +
-        cssOpacityShadowAtlas.addressSlotIndexByteLength +
-        cssOpacityShadowAtlas.reverseAddressStateOffsetByteLength +
-        cssOpacityShadowAtlas.reverseAddressLeafIndexByteLength +
-        cssOpacityShadowAtlas.reverseAddressSlotIndexByteLength,
+        cssOpacityShadowAtlas.addressSlotIndexByteLength,
       preparedCssOpacityLightingSampleCount: cssOpacityShadowAtlas.lightingSampleCount,
       atlasPageCount: 2,
       preparedRenderWrapperCount: 2,
@@ -381,11 +380,9 @@ async function publishRuntimeScene({
       preparedVisibleLightingFieldCount: desktopAtlas.visibleLeafFieldCount,
       preparedOmittedBackFacingLightingFieldCount: desktopAtlas.omittedBackFacingLeafFieldCount,
       preparedLightingAddressUpdateCount: desktopAtlas.addressUpdateCount,
-      preparedReverseLightingAddressUpdateCount: desktopAtlas.reverseAddressUpdateCount,
       preparedRedundantLightingAddressWriteCountRemoved:
         desktopAtlas.redundantAddressWriteCountRemoved,
       preparedMobileLightingAddressUpdateCount: mobileAtlas.addressUpdateCount,
-      preparedMobileReverseLightingAddressUpdateCount: mobileAtlas.reverseAddressUpdateCount,
       preparedMobileRedundantLightingAddressWriteCountRemoved:
         mobileAtlas.redundantAddressWriteCountRemoved,
     },
@@ -402,7 +399,7 @@ async function publishRuntimeScene({
     },
     warnings: [
       `This prepared product scene fixes source depth at ${scene.sourceProfile.depth}; the XScreenSaver depth-change sequence remains outside this slice.`,
-      "The prepared source rotator segment reverses at its endpoints for continuous endless playback without a final-to-first transform jump.",
+      "The native-prefix rotation is closed at prepare time into a forward C2 cycle without a runtime reversal or reset.",
       "Wander and interactive trackball input are disabled in this first slice.",
       "Moving two-light RGB and palette colors are prepared off the runtime path into exact source-cell face tiles.",
       "The optional CSS-opacity preview scales its prepared normalized palette base to the native display range, then applies one prepared black-alpha light value per source cell.",

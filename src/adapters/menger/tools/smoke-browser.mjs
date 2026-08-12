@@ -33,7 +33,7 @@ try {
     const loadingPage = await browser.newPage({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 });
     let releaseAtlasRequest;
     const atlasRequestGate = new Promise((resolve) => { releaseAtlasRequest = resolve; });
-    await loadingPage.route("**/cssmenger/assets/lighting-shadow-grid-*.avif", async (request) => {
+    await loadingPage.route("**/cssmenger/assets/lighting-grid-*.avif", async (request) => {
       await atlasRequestGate;
       await request.continue();
     });
@@ -66,8 +66,7 @@ try {
       const debug = globalThis.__cssMengerDebug;
       const scene = document.querySelector(".polycss-camera > .polycss-scene");
       const leaves = [...scene.querySelectorAll(":scope > b")];
-      const shadowAtlas = debug.scene.cssOpacityShadowAtlas;
-      const baseAtlas = debug.scene.cssOpacityBaseAtlas;
+      const atlas = debug.scene.planeAtlas;
       const importantRules = [];
       for (const sheet of [...document.styleSheets]) {
         for (const rule of [...(sheet.cssRules ?? [])]) {
@@ -124,10 +123,9 @@ try {
           maskImage: firstStyle.maskImage,
           backgroundBlendMode: firstStyle.backgroundBlendMode,
         },
-        expectedBackgroundSize:
-          `${shadowAtlas.width}px ${shadowAtlas.height}px, ${baseAtlas.width}px ${baseAtlas.height}px`,
-        atlasWidth: shadowAtlas.width,
-        atlasHeight: shadowAtlas.height,
+        expectedBackgroundSize: `${atlas.width}px ${atlas.height}px`,
+        atlasWidth: atlas.width,
+        atlasHeight: atlas.height,
         atlasPageCount: debug.scene.metrics.atlasPageCount,
         sceneVariableWidth: getComputedStyle(scene).getPropertyValue("--cssmenger-atlas-width"),
         sceneVariableHeight: getComputedStyle(scene).getPropertyValue("--cssmenger-atlas-height"),
@@ -225,8 +223,8 @@ try {
 
     if (pageErrors.length || evidence.status !== "ready" || evidence.bodyDataAttributes.length !== 0 ||
         !evidence.ready || !evidence.stable || evidence.selectedDeviceProfile !== "desktop" ||
-        evidence.selectedLightingMode !== "prepared-css-opacity" ||
-        evidence.selectedLightingPresentation !== "css-opacity" || evidence.locationSearch !== "" ||
+        evidence.selectedLightingMode !== "dynamic" ||
+        evidence.selectedLightingPresentation !== "atlas" || evidence.locationSearch !== "" ||
         evidence.internalTransformWrapCount !== 0 || evidence.maximumAdjacentTransformDegrees >= 2 ||
         evidence.errors.length || evidence.bCount !== 84 || evidence.iCount !== 0 || evidence.sCount !== 0 ||
         evidence.forbiddenRendererCount !== 0 || evidence.leafImportantInlineCount !== 0 ||
@@ -238,14 +236,14 @@ try {
         evidence.importantRules.length !== 0 || evidence.computed.width !== "27px" ||
         evidence.computed.height !== "27px" || evidence.computed.imageRendering !== "pixelated" ||
         evidence.computed.backfaceVisibility !== "hidden" ||
-        (evidence.computed.backgroundImage.match(/url\("blob:/gu) ?? []).length !== 2 ||
+        (evidence.computed.backgroundImage.match(/url\("blob:/gu) ?? []).length !== 1 ||
         evidence.computed.filter !== "none" || evidence.computed.maskImage !== "none" ||
         !["normal", "normal, normal"].includes(evidence.computed.backgroundBlendMode) ||
         evidence.computed.backgroundSize !== evidence.expectedBackgroundSize ||
         evidence.sceneVariableWidth !== `${evidence.atlasWidth}px` ||
         evidence.sceneVariableHeight !== `${evidence.atlasHeight}px` || evidence.atlasPageCount !== 2 ||
-        desktopAtlasRequests.length !== 0 || frozenAtlasRequests.length !== 0 ||
-        new Set(shadowAtlasRequests).size !== 1 || new Set(baseAtlasRequests).size !== 1 ||
+        new Set(desktopAtlasRequests).size !== 1 || frozenAtlasRequests.length !== 0 ||
+        shadowAtlasRequests.length !== 0 || baseAtlasRequests.length !== 0 ||
         pageRequests.length !== 0 ||
         sampledStates.some((sample, index) => sample.tick !== [0, 36, 420, 1_535][index] ||
           !sample.paused || sample.matrixMaxDelta > 5e-5) ||
@@ -257,14 +255,14 @@ try {
         seamEvidence.visibleLightingAddressMismatchCount !== 0 || seamEvidence.wrappedTick !== 0 ||
         evidence.stats.runtimeDomMutationCount !== 0 || evidence.stats.runtimeDomGrowth !== false ||
         evidence.stats.preparedPlaneAtlasProfile !== "desktop" ||
-        evidence.stats.preparedPlaneAtlasAssetBytes !== 6_190_414 ||
-        evidence.stats.preparedPlaneAtlasDecodedBytes !== 198_866_224 ||
+        evidence.stats.preparedPlaneAtlasAssetBytes !== 6_542_470 ||
+        evidence.stats.preparedPlaneAtlasDecodedBytes !== 90_121_896 ||
         evidence.stats.preparedPlaneAtlasDecodedImageRetention !==
           "verified-decoded-object-url-lifetime" ||
         evidence.stats.preparedColorPublicationMode !==
-          "prepared-palette-base-plus-cadence-batched-black-alpha-shadow-atlas" ||
+          "prepared-held-lighting-sample-plus-per-state-front-face-address" ||
         evidence.stats.preparedLightingAddressPublicationIntervalTicks !== 1 ||
-        evidence.stats.preparedLightingAtlasAssetCount !== 2 ||
+        evidence.stats.preparedLightingAtlasAssetCount !== 1 ||
         evidence.stats.preparedCssOpacityWriteCountPerScheduledTick !== 0 ||
         evidence.stats.preparedSchedulerCatchUpMode !==
           "compositor-clock-adjacent-or-collapsed-prepared-resync" ||

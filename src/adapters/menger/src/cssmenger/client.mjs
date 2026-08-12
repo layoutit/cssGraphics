@@ -24,7 +24,7 @@ export function mountCssmengerClient(host) {
     const preparedRoute = { ...route, scene: deviceProfile === "mobile" ? MOBILE_SCENE_ID : route.scene };
     const { entry, sceneData, snapshotHtml } = await loadPreparedScene(state.manifest, preparedRoute);
     const planeAtlasProfile = deviceProfile;
-    const lightingPresentation = deviceProfile === "desktop" ? "css-opacity" : "atlas";
+    const lightingPresentation = "atlas";
     const planeAtlas = lightingPresentation === "css-opacity"
       ? sceneData.cssOpacityShadowAtlas
       : planeAtlasProfile === "mobile" ? sceneData.mobilePlaneAtlas : sceneData.planeAtlas;

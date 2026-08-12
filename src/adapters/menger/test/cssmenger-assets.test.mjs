@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -11,39 +10,34 @@ import { PREPARED_STATE_COUNT } from "../src/prepare/cssmenger/sourcePlayback.mj
 const root = resolve(import.meta.dirname, "..");
 const generated = generatedPublicRoot;
 
-test("verified lighting atlas bytes stay bound to the CSS background lifetime", async () => {
+test("prepared lighting atlas uses one direct stylesheet URL without a runtime fetch", async () => {
   const originalFetch = globalThis.fetch;
-  const originalImage = globalThis.Image;
-  const bytes = Uint8Array.from([17, 34, 51, 68]);
-  const assetSha256 = createHash("sha256").update(bytes).digest("hex");
-  class FakeImage {
-    set src(value) { this.url = value; }
-    get naturalWidth() { return 27; }
-    get naturalHeight() { return 27; }
-    async decode() { this.decoded = true; }
-    removeAttribute(name) { if (name === "src") this.url = ""; }
-  }
-  globalThis.fetch = async () => ({
-    ok: true,
-    arrayBuffer: async () => bytes.slice().buffer,
-  });
-  globalThis.Image = FakeImage;
+  const assetSha256 = "a".repeat(64);
+  let fetchCount = 0;
+  globalThis.fetch = async () => {
+    fetchCount += 1;
+    throw new Error("Prepared CSS atlas binding must not fetch at runtime");
+  };
   try {
     const asset = await loadPreparedMengerPlaneAtlasAsset({
       schema: "cssmenger-prepared-sparse-leaf-lighting-atlas@1",
-      assetUrl: `/cssmenger/assets/lighting-grid-${assetSha256}.avif`,
+      presentation: "source-rgb",
+      assetUrl: `/cssmenger/assets/lighting-grid-${assetSha256}.webp`,
       profile: "desktop",
       assetSha256,
-      encoding: "AVIF-lossy-q83-alpha-lossless-yuv444",
+      encoding: "WebP-lossless-transcode-of-AVIF-q83-alpha-lossless-yuv444",
+      mimeType: "image/webp",
+      lossless: true,
       quality: 83,
       alphaQuality: 100,
       chromaSubsampling: "4:4:4",
-      byteLength: bytes.byteLength,
+      byteLength: 4,
       width: 27,
       height: 27,
     });
-    assert.match(asset.url, /^blob:/u);
-    assert.equal(asset.decodedImageRetention, "verified-decoded-object-url-lifetime");
+    assert.equal(asset.url, `/cssmenger/assets/lighting-grid-${assetSha256}.webp`);
+    assert.equal(asset.cssImageBinding, "prepared-direct-stylesheet-url");
+    assert.equal(fetchCount, 0);
     assert.equal(asset.retained, true);
     asset.destroy();
     assert.equal(asset.retained, false);
@@ -55,16 +49,16 @@ test("verified lighting atlas bytes stay bound to the CSS background lifetime", 
       assetUrl: `/cssmenger/assets/planes-opacity-base-${assetSha256}.png`,
       assetSha256,
       encoding: "PNG-RGBA8",
-      byteLength: bytes.byteLength,
+      byteLength: 4,
       width: 27,
       height: 27,
     });
     assert.equal(cssOpacityAsset.paletteRole, "css-opacity-base");
+    assert.equal(fetchCount, 0);
     cssOpacityAsset.destroy();
     assert.equal(cssOpacityAsset.retained, false);
   } finally {
     globalThis.fetch = originalFetch;
-    globalThis.Image = originalImage;
   }
 });
 
@@ -98,7 +92,14 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
   assert.equal(scene.planeAtlas.leafCount, 84);
   assert.equal(scene.planeAtlas.profile, "desktop");
   assert.equal(scene.planeAtlas.schema, "cssmenger-prepared-sparse-leaf-lighting-atlas@1");
-  assert.match(scene.planeAtlas.assetUrl, /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif$/u);
+  assert.match(scene.planeAtlas.assetUrl, /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.webp$/u);
+  assert.equal(scene.planeAtlas.mimeType, "image/webp");
+  assert.equal(scene.planeAtlas.lossless, true);
+  assert.equal(scene.planeAtlas.encoding,
+    "WebP-lossless-transcode-of-AVIF-q83-alpha-lossless-yuv444");
+  assert.equal(scene.planeAtlas.byteLength, 8_643_642);
+  assert.equal(scene.planeAtlas.visiblePixelIdentity,
+    "byte-exact-to-prepared-avif-decode-where-alpha-is-nonzero");
   assert.equal(scene.planeAtlas.visibleLeafFieldCount, 65_436);
   assert.equal(scene.planeAtlas.slotCount, 30_744);
   assert.equal(scene.planeAtlas.exactDuplicateTileCount, 34_692);
@@ -124,8 +125,8 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
   });
   assert.equal(scene.mobilePlaneAtlas.profile, "mobile");
   assert.match(scene.mobilePlaneAtlas.assetUrl,
-    /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.avif$/u);
-  assert.equal(scene.mobilePlaneAtlas.byteLength, 15_028);
+    /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.webp$/u);
+  assert.equal(scene.mobilePlaneAtlas.byteLength, 19_686);
   assert.equal(scene.mobilePlaneAtlas.decodedBytes, 218_700);
   assert.equal(scene.mobilePlaneAtlas.width, 2_025);
   assert.equal(scene.mobilePlaneAtlas.height, 27);
@@ -227,7 +228,7 @@ test("generated manifest exposes depth-3 desktop and depth-2 mobile prepared pat
   assert.equal(mobileScene.metrics.sourceFaceCoverageExact, true);
   assert.deepEqual(mobileScene.meshDescriptors.map((mesh) => mesh.polygonCount), [10, 10, 10]);
   assert.equal(mobileScene.mobilePlaneAtlas.profile, "mobile");
-  assert.equal(mobileScene.mobilePlaneAtlas.byteLength, 447_767);
+  assert.equal(mobileScene.mobilePlaneAtlas.byteLength, 748_646);
   assert.equal(mobileScene.mobilePlaneAtlas.decodedBytes, 4_127_760);
   assert.equal(mobileScene.mobilePlaneAtlas.leafCount, 30);
   assert.equal(mobileScene.mobilePlaneAtlas.addressUpdateCount, 11_680);
@@ -254,9 +255,9 @@ test("prepared snapshot is retained DOM without an alternate renderer", async ()
   assert.equal((html.match(/<b style="transform: matrix3d\(/gu) ?? []).length, 84);
   assert.doesNotMatch(html, /\.polycss-scene>b:nth-child\(\d+\)\{transform:/u);
   assert.match(html,
-    /\.polycss-scene>b\{background-image:url\("\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif"\)\}/u);
+    /\.polycss-scene>b\{background-image:url\("\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.webp"\)\}/u);
   assert.match(html,
-    /\.polycss-scene\.cssmenger-mobile-atlas.*lighting-grid-mobile-[a-f0-9]{64}\.avif/u);
+    /\.polycss-scene\.cssmenger-mobile-atlas.*lighting-grid-mobile-[a-f0-9]{64}\.webp/u);
   assert.match(html,
     /\.polycss-scene\.cssmenger-css-opacity.*planes-opacity-base-[a-f0-9]{64}\.png/u);
   assert.match(html,

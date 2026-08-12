@@ -84,16 +84,27 @@ export function mountCssmengerClient(host) {
         for (const asset of renderAtlasAssets) asset.destroy();
       },
     });
-    await waitForPreparedCssPaint();
+    await waitForPreparedCssPaint(snapshot.leaves);
     state.ready = true;
     setStatus("ready");
     requestAnimationFrame(() => player.resume());
   }
 }
 
-function waitForPreparedCssPaint() {
-  return new Promise((resolvePaint) => {
-    requestAnimationFrame(() => requestAnimationFrame(resolvePaint));
+function waitForPreparedCssPaint(leaves) {
+  if (!Array.isArray(leaves) || leaves.length < 1) {
+    throw new Error("Prepared cssMenger leaves are required for CSS atlas warmup");
+  }
+  return new Promise((resolvePaint, rejectPaint) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const atlasUrl = getComputedStyle(leaves[0]).backgroundImage;
+      if (!atlasUrl || atlasUrl === "none" || leaves.some((leaf) =>
+        getComputedStyle(leaf).backgroundImage !== atlasUrl)) {
+        rejectPaint(new Error("Prepared cssMenger CSS atlas warmup drifted"));
+        return;
+      }
+      resolvePaint();
+    }));
   });
 }
 

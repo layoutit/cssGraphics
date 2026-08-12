@@ -91,8 +91,12 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     sha256(atlasBytes) === scene.planeAtlas.assetSha256 &&
     scene.planeAtlas?.schema === "cssmenger-prepared-sparse-leaf-lighting-atlas@1" &&
     scene.planeAtlas?.profile === "desktop" &&
-    /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif$/u.test(scene.planeAtlas?.assetUrl) &&
-    scene.planeAtlas?.mimeType === "image/avif" &&
+    /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.webp$/u.test(scene.planeAtlas?.assetUrl) &&
+    scene.planeAtlas?.mimeType === "image/webp" && scene.planeAtlas?.lossless === true &&
+    scene.planeAtlas?.encoding === "WebP-lossless-transcode-of-AVIF-q83-alpha-lossless-yuv444" &&
+    scene.planeAtlas?.byteLength === 8_643_642 &&
+    scene.planeAtlas?.visiblePixelIdentity ===
+      "byte-exact-to-prepared-avif-decode-where-alpha-is-nonzero" &&
     scene.planeAtlas?.width === 16_362 && scene.planeAtlas?.height === 1_377 &&
     scene.planeAtlas?.leafCount === 84 &&
     scene.planeAtlas?.visibleLeafFieldCount === 65_436 &&
@@ -121,11 +125,13 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     sha256(mobileAtlasBytes) === scene.mobilePlaneAtlas.assetSha256 &&
     scene.mobilePlaneAtlas?.schema === "cssmenger-prepared-sparse-leaf-lighting-atlas@1" &&
     scene.mobilePlaneAtlas?.profile === "mobile" &&
-    /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.avif$/u.test(scene.mobilePlaneAtlas?.assetUrl) &&
-    scene.mobilePlaneAtlas?.mimeType === "image/avif" &&
+    /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.webp$/u.test(scene.mobilePlaneAtlas?.assetUrl) &&
+    scene.mobilePlaneAtlas?.mimeType === "image/webp" && scene.mobilePlaneAtlas?.lossless === true &&
+    scene.mobilePlaneAtlas?.encoding ===
+      "WebP-lossless-transcode-of-AVIF-q83-alpha-lossless-yuv444" &&
     scene.mobilePlaneAtlas?.width === 2_025 && scene.mobilePlaneAtlas?.height === 27 &&
     scene.mobilePlaneAtlas?.decodedBytes === 218_700 &&
-    scene.mobilePlaneAtlas?.byteLength === 15_028 &&
+    scene.mobilePlaneAtlas?.byteLength === 19_686 &&
     scene.mobilePlaneAtlas?.leafCount === 84 &&
     scene.mobilePlaneAtlas?.visibleLeafFieldCount === 65_436 &&
     scene.mobilePlaneAtlas?.slotCount === 75 &&
@@ -153,8 +159,8 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     /matrix3d\(12\.222222222,/u.test(snapshot) &&
     count(snapshot, /<b><\/b>/gu) === 0 &&
     !/\.polycss-scene>b:nth-child\(\d+\)\{transform:/u.test(snapshot) &&
-    /\.polycss-scene>b\{background-image:url\("\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif"\)\}/u.test(snapshot) &&
-    /\.polycss-scene\.cssmenger-mobile-atlas.*lighting-grid-mobile-[a-f0-9]{64}\.avif/u.test(snapshot) &&
+    /\.polycss-scene>b\{background-image:url\("\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.webp"\)\}/u.test(snapshot) &&
+    /\.polycss-scene\.cssmenger-mobile-atlas.*lighting-grid-mobile-[a-f0-9]{64}\.webp/u.test(snapshot) &&
     snapshot.includes(scene.cssOpacityBaseAtlas.assetUrl) &&
     snapshot.includes(scene.cssOpacityShadowAtlas.assetUrl) &&
     count(snapshot, /%\{transform:rotateX/gu) === 1_537 &&
@@ -211,12 +217,15 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     const reducedAtlasPath = productPath(reducedAtlas?.assetUrl);
     const reducedAtlasBytes = await readFile(join(root, reducedAtlasPath));
     const suffix = profile === "mobile" ? "-mobile" : "";
-    assert(reducedAtlasBytes.length === 447_767 && reducedAtlas?.byteLength === 447_767 &&
+    assert(reducedAtlasBytes.length === 748_646 && reducedAtlas?.byteLength === 748_646 &&
       sha256(reducedAtlasBytes) === reducedAtlas.assetSha256 &&
       reducedAtlas?.schema === "cssmenger-prepared-sparse-leaf-lighting-atlas@1" &&
       reducedAtlas?.profile === profile &&
-      new RegExp(`^/cssmenger/assets/lighting-grid${suffix}-[a-f0-9]{64}\\.avif$`, "u")
+      new RegExp(`^/cssmenger/assets/lighting-grid${suffix}-[a-f0-9]{64}\\.webp$`, "u")
         .test(reducedAtlas?.assetUrl) &&
+      reducedAtlas?.mimeType === "image/webp" && reducedAtlas?.lossless === true &&
+      reducedAtlas?.encoding ===
+        "WebP-lossless-transcode-of-AVIF-q83-alpha-lossless-yuv444" &&
       reducedAtlas?.width === 16_380 && reducedAtlas?.height === 63 &&
       reducedAtlas?.decodedBytes === 4_127_760 && reducedAtlas?.leafCount === 30 &&
       reducedAtlas?.visibleLeafFieldCount === 23_234 && reducedAtlas?.slotCount === 10_962 &&

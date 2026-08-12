@@ -33,7 +33,7 @@ try {
     const loadingPage = await browser.newPage({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 });
     let releaseAtlasRequest;
     const atlasRequestGate = new Promise((resolve) => { releaseAtlasRequest = resolve; });
-    await loadingPage.route("**/cssmenger/assets/lighting-grid-*.avif", async (request) => {
+    await loadingPage.route("**/cssmenger/assets/lighting-grid-*.webp", async (request) => {
       await atlasRequestGate;
       await request.continue();
     });
@@ -124,6 +124,8 @@ try {
           backgroundBlendMode: firstStyle.backgroundBlendMode,
         },
         expectedBackgroundSize: `${atlas.width}px ${atlas.height}px`,
+        expectedBackgroundUrl: atlas.assetUrl,
+        expectedAssetBytes: atlas.byteLength,
         atlasWidth: atlas.width,
         atlasHeight: atlas.height,
         atlasPageCount: debug.scene.metrics.atlasPageCount,
@@ -212,9 +214,9 @@ try {
       };
     });
     const desktopAtlasRequests = requests.filter((path) =>
-      /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif$/u.test(path));
+      /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.webp$/u.test(path));
     const frozenAtlasRequests = requests.filter((path) =>
-      /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.avif$/u.test(path));
+      /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.webp$/u.test(path));
     const shadowAtlasRequests = requests.filter((path) =>
       /^\/cssmenger\/assets\/lighting-shadow-grid-[a-f0-9]{64}\.avif$/u.test(path));
     const baseAtlasRequests = requests.filter((path) =>
@@ -236,13 +238,13 @@ try {
         evidence.importantRules.length !== 0 || evidence.computed.width !== "27px" ||
         evidence.computed.height !== "27px" || evidence.computed.imageRendering !== "pixelated" ||
         evidence.computed.backfaceVisibility !== "hidden" ||
-        (evidence.computed.backgroundImage.match(/url\("blob:/gu) ?? []).length !== 1 ||
+        !evidence.computed.backgroundImage.includes(evidence.expectedBackgroundUrl) ||
         evidence.computed.filter !== "none" || evidence.computed.maskImage !== "none" ||
         !["normal", "normal, normal"].includes(evidence.computed.backgroundBlendMode) ||
         evidence.computed.backgroundSize !== evidence.expectedBackgroundSize ||
         evidence.sceneVariableWidth !== `${evidence.atlasWidth}px` ||
         evidence.sceneVariableHeight !== `${evidence.atlasHeight}px` || evidence.atlasPageCount !== 2 ||
-        new Set(desktopAtlasRequests).size !== 1 || frozenAtlasRequests.length !== 0 ||
+        desktopAtlasRequests.length !== 1 || frozenAtlasRequests.length !== 0 ||
         shadowAtlasRequests.length !== 0 || baseAtlasRequests.length !== 0 ||
         pageRequests.length !== 0 ||
         sampledStates.some((sample, index) => sample.tick !== [0, 36, 420, 1_535][index] ||
@@ -255,10 +257,9 @@ try {
         seamEvidence.visibleLightingAddressMismatchCount !== 0 || seamEvidence.wrappedTick !== 0 ||
         evidence.stats.runtimeDomMutationCount !== 0 || evidence.stats.runtimeDomGrowth !== false ||
         evidence.stats.preparedPlaneAtlasProfile !== "desktop" ||
-        evidence.stats.preparedPlaneAtlasAssetBytes !== 6_542_470 ||
+        evidence.stats.preparedPlaneAtlasAssetBytes !== evidence.expectedAssetBytes ||
         evidence.stats.preparedPlaneAtlasDecodedBytes !== 90_121_896 ||
-        evidence.stats.preparedPlaneAtlasDecodedImageRetention !==
-          "verified-decoded-object-url-lifetime" ||
+        evidence.stats.preparedPlaneAtlasCssImageBinding !== "prepared-direct-stylesheet-url" ||
         evidence.stats.preparedColorPublicationMode !==
           "prepared-held-lighting-sample-plus-per-state-front-face-address" ||
         evidence.stats.preparedLightingAddressPublicationIntervalTicks !== 1 ||
@@ -366,6 +367,8 @@ try {
         backgroundImage: getComputedStyle(firstLeaf).backgroundImage,
         backgroundSize: getComputedStyle(firstLeaf).backgroundSize,
         expectedBackgroundSize: `${atlas.width}px ${atlas.height}px`,
+        expectedBackgroundUrl: atlas.assetUrl,
+        expectedAssetBytes: atlas.byteLength,
         transformAnimationName: getComputedStyle(scene).animationName,
         transformAnimationDuration: getComputedStyle(scene).animationDuration,
         transformAnimationTimingFunction: getComputedStyle(scene).animationTimingFunction,
@@ -380,14 +383,15 @@ try {
     await mobilePage.screenshot({ path: mobileScreenshotPath });
     await mobilePage.close();
     const requestedDesktopAtlases = mobileRequests.filter((path) =>
-      /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif$/u.test(path));
+      /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.webp$/u.test(path));
     const requestedMobileAtlases = mobileRequests.filter((path) =>
-      /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.avif$/u.test(path));
+      /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.webp$/u.test(path));
     if (mobileErrors.length || !mobileEvidence.ready || mobileEvidence.errors.length ||
         mobileEvidence.bodyDataAttributes.length !== 0 || mobileEvidence.selectedProfile !== "mobile" ||
         mobileEvidence.devicePixelRatio !== 3 ||
         mobileEvidence.selectedScene !== "depth-2" || mobileEvidence.leafCount !== 30 ||
-        mobileEvidence.selectedDecodedBytes !== 4_127_760 || mobileEvidence.selectedAssetBytes !== 447_767 ||
+        mobileEvidence.selectedDecodedBytes !== 4_127_760 ||
+        mobileEvidence.selectedAssetBytes !== mobileEvidence.expectedAssetBytes ||
         mobileEvidence.selectedLightingIntervalTicks !== 2 ||
         mobileEvidence.selectedLightingAddressUpdateCount !== 11_680 ||
         !mobileEvidence.lightingAddressesChange ||
@@ -395,7 +399,7 @@ try {
         mobileEvidence.lightingSteps.some((step) => step.preparedLightingAddressWriteCount > 18) ||
         !mobileEvidence.lightingSteps.some((step) => step.preparedLightingAddressWriteCount > 0) ||
         mobileEvidence.tick !== 720 ||
-        !mobileEvidence.backgroundImage.startsWith('url("blob:') ||
+        !mobileEvidence.backgroundImage.includes(mobileEvidence.expectedBackgroundUrl) ||
         mobileEvidence.backgroundSize !== mobileEvidence.expectedBackgroundSize ||
         mobileEvidence.transformAnimationName !== "cssmenger-prepared-rotation" ||
         mobileEvidence.transformAnimationDuration !== "46.08s" ||
@@ -403,7 +407,7 @@ try {
         mobileEvidence.transformAnimationDirection !== "normal" ||
         mobileEvidence.transformAnimationCount !== 1 ||
         mobileEvidence.transformAnimationPlayState !== "paused" ||
-        requestedDesktopAtlases.length !== 0 || new Set(requestedMobileAtlases).size !== 1) {
+        requestedDesktopAtlases.length !== 0 || requestedMobileAtlases.length !== 1) {
       throw new Error(`cssMenger responsive mobile atlas failed: ${JSON.stringify({
         mobileEvidence, requestedDesktopAtlases, requestedMobileAtlases, mobileErrors,
       })}`);
@@ -434,20 +438,22 @@ try {
         ".polycss-camera > .polycss-scene > b",
       ).length,
       assetBytes: globalThis.__cssMengerDebug.stats().preparedPlaneAtlasAssetBytes,
+      expectedAssetBytes: globalThis.__cssMengerDebug.scene.mobilePlaneAtlas.byteLength,
       colorMode: globalThis.__cssMengerDebug.stats().preparedColorPublicationMode,
       viewportWidth: innerWidth,
       errors: globalThis.__cssMengerDebug.errors(),
     }));
     await widePhoneContext.close();
     const widePhoneDesktopAtlases = widePhoneRequests.filter((path) =>
-      /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.avif$/u.test(path));
+      /^\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.webp$/u.test(path));
     const widePhoneMobileAtlases = widePhoneRequests.filter((path) =>
-      /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.avif$/u.test(path));
+      /^\/cssmenger\/assets\/lighting-grid-mobile-[a-f0-9]{64}\.webp$/u.test(path));
     if (widePhoneErrors.length || widePhoneEvidence.errors.length || widePhoneEvidence.viewportWidth <= 430 ||
         widePhoneEvidence.profile !== "mobile" || widePhoneEvidence.scene !== "depth-2" ||
-        widePhoneEvidence.leaves !== 30 || widePhoneEvidence.assetBytes !== 447_767 ||
+        widePhoneEvidence.leaves !== 30 ||
+        widePhoneEvidence.assetBytes !== widePhoneEvidence.expectedAssetBytes ||
         widePhoneEvidence.colorMode !== "prepared-held-lighting-sample-plus-per-state-front-face-address" ||
-        widePhoneDesktopAtlases.length !== 0 || new Set(widePhoneMobileAtlases).size !== 1) {
+        widePhoneDesktopAtlases.length !== 0 || widePhoneMobileAtlases.length !== 1) {
       throw new Error(`cssMenger wide-phone profile selection failed: ${JSON.stringify({
         widePhoneEvidence, widePhoneDesktopAtlases, widePhoneMobileAtlases, widePhoneErrors,
       })}`);

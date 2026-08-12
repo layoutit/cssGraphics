@@ -28,8 +28,8 @@ export function mountPreparedPolycssSnapshot({
   if (!Array.isArray(renderAtlases) || !Array.isArray(renderAtlasAssets) ||
       renderAtlases.length !== renderAtlasAssets.length || renderAtlases.length < 1 ||
       renderAtlases.some((atlas, index) => renderAtlasAssets[index]?.sha256 !== atlas?.assetSha256 ||
-        typeof renderAtlasAssets[index].url !== "string" ||
-        renderAtlasAssets[index].decodedImageRetention !== "verified-decoded-object-url-lifetime") ||
+        renderAtlasAssets[index].url !== atlas.assetUrl ||
+        renderAtlasAssets[index].cssImageBinding !== "prepared-direct-stylesheet-url") ||
       !["atlas", "css-opacity"].includes(lightingPresentation) ||
       !["desktop", "mobile"].includes(planeAtlasProfile) || planeAtlas?.profile !== planeAtlasProfile ||
       (lightingPresentation === "atlas" &&
@@ -48,7 +48,6 @@ export function mountPreparedPolycssSnapshot({
   removePreparedSnapshotStyles();
   for (const style of styles) {
     const imported = document.importNode(style, true);
-    imported.textContent = bindVerifiedAtlasUrls(imported.textContent, renderAtlases, renderAtlasAssets);
     document.head.append(imported);
     mountedStyles.push(imported);
   }
@@ -145,9 +144,9 @@ export function mountPreparedPolycssSnapshot({
         preparedPlaneAtlasAssetBytes:
           renderAtlasAssets.reduce((sum, asset) => sum + asset.byteLength, 0),
         preparedPlaneAtlasAssetSha256: renderAtlasAssets.map((asset) => asset.sha256).join(","),
-        preparedPlaneAtlasDecodedImageRetention: renderAtlasAssets.every((asset) =>
-          asset.decodedImageRetention === "verified-decoded-object-url-lifetime")
-          ? "verified-decoded-object-url-lifetime"
+        preparedPlaneAtlasCssImageBinding: renderAtlasAssets.every((asset) =>
+          asset.cssImageBinding === "prepared-direct-stylesheet-url")
+          ? "prepared-direct-stylesheet-url"
           : "invalid",
         runtimeDomCreationCount,
         runtimeDomRemovalCount,
@@ -162,12 +161,6 @@ export function mountPreparedPolycssSnapshot({
       removePreparedSnapshotStyles();
     },
   });
-}
-
-function bindVerifiedAtlasUrls(cssText, renderAtlases, renderAtlasAssets) {
-  return renderAtlases.reduce((boundCss, atlas, index) => {
-    return boundCss.split(atlas.assetUrl).join(renderAtlasAssets[index].url);
-  }, cssText);
 }
 
 function removePreparedSnapshotStyles() {

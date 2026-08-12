@@ -144,6 +144,7 @@ function bindFinalAtlasDimensions({
 function validCssOpacityAtlas(atlas, role, paletteStateCount) {
   return atlas?.schema === "cssmenger-prepared-coplanar-plane-atlas@1" &&
     atlas.paletteRole === role && atlas.paletteStateCount === paletteStateCount &&
+    atlas.rgbScale === 0.75 &&
     atlas.encoding === "PNG-RGBA8" && Number.isSafeInteger(atlas.byteLength) && atlas.byteLength > 0 &&
     /^\/cssmenger\/assets\/planes-opacity-base-[a-f0-9]{64}\.png$/u.test(atlas.assetUrl);
 }
@@ -404,7 +405,7 @@ async function publishRuntimeScene({
       "The prepared source rotator segment reverses at its endpoints for continuous endless playback without a final-to-first transform jump.",
       "Wander and interactive trackball input are disabled in this first slice.",
       "Moving two-light RGB and palette colors are prepared off the runtime path into exact source-cell face tiles.",
-      "The optional CSS-opacity preview intentionally replaces intra-plane source-cell lighting with one prepared mean black-overlay opacity per retained plane.",
+      "The optional CSS-opacity preview scales its prepared normalized palette base to the native display range, then applies one prepared black-alpha light value per source cell.",
       "Coplanar bundles preserve an exact one-to-one census of all source faces before merging.",
       "The fresh exact-first browser/native pixel comparison diverges for the deduplicated atlas; native visual parity remains unqualified.",
     ],

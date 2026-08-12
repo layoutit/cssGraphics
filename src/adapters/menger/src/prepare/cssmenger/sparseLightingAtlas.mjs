@@ -5,6 +5,7 @@ import {
   preparedSourceFaceNormal,
   preparedSourceFaceVertices,
 } from "./mengerGeometry.mjs";
+import { CSS_OPACITY_NATIVE_DISPLAY_SCALE } from "./preparedPlaneAtlas.mjs";
 
 const SOURCE_RGB_GUTTER = 0;
 const CSS_BLACK_ALPHA_GUTTER = 1;
@@ -274,10 +275,10 @@ export async function buildPreparedMengerSparseLightingAtlas({
         const maximum = Math.max(...entry.material.slice(0, 3));
         if (!(maximum > 0)) throw new Error("cssMenger CSS palette contains a black source material");
         return `rgb(${entry.material.slice(0, 3)
-          .map((channel) => byte(channel / maximum)).join(" ")})`;
+          .map((channel) => byte(channel / maximum * CSS_OPACITY_NATIVE_DISPLAY_SCALE)).join(" ")})`;
       })),
       colorReconstruction:
-        "normalized-css-palette-under-prepared-per-source-cell-black-alpha-shadow",
+        "native-display-calibrated-normalized-css-palette-under-prepared-per-source-cell-black-alpha-shadow",
     } : {}),
   });
   preparedBytes.set(contract, bytes);

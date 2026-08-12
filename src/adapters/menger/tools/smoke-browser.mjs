@@ -196,6 +196,8 @@ try {
         evidence.stats.preparedPlaneAtlasDecodedBytes !== 86_587_704 ||
         evidence.stats.preparedPlaneAtlasDecodedImageRetention !== "css-background-lifetime" ||
         evidence.stats.preparedColorPublicationMode !== "prepared-held-lighting-sample-plus-per-state-front-face-address" ||
+        evidence.stats.preparedSchedulerCatchUpMode !==
+          "compositor-clock-adjacent-or-collapsed-prepared-resync" ||
         evidence.stats.preparedLoopPresentationMode !== "prepared-adjacent-state-ping-pong-no-reset" ||
         evidence.stats.preparedCompositorRotationMode !==
           "prepared-css-keyframes-on-existing-scene-node" ||
@@ -283,6 +285,8 @@ try {
         !["normal", "normal, normal"].includes(cssOpacityEvidence.backgroundBlendMode) ||
         cssOpacityEvidence.stats.preparedColorPublicationMode !==
           "prepared-palette-base-plus-cadence-batched-black-alpha-shadow-atlas" ||
+        cssOpacityEvidence.stats.preparedSchedulerCatchUpMode !==
+          "compositor-clock-adjacent-or-collapsed-prepared-resync" ||
         cssOpacityEvidence.stats.preparedCssOpacityWriteCountPerScheduledTick !== 0 ||
         cssOpacityEvidence.stats.preparedLightingAddressPublicationIntervalTicks !== 1 ||
         cssOpacityEvidence.stats.preparedLightingAtlasAssetCount !== 2 ||

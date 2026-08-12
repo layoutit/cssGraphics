@@ -41,18 +41,29 @@ export function createCssmengerPreparedPlayer({
   const addressSchedule = decodePreparedAddressSchedule(planeAtlas, "forward");
   const reverseAddressSchedule = decodePreparedAddressSchedule(planeAtlas, "reverse");
   const frozenLighting = !cssOpacityMode && planeAtlas.lightingSampleCount === 1;
+  const animationFinalStateIndex = playback.stateCount - 1;
+  const animationIterationMilliseconds = animationFinalStateIndex * frameMilliseconds;
+  const animationCycleMilliseconds = animationIterationMilliseconds * 2;
+  const animationCycleStateCount = animationFinalStateIndex * 2;
   const axisLeafOffsets = cssOpacityMode
     ? [0, axisLeafCounts[0], axisLeafCounts[0] + axisLeafCounts[1], leaves.length]
     : null;
   const shadowBackgroundPositions = cssOpacityMode ? Array(leaves.length).fill("0px 0px") : null;
   const baseBackgroundPositions = cssOpacityMode ? Array(leaves.length).fill("0px 0px") : null;
-  const schedulerLeadMilliseconds = Math.min(4, frameMilliseconds / 4);
+  const currentSlotIndices = new Int32Array(leaves.length).fill(-1);
+  const deferredAddressLeaves = new Uint8Array(leaves.length);
+  const schedulerLeadMilliseconds = compositorRotationMode
+    ? 1
+    : Math.min(4, frameMilliseconds / 4);
   let paused = true;
   let tick = playback.initial.stateIndex;
   let animationFrame = null;
   let delay = null;
   let nextFrameAt = null;
   let loopDirection = 1;
+  let compositorClockReadCount = 0;
+  let collapsedLightingResyncCount = 0;
+  let maximumCollapsedStateCount = 0;
 
   function publishPreparedRotation(stateIndex, force = false) {
     if (compositorRotationMode) {
@@ -111,26 +122,34 @@ export function createCssmengerPreparedPlayer({
       `${-(row * planeAtlas.slotHeight + planeAtlas.gutterPixels)}px`;
   }
 
-  function publishAddressRange(schedule, start, end) {
+  function publishAddressRange(schedule, start, end, deferredLeaves = null) {
     for (let cursor = start; cursor < end; cursor += 1) {
       const leafIndex = schedule.leafIndices[cursor];
-      const address = backgroundPositionForSlot(schedule.slotIndices[cursor]);
+      const slotIndex = schedule.slotIndices[cursor];
+      const address = backgroundPositionForSlot(slotIndex);
+      currentSlotIndices[leafIndex] = slotIndex;
       if (cssOpacityMode) shadowBackgroundPositions[leafIndex] = address;
+      else if (deferredLeaves) deferredLeaves[leafIndex] = 1;
       else leaves[leafIndex].style.backgroundPosition = address;
     }
     return end - start;
+  }
+
+  function publishPreparedAddressState(stateIndex, direction, deferredLeaves = null) {
+    const selectedAddressSchedule = direction > 0 ? addressSchedule : reverseAddressSchedule;
+    return publishAddressRange(
+      selectedAddressSchedule,
+      selectedAddressSchedule.offsets[stateIndex],
+      selectedAddressSchedule.offsets[stateIndex + 1],
+      deferredLeaves,
+    );
   }
 
   function publishSequentialState(stateIndex, profile = null, direction = 1) {
     const startedAt = profile ? readNow() : 0;
     publishPreparedRotation(stateIndex);
     const transformPublishedAt = profile ? readNow() : 0;
-    const selectedAddressSchedule = direction > 0 ? addressSchedule : reverseAddressSchedule;
-    const targetCount = frozenLighting ? 0 : publishAddressRange(
-        selectedAddressSchedule,
-        selectedAddressSchedule.offsets[stateIndex],
-        selectedAddressSchedule.offsets[stateIndex + 1],
-      );
+    const targetCount = frozenLighting ? 0 : publishPreparedAddressState(stateIndex, direction);
     const colorWriteCount = cssOpacityMode
       ? publishCssOpacityBasePositions(stateIndex, false, direction)
       : 0;
@@ -165,7 +184,9 @@ export function createCssmengerPreparedPlayer({
     publishPreparedRotation(stateIndex, true);
     for (let leafIndex = 0; leafIndex < slotsByLeaf.length; leafIndex += 1) {
       if (slotsByLeaf[leafIndex] >= 0) {
-        const address = backgroundPositionForSlot(slotsByLeaf[leafIndex]);
+        const slotIndex = slotsByLeaf[leafIndex];
+        const address = backgroundPositionForSlot(slotIndex);
+        currentSlotIndices[leafIndex] = slotIndex;
         if (cssOpacityMode) shadowBackgroundPositions[leafIndex] = address;
         else leaves[leafIndex].style.backgroundPosition = address;
       }
@@ -173,6 +194,88 @@ export function createCssmengerPreparedPlayer({
     if (cssOpacityMode) publishCssOpacityBasePositions(stateIndex, true);
     tick = stateIndex;
     return tick;
+  }
+
+  function preparedStateCodeForAnimationTime(value) {
+    const currentTime = Number(value);
+    if (!Number.isFinite(currentTime) || currentTime < 0 || animationCycleMilliseconds <= 0) return null;
+    const cycleTime = currentTime % animationCycleMilliseconds;
+    if (cycleTime <= animationIterationMilliseconds) {
+      return Math.min(animationFinalStateIndex, Math.floor((cycleTime + 0.001) / frameMilliseconds));
+    }
+    const reverseElapsed = cycleTime - animationIterationMilliseconds;
+    const stateIndex = Math.max(0,
+      animationFinalStateIndex - Math.floor((reverseElapsed + 0.001) / frameMilliseconds));
+    return -stateIndex - 1;
+  }
+
+  function animationPhaseForState(stateIndex, direction) {
+    return direction > 0
+      ? stateIndex
+      : (animationCycleStateCount - stateIndex) % animationCycleStateCount;
+  }
+
+  function stateIndexForAnimationPhase(phase) {
+    return phase <= animationFinalStateIndex
+      ? phase
+      : animationCycleStateCount - phase;
+  }
+
+  function transitionDirectionForAnimationPhase(phase) {
+    return phase !== 0 && phase <= animationFinalStateIndex ? 1 : -1;
+  }
+
+  function publishCollapsedPreparedState(targetStateIndex, targetDirection, stateCount) {
+    deferredAddressLeaves.fill(0);
+    let phase = animationPhaseForState(tick, loopDirection);
+    for (let index = 0; index < stateCount; index += 1) {
+      phase = (phase + 1) % animationCycleStateCount;
+      publishPreparedAddressState(
+        stateIndexForAnimationPhase(phase),
+        transitionDirectionForAnimationPhase(phase),
+        deferredAddressLeaves,
+      );
+    }
+    if (cssOpacityMode) {
+      publishCssOpacityBasePositions(targetStateIndex, false, targetDirection);
+    } else {
+      for (let leafIndex = 0; leafIndex < deferredAddressLeaves.length; leafIndex += 1) {
+        if (deferredAddressLeaves[leafIndex] !== 0) {
+          leaves[leafIndex].style.backgroundPosition =
+            backgroundPositionForSlot(currentSlotIndices[leafIndex]);
+        }
+      }
+    }
+    tick = targetStateIndex;
+    loopDirection = targetDirection;
+    collapsedLightingResyncCount += 1;
+    maximumCollapsedStateCount = Math.max(maximumCollapsedStateCount, stateCount);
+    return tick;
+  }
+
+  function publishCompositorClockState(stateIndex, direction) {
+    if (frozenLighting) {
+      tick = stateIndex;
+      loopDirection = direction;
+      return tick;
+    }
+    if (stateIndex === tick) {
+      loopDirection = direction;
+      return tick;
+    }
+    const currentPhase = animationPhaseForState(tick, loopDirection);
+    const targetPhase = animationPhaseForState(stateIndex, direction);
+    const stateCount = (targetPhase - currentPhase + animationCycleStateCount) % animationCycleStateCount;
+    if (stateCount === 0) {
+      loopDirection = direction;
+      return tick;
+    }
+    if (stateCount === 1) {
+      publishSequentialState(stateIndex, null, transitionDirectionForAnimationPhase(targetPhase));
+      loopDirection = direction;
+      return tick;
+    }
+    return publishCollapsedPreparedState(stateIndex, direction, stateCount);
   }
 
   function advanceOne(profile = null) {
@@ -195,7 +298,12 @@ export function createCssmengerPreparedPlayer({
 
   function scheduleNextDraw() {
     if (paused || animationFrame !== null || delay !== null) return;
-    const wait = Math.max(0, nextFrameAt - readNow() - schedulerLeadMilliseconds);
+    const animationTime = compositorRotationMode ? Number(rotationAnimation.currentTime) : null;
+    const nextAnimationBoundary = compositorRotationMode && Number.isFinite(animationTime)
+      ? (Math.floor(animationTime / frameMilliseconds) + 1) * frameMilliseconds
+      : null;
+    const wait = Math.max(0, (nextAnimationBoundary ?? nextFrameAt) -
+      (nextAnimationBoundary === null ? readNow() : animationTime) - schedulerLeadMilliseconds);
     if (wait <= 1) {
       animationFrame = requestFrame(loopFast);
       return;
@@ -209,9 +317,21 @@ export function createCssmengerPreparedPlayer({
   function loopFast(timestamp) {
     animationFrame = null;
     if (paused) return;
-    advanceOne();
+    if (compositorRotationMode) {
+      compositorClockReadCount += 1;
+      const stateCode = preparedStateCodeForAnimationTime(rotationAnimation.currentTime);
+      if (stateCode !== null) {
+        const direction = stateCode >= 0 ? 1 : -1;
+        const stateIndex = stateCode >= 0 ? stateCode : -stateCode - 1;
+        publishCompositorClockState(stateIndex, direction);
+      }
+    } else {
+      advanceOne();
+    }
     if (paused) return;
-    nextFrameAt = Math.max(nextFrameAt + frameMilliseconds, timestamp);
+    if (!compositorRotationMode) {
+      nextFrameAt = Math.max(nextFrameAt + frameMilliseconds, timestamp);
+    }
     scheduleNextDraw();
   }
 
@@ -239,7 +359,7 @@ export function createCssmengerPreparedPlayer({
     resume() {
       if (!paused || (!playback.loop && tick >= playback.segmentEndState)) return tick;
       paused = false;
-      nextFrameAt = readNow() + frameMilliseconds;
+      nextFrameAt = compositorRotationMode ? null : readNow() + frameMilliseconds;
       if (compositorRotationMode) rotationAnimation.play();
       scheduleNextDraw();
       return tick;
@@ -271,7 +391,12 @@ export function createCssmengerPreparedPlayer({
         sourceFrameDelayMilliseconds: frameMilliseconds,
         preparedTimelineStateCount: playback.stateCount,
         preparedPaletteColorCount: playback.palette.length,
-        preparedSchedulerCatchUpMode: "one-adjacent-prepared-state-no-skip",
+        preparedSchedulerCatchUpMode: compositorRotationMode
+          ? "compositor-clock-adjacent-or-collapsed-prepared-resync"
+          : "one-adjacent-prepared-state-no-skip",
+        runtimeCompositorClockReadCount: compositorClockReadCount,
+        preparedCollapsedLightingResyncCount: collapsedLightingResyncCount,
+        preparedMaximumCollapsedLightingStateCount: maximumCollapsedStateCount,
         preparedLoopPresentationMode: playback.loop
           ? "prepared-adjacent-state-ping-pong-no-reset"
           : "prepared-forward-once",
@@ -415,6 +540,7 @@ function validCssOpacityPlayback({
     planeAtlas.preparedAxisPaletteSourceIndices.join(",") === "1,0,2" &&
     baseAtlas?.schema === "cssmenger-prepared-coplanar-plane-atlas@1" &&
     baseAtlas.paletteRole === "css-opacity-base" &&
+    baseAtlas.rgbScale === 0.75 &&
     baseAtlas.paletteStateCount === playback.palette.length &&
     baseAtlas.leafCount === leaves.length &&
     Array.isArray(baseAtlas.patternRows) && baseAtlas.patternRows.length === baseAtlas.patternCount &&

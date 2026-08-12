@@ -5,6 +5,7 @@ import { preparedSourceFaceVertices } from "./mengerGeometry.mjs";
 
 const GUTTER = 1;
 const preparedBytes = new WeakMap();
+export const CSS_OPACITY_NATIVE_DISPLAY_SCALE = 0.75;
 
 const PALETTE_ROLES = Object.freeze({
   source: Object.freeze({
@@ -17,6 +18,8 @@ const PALETTE_ROLES = Object.freeze({
     assetPrefix: "planes-opacity-base",
     technique: "one-alpha-color-base-atlas-quad-per-directional-plane",
     rgbNormalization: "divide-by-maximum-rgb-channel",
+    rgbScale: CSS_OPACITY_NATIVE_DISPLAY_SCALE,
+    rgbCalibration: "native-oracle-common-prefix-display-range-scale",
   }),
 });
 
@@ -94,6 +97,7 @@ export function buildPreparedMengerPlaneAtlas({ geometry, palette, paletteRole =
     technique: role.technique,
     paletteRole,
     rgbNormalization: role.rgbNormalization ?? "none",
+    ...(role.rgbScale ? { rgbScale: role.rgbScale, rgbCalibration: role.rgbCalibration } : {}),
     assetUrl: `/cssmenger/assets/${role.assetPrefix}-${sha256}.png`,
     assetSha256: sha256,
     encoding: "PNG-RGBA8",
@@ -137,7 +141,9 @@ function preparedPaletteColor(material, role) {
     throw new Error("Prepared cssMenger CSS-opacity palette contains a black material");
   }
   return material.map((value, channel) => {
-    const normalized = channel < 3 && role.rgbNormalization ? value / maximumRgb : value;
+    const normalized = channel < 3 && role.rgbNormalization
+      ? value / maximumRgb * (role.rgbScale ?? 1)
+      : value;
     return Math.max(0, Math.min(255, Math.round(normalized * 255)));
   });
 }

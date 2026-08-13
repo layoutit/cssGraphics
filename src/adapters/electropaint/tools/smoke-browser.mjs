@@ -4,11 +4,12 @@ import { spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { createServer } from "node:net";
 import { resolve } from "node:path";
-import { chromium } from "playwright";
+import { chromium, firefox } from "playwright";
 import { adapterRoot, repositoryRoot } from "../src/prepare/cssselectropaint/paths.mjs";
 
 const capture = process.argv.includes("--capture");
 const deploy = process.argv.includes("--deploy");
+const useFirefox = process.argv.includes("--firefox");
 const presentationExtremeStates = Object.freeze({
   "kent-seed-01": Object.freeze([32_714, 20_382]),
   "kent-seed-02": Object.freeze([62_653, 45_447]),
@@ -36,7 +37,7 @@ try {
   await waitFor(() => output.includes("Local:") || output.includes(`127.0.0.1:${port}`), 20_000, () => {
     if (server.exitCode !== null) throw new Error(`Vite exited early:\n${output}`);
   });
-  const browser = await chromium.launch({ headless: true });
+  const browser = await (useFirefox ? firefox : chromium).launch({ headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 });
     const pageErrors = [];
@@ -123,6 +124,7 @@ try {
           rectangle.left < innerWidth && rectangle.top < innerHeight).length,
         visualBounds,
         hostBounds: hostRectangle.toJSON(),
+        hostInlineStyle: document.querySelector("#scene").getAttribute("style"),
         cameraInlineStyle: camera.getAttribute("style"),
         sceneInlineStyle: scene.getAttribute("style"),
         cameraPerspective: getComputedStyle(camera).perspective,
@@ -157,7 +159,8 @@ try {
         evidence.visualBounds.bottom - evidence.visualBounds.top < 25 ||
         evidence.visualBounds.bottom - evidence.visualBounds.top > 540 ||
         evidence.visualBounds.top < 0 || evidence.visualBounds.bottom > 540 || !evidence.stable ||
-        evidence.cameraInlineStyle !== null || evidence.sceneInlineStyle !== null ||
+        evidence.hostInlineStyle !== null || evidence.cameraInlineStyle !== null ||
+        evidence.sceneInlineStyle !== null ||
         evidence.cameraPerspective !== "1000px" ||
         Math.abs(Number.parseFloat(evidence.cameraScale) - (268 / 311)) > 0.000_01 ||
         desktopExtremeBounds.top < 0 || desktopExtremeBounds.bottom > 540 ||
@@ -222,8 +225,9 @@ try {
         evidence.stats.scene.retainedQuadCount !== 40 ||
         evidence.stats.scene.retainedPerQuadWrapperCount !== 0 ||
         evidence.stats.presentation.verticalCenterOffsetSourcePixels !== -35 ||
-        evidence.stats.presentation.resizeCount !== 0 ||
-        evidence.stats.presentation.runtimeStyleWriteCount !== 0) {
+        evidence.stats.presentation.resizeCount < 1 ||
+        evidence.stats.presentation.runtimeStyleWriteCount !== 0 ||
+        evidence.stats.presentation.runtimeStylesheetRuleWriteCount < 1) {
       throw new Error(`ElectroPaint browser smoke failed: ${JSON.stringify({ pageErrors, evidence }, null, 2)}`);
     }
     let screenshotPath = null;

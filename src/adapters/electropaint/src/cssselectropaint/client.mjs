@@ -3,20 +3,15 @@ import { loadPreparedElectropaint } from "./manifestClient.mjs";
 import { mountPreparedElectropaintSnapshot } from "./polycssScene.mjs";
 import { createPreparedElectropaintPlayer } from "./preparedPlayback.mjs";
 
-const PRESENTATION_STATS = Object.freeze({
-  sourceViewport: Object.freeze({ width: 960, height: 540 }),
-  policy: "stylesheet-responsive-high-composition-with-top-safe-frame",
-  verticalCenterOffsetSourcePixels: -35,
-  resizeCount: 0,
-  runtimeStyleWriteCount: 0,
-  semanticCameraCalculationCount: 0,
-});
+const SOURCE_VIEWPORT = Object.freeze({ width: 960, height: 540 });
+const PRESENTATION_RULE_MARKER = "--cssselectropaint-presentation-rule";
 
 export async function mountElectropaintClient(body = document.body) {
   const host = body.querySelector("#scene");
   if (!(host instanceof HTMLElement)) throw new Error("Missing ElectroPaint scene host");
   const debug = { status: "loading" };
   globalThis.__cssElectropaint = debug;
+  const presentation = mountPresentation(host);
   try {
     const prepared = await loadPreparedElectropaint();
     const mounted = mountPreparedElectropaintSnapshot({ host, ...prepared });
@@ -38,9 +33,10 @@ export async function mountElectropaintClient(body = document.body) {
       stats: () => Object.freeze({
         scene: mounted.stats(),
         player: player.stats(),
-        presentation: PRESENTATION_STATS,
+        presentation: presentation.stats(),
       }),
       destroy() {
+        presentation.destroy();
         player.destroy();
         mounted.destroy();
         debug.status = "destroyed";
@@ -51,6 +47,7 @@ export async function mountElectropaintClient(body = document.body) {
     player.resume();
     return debug;
   } catch (error) {
+    presentation.destroy();
     debug.status = "error";
     debug.error = error.stack || error.message || String(error);
     body.classList.remove("loading");
@@ -61,4 +58,47 @@ export async function mountElectropaintClient(body = document.body) {
     host.replaceChildren(message);
     throw error;
   }
+}
+
+function mountPresentation(host) {
+  const rule = findPresentationRule(host.ownerDocument);
+  let resizeCount = 0;
+  let runtimeStylesheetRuleWriteCount = 0;
+  const resize = () => {
+    const scale = Math.max(0.01, Math.min(host.clientWidth / 960, (host.clientHeight / 2 - 2) / 311));
+    rule.style.setProperty("--cssselectropaint-presentation-scale", String(scale));
+    rule.style.setProperty("--cssselectropaint-inverse-presentation-scale", String(1 / scale));
+    rule.style.setProperty("--cssselectropaint-presentation-y", `${35 * scale}px`);
+    resizeCount += 1;
+    runtimeStylesheetRuleWriteCount += 1;
+  };
+  const observer = new ResizeObserver(resize);
+  observer.observe(host);
+  resize();
+  return Object.freeze({
+    stats: () => Object.freeze({
+      sourceViewport: SOURCE_VIEWPORT,
+      policy: "stylesheet-responsive-high-composition-with-top-safe-frame",
+      verticalCenterOffsetSourcePixels: -35,
+      resizeCount,
+      runtimeStyleWriteCount: 0,
+      runtimeStylesheetRuleWriteCount,
+      semanticCameraCalculationCount: 0,
+    }),
+    destroy() {
+      observer.disconnect();
+      rule.style.removeProperty("--cssselectropaint-presentation-scale");
+      rule.style.removeProperty("--cssselectropaint-inverse-presentation-scale");
+      rule.style.removeProperty("--cssselectropaint-presentation-y");
+    },
+  });
+}
+
+function findPresentationRule(document) {
+  for (const stylesheet of document.styleSheets) {
+    for (const rule of stylesheet.cssRules) {
+      if (rule.style?.getPropertyValue(PRESENTATION_RULE_MARKER).trim() === "1") return rule;
+    }
+  }
+  throw new Error("ElectroPaint presentation stylesheet rule is missing");
 }

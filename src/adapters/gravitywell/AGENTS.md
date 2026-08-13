@@ -18,9 +18,9 @@
   solid quads, followed by 62 prepared presentation segments that close the
   source's omitted final row and column. Native adaptive sub-segment fidelity
   is a visual-oracle issue, not permission to replace the retained DOM renderer.
-- Preserve the one-pixel projected overlap beyond both ends of every prepared
-  two-pixel line quad. It covers shared endpoints after independent compositor
-  quantization without changing topology or adding runtime work.
+- Preserve contiguous selected runs inside every row and column of the square
+  coarse-pointer visibility profiles. Keep that closure at preparation time and
+  do not expand the non-square desktop profiles.
 - Preserve PolyCSS's mounted visible-backface value without restoring a
   duplicate adapter `!important` rule; any renderer-style change must retain
   the four-frame browser oracle.

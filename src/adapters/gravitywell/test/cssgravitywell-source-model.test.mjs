@@ -11,7 +11,6 @@ import {
   CSSGRAVITYWELL_SEEDS,
   PREPARED_MAX_BANK_FRAME_COUNT,
   PREPARED_LINE_COVERAGE,
-  PREPARED_LINE_ENDPOINT_OVERLAP_PIXELS,
   PREPARED_MAXIMUM_ACTIVE_WELL_COUNT,
   PREPARED_MAXIMUM_DEPTH_OPACITY_REDUCTION,
   PREPARED_MAXIMUM_WELL_FRAME_SPEED,
@@ -24,6 +23,7 @@ import {
   SOURCE,
 } from "../src/prepare/cssgravitywell/sourceModel.mjs";
 import {
+  closeVisibleGridRuns,
   CSSGRAVITYWELL_VIEWPORT_PROFILES,
   encodeGravityWellViewportVisibility,
   prepareGravityWellViewportVisibility,
@@ -56,33 +56,6 @@ test("pinned Gravity Well profile prepares a stable retained topology", () => {
   assert.equal(PREPARED_MAXIMUM_WELL_FRAME_SPEED, 1.6);
   assert.equal(SOURCE.resolution, 1);
   assert.equal(SOURCE.gridSize, 16 / 7);
-});
-
-test("prepared line quads overlap both shared endpoints in projected pixels", () => {
-  const prepared = buildPreparedGravityWellStates();
-  const depths = Array(prepared.gridWidth ** 2).fill(0);
-  const original = preparedGridLineQuads(prepared, depths, 2, null, 0)[0];
-  const overlapped = preparedGridLineQuads(prepared, depths)[0];
-  const perspective = 600 / (2 * Math.tan(20 * Math.PI / 180));
-  const center = (first, second) => first.map((value, index) => (value + second[index]) / 2);
-  const project = (point) => [point[0] * perspective / -point[2], point[1] * perspective / -point[2]];
-  const originalFirst = project(center(original.points[0], original.points[3]));
-  const originalSecond = project(center(original.points[1], original.points[2]));
-  const overlappedFirst = project(center(overlapped.points[0], overlapped.points[3]));
-  const overlappedSecond = project(center(overlapped.points[1], overlapped.points[2]));
-  assert.equal(PREPARED_LINE_ENDPOINT_OVERLAP_PIXELS, 1);
-  assert.ok(Math.abs(Math.hypot(
-    overlappedFirst[0] - originalFirst[0],
-    overlappedFirst[1] - originalFirst[1],
-  ) - PREPARED_LINE_ENDPOINT_OVERLAP_PIXELS) < 1e-9);
-  assert.ok(Math.abs(Math.hypot(
-    overlappedSecond[0] - originalSecond[0],
-    overlappedSecond[1] - originalSecond[1],
-  ) - PREPARED_LINE_ENDPOINT_OVERLAP_PIXELS) < 1e-9);
-  assert.deepEqual(
-    overlapped.points.map((point) => point[2]),
-    original.points.map((point) => point[2]),
-  );
 });
 
 test("24 deterministic seed banks share an exact prepared flat boundary", () => {
@@ -162,7 +135,7 @@ test("viewport visibility is prepared as sparse conservative rectangular profile
   const states = buildPreparedGravityWellBankStates({ seed: CSSGRAVITYWELL_SEEDS[0] });
   const timeline = buildPreparedGravityWellTimeline(states);
   const quadsByFrame = timeline.frames.map((frame) => preparedGridLineQuads(states, frame.depths));
-  const schedule = prepareGravityWellViewportVisibility(quadsByFrame);
+  const schedule = prepareGravityWellViewportVisibility(quadsByFrame, { gridWidth: states.gridWidth });
   const encoded = encodeGravityWellViewportVisibility(schedule);
   assert.deepEqual(
     schedule.profiles.map(({ width, height }) => ({ width, height })),
@@ -172,10 +145,52 @@ test("viewport visibility is prepared as sparse conservative rectangular profile
   assert.equal(schedule.leafCount, 1_984);
   assert.ok(schedule.profiles.every((profile) =>
     profile.initialVisibleIndices.length < schedule.leafCount &&
-    profile.assignments.length < 400 &&
+    profile.assignments.length < 2_000 &&
     profile.minimumVisibleCount > 500 &&
     profile.maximumVisibleCount < schedule.leafCount));
   assert.equal(String.fromCharCode(...encoded.subarray(0, 4)), "CGWV");
   assert.equal(encoded[4], 2);
   assert.equal(encoded[5], CSSGRAVITYWELL_VIEWPORT_PROFILES.length);
+  const gridWidth = states.gridWidth;
+  const segmentsPerLine = gridWidth - 1;
+  const sourceSegmentsPerAxis = segmentsPerLine ** 2;
+  const closingSegmentsStart = sourceSegmentsPerAxis * 2;
+  for (const profile of schedule.profiles) {
+    if (profile.width !== profile.height) continue;
+    const selected = new Uint8Array(schedule.leafCount);
+    for (const leafIndex of profile.initialVisibleIndices) selected[leafIndex] = 1;
+    for (let frameIndex = 0; frameIndex < schedule.frameCount; frameIndex += 1) {
+      for (let index = profile.changeOffsets[frameIndex]; index < profile.changeOffsets[frameIndex + 1]; index += 1) {
+        const assignment = profile.assignments[index];
+        selected[assignment >> 1] = assignment & 1;
+      }
+      for (let axisIndex = 0; axisIndex < 2; axisIndex += 1) {
+        for (let lineIndex = 0; lineIndex < gridWidth; lineIndex += 1) {
+          const lineStart = lineIndex < segmentsPerLine
+            ? axisIndex * sourceSegmentsPerAxis + lineIndex * segmentsPerLine
+            : closingSegmentsStart + axisIndex * segmentsPerLine;
+          const row = selected.subarray(lineStart, lineStart + segmentsPerLine);
+          const first = row.indexOf(1);
+          const last = row.lastIndexOf(1);
+          if (first !== -1) assert.ok(row.subarray(first, last + 1).every((value) => value === 1));
+        }
+      }
+    }
+  }
+});
+
+test("viewport visibility cannot punch holes inside prepared grid rows or columns", () => {
+  const gridWidth = 4;
+  const horizontal = gridWidth * (gridWidth - 1);
+  const selected = new Uint8Array(horizontal * 2);
+  selected[0] = 1;
+  selected[2] = 1;
+  selected[13] = 1;
+  selected[14] = 1;
+  selected[18] = 1;
+  selected[20] = 1;
+  assert.deepEqual(
+    Array.from(closeVisibleGridRuns(selected, gridWidth)),
+    [1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0],
+  );
 });

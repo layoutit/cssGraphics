@@ -5,8 +5,8 @@ import { createPreparedElectropaintPlayer } from "./preparedPlayback.mjs";
 
 const PRESENTATION_STATS = Object.freeze({
   sourceViewport: Object.freeze({ width: 960, height: 540 }),
-  policy: "stylesheet-responsive-contain-with-safe-frame",
-  verticalCenterOffsetSourcePixels: 0,
+  policy: "stylesheet-responsive-high-composition-with-top-safe-frame",
+  verticalCenterOffsetSourcePixels: -35,
   resizeCount: 0,
   runtimeStyleWriteCount: 0,
   semanticCameraCalculationCount: 0,

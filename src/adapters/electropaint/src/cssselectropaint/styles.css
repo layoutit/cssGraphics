@@ -133,10 +133,9 @@ body.loading::after {
 }
 
 #scene {
-  --cssselectropaint-safe-frame-y: 32px;
   --cssselectropaint-presentation-scale: min(
     calc(100dvw / 960px),
-    calc((100dvh - var(--cssselectropaint-safe-frame-y)) / 540px)
+    calc((50dvh - 2px) / 311px)
   );
   --cssselectropaint-inverse-presentation-scale: calc(
     1 / var(--cssselectropaint-presentation-scale)
@@ -152,7 +151,9 @@ body.loading::after {
 #scene > .polycss-camera {
   position: absolute !important;
   left: 50% !important;
-  top: 50% !important;
+  top: calc(
+    50% - calc(35px * var(--cssselectropaint-presentation-scale))
+  ) !important;
   width: 960px !important;
   height: 540px !important;
   translate: -50% -50%;

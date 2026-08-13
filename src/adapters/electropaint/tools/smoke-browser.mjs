@@ -159,7 +159,7 @@ try {
         evidence.visualBounds.top < 0 || evidence.visualBounds.bottom > 540 || !evidence.stable ||
         evidence.cameraInlineStyle !== null || evidence.sceneInlineStyle !== null ||
         evidence.cameraPerspective !== "1000px" ||
-        Math.abs(Number.parseFloat(evidence.cameraScale) - (508 / 540)) > 0.000_01 ||
+        Math.abs(Number.parseFloat(evidence.cameraScale) - (268 / 311)) > 0.000_01 ||
         desktopExtremeBounds.top < 0 || desktopExtremeBounds.bottom > 540 ||
         landscapeExtremeBounds.top < 0 || landscapeExtremeBounds.bottom > 390 ||
         evidence.stats.player.runtimeGeometryConstructionCount !== 0 ||
@@ -221,7 +221,7 @@ try {
         evidence.stats.scene.runtimeDomGrowth !== false ||
         evidence.stats.scene.retainedQuadCount !== 40 ||
         evidence.stats.scene.retainedPerQuadWrapperCount !== 0 ||
-        evidence.stats.presentation.verticalCenterOffsetSourcePixels !== 0 ||
+        evidence.stats.presentation.verticalCenterOffsetSourcePixels !== -35 ||
         evidence.stats.presentation.resizeCount !== 0 ||
         evidence.stats.presentation.runtimeStyleWriteCount !== 0) {
       throw new Error(`ElectroPaint browser smoke failed: ${JSON.stringify({ pageErrors, evidence }, null, 2)}`);

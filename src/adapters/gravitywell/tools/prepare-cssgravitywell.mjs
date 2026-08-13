@@ -256,7 +256,12 @@ async function prepareBank({ bankIndex, seed, fixedViewQuaternion }) {
   const sourceStates = buildPreparedGravityWellBankStates({ seed });
   const timeline = buildPreparedGravityWellTimeline(sourceStates);
   const renderState = Object.freeze({ ...sourceStates, trackballQuaternion: fixedViewQuaternion });
-  const quadsByFrame = timeline.frames.map((frame) => preparedGridLineQuads(renderState, frame.depths));
+  const quadsByFrame = timeline.frames.map((frame) => preparedGridLineQuads(
+    renderState,
+    frame.depths,
+    2,
+    frame.opacityDepths,
+  ));
   if (quadsByFrame.some((quads) => quads.length !== preparedLeafCount)) {
     throw new Error(`Gravity Well bank ${bankId} topology drifted`);
   }
@@ -269,7 +274,11 @@ async function prepareBank({ bankIndex, seed, fixedViewQuaternion }) {
   for (let frameIndex = 0; frameIndex < timeline.frameCount; frameIndex += 1) {
     for (let leafIndex = 0; leafIndex < preparedLeafCount; leafIndex += 1) {
       const quad = quadsByFrame[frameIndex][leafIndex];
-      colorRows[frameIndex * preparedLeafCount + leafIndex] = preparedFoggedColorIndex(quad.colorDepth, quad.eyeDepth);
+      colorRows[frameIndex * preparedLeafCount + leafIndex] = preparedFoggedColorIndex(
+        quad.colorDepth,
+        quad.opacityDepth,
+        quad.eyeDepth,
+      );
     }
   }
   const frameStateSha256 = (frameIndex) => sha256(Buffer.concat([

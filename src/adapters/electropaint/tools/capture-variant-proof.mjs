@@ -33,7 +33,9 @@ try {
     const results = [];
     for (const [variantIndex, variant] of KENT_VARIANTS.entries()) {
       const context = await browser.newContext({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 });
-      const forcedRandomValue = variantIndex * 0x4000_0000 + 0x2000_0000;
+      const forcedRandomValue = Math.floor(
+        ((variantIndex + 0.5) / KENT_VARIANTS.length) * 0x1_0000_0000,
+      );
       await context.addInitScript((value) => {
         Object.defineProperty(globalThis.crypto, "getRandomValues", {
           configurable: true,
@@ -68,6 +70,31 @@ try {
         await api.setState(stateIndex);
         await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
       }, captureStateIndex);
+      const openingBounds = await page.evaluate(() => {
+        const rectangles = [...document.querySelectorAll(".polycss-scene > b")]
+          .map((quad) => quad.getBoundingClientRect());
+        const left = Math.min(...rectangles.map((rectangle) => rectangle.left));
+        const top = Math.min(...rectangles.map((rectangle) => rectangle.top));
+        const right = Math.max(...rectangles.map((rectangle) => rectangle.right));
+        const bottom = Math.max(...rectangles.map((rectangle) => rectangle.bottom));
+        return {
+          left,
+          top,
+          right,
+          bottom,
+          width: right - left,
+          height: bottom - top,
+          verticalCenterDeviation: Math.abs((top + bottom) / 2 - innerHeight / 2),
+        };
+      });
+      if (openingBounds.left < 0 || openingBounds.top < 0 ||
+          openingBounds.right > 960 || openingBounds.bottom > 540 ||
+          openingBounds.width < 120 || openingBounds.height < 180 ||
+          openingBounds.verticalCenterDeviation > 30) {
+        throw new Error(
+          `ElectroPaint opening presentation drifted for ${variant.id}: ${JSON.stringify(openingBounds)}`,
+        );
+      }
       const packedPath = resolve(outputRoot, `${variant.id}-packed.png`);
       await page.screenshot({ path: packedPath });
       const exactTransforms = exactPhysicalTransforms(variant, captureStateIndex);
@@ -90,6 +117,7 @@ try {
         seed: `0x${variant.seed.toString(16)}`,
         warmupStateCount: variant.warmupStateCount,
         captureStateIndex,
+        openingBounds,
         fetchedVariantIds,
         variantAssetRequestCount: variantAssetUrls.length,
         packedSha256: await fileSha256(packedPath),
@@ -105,12 +133,19 @@ try {
       throw new Error("Prepared ElectroPaint variant openings are not visually distinct");
     }
     const mosaicPath = resolve(outputRoot, "prepared-variant-openings.png");
+    const mosaicColumns = KENT_VARIANTS.length <= 4 ? 2 : 4;
+    const mosaicRows = Math.ceil(KENT_VARIANTS.length / mosaicColumns);
     await sharp({
-      create: { width: 960, height: 540, channels: 4, background: "#000000" },
+      create: {
+        width: mosaicColumns * 480,
+        height: mosaicRows * 270,
+        channels: 4,
+        background: "#000000",
+      },
     }).composite(await Promise.all(results.map(async (result, index) => ({
       input: await sharp(result.packedPath).resize(480, 270).png().toBuffer(),
-      left: (index % 2) * 480,
-      top: Math.floor(index / 2) * 270,
+      left: (index % mosaicColumns) * 480,
+      top: Math.floor(index / mosaicColumns) * 270,
     })))).png().toFile(mosaicPath);
     const summary = {
       schema: "cssselectropaint-prepared-variant-visual-proof@1",

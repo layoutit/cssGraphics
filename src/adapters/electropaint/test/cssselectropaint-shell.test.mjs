@@ -24,5 +24,8 @@ test("product shell identifies the route and avoids alternate or paint-heavy ren
   assert.match(css, /\.site-wordmark \{[^}]*pointer-events:\s*auto;/u);
   assert.match(css, /\.site-action-icon-only \{[^}]*pointer-events:\s*auto;/u);
   assert.match(css, /#scene \{[^}]*position:\s*absolute;[^}]*inset:\s*0;/u);
+  assert.match(css, /body\.loading::after \{[^}]*animation:\s*cssselectropaint-loading 0\.8s linear infinite;/u);
+  assert.match(css, /@keyframes cssselectropaint-loading \{\s*to \{\s*transform:\s*rotate\(1turn\);/u);
+  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\) \{\s*body\.loading::after \{\s*animation:\s*none;/u);
   assert.match(client, /PRESENTATION_VERTICAL_OFFSET_SOURCE_PIXELS = -45/u);
 });

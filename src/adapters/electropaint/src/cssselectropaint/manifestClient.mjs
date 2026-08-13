@@ -55,7 +55,7 @@ function validateManifest(manifest) {
   if (manifest?.schema !== "cssselectropaint-manifest@2" ||
       manifest.artifactMode !== "prepared-polycss-snapshot-plus-timeline-chunks" ||
       manifest.retainedSquareCount !== RETAINED_SQUARE_COUNT ||
-      !Array.isArray(manifest.variants) || manifest.variants.length !== 4 ||
+      !Array.isArray(manifest.variants) || manifest.variants.length !== 8 ||
       new Set(manifest.variants.map((variant) => variant.id)).size !== manifest.variants.length ||
       manifest.variants.some((variant) => !validVariant(variant)) ||
       manifest.selection?.policy !== "crypto-random-uniform-once-before-variant-asset-fetch" ||
@@ -70,7 +70,7 @@ function validateManifest(manifest) {
         manifest.variants.reduce((total, variant) => total + variant.timelineStoredBytes, 0) ||
       runtime?.scheme !== "prepared-forty-wing-history-ring" ||
       runtime.timelineStorage !== "content-addressed-gzip-binary-third-order-affine-four-chunk-lookahead" ||
-      runtime.retainedDomBankCount !== 1 || runtime.publishedPreparedVariantCount !== 4 ||
+      runtime.retainedDomBankCount !== 1 || runtime.publishedPreparedVariantCount !== 8 ||
       runtime.fetchedPreparedVariantCount !== 1 || runtime.runtimeLookaheadChunkCount !== 4 ||
       runtime.sequentialRootTransformWrites !== 0 ||
       runtime.maximumSequentialLeafTransformWrites !== 40 ||

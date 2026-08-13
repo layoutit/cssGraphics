@@ -11,7 +11,7 @@ import {
 
 export const CSSGRAVITYWELL_PRODUCT_BANK_SCHEMA = "cssgravitywell-product-bank@2";
 const RETAINED_LEAF_COUNT = 1_922;
-const PREPARED_COLOR_COUNT = 4_096;
+const PREPARED_COLOR_COUNT = 512;
 const LEGACY_VISIBILITY_SCHEMA = "cssgravitywell-prepared-viewport-visibility@1";
 const LEGACY_VISIBILITY_ENCODING = "gzip-cgwv1-square-profile-sparse-visibility-assignments";
 const LEGACY_VISIBILITY_PROFILE_SIZES = Object.freeze([1_024, 1_536, 1_920, 2_560, 3_840]);

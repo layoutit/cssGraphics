@@ -7,11 +7,12 @@ import { fileURLToPath } from "node:url";
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(siteRoot, "..");
 const expectedProjects = [
+  ["menger", 4, "XScreenSaver", "2026-08-13"],
   ["maze", 3, "XScreenSaver", "2026-08-09"],
   ["gears", 2, "XScreenSaver", "2026-08-07"],
   ["pipes", 1, "Original", "2026-08-06"],
 ];
-const hiddenLandingProjects = ["electropaint", "flowerbox", "gravitywell", "menger"];
+const hiddenLandingProjects = ["electropaint", "flowerbox", "gravitywell"];
 const projectAdapterDirectories = new Map([
   ["electropaint", "electropaint"],
   ["flowerbox", "flowerbox"],

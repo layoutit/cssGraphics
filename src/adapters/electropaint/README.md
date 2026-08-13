@@ -1,12 +1,13 @@
 # cssElectroPaint
 
-This adapter prepares the Kent Rosenkoetter ElectroPaint motion model into one
-deterministic 64,000-state PolyCSS screensaver. It keeps 40 stable retained CSS
-quads and publishes the source 60 Hz sequence. The 17:46.7 timeline is stored as
-128 continuous 500-frame gzip chunks. Four chunks are fetched, parsed, and
-decoded ahead; an inner chunk boundary is an ordinary sparse state transition,
-not a reset or DOM swap. There is no Canvas, SVG, WebGL, alternate renderer,
-runtime random walk, matrix calculation, camera calculation, or DOM growth.
+This adapter prepares the Kent Rosenkoetter ElectroPaint motion model into eight
+deterministic 64,000-state PolyCSS screensavers. One variant is selected
+uniformly before any variant asset fetch. It keeps 40 stable retained CSS quads
+and publishes the source 60 Hz sequence. Each 17:46.7 timeline is stored as 128
+continuous 500-frame gzip chunks. Four chunks are fetched, parsed, and decoded
+ahead; an inner chunk boundary is an ordinary sparse state transition, not a
+reset or DOM swap. There is no Canvas, SVG, WebGL, alternate renderer, runtime
+random walk, matrix calculation, camera calculation, or DOM growth.
 
 The preparer binds three ignored source checkouts:
 
@@ -31,7 +32,7 @@ pnpm build:electropaint
 Preparation freezes a seeded random sequence while preserving the source
 parameters, call order, 40-wing history, transform order, projection, and fixed
 animation interval. An ordinary runtime state performs 40 prepared transform
-writes and at most one prepared color-class write. The 64,000-state bank loops
+writes and at most one prepared color-class write. Each 64,000-state bank loops
 after 1,066.7 seconds; this finite restart is not claimed to be an upstream
 random-walk period.
 

@@ -242,6 +242,27 @@ export function buildGridSegments(gridWidth) {
   return Object.freeze(segments);
 }
 
+export function buildGridClosingSegments(gridWidth) {
+  const segments = [];
+  const finalIndex = gridWidth - 1;
+  const finalRowStart = finalIndex * gridWidth;
+  for (let x = 0; x < finalIndex; x += 1) {
+    segments.push(Object.freeze([finalRowStart + x, finalRowStart + x + 1]));
+  }
+  for (let y = 0; y < finalIndex; y += 1) {
+    const a = y * gridWidth + finalIndex;
+    segments.push(Object.freeze([a, a + gridWidth]));
+  }
+  return Object.freeze(segments);
+}
+
+export function buildPreparedGridSegments(gridWidth) {
+  return Object.freeze([
+    ...buildGridSegments(gridWidth),
+    ...buildGridClosingSegments(gridWidth),
+  ]);
+}
+
 export function preparedGridLineQuads(state, depths, lineWidthPixels = 2, opacityDepths = null) {
   const positions = preparedWorldPositions(state, depths);
   const preparedOpacityDepths = opacityDepths ?? depths.map(
@@ -252,7 +273,7 @@ export function preparedGridLineQuads(state, depths, lineWidthPixels = 2, opacit
   }
   const modelView = nativeModelViewMatrix(state.trackballQuaternion);
   const perspective = 600 / (2 * Math.tan(20 * Math.PI / 180));
-  return Object.freeze(buildGridSegments(state.gridWidth).map(([firstIndex, secondIndex]) => {
+  return Object.freeze(buildPreparedGridSegments(state.gridWidth).map(([firstIndex, secondIndex]) => {
     const first = transformPoint(modelView, positions[firstIndex]);
     const second = transformPoint(modelView, positions[secondIndex]);
     const firstScreen = projectEyePoint(first, perspective);

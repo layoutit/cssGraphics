@@ -12,7 +12,8 @@ permissive notice. Gravity Well has no external model or texture asset.
 Preparation owns 24 deterministic seed banks. Each bank owns the
 source-compatible `yarandom` stream, 15 star records, inverse-square field with
 the source inner-radius cap and outer-radius cutoff, 240 source-timed states,
-32 by 32 field vertices, 1,922 source-ordered coarse grid segments,
+32 by 32 field vertices, 1,922 source-ordered coarse grid segments followed by
+62 prepared closing-edge segments,
 depth-and-fog colors, every PolyCSS solid-quad leaf matrix, prepared blocks,
 and separate sparse transform and color write schedules. Transform
 storage follows the sibling cssPipes/cssFlower prepared-block pattern: each
@@ -25,7 +26,11 @@ the seed-0 source trackball quaternion and 40 degree native camera so changing a
 bank cannot move the view. One common static Morph package owns the retained
 topology.
 
-PolyCSS mounts all 1,922 prepared line leaves with visible back faces. The
+PolyCSS mounts all 1,984 prepared line leaves with visible back faces. The
+final 62 are a presentation-only closure of the outer row and column omitted by
+the source draw loops. They prevent the open source boundary from projecting as
+disconnected interior line ends in tall mobile views; they are not native-raster
+parity. The
 adapter deliberately adds no duplicate `!important` backface rule: the mounted
 computed value remains `visible`, while Chrome avoids resolving the redundant
 high-priority declaration for every changed leaf. The deterministic four-frame
@@ -56,7 +61,7 @@ native profile, not a claim about the default `grid-size = 1` raster.
 ## Runtime boundary
 
 The browser loads the verified static Morph package and bank catalog, chooses
-the initial bank with `crypto.getRandomValues`, adopts its 1,922 retained
+the initial bank with `crypto.getRandomValues`, adopts its 1,984 retained
 solid-quad line leaves with `createPolyMorphPreparedDomTarget`, and fetches,
 verifies, decompresses, decodes, and formats all sixteen blocks of the selected
 bank beneath the loading cover before exposing the scene. The largest selected
@@ -90,14 +95,14 @@ evaluation, color generation, DOM growth, Canvas, SVG scene geometry, WebGL,
 WebGPU, masks, and clip paths are forbidden. Randomness selects only prepared
 bank indices.
 
-At 1,512 by 982 CSS pixels and DPR 2, the prepared worst transition contains
-1,922 transform and 1,299 color changes. The selected 1,536-pixel profile
-publishes 1,322 transforms and 971 colors. The final Chrome trace measures a
-`0.9 ms` worst-transition publication p95, `0.7 ms` steady-state publication
-p95, and `9.2 ms` display-interval p95, with a `17.6 ms` maximum, no long tasks,
-no empty scheduler callbacks, no transform-block load, and no DOM growth. The
-same four deterministic browser frames remain pixel-exact against the deployed
-pre-optimization product.
+At 960 by 600 CSS pixels and DPR 1, the closed-grid prepared worst transition
+contains 1,763 transform and 489 color changes. The selected 1,024 by 640
+profile publishes 916 transforms and 328 colors. The final Chrome trace
+measures a `1.0 ms` worst-transition publication p95, `0.6 ms` steady-state
+publication p95 outside block activation, and `9.3 ms` sampled display-interval
+p95, with a `17.4 ms` maximum, no intervals over 25 ms, no long tasks, no
+continuous-playback transform-block loads or activation waits, and no DOM
+growth across 234 prepared frames and eleven block boundaries.
 
 In the locally generated rectangular-profile candidate, a 390 by 844 viewport
 uses the 430 by 960 profile instead of the legacy 1,024-pixel square. Across
@@ -114,12 +119,24 @@ The rectangular mobile selection was subsequently found to expose disconnected
 retained segments on a real mobile compositor even though Chrome emulation
 painted the same frames continuously. The coarse-pointer correction reuses the
 existing 1,024 by 1,024 prepared profile for a 390 by 844 viewport: 1,113 of
-1,922 leaves remain selected instead of 753. A controlled five-second Chrome
+1,922 source leaves remain selected instead of 753. A controlled five-second Chrome
 DPR-3 comparison published the same 167 prepared frames with no long tasks;
 the rectangular and conservative runs measured 9.3 ms and 9.1 ms display-
 interval p95 respectively. The accepted tick-120 Chrome PNG is byte-identical
 before and after the policy change. This evidence bounds Chrome cost and visual
 output; the originating real device remains the required final compositor check.
+
+Chrome mobile reproduction later showed that the remaining apparent breaks were
+the source topology itself: its final horizontal row and vertical column are
+omitted, leaving 62 degree-one outer-edge endpoints that project inside tall and
+landscape mobile views. The prepared presentation now appends exactly those 62
+closing segments after the unchanged 1,922 source-ordered segments. The complete
+1,984-segment grid has no degree-one vertices. A fresh Chrome Pixel 7 landscape
+capture at 915 by 412 CSS pixels, DPR 2.625, touch enabled, and coarse pointer
+selects the same 1,024-square visibility profile; the 390 by 844 DPR-3 smoke at
+source tick 120 selects 1,151 leaves with no hidden leaf intersecting the
+viewport. This is a documented presentation divergence, not native-raster
+parity.
 
 An earlier 960 by 600, 5.5-second production/candidate streaming trace over the same
 bank reduces current-plus-lookahead prepared CSS string residency from

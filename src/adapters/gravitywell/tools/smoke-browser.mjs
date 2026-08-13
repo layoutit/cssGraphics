@@ -129,7 +129,7 @@ try {
   if (pageErrors.length || evidence.errors.length || evidence.status !== "ready" || !evidence.ready ||
       !evidence.stable || evidence.state.sourceFrameIndex !== 120 || !evidence.state.paused ||
       evidence.catalogBankCount !== 24 || evidence.stats.preparedBankCount !== 24 ||
-      evidence.retainedLeaves !== 1_922 || evidence.retainedSceneElements !== 1_926 ||
+      evidence.retainedLeaves !== 1_984 || evidence.retainedSceneElements !== 1_988 ||
       evidence.retainedShapeRoots !== 1 || evidence.forbiddenCanvasCount !== 0 ||
       evidence.forbiddenSvgCount !== 0 || evidence.clipPathCount !== 0 ||
       evidence.dataAttributeCount !== 0 || evidence.bodyAttributeNames.join(",") !== "class" ||

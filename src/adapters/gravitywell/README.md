@@ -1,7 +1,8 @@
 # css.graphics/gravitywell
 
-Source-backed XScreenSaver Gravity Well rendered as 1,922 retained PolyCSS
-solid-quad grid lines. Twenty-four deterministic prepared seed banks are
+Source-backed XScreenSaver Gravity Well rendered as 1,984 retained PolyCSS
+solid-quad grid lines: all 1,922 source-ordered coarse segments plus 62 prepared
+closing-edge segments. Twenty-four deterministic prepared seed banks are
 selected randomly on load, shuffled without replacement, and switched only
 after every visible well has drained and the ground has held exactly flat.
 
@@ -38,8 +39,8 @@ incrementally in request-idle slices with a two-millisecond target budget; the
 next slice is delayed by one source frame so lookahead formatting cannot bunch
 inside one idle window. The player retains only the current and one lookahead
 block, so activation does not wait for expansion. A block expands to at most
-3,449,674 bytes of final CSS strings, and every prepared current-plus-lookahead
-pair stays below 6,754,392 bytes. Each bank also embeds one small viewport-visibility
+2,775,873 bytes of final CSS strings, and every prepared current-plus-lookahead
+pair stays below 5,232,095 bytes. Each bank also embeds one small viewport-visibility
 schedule with 25 conservative portrait, landscape, and square profiles. Playback
 selects the smallest-area rectangle that covers the CSS viewport, consumes its
 sparse assignments, publishes transforms and colors only to selected leaves,

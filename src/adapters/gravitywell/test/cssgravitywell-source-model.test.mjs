@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import {
+  buildGridClosingSegments,
   buildGridSegments,
+  buildPreparedGridSegments,
   buildPreparedGravityWellBankStates,
   buildPreparedGravityWellTimeline,
   buildPreparedGravityWellStates,
@@ -28,12 +30,24 @@ import {
 
 test("pinned Gravity Well profile prepares a stable retained topology", () => {
   const prepared = buildPreparedGravityWellStates();
-  const segments = buildGridSegments(prepared.gridWidth);
+  const nativeSegments = buildGridSegments(prepared.gridWidth);
+  const closingSegments = buildGridClosingSegments(prepared.gridWidth);
+  const segments = buildPreparedGridSegments(prepared.gridWidth);
   assert.equal(prepared.gridWidth, 32);
   assert.equal(prepared.gridCellCount, 31);
   assert.equal(prepared.frameCount, 240);
-  assert.equal(segments.length, 1_922);
-  assert.equal(new Set(segments.flat()).size, 1_023);
+  assert.equal(nativeSegments.length, 1_922);
+  assert.equal(closingSegments.length, 62);
+  assert.equal(segments.length, 1_984);
+  assert.equal(new Set(segments.flat()).size, 1_024);
+  const degrees = new Uint8Array(prepared.gridWidth ** 2);
+  for (const [firstIndex, secondIndex] of segments) {
+    degrees[firstIndex] += 1;
+    degrees[secondIndex] += 1;
+  }
+  assert.equal([...degrees].filter((degree) => degree === 1).length, 0);
+  assert.equal(degrees[0], 2);
+  assert.equal(degrees.at(-1), 2);
   assert.equal(SOURCE.delayMicroseconds, 30_000);
   assert.equal(SOURCE.count, 15);
   assert.equal(PREPARED_MAXIMUM_ACTIVE_WELL_COUNT, 2);
@@ -127,7 +141,7 @@ test("viewport visibility is prepared as sparse conservative rectangular profile
     CSSGRAVITYWELL_VIEWPORT_PROFILES,
   );
   assert.equal(schedule.frameCount, timeline.frameCount);
-  assert.equal(schedule.leafCount, 1_922);
+  assert.equal(schedule.leafCount, 1_984);
   assert.ok(schedule.profiles.every((profile) =>
     profile.initialVisibleIndices.length < schedule.leafCount &&
     profile.assignments.length < 400 &&

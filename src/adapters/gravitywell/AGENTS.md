@@ -21,6 +21,8 @@
 - Preserve contiguous selected runs inside every row and column of the square
   coarse-pointer visibility profiles. Keep that closure at preparation time and
   do not expand the non-square desktop profiles.
+- Preserve 1-by-1 line carriers and the prepared fixed-point matrix invariant:
+  every incident segment must reconstruct a shared centerline vertex exactly.
 - Preserve PolyCSS's mounted visible-backface value without restoring a
   duplicate adapter `!important` rule; any renderer-style change must retain
   the four-frame browser oracle.

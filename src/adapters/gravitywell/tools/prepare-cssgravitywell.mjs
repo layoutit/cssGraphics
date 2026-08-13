@@ -16,10 +16,12 @@ import {
   buildPreparedGravityWellBankStates,
   buildPreparedGravityWellTimeline,
   CSSGRAVITYWELL_SEEDS,
+  PREPARED_MATRIX_DECIMAL_PLACES,
   PREPARED_MAX_BANK_FRAME_COUNT,
   preparedFoggedColorIndex,
   preparedFoggedColorPalette,
   preparedGridLineQuads,
+  preparedGridLineMatrix,
 } from "../src/prepare/cssgravitywell/sourceModel.mjs";
 import {
   inspectCssgravitywellProductBank,
@@ -39,7 +41,7 @@ const adapterRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(adapterRoot, "..", "..", "..");
 const outputRoot = join(repositoryRoot, "build/generated/public/cssgravitywell");
 const stagingRoot = join(repositoryRoot, `build/generated/.cssgravitywell-${process.pid}`);
-const MATRIX_DECIMAL_PLACES = 2;
+const MATRIX_DECIMAL_PLACES = PREPARED_MATRIX_DECIMAL_PLACES;
 const MATRIX_SCALE = 10 ** MATRIX_DECIMAL_PLACES;
 const MATRIX_COMPONENTS = Object.freeze([0, 1, 2, 4, 5, 8, 9, 10, 12, 13, 14]);
 const MATRIX_DATA_STREAM_COUNT = MATRIX_COMPONENTS.length * 2 + 1;
@@ -129,7 +131,7 @@ const staticModel = Object.freeze({
       strategy: "solid-quad",
       width: quad.width,
       height: quad.height,
-      matrix: Object.freeze(quadMatrix(quad, index)),
+      matrix: Object.freeze(preparedGridLineMatrix(quad)),
       atlas: null,
       fallback: null,
     }))),
@@ -276,7 +278,7 @@ async function prepareBank({ bankIndex, seed, fixedViewQuaternion }) {
   const viewportVisibilityDecoded = encodeGravityWellViewportVisibility(viewportVisibility);
   const viewportVisibilityEncoded = gzipSync(viewportVisibilityDecoded, { level: 9, mtime: 0 });
   const formattedTransformsByFrame = quadsByFrame.map((quads, frameIndex) => quads.map((quad, index) =>
-    `matrix3d(${formatMatrix3dValues(quadMatrix(quad, index, frameIndex), MATRIX_DECIMAL_PLACES)})`));
+    `matrix3d(${formatMatrix3dValues(preparedGridLineMatrix(quad), MATRIX_DECIMAL_PLACES)})`));
   const colorRows = new Uint16Array(timeline.frameCount * preparedLeafCount);
   for (let frameIndex = 0; frameIndex < timeline.frameCount; frameIndex += 1) {
     for (let leafIndex = 0; leafIndex < preparedLeafCount; leafIndex += 1) {
@@ -685,51 +687,6 @@ function bankCatalogSource(seed, frameCount) {
 
 function identity() {
   return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
-}
-
-function quadMatrix(quad, index = -1, frameIndex = 0) {
-  const [origin, along, opposite, across] = quad.points;
-  const xVector = subtract(along, origin);
-  const yVector = subtract(across, origin);
-  const xLength = Math.hypot(...xVector);
-  const yLength = Math.hypot(...yVector);
-  const xAxis = xVector.map((value) => value / xLength);
-  const yAxis = yVector.map((value) => value / yLength);
-  const normal = normalize(cross(xAxis, yAxis));
-  const planarDelta = [opposite[0] - origin[0], opposite[1] - origin[1], opposite[2] - origin[2]];
-  const nonPlanarity = Math.abs(dot(normal, planarDelta));
-  const maximumSpan = Math.max(xLength, yLength, Math.hypot(...planarDelta));
-  if (!Number.isFinite(nonPlanarity) || nonPlanarity / maximumSpan > 1e-6) {
-    throw new Error("Prepared Gravity Well line quad is not planar");
-  }
-  return [
-    xVector[0] / quad.width, xVector[1] / quad.width, xVector[2] / quad.width, 0,
-    yVector[0] / quad.height, yVector[1] / quad.height, yVector[2] / quad.height, 0,
-    normal[0], normal[1], normal[2], 0,
-    origin[0], origin[1], origin[2], 1,
-  ];
-}
-
-function subtract(left, right) {
-  return [left[0] - right[0], left[1] - right[1], left[2] - right[2]];
-}
-
-function cross(left, right) {
-  return [
-    left[1] * right[2] - left[2] * right[1],
-    left[2] * right[0] - left[0] * right[2],
-    left[0] * right[1] - left[1] * right[0],
-  ];
-}
-
-function dot(left, right) {
-  return left[0] * right[0] + left[1] * right[1] + left[2] * right[2];
-}
-
-function normalize(vector) {
-  const length = Math.hypot(...vector);
-  if (!Number.isFinite(length) || length <= 1e-12) throw new Error("Prepared Gravity Well line quad is degenerate");
-  return vector.map((value) => value / length);
 }
 
 function sha256(value) {

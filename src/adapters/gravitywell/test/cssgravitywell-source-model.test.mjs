@@ -20,6 +20,7 @@ import {
   preparedFoggedColorIndex,
   preparedFoggedColorPalette,
   preparedGridLineQuads,
+  preparedGridLineMatrix,
   SOURCE,
 } from "../src/prepare/cssgravitywell/sourceModel.mjs";
 import {
@@ -56,6 +57,30 @@ test("pinned Gravity Well profile prepares a stable retained topology", () => {
   assert.equal(PREPARED_MAXIMUM_WELL_FRAME_SPEED, 1.6);
   assert.equal(SOURCE.resolution, 1);
   assert.equal(SOURCE.gridSize, 16 / 7);
+});
+
+test("prepared line matrices encode every shared centerline vertex identically", () => {
+  const prepared = buildPreparedGravityWellBankStates();
+  const timeline = buildPreparedGravityWellTimeline(prepared);
+  const segments = buildPreparedGridSegments(prepared.gridWidth);
+  for (const frame of timeline.frames) {
+    const endpoints = Array.from({ length: frame.depths.length }, () => []);
+    preparedGridLineQuads(prepared, frame.depths, 2, frame.opacityDepths).forEach((quad, leafIndex) => {
+      assert.equal(quad.width, 1);
+      assert.equal(quad.height, 1);
+      const matrix = preparedGridLineMatrix(quad);
+      const fixed = matrix.map((value) => Math.round(value * 100));
+      const first = [0, 1, 2].map((index) => fixed[12 + index] + fixed[4 + index] / 2);
+      const second = first.map((value, index) => value + fixed[index]);
+      endpoints[segments[leafIndex][0]].push(first);
+      endpoints[segments[leafIndex][1]].push(second);
+    });
+    for (const vertexEndpoints of endpoints) {
+      for (const endpoint of vertexEndpoints.slice(1)) {
+        assert.deepEqual(endpoint, vertexEndpoints[0]);
+      }
+    }
+  }
 });
 
 test("24 deterministic seed banks share an exact prepared flat boundary", () => {

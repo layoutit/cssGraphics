@@ -152,6 +152,19 @@ prepared quads intersecting the viewport. These Chrome gates qualify the
 candidate mechanics and bound its desktop scope; the Android refresh remains
 the required acceptance test.
 
+The remaining crack was traced to fixed-two-decimal matrix construction rather
+than missing topology, visibility, or carrier area. Adjacent 1-by-1 quads began
+from the same prepared vertex, but one matrix encoded it as an origin while an
+incident matrix reconstructed it as origin plus an independently rounded axis.
+Preparation now quantizes shared centerline vertices and thickness vectors on
+even fixed-point units, so all incident matrices reconstruct exactly the same
+endpoint. Across all 7,482 prepared frames and 24 banks, 22,027,008 incident
+endpoint comparisons report zero drift. No leaf, layer, visibility, or raster
+area is added. The archive shrinks from 18,634,611 to 16,813,348 transform bytes;
+bank 0 records 315,203 transform changes instead of 345,449. The matching
+desktop trace records zero DrawFrame gaps above 40 ms, a 36.705 ms p95, and a
+38.997 ms maximum. The real Android compositor remains the final visual gate.
+
 An earlier 960 by 600, 5.5-second production/candidate streaming trace over the same
 bank reduces current-plus-lookahead prepared CSS string residency from
 25,746,023 to 4,816,407 bytes. The production trace records two 91–95 ms long

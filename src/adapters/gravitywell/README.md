@@ -39,8 +39,8 @@ incrementally in request-idle slices with a two-millisecond target budget; the
 next slice is delayed by one source frame so lookahead formatting cannot bunch
 inside one idle window. The player retains only the current and one lookahead
 block, so activation does not wait for expansion. A block expands to at most
-2,775,873 bytes of final CSS strings, and every prepared current-plus-lookahead
-pair stays below 5,232,095 bytes. Each bank also embeds one small viewport-visibility
+2,675,324 bytes of final CSS strings, and every prepared current-plus-lookahead
+pair stays below 4,894,248 bytes. Each bank also embeds one small viewport-visibility
 schedule with 25 conservative portrait, landscape, and square profiles. Playback
 selects the smallest-area rectangle that covers the CSS viewport, consumes its
 sparse assignments, publishes transforms and colors only to selected leaves,

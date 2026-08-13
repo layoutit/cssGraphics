@@ -38,6 +38,8 @@ export const PREPARED_MAXIMUM_WELL_FRAME_SPEED = 1.6;
 export const PREPARED_FOG_LEVELS = 32;
 export const PREPARED_OPACITY_DEPTH_LEVELS = 16;
 export const PREPARED_LINE_COVERAGE = 0.6;
+export const PREPARED_LINE_WIDTH_PIXELS = 2;
+export const PREPARED_MATRIX_DECIMAL_PLACES = 2;
 export const PREPARED_MAXIMUM_DEPTH_OPACITY_REDUCTION = 0.75;
 export const PREPARED_TRANSITION_FRAME_COUNT = 16;
 export const PREPARED_FLAT_HOLD_FRAME_COUNT = 4;
@@ -263,7 +265,12 @@ export function buildPreparedGridSegments(gridWidth) {
   ]);
 }
 
-export function preparedGridLineQuads(state, depths, lineWidthPixels = 2, opacityDepths = null) {
+export function preparedGridLineQuads(
+  state,
+  depths,
+  lineWidthPixels = PREPARED_LINE_WIDTH_PIXELS,
+  opacityDepths = null,
+) {
   const positions = preparedWorldPositions(state, depths);
   const preparedOpacityDepths = opacityDepths ?? depths.map(
     (depth) => Math.min(1, Math.max(0, depth / SOURCE.maximumMassColor)),
@@ -303,6 +310,43 @@ export function preparedGridLineQuads(state, depths, lineWidthPixels = 2, opacit
       eyeDepth: -(first[2] + second[2]) / 2,
     });
   }));
+}
+
+export function preparedGridLineMatrix(quad, decimalPlaces = PREPARED_MATRIX_DECIMAL_PLACES) {
+  if (!Array.isArray(quad?.points) || quad.points.length !== 4 ||
+      !Number.isSafeInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 6) {
+    throw new TypeError("Complete prepared Gravity Well line matrix inputs are required");
+  }
+  const [origin, along, opposite, across] = quad.points;
+  const rawXVector = subtractVector(along, origin);
+  const rawYVector = subtractVector(across, origin);
+  const normal = normalizeVector(crossVector(rawXVector, rawYVector));
+  const planarDelta = subtractVector(opposite, origin);
+  const nonPlanarity = Math.abs(dotVector(normal, planarDelta));
+  const maximumSpan = Math.max(
+    Math.hypot(...rawXVector),
+    Math.hypot(...rawYVector),
+    Math.hypot(...planarDelta),
+  );
+  if (!Number.isFinite(nonPlanarity) || nonPlanarity / maximumSpan > 1e-6) {
+    throw new Error("Prepared Gravity Well line quad is not planar");
+  }
+  const scale = 10 ** decimalPlaces;
+  const round = (value) => Math.round(value * scale) / scale;
+  // Keep centerline vertices and thickness vectors on even fixed-point units so
+  // origin + y / 2 reconstructs the same encoded vertex for every incident line.
+  const roundEven = (value) => Math.round(value * scale / 2) * 2 / scale;
+  const firstCenter = origin.map((value, index) => (value + across[index]) / 2).map(roundEven);
+  const secondCenter = along.map((value, index) => (value + opposite[index]) / 2).map(roundEven);
+  const yVector = rawYVector.map(roundEven);
+  const xVector = secondCenter.map((value, index) => roundEven(value - firstCenter[index]));
+  const canonicalOrigin = firstCenter.map((value, index) => round(value - yVector[index] / 2));
+  return [
+    xVector[0], xVector[1], xVector[2], 0,
+    yVector[0], yVector[1], yVector[2], 0,
+    round(normal[0]), round(normal[1]), round(normal[2]), 0,
+    canonicalOrigin[0], canonicalOrigin[1], canonicalOrigin[2], 1,
+  ];
 }
 
 export function preparedDepthColorRow(depth) {
@@ -636,4 +680,28 @@ function projectEyePoint(point, perspective) {
 function eyeOffsetForScreenPixels(point, xPixels, yPixels, perspective) {
   const inverseScale = -point[2] / perspective;
   return [xPixels * inverseScale, yPixels * inverseScale];
+}
+
+function subtractVector(left, right) {
+  return left.map((value, index) => value - right[index]);
+}
+
+function crossVector(left, right) {
+  return [
+    left[1] * right[2] - left[2] * right[1],
+    left[2] * right[0] - left[0] * right[2],
+    left[0] * right[1] - left[1] * right[0],
+  ];
+}
+
+function normalizeVector(vector) {
+  const length = Math.hypot(...vector);
+  if (!Number.isFinite(length) || length <= 1e-12) {
+    throw new Error("Prepared Gravity Well line quad is degenerate");
+  }
+  return vector.map((value) => value / length);
+}
+
+function dotVector(left, right) {
+  return left.reduce((sum, value, index) => sum + value * right[index], 0);
 }

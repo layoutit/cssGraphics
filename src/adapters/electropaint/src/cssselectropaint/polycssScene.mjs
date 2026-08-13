@@ -27,7 +27,8 @@ export function mountPreparedElectropaintSnapshot({ host, sceneData, snapshotHtm
     mountedStyles.push(imported);
   }
   const mountedCamera = document.importNode(camera, true);
-  host.replaceChildren(mountedCamera);
+  for (const existing of host.querySelectorAll(":scope > .polycss-camera")) existing.remove();
+  host.append(mountedCamera);
   const mountedScene = mountedCamera.querySelector(":scope > .polycss-scene");
   const mountedQuads = [...(mountedScene?.querySelectorAll(":scope > b") ?? [])];
   if (!(mountedScene instanceof HTMLElement) || mountedQuads.length !== 40 ||
@@ -62,7 +63,7 @@ export function mountPreparedElectropaintSnapshot({ host, sceneData, snapshotHtm
       });
     },
     destroy() {
-      host.replaceChildren();
+      mountedCamera.remove();
       removePreparedSnapshotStyles();
     },
   });

@@ -93,7 +93,8 @@ try {
       const wrapStepDelta = statDelta(statsBeforeWrapStep, api.stats().player);
       await api.setState(359);
       const rectangles = quads.map((quad) => quad.getBoundingClientRect());
-      const hostRectangle = document.querySelector("#scene").getBoundingClientRect();
+      const host = document.body;
+      const hostRectangle = host.getBoundingClientRect();
       const camera = document.querySelector(".polycss-camera");
       const scene = document.querySelector(".polycss-scene");
       const visualBounds = {
@@ -108,9 +109,11 @@ try {
         perQuadWrapperCount: document.querySelectorAll(".polycss-scene > div").length,
         nestedQuadCount: document.querySelectorAll(".polycss-scene > * > b").length,
         canvasCount: document.querySelectorAll("canvas").length,
-        svgInSceneCount: document.querySelectorAll("#scene svg").length,
+        svgInSceneCount: camera.querySelectorAll("svg").length,
+        legacySceneHostCount: document.querySelectorAll("#scene").length,
+        directCameraCount: host.querySelectorAll(":scope > .polycss-camera").length,
         bodyBackgroundImage: getComputedStyle(document.body).backgroundImage,
-        sceneBackgroundImage: getComputedStyle(document.querySelector("#scene")).backgroundImage,
+        sceneBackgroundImage: getComputedStyle(host).backgroundImage,
         headerBackgroundColor: getComputedStyle(document.querySelector(".site-header")).backgroundColor,
         headerBackgroundImage: getComputedStyle(document.querySelector(".site-header")).backgroundImage,
         headerPointerEvents: getComputedStyle(document.querySelector(".site-header")).pointerEvents,
@@ -124,7 +127,7 @@ try {
           rectangle.left < innerWidth && rectangle.top < innerHeight).length,
         visualBounds,
         hostBounds: hostRectangle.toJSON(),
-        hostInlineStyle: document.querySelector("#scene").getAttribute("style"),
+        hostInlineStyle: host.getAttribute("style"),
         cameraInlineStyle: camera.getAttribute("style"),
         sceneInlineStyle: scene.getAttribute("style"),
         cameraPerspective: getComputedStyle(camera).perspective,
@@ -145,7 +148,8 @@ try {
     await page.setViewportSize({ width: 844, height: 390 });
     const landscapeExtremeBounds = await measureExtremeBounds(page, extremeStates);
     if (pageErrors.length > 0 || evidence.quadCount !== 40 || evidence.perQuadWrapperCount !== 0 ||
-        evidence.nestedQuadCount !== 0 ||
+        evidence.nestedQuadCount !== 0 || evidence.legacySceneHostCount !== 0 ||
+        evidence.directCameraCount !== 1 ||
         evidence.canvasCount !== 0 || evidence.svgInSceneCount !== 0 ||
         !evidence.bodyBackgroundImage.includes("linear-gradient") ||
         !evidence.sceneBackgroundImage.includes("linear-gradient") || !evidence.transformChanged ||

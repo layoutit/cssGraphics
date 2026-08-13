@@ -8,16 +8,22 @@
 * { box-sizing: border-box; }
 
 html,
-body,
-#scene {
+body {
   width: 100%;
   height: 100%;
   margin: 0;
 }
 
 body {
+  --cssselectropaint-presentation-scale: 1;
+  --cssselectropaint-inverse-presentation-scale: 1;
+  --cssselectropaint-presentation-y: 35px;
   overflow: hidden;
   background: linear-gradient(180deg, #0b1119 0%, #000 100%);
+}
+
+html body {
+  --cssselectropaint-presentation-rule: 1;
 }
 
 body.loading::after {
@@ -132,22 +138,7 @@ body.loading::after {
   outline-offset: -5px;
 }
 
-#scene {
-  --cssselectropaint-presentation-scale: 1;
-  --cssselectropaint-inverse-presentation-scale: 1;
-  --cssselectropaint-presentation-y: 35px;
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  contain: layout paint size style;
-  background: linear-gradient(180deg, #0b1119 0%, #000 100%);
-}
-
-html #scene {
-  --cssselectropaint-presentation-rule: 1;
-}
-
-#scene > .polycss-camera {
+body > .polycss-camera {
   position: absolute !important;
   left: 50% !important;
   top: calc(50% - var(--cssselectropaint-presentation-y)) !important;
@@ -160,7 +151,7 @@ html #scene {
   perspective-origin: 50% 75%;
 }
 
-#scene > .polycss-camera > .polycss-scene {
+body > .polycss-camera > .polycss-scene {
   transform: translateY(135px) rotateX(45deg);
 }
 

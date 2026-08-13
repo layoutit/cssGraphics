@@ -72,11 +72,14 @@ without replacement.
 Sequential frames visit only their independently prepared transform and color
 write indices. Twenty-five conservative rectangular viewport profiles prepare
 visible-leaf membership for every bank frame, including one-frame temporal
-dilation and sparse visibility assignments. Runtime chooses the smallest-area
-profile covering the CSS viewport on load or resize, keeps exact prepared
-transform and color state for hidden leaves, publishes styles only to selected
-leaves, and catches each newly selected leaf up before showing it. It performs
-no per-frame projection or viewport leaf scan. At the
+dilation and sparse visibility assignments. Fine-pointer devices choose the
+smallest-area profile covering the CSS viewport on load or resize. Coarse-pointer
+devices choose the smallest prepared square covering both viewport axes. The
+square policy restores the larger projection guard required by real mobile CSS
+3D compositors without disabling culling or changing prepared geometry. Runtime
+keeps exact prepared transform and color state for hidden leaves, publishes
+styles only to selected leaves, and catches each newly selected leaf up before
+showing it. It performs no per-frame projection or viewport leaf scan. At the
 terminal flat frame, the player adopts the next bank at
 its identical frame 0 without a style write or DOM mutation. The absolute timer
 publishes one prepared frame per callback.
@@ -106,6 +109,17 @@ ms. Four deterministic browser captures remain byte-identical to the legacy
 product. The 24-bank archive grows by 211,695 bytes. Browser compositor cadence
 does not materially change, so this is a page-owned work and headroom
 improvement rather than a claim that external compositor stalls are eliminated.
+
+The rectangular mobile selection was subsequently found to expose disconnected
+retained segments on a real mobile compositor even though Chrome emulation
+painted the same frames continuously. The coarse-pointer correction reuses the
+existing 1,024 by 1,024 prepared profile for a 390 by 844 viewport: 1,113 of
+1,922 leaves remain selected instead of 753. A controlled five-second Chrome
+DPR-3 comparison published the same 167 prepared frames with no long tasks;
+the rectangular and conservative runs measured 9.3 ms and 9.1 ms display-
+interval p95 respectively. The accepted tick-120 Chrome PNG is byte-identical
+before and after the policy change. This evidence bounds Chrome cost and visual
+output; the originating real device remains the required final compositor check.
 
 An earlier 960 by 600, 5.5-second production/candidate streaming trace over the same
 bank reduces current-plus-lookahead prepared CSS string residency from

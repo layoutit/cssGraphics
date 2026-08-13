@@ -1,5 +1,10 @@
 import { createPolyMorphPreparedDomTarget } from "@layoutit/polycss-morph";
 
+export const GRAVITYWELL_VIEWPORT_PROFILE_POLICY = Object.freeze({
+  rectangular: "rectangular",
+  conservativeMobile: "conservative-mobile-square",
+});
+
 export async function createGravityWellPreparedPlayer({
   mounted,
   bank,
@@ -16,6 +21,7 @@ export async function createGravityWellPreparedPlayer({
   clearDelay = globalThis.clearTimeout.bind(globalThis),
   readNow = globalThis.performance.now.bind(globalThis.performance),
   viewportSize = defaultViewportSize(),
+  viewportProfilePolicy = defaultViewportProfilePolicy(),
 }) {
   const leaves = mounted.model.render.leaves.map((leaf) => mounted.leafHandles.get(leaf.id)?.element);
   const shapes = mounted.model.render.shapes.map((shape) => mounted.shapeElements.get(shape.id));
@@ -50,11 +56,13 @@ export async function createGravityWellPreparedPlayer({
   let transformBlocks = activeBank.transformBlocks;
   let changeSchedule = activeBank.changeSchedule;
   let selectedViewportSize = validateViewportSize(viewportSize.width, viewportSize.height);
+  const selectedViewportProfilePolicy = validateViewportProfilePolicy(viewportProfilePolicy);
   let visibilitySchedule = playback.visibilitySchedule;
-  let selectedVisibilityProfile = selectVisibilityProfile(
+  let selectedVisibilityProfile = selectGravityWellVisibilityProfile(
     visibilitySchedule,
     selectedViewportSize.width,
     selectedViewportSize.height,
+    selectedViewportProfilePolicy,
   );
   let presentedVisibilityFrameIndex = -1;
   let visibilityInitialized = false;
@@ -301,10 +309,11 @@ export async function createGravityWellPreparedPlayer({
     transformBlocks = activeBank.transformBlocks;
     changeSchedule = activeBank.changeSchedule;
     visibilitySchedule = playback.visibilitySchedule;
-    selectedVisibilityProfile = selectVisibilityProfile(
+    selectedVisibilityProfile = selectGravityWellVisibilityProfile(
       visibilitySchedule,
       selectedViewportSize.width,
       selectedViewportSize.height,
+      selectedViewportProfilePolicy,
     );
     firstBlockLookaheadFrameIndex = Math.max(1, Math.floor(playback.blockFrameCount / 2));
     frameIndex = 0;
@@ -411,10 +420,11 @@ export async function createGravityWellPreparedPlayer({
     },
     setViewportSize(width, height) {
       const nextViewportSize = validateViewportSize(width, height);
-      const nextProfile = selectVisibilityProfile(
+      const nextProfile = selectGravityWellVisibilityProfile(
         visibilitySchedule,
         nextViewportSize.width,
         nextViewportSize.height,
+        selectedViewportProfilePolicy,
       );
       selectedViewportSize = nextViewportSize;
       if (nextProfile === selectedVisibilityProfile) return profileDimensions(nextProfile);
@@ -458,6 +468,7 @@ export async function createGravityWellPreparedPlayer({
         viewportProfileRebuildLeafScanCount,
         selectedViewportWidth: selectedViewportSize.width,
         selectedViewportHeight: selectedViewportSize.height,
+        selectedViewportProfilePolicy,
         selectedViewportProfileWidth: selectedVisibilityProfile?.width ?? null,
         selectedViewportProfileHeight: selectedVisibilityProfile?.height ?? null,
         currentVisibleLeafCount,
@@ -515,6 +526,16 @@ function defaultViewportSize() {
     : Object.freeze({ width: Infinity, height: Infinity });
 }
 
+export function defaultViewportProfilePolicy(
+  matchMedia = typeof globalThis.matchMedia === "function"
+    ? globalThis.matchMedia.bind(globalThis)
+    : null,
+) {
+  return matchMedia?.("(pointer: coarse)")?.matches === true
+    ? GRAVITYWELL_VIEWPORT_PROFILE_POLICY.conservativeMobile
+    : GRAVITYWELL_VIEWPORT_PROFILE_POLICY.rectangular;
+}
+
 function validateViewportSize(widthValue, heightValue) {
   const width = Number(widthValue);
   const height = Number(heightValue);
@@ -525,13 +546,34 @@ function validateViewportSize(widthValue, heightValue) {
   return Object.freeze({ width, height });
 }
 
-function selectVisibilityProfile(schedule, viewportWidth, viewportHeight) {
+function validateViewportProfilePolicy(policy) {
+  if (!Object.values(GRAVITYWELL_VIEWPORT_PROFILE_POLICY).includes(policy)) {
+    throw new RangeError("Gravity Well viewport profile policy is invalid");
+  }
+  return policy;
+}
+
+export function selectGravityWellVisibilityProfile(
+  schedule,
+  viewportWidth,
+  viewportHeight,
+  policy = GRAVITYWELL_VIEWPORT_PROFILE_POLICY.rectangular,
+) {
   if (schedule?.schema !== "cssgravitywell-prepared-viewport-visibility@2" ||
       !Array.isArray(schedule.profiles) || schedule.profiles.length < 1) {
     throw new Error("Gravity Well prepared viewport visibility schedule is incomplete");
   }
+  const selectedPolicy = validateViewportProfilePolicy(policy);
+  const requiredWidth = selectedPolicy === GRAVITYWELL_VIEWPORT_PROFILE_POLICY.conservativeMobile
+    ? Math.max(viewportWidth, viewportHeight)
+    : viewportWidth;
+  const requiredHeight = selectedPolicy === GRAVITYWELL_VIEWPORT_PROFILE_POLICY.conservativeMobile
+    ? requiredWidth
+    : viewportHeight;
   return schedule.profiles
-    .filter((profile) => profile.width >= viewportWidth && profile.height >= viewportHeight)
+    .filter((profile) => profile.width >= requiredWidth && profile.height >= requiredHeight &&
+      (selectedPolicy !== GRAVITYWELL_VIEWPORT_PROFILE_POLICY.conservativeMobile ||
+        profile.width === profile.height))
     .sort((left, right) => left.width * left.height - right.width * right.height ||
       left.width + left.height - right.width - right.height)[0] ?? null;
 }

@@ -9,6 +9,7 @@ const adapterRoot = resolve(import.meta.dirname, "..");
 const repositoryRoot = resolve(adapterRoot, "..", "..", "..");
 const outputRoot = resolve(repositoryRoot, "bench/results/cssgravitywell/smoke");
 const screenshotPath = resolve(outputRoot, "default-route.png");
+const mobileScreenshotPath = resolve(outputRoot, "mobile-route.png");
 const statePath = resolve(outputRoot, "state.json");
 const externalUrl = process.env.CSSGRAVITYWELL_SMOKE_URL;
 const port = externalUrl ? null : await freePort();
@@ -253,6 +254,63 @@ try {
       cycleEvidence.changedStyleCount !== 0) {
     throw new Error(`Gravity Well flat-boundary cycle failed: ${JSON.stringify(cycleEvidence)}`);
   }
+  const mobileContext = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 3,
+    isMobile: true,
+    hasTouch: true,
+  });
+  const mobilePage = await mobileContext.newPage();
+  const mobileErrors = [];
+  mobilePage.on("pageerror", (error) => mobileErrors.push(error.stack || error.message));
+  mobilePage.on("console", (message) => { if (message.type() === "error") mobileErrors.push(message.text()); });
+  await mobilePage.route("**/favicon.ico", (faviconRoute) => faviconRoute.fulfill({ status: 204 }));
+  await mobilePage.goto(`${route}?bank=0&cycle=0`, { waitUntil: "networkidle" });
+  await mobilePage.waitForFunction(() => document.body.classList.contains("ready") ||
+    document.body.classList.contains("error"), null, { timeout: 30_000 });
+  await mobilePage.setViewportSize({ width: 4_000, height: 4_000 });
+  await mobilePage.evaluate(async () => globalThis.__cssGravityWellDebug.seekSourceTick(120));
+  await mobilePage.setViewportSize({ width: 390, height: 844 });
+  await mobilePage.evaluate(() => new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame))));
+  const mobileEvidence = await mobilePage.evaluate(() => {
+    const debug = globalThis.__cssGravityWellDebug;
+    const leaves = [...document.querySelectorAll(".polycss-scene > div > .polycss-mesh > b")];
+    const hiddenIntersectingViewport = leaves.filter((leaf) => {
+      if (leaf.style.visibility !== "hidden") return false;
+      const rect = leaf.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0 &&
+        rect.left < innerWidth && rect.top < innerHeight;
+    }).length;
+    return {
+      status: document.body.className,
+      errors: debug.errors(),
+      stable: debug.assertStableDomIdentity(),
+      coarsePrimaryPointer: matchMedia("(pointer: coarse)").matches,
+      state: debug.state(),
+      stats: debug.stats(),
+      hiddenIntersectingViewport,
+    };
+  });
+  if (mobileErrors.length || mobileEvidence.errors.length || mobileEvidence.status !== "ready" ||
+      !mobileEvidence.stable || !mobileEvidence.coarsePrimaryPointer ||
+      mobileEvidence.state.sourceFrameIndex !== 120 || !mobileEvidence.state.paused ||
+      mobileEvidence.stats.selectedViewportProfilePolicy !== "conservative-mobile-square" ||
+      mobileEvidence.stats.selectedViewportWidth !== 390 ||
+      mobileEvidence.stats.selectedViewportHeight !== 844 ||
+      mobileEvidence.stats.selectedViewportProfileWidth !== 1_024 ||
+      mobileEvidence.stats.selectedViewportProfileHeight !== 1_024 ||
+      mobileEvidence.stats.currentVisibleLeafCount < 1_000 ||
+      mobileEvidence.stats.currentVisibleLeafCount >= mobileEvidence.stats.retainedLeafCount ||
+      mobileEvidence.hiddenIntersectingViewport !== 0 ||
+      mobileEvidence.stats.runtimeGeometryConstructionCount !== 0 ||
+      mobileEvidence.stats.runtimeViewportProjectionCount !== 0 ||
+      mobileEvidence.stats.runtimePerFrameViewportLeafScanCount !== 0 ||
+      mobileEvidence.stats.runtimeDomCreationCount !== 0 ||
+      mobileEvidence.stats.runtimeDomRemovalCount !== 0) {
+    throw new Error(`Gravity Well mobile visibility smoke failed: ${JSON.stringify({ mobileEvidence, mobileErrors })}`);
+  }
+  await mobilePage.screenshot({ path: mobileScreenshotPath });
+  await mobileContext.close();
   await writeFile(statePath, `${JSON.stringify({
     route,
     loadingIndicator,
@@ -260,8 +318,11 @@ try {
     evidence,
     sparseBlockEvidence,
     cycleEvidence,
+    mobileEvidence,
+    mobileErrors,
     pageErrors,
     screenshotPath,
+    mobileScreenshotPath,
   }, null, 2)}\n`);
   console.log(JSON.stringify({
     status: "passed",
@@ -269,9 +330,11 @@ try {
     loadingIndicator,
     initialCompleteBankEvidence,
     screenshotPath,
+    mobileScreenshotPath,
     statePath,
     sparseBlockEvidence,
     cycleEvidence,
+    mobileEvidence,
     ...evidence,
   }, null, 2));
 } finally {

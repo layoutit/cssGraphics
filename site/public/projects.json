@@ -2,6 +2,15 @@
   "schema": "cssgraphics.projects@2",
   "projects": [
     {
+      "number": 5,
+      "id": "electropaint",
+      "name": "ElectroPaint",
+      "route": "/electropaint/",
+      "preview": "/landing/electropaint.webp",
+      "source": "David A. Tristram / SGI",
+      "date": "2026-08-10"
+    },
+    {
       "number": 4,
       "id": "menger",
       "name": "Menger",

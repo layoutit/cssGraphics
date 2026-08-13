@@ -57,17 +57,18 @@ native profile, not a claim about the default `grid-size = 1` raster.
 
 The browser loads the verified static Morph package and bank catalog, chooses
 the initial bank with `crypto.getRandomValues`, adopts its 1,922 retained
-solid-quad line leaves with `createPolyMorphPreparedDomTarget`, and expands the
-initial bank's current and lookahead blocks beneath the loader. Later lookahead
-blocks are fetched, verified, decompressed, decoded, and formatted ahead of
-activation. Decoding and fixed-two-decimal `matrix3d` formatting run in bounded
-request-idle slices with a two-millisecond target budget, outside frame
-publication. As in cssElectroPaint's prepared horizon, successive slices are
-separated by one source frame so they cannot bunch inside one idle window. The
-next shuffled bank starts prefetching only after the active
-bank's 240-frame source-authority window and uses the same incremental path.
-The active bank retains only its current and one lookahead transform block. The
-shuffle visits the other 23 banks without replacement.
+solid-quad line leaves with `createPolyMorphPreparedDomTarget`, and fetches,
+verifies, decompresses, decodes, and formats all sixteen blocks of the selected
+bank beneath the loading cover before exposing the scene. The largest selected
+bank transfers 1,733,655 encoded block bytes and expands to 42,212,693 bytes of
+prepared CSS strings. Playback releases only blocks it has already passed.
+The next complete shuffled bank starts preparing at the first block's midpoint,
+well ahead of handoff. Its fixed-two-decimal `matrix3d` formatting runs in
+bounded two-millisecond timer slices outside frame publication, with successive
+slices separated by one source frame so they cannot bunch inside one task.
+Unlike the previous idle-callback request, timer slices are not starved by
+continuous style and compositor work. The shuffle visits the other 23 banks
+without replacement.
 Sequential frames visit only their independently prepared transform and color
 write indices. Twenty-five conservative rectangular viewport profiles prepare
 visible-leaf membership for every bank frame, including one-frame temporal
@@ -106,14 +107,33 @@ product. The 24-bank archive grows by 211,695 bytes. Browser compositor cadence
 does not materially change, so this is a page-owned work and headroom
 improvement rather than a claim that external compositor stalls are eliminated.
 
-At 960 by 600, a 5.5-second production/candidate streaming trace over the same
+An earlier 960 by 600, 5.5-second production/candidate streaming trace over the same
 bank reduces current-plus-lookahead prepared CSS string residency from
 25,746,023 to 4,816,407 bytes. The production trace records two 91–95 ms long
 tasks, a 129.719 ms maximum GC slice, and a 91.8 ms maximum display interval;
 the sixteen-block product records no long task, a 42.721 ms maximum GC slice,
 and a 33.6 ms maximum display interval. Both runs transfer approximately 1.5 MB
 of transform packets over the interval; the change bounds allocation size
-rather than shifting work onto the wire.
+rather than shifting work onto the wire. That two-block residency experiment
+was superseded by the complete selected-bank preload after it still permitted
+activation waits in a real production trace.
+
+A later 6.8-second real production trace exposed a release-blocking flaw that
+the earlier warmed 1.8-second trace did not cover: six repeated 283–776 ms
+DrawFrame gaps aligned with transform-block activation while idle-callback
+lookahead decoding was starved. A direct local boundary probe reproduced
+214–306 ms waits only when a transform block loaded. The repair retains the
+same blocks, matrices, colors, two-millisecond slice budget, and one-frame slice
+spacing, but fully prepares the selected bank beneath the loader and schedules
+future-bank slices with the source-frame timer instead of waiting for browser
+idle time. The release gate now begins with the real endless route in an
+untouched seven-second playback window before any pause, seek, or step. At 960
+by 600 it crosses 11 block boundaries and 234 prepared frames with zero runtime
+block loads, zero activation waits, zero long tasks, a 16.7 ms maximum rAF
+sample, and a 41.031 ms maximum FrameSleuth DrawFrame interval after excluding
+only the first 500 ms tracing-start seam. A separate 12.5-second run crosses an
+endless bank handoff with both banks completely prepared, no bank wait, no
+activation wait, stable DOM identity, and a 25 ms maximum sampled gap.
 
 ## Proof boundary
 

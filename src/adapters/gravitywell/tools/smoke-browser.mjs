@@ -29,6 +29,40 @@ try {
   await mkdir(outputRoot, { recursive: true });
   if (server) await waitFor(() => serverOutput.includes("Local:"), 20_000);
   browser = await chromium.launch({ channel: "chrome", headless: true });
+  let loadingIndicator = null;
+  {
+    const loadingPage = await browser.newPage({ viewport: { width: 960, height: 600 }, deviceScaleFactor: 1 });
+    await loadingPage.route("**/favicon.ico", (faviconRoute) => faviconRoute.fulfill({ status: 204 }));
+    await loadingPage.route("**/cssgravitywell/catalog.json", async (catalogRoute) => {
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 500));
+      await catalogRoute.continue();
+    });
+    await loadingPage.goto(route, { waitUntil: "domcontentloaded" });
+    await loadingPage.waitForFunction(() => document.body.classList.contains("loading"));
+    loadingIndicator = await loadingPage.evaluate(() => {
+      const indicator = getComputedStyle(document.body, "::after");
+      const cover = getComputedStyle(document.body, "::before");
+      return {
+        bodyClassName: document.body.className,
+        content: indicator.content,
+        width: indicator.width,
+        height: indicator.height,
+        borderRadius: indicator.borderRadius,
+        animationName: indicator.animationName,
+        coverContent: cover.content,
+        coverPosition: cover.position,
+      };
+    });
+    await loadingPage.waitForFunction(() => document.body.classList.contains("ready"), null, { timeout: 30_000 });
+    await loadingPage.close();
+  }
+  if (loadingIndicator.bodyClassName !== "loading" || loadingIndicator.content !== '""' ||
+      loadingIndicator.width !== "18px" || loadingIndicator.height !== "18px" ||
+      loadingIndicator.borderRadius !== "50%" ||
+      loadingIndicator.animationName !== "cssgravitywell-loading" ||
+      loadingIndicator.coverContent !== '""' || loadingIndicator.coverPosition !== "fixed") {
+    throw new Error(`Gravity Well loading indicator failed: ${JSON.stringify(loadingIndicator)}`);
+  }
   const page = await browser.newPage({ viewport: { width: 960, height: 600 }, deviceScaleFactor: 1 });
   await page.route("**/favicon.ico", (faviconRoute) => faviconRoute.fulfill({ status: 204 }));
   const pageErrors = [];
@@ -36,6 +70,15 @@ try {
   page.on("console", (message) => { if (message.type() === "error") pageErrors.push(message.text()); });
   await page.goto(route, { waitUntil: "networkidle" });
   await page.waitForFunction(() => ["ready", "error"].includes(document.body.dataset.portStatus), null, { timeout: 30_000 });
+  const initialCompleteBankEvidence = await page.evaluate(() => {
+    const stats = globalThis.__cssGravityWellDebug.stats().transformBlocks;
+    return {
+      loadCount: stats.loadCount,
+      residentBlockCount: stats.residentBlockCount,
+      preparedCompleteBank: stats.preparedCompleteBank,
+      activationWaitCount: stats.activationWaitCount,
+    };
+  });
   await page.evaluate(async () => globalThis.__cssGravityWellDebug.seekSourceTick(120));
   await page.evaluate(() => new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame))));
   const evidence = await page.evaluate(() => {
@@ -69,6 +112,8 @@ try {
           rect.left < innerWidth && rect.top < innerHeight && getComputedStyle(leaf).visibility === "visible";
       }).length,
       shellPath: document.querySelector(".site-wordmark-path")?.textContent ?? "",
+      bodyClassName: document.body.className,
+      loadingIndicatorContent: getComputedStyle(document.body, "::after").content,
       activeBankDataset: Number(document.body.dataset.activeBank),
       activeSeedDataset: Number(document.body.dataset.activeSeed),
     };
@@ -84,10 +129,18 @@ try {
       evidence.dataAttributeCount !== 0 || evidence.preparedColorCount < 8 ||
       evidence.visibleBackfaceLeafCount !== evidence.retainedLeaves ||
       evidence.visibleLeafCount < 500 || evidence.shellPath !== "/gravitywell" ||
+      evidence.bodyClassName !== "ready" || evidence.loadingIndicatorContent !== "none" ||
       evidence.stats.runtimeGeometryConstructionCount !== 0 ||
       evidence.stats.runtimeTopologyConstructionCount !== 0 ||
       evidence.stats.runtimeAffineEvaluationCount !== 0 ||
       evidence.stats.runtimeColorCalculationCount !== 0 ||
+      evidence.stats.transformBlocks.loadCount !== 16 ||
+      evidence.stats.transformBlocks.preparedCompleteBank !== true ||
+      evidence.stats.transformBlocks.activationWaitCount !== 0 ||
+      initialCompleteBankEvidence.loadCount !== 16 ||
+      initialCompleteBankEvidence.residentBlockCount !== 16 ||
+      initialCompleteBankEvidence.preparedCompleteBank !== true ||
+      initialCompleteBankEvidence.activationWaitCount !== 0 ||
       evidence.stats.runtimeDomCreationCount !== 0 || evidence.stats.runtimeDomRemovalCount !== 0) {
     throw new Error(`Gravity Well browser smoke failed: ${JSON.stringify({ evidence, pageErrors })}`);
   }
@@ -195,6 +248,8 @@ try {
   }
   await writeFile(statePath, `${JSON.stringify({
     route,
+    loadingIndicator,
+    initialCompleteBankEvidence,
     evidence,
     sparseBlockEvidence,
     cycleEvidence,
@@ -204,6 +259,8 @@ try {
   console.log(JSON.stringify({
     status: "passed",
     route,
+    loadingIndicator,
+    initialCompleteBankEvidence,
     screenshotPath,
     statePath,
     sparseBlockEvidence,

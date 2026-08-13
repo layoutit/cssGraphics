@@ -246,6 +246,7 @@ export async function createGravityWellPreparedPlayer({
       firstBlockLookaheadFrameIndex = -1;
       const lookahead = transformBlocks.prefetchLookahead();
       if (lookahead) void lookahead.catch(onError);
+      queueNextBank();
     }
     if (nextFrameIndex === activeBank.scene.timeline.sourceFrameEndIndex) queueNextBank();
     return frameIndex;
@@ -275,6 +276,7 @@ export async function createGravityWellPreparedPlayer({
     pendingBankPromise = Promise.resolve(loadBank(pendingBankIndex, {
       lookahead: true,
       incremental: true,
+      complete: true,
     })).then((loaded) => {
       pendingBank = validateBank(loaded, pendingBankIndex, leaves.length);
       pendingBankPromise = null;

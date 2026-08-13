@@ -14,6 +14,7 @@ test("public product slug is gravitywell everywhere", async () => {
     resolve(adapterRoot, "README.md"),
     resolve(adapterRoot, "vite.config.mjs"),
     resolve(adapterRoot, "src/cssgravitywell/client.mjs"),
+    resolve(adapterRoot, "src/cssgravitywell/styles.css"),
     resolve(adapterRoot, "tools/prepare-cssgravitywell.mjs"),
     resolve(adapterRoot, "tools/smoke-browser.mjs"),
   ];
@@ -24,6 +25,9 @@ test("public product slug is gravitywell everywhere", async () => {
   assert.match(source, /<link rel="icon" href="\/favicon\.ico" sizes="any" \/>/u);
   assert.match(source, /base:\s*deployBuild \? "\/gravitywell\/" : "\/"/u);
   assert.match(source, /identity\.id !== "gravitywell"/u);
+  assert.match(source, /<body class="loading">/u);
+  assert.match(source, /body\.loading::after/u);
+  assert.match(source, /setStatus\("ready"\)/u);
   assert.match(source, /"dev:gravitywell"/u);
   assert.match(source, /prepare:gravitywell:artifact/u);
   assert.match(source, /CSSGRAVITYWELL_DEPLOY_BUILD=1 pnpm build:gravitywell/u);
@@ -36,6 +40,10 @@ test("proof tools use the canonical gravitywell route", async () => {
   assert.match(trace, /cssgravitywell-steady-playback-start/u);
   assert.match(trace, /analyzeTrace/u);
   assert.match(trace, /noScheduledTransformBlockWait/u);
+  assert.match(trace, /untouchedBeforeMeasurement:\s*true/u);
+  assert.match(trace, /noUntouchedPlaybackActivationWait/u);
+  assert.match(trace, /noUntouchedPlaybackFreezeGap/u);
+  assert.match(trace, /noFrameSleuthFreezeGap/u);
   assert.match(oracle, /127\.0\.0\.1:\$\{port\}\/gravitywell\//u);
 });
 
@@ -102,15 +110,18 @@ test("product frame loop publishes only separately prepared writes", async () =>
   assert.match(assets, /gzip-field-major-delta-varint-fixed2-matrix-and-bank-schedule@2/u);
   assert.match(assets, /decodePreparedTransformBlock\(decoded, descriptor, playback, transformIndices\)/u);
   assert.match(assets, /decodePreparedTransformBlockIncrementally/u);
-  assert.match(assets, /requestIdle/u);
+  assert.doesNotMatch(assets, /requestIdle/u);
+  assert.doesNotMatch(assets, /timeRemaining/u);
   assert.match(assets, /setDelay\(resolveDelay, playback\.frameMilliseconds\)/u);
   assert.match(assets, /incrementalSliceBudgetMilliseconds/u);
   assert.match(assets, /incrementalDecodeMaximumSliceMilliseconds/u);
+  assert.match(assets, /preparedCompleteBank/u);
+  assert.match(assets, /Promise\.all\(remaining\.map/u);
   assert.match(assets, /preparedCssStringByteLength !== descriptor\.preparedCssStringByteLength/u);
   assert.match(assets, /frameView\.mode = "delta"/u);
   assert.match(assets, /activationWaitCount/u);
   assert.match(assets, /rectangular-profile/u);
-  assert.match(playback, /lookahead:\s*true[\s\S]*incremental:\s*true/u);
+  assert.match(playback, /lookahead:\s*true[\s\S]*incremental:\s*true[\s\S]*complete:\s*true/u);
   assert.match(preparer, /content-addressed/u);
   assert.match(preparer, /field-major fixed-point varints/u);
   assert.match(preparer, /prepared-transform-block-0/u);

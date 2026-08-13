@@ -10,7 +10,9 @@ import {
 } from "@layoutit/polycss-morph";
 import { formatMatrix3dValues } from "@layoutit/polycss";
 import {
+  buildGridClosingSegments,
   buildGridSegments,
+  buildPreparedGridSegments,
   buildPreparedGravityWellBankStates,
   buildPreparedGravityWellTimeline,
   CSSGRAVITYWELL_SEEDS,
@@ -78,12 +80,15 @@ const canonicalStates = buildPreparedGravityWellBankStates({ seed: CSSGRAVITYWEL
 const canonicalTimeline = buildPreparedGravityWellTimeline(canonicalStates);
 const fixedViewQuaternion = canonicalStates.trackballQuaternion;
 const fixedViewState = Object.freeze({ ...canonicalStates, trackballQuaternion: fixedViewQuaternion });
-const segments = buildGridSegments(canonicalStates.gridWidth);
+const nativeSegments = buildGridSegments(canonicalStates.gridWidth);
+const closingSegments = buildGridClosingSegments(canonicalStates.gridWidth);
+const segments = buildPreparedGridSegments(canonicalStates.gridWidth);
 const flatDepths = Object.freeze(Array(canonicalStates.gridWidth ** 2).fill(0));
 const baseQuads = preparedGridLineQuads(fixedViewState, flatDepths);
 const preparedLeafCount = segments.length;
-if (segments.length !== 1_922 || baseQuads.length !== preparedLeafCount) {
-  throw new Error("Gravity Well prepared coarse native grid topology drifted");
+if (nativeSegments.length !== 1_922 || closingSegments.length !== 62 ||
+    segments.length !== 1_984 || baseQuads.length !== preparedLeafCount) {
+  throw new Error("Gravity Well prepared closed grid topology drifted");
 }
 const topologyVertices = baseQuads.flatMap((quad) => quad.points);
 const topologyPolygons = baseQuads.map((quad, index) => ({
@@ -95,7 +100,7 @@ const shapeId = "shape-0000-gravitywell-grid";
 const materialId = "material-0000-gravity-grid";
 const staticModel = Object.freeze({
   schema: "polycss-morph.model@1",
-  identity: Object.freeze({ id: "gravitywell", name: "Gravity Well", revision: "1.1.0" }),
+  identity: Object.freeze({ id: "gravitywell", name: "Gravity Well", revision: "1.2.0" }),
   profile: "static-prepared",
   capabilities: Object.freeze(["retained-render"]),
   budgets: Object.freeze({
@@ -490,7 +495,8 @@ async function prepareBank({ bankIndex, seed, fixedViewQuaternion }) {
     metrics: Object.freeze({
       sourceVertexCount: sourceStates.gridWidth ** 2,
       sourceCellCount: sourceStates.gridCellCount ** 2,
-      sourceCoarseGridSegmentCount: segments.length,
+      sourceCoarseGridSegmentCount: nativeSegments.length,
+      preparedClosingEdgeSegmentCount: closingSegments.length,
       preparedSolidQuadCount: preparedLeafCount,
       preparedLeafCount,
       preparedFrameCount: timeline.frameCount,
@@ -506,6 +512,7 @@ async function prepareBank({ bankIndex, seed, fixedViewQuaternion }) {
     proof: Object.freeze({
       stableTopology: true,
       sourceOrderedGridSegments: true,
+      preparedGridClosesSourceOuterEdges: true,
       retainedSolidQuadLines: true,
       fixedPreparedCameraAcrossBanks: true,
       firstAndLastGroundFlat: true,

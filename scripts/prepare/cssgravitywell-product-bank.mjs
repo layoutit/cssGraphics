@@ -17,7 +17,7 @@ const lock = JSON.parse(await readFile(
   "utf8",
 ));
 if (lock.schema !== "cssgravitywell-prepared-bank-lock@2" || lock.bankCount !== 24 ||
-    lock.retainedShapeRootCount !== 1 || lock.retainedLeafCount !== 1_922 ||
+    lock.retainedShapeRootCount !== 1 || lock.retainedLeafCount !== 1_984 ||
     lock.preparedFrameCount !== 7_482 ||
     lock.transformAssetCount !== 24 * CSSGRAVITYWELL_TRANSFORM_BLOCK_COUNT ||
     lock.productFileCount !== 28 + lock.transformAssetCount ||

@@ -15,8 +15,9 @@
 - Keep one stable retained PolyCSS graph. No Canvas, WebGL, WebGPU, SVG scene
   geometry, masks, clip paths, runtime polygon construction, or DOM growth.
 - Preserve all 1,922 source-ordered coarse native grid segments as retained
-  solid quads. Native adaptive sub-segment fidelity is a visual-oracle issue,
-  not permission to replace the retained DOM renderer.
+  solid quads, followed by 62 prepared presentation segments that close the
+  source's omitted final row and column. Native adaptive sub-segment fidelity
+  is a visual-oracle issue, not permission to replace the retained DOM renderer.
 - Preserve PolyCSS's mounted visible-backface value without restoring a
   duplicate adapter `!important` rule; any renderer-style change must retain
   the four-frame browser oracle.

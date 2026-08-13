@@ -9,7 +9,7 @@ test("generated Gravity Well product bank is exact and portable", async () => {
   const summary = await inspectCssgravitywellProductBank(root);
   assert.equal(summary.bankCount, 24);
   assert.equal(summary.retainedShapeRootCount, 1);
-  assert.equal(summary.retainedLeafCount, 1_922);
+  assert.equal(summary.retainedLeafCount, 1_984);
   assert.equal(summary.colorAssetCount, 24);
   assert.equal(summary.changeAssetCount, 24);
   assert.equal(summary.visibilityAssetCount, 24);

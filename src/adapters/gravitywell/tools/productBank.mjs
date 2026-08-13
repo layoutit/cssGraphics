@@ -10,7 +10,9 @@ import {
 } from "../src/prepare/cssgravitywell/visibilitySchedule.mjs";
 
 export const CSSGRAVITYWELL_PRODUCT_BANK_SCHEMA = "cssgravitywell-product-bank@2";
-const RETAINED_LEAF_COUNT = 1_922;
+const RETAINED_LEAF_COUNT = 1_984;
+const SOURCE_COARSE_GRID_SEGMENT_COUNT = 1_922;
+const PREPARED_CLOSING_EDGE_SEGMENT_COUNT = 62;
 const PREPARED_COLOR_COUNT = 512;
 const LEGACY_VISIBILITY_SCHEMA = "cssgravitywell-prepared-viewport-visibility@1";
 const LEGACY_VISIBILITY_ENCODING = "gzip-cgwv1-square-profile-sparse-visibility-assignments";
@@ -90,7 +92,9 @@ export async function inspectCssgravitywellProductBank(root, { verifyDescriptor 
       scene.playback?.schema === "cssgravitywell-sparse-transform-block-playback@1" &&
       scene.playback.leafCount === RETAINED_LEAF_COUNT &&
       scene.metrics?.preparedLeafCount === RETAINED_LEAF_COUNT &&
-      scene.metrics.sourceCoarseGridSegmentCount === 1_922 &&
+      scene.metrics.sourceCoarseGridSegmentCount === SOURCE_COARSE_GRID_SEGMENT_COUNT &&
+      scene.metrics.preparedClosingEdgeSegmentCount === PREPARED_CLOSING_EDGE_SEGMENT_COUNT &&
+      scene.proof?.preparedGridClosesSourceOuterEdges === true &&
       scene.playback.blockCount === CSSGRAVITYWELL_TRANSFORM_BLOCK_COUNT &&
       scene.playback.blocks?.length === CSSGRAVITYWELL_TRANSFORM_BLOCK_COUNT &&
       scene.playback.runtimeLookaheadBlockCount === 1 &&

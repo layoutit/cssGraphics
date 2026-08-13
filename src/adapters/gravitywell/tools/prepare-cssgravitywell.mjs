@@ -270,7 +270,9 @@ async function prepareBank({ bankIndex, seed, fixedViewQuaternion }) {
   if (quadsByFrame.some((quads) => quads.length !== preparedLeafCount)) {
     throw new Error(`Gravity Well bank ${bankId} topology drifted`);
   }
-  const viewportVisibility = prepareGravityWellViewportVisibility(quadsByFrame);
+  const viewportVisibility = prepareGravityWellViewportVisibility(quadsByFrame, {
+    gridWidth: sourceStates.gridWidth,
+  });
   const viewportVisibilityDecoded = encodeGravityWellViewportVisibility(viewportVisibility);
   const viewportVisibilityEncoded = gzipSync(viewportVisibilityDecoded, { level: 9, mtime: 0 });
   const formattedTransformsByFrame = quadsByFrame.map((quads, frameIndex) => quads.map((quad, index) =>

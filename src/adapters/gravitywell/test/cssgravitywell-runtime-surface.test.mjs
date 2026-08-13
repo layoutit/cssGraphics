@@ -124,7 +124,7 @@ test("product frame loop publishes only separately prepared writes", async () =>
   assert.match(assets, /preparedCssStringByteLength !== descriptor\.preparedCssStringByteLength/u);
   assert.match(assets, /frameView\.mode = "delta"/u);
   assert.match(assets, /activationWaitCount/u);
-  assert.match(assets, /rectangular-profile/u);
+  assert.match(assets, /CSSGRAVITYWELL_VISIBILITY_SELECTION/u);
   assert.match(playback, /lookahead:\s*true[\s\S]*incremental:\s*true[\s\S]*complete:\s*true/u);
   assert.match(preparer, /content-addressed/u);
   assert.match(preparer, /field-major fixed-point varints/u);

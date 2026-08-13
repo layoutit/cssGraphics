@@ -153,8 +153,8 @@ body > .polycss-camera > .polycss-scene > div {
 }
 
 body > .polycss-camera > .polycss-scene > div > .polycss-mesh > b {
-  width: 8px;
-  height: 8px;
+  width: 1px;
+  height: 1px;
   opacity: 1;
   visibility: visible;
   backface-visibility: visible;

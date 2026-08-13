@@ -1,5 +1,3 @@
-import { CSSGRAVITYWELL_LINE_CARRIER_PIXELS } from "../../cssgravitywell/renderContract.mjs";
-
 const RANDOM_VECTOR = Object.freeze([
   0o35340171546, 0o10401501101, 0o22364657325, 0o24130436022, 0o02167303062,
   0o37570375137, 0o37210607110, 0o16272055420, 0o23011770546, 0o17143426366,
@@ -42,7 +40,6 @@ export const PREPARED_OPACITY_DEPTH_LEVELS = 16;
 export const PREPARED_LINE_COVERAGE = 0.6;
 export const PREPARED_LINE_WIDTH_PIXELS = 2;
 export const PREPARED_LINE_ENDPOINT_OVERLAP_PIXELS = PREPARED_LINE_WIDTH_PIXELS / 2;
-export const PREPARED_LINE_CARRIER_PIXELS = CSSGRAVITYWELL_LINE_CARRIER_PIXELS;
 export const PREPARED_MAXIMUM_DEPTH_OPACITY_REDUCTION = 0.75;
 export const PREPARED_TRANSITION_FRAME_COUNT = 16;
 export const PREPARED_FLAT_HOLD_FRAME_COUNT = 4;
@@ -324,8 +321,8 @@ export function preparedGridLineQuads(
         Object.freeze([extendedSecond[0] + sharedOffset[0], extendedSecond[1] + sharedOffset[1], extendedSecond[2]]),
         Object.freeze([extendedFirst[0] + sharedOffset[0], extendedFirst[1] + sharedOffset[1], extendedFirst[2]]),
       ]),
-      width: PREPARED_LINE_CARRIER_PIXELS,
-      height: PREPARED_LINE_CARRIER_PIXELS,
+      width: 1,
+      height: 1,
       colorDepth: (depths[firstIndex] + depths[secondIndex]) / 2,
       opacityDepth: (preparedOpacityDepths[firstIndex] + preparedOpacityDepths[secondIndex]) / 2,
       eyeDepth: -(first[2] + second[2]) / 2,

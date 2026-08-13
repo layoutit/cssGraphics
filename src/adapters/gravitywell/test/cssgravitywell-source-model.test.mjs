@@ -11,6 +11,7 @@ import {
   CSSGRAVITYWELL_SEEDS,
   PREPARED_MAX_BANK_FRAME_COUNT,
   PREPARED_LINE_COVERAGE,
+  PREPARED_LINE_CARRIER_PIXELS,
   PREPARED_LINE_ENDPOINT_OVERLAP_PIXELS,
   PREPARED_MAXIMUM_ACTIVE_WELL_COUNT,
   PREPARED_MAXIMUM_DEPTH_OPACITY_REDUCTION,
@@ -71,6 +72,9 @@ test("prepared line quads overlap both shared endpoints in projected pixels", ()
   const overlappedFirst = project(center(overlapped.points[0], overlapped.points[3]));
   const overlappedSecond = project(center(overlapped.points[1], overlapped.points[2]));
   assert.equal(PREPARED_LINE_ENDPOINT_OVERLAP_PIXELS, 1);
+  assert.equal(PREPARED_LINE_CARRIER_PIXELS, 8);
+  assert.equal(overlapped.width, PREPARED_LINE_CARRIER_PIXELS);
+  assert.equal(overlapped.height, PREPARED_LINE_CARRIER_PIXELS);
   assert.ok(Math.abs(Math.hypot(
     overlappedFirst[0] - originalFirst[0],
     overlappedFirst[1] - originalFirst[1],

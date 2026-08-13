@@ -11,6 +11,7 @@ import {
   selectInitialGravityWellBank,
 } from "./preparedAssets.mjs";
 import { createGravityWellPreparedPlayer } from "./preparedPlayback.mjs";
+import { CSSGRAVITYWELL_LINE_CARRIER_PIXELS } from "./renderContract.mjs";
 
 export function mountGravityWellClient(host) {
   const state = {
@@ -119,8 +120,9 @@ function cleanPreparedDom(mounted) {
     throw new Error("Gravity Well clean DOM requires identity model and shape roots");
   }
   for (const { plan } of mounted.leafHandles.values()) {
-    if (plan.strategy !== "solid-quad" || plan.width !== 1 || plan.height !== 1) {
-      throw new Error("Gravity Well clean DOM requires prepared 1px solid quads");
+    if (plan.strategy !== "solid-quad" || plan.width !== CSSGRAVITYWELL_LINE_CARRIER_PIXELS ||
+        plan.height !== CSSGRAVITYWELL_LINE_CARRIER_PIXELS) {
+      throw new Error("Gravity Well clean DOM requires prepared 8px solid quads");
     }
   }
   mounted.cameraElement.className = "polycss-camera";

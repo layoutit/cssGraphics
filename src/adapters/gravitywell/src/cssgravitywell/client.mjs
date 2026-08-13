@@ -78,15 +78,14 @@ export function mountGravityWellClient(host) {
       initialBankIndex: selection.bankIndex,
       loadBank,
       cycleBanks: new URLSearchParams(location.search).get("cycle") !== "0",
-      onBankChange(bankIndex, nextScene) {
+      onBankChange(_bankIndex, nextScene) {
         state.scene = nextScene;
-        document.body.dataset.activeBank = String(bankIndex);
-        document.body.dataset.activeSeed = String(nextScene.seed);
       },
       onError(error) {
         recordError(error instanceof Error ? error.stack || error.message : String(error));
       },
     });
+    removeEmptyWrapperStyles(mounted);
     state.catalog = catalog;
     state.selection = selection;
     state.scene = scene;
@@ -94,11 +93,6 @@ export function mountGravityWellClient(host) {
     state.player = player;
     state.ready = true;
     setStatus("ready");
-    document.body.dataset.productView = "1";
-    document.body.dataset.gameView = "polycss";
-    document.body.dataset.portSlug = "cssgravitywell";
-    document.body.dataset.activeBank = String(selection.bankIndex);
-    document.body.dataset.activeSeed = String(scene.seed);
     requestAnimationFrame(() => player.resume());
   }
 
@@ -117,16 +111,59 @@ export function mountGravityWellClient(host) {
 function setStatus(kind) {
   document.body.classList.remove("loading", "ready", "error");
   document.body.classList.add(kind);
-  document.body.dataset.portStatus = kind;
 }
 
 function cleanPreparedDom(mounted) {
+  if (!isIdentityMatrix(mounted.model.render.modelMatrix) ||
+      mounted.model.render.shapes.some((shape) => !isIdentityMatrix(shape.matrix))) {
+    throw new Error("Gravity Well clean DOM requires identity model and shape roots");
+  }
+  for (const { plan } of mounted.leafHandles.values()) {
+    if (plan.strategy !== "solid-quad" || plan.width !== 1 || plan.height !== 1) {
+      throw new Error("Gravity Well clean DOM requires prepared 1px solid quads");
+    }
+  }
+  mounted.cameraElement.className = "polycss-camera";
   mounted.cameraElement.removeAttribute("data-polycss-camera-projection");
+  mounted.cameraElement.removeAttribute("style");
+  mounted.sceneElement.className = "polycss-scene";
+  mounted.sceneElement.removeAttribute("style");
+  mounted.modelElement.removeAttribute("class");
   mounted.modelElement.removeAttribute("data-poly-morph-model");
-  for (const element of mounted.shapeElements.values()) element.removeAttribute("data-poly-morph-shape");
+  mounted.modelElement.removeAttribute("style");
+  for (const element of mounted.shapeElements.values()) {
+    element.className = "polycss-mesh";
+    element.removeAttribute("data-poly-morph-shape");
+    element.removeAttribute("style");
+  }
   for (const { element } of mounted.leafHandles.values()) {
+    element.removeAttribute("class");
     element.removeAttribute("data-poly-morph-leaf");
     element.removeAttribute("data-poly-morph-strategy");
     element.removeAttribute("data-poly-morph-resolved-strategy");
+    element.style.removeProperty("backface-visibility");
+    element.style.removeProperty("background-repeat");
+    element.style.removeProperty("height");
+    element.style.removeProperty("opacity");
+    element.style.removeProperty("transform-origin");
+    element.style.removeProperty("visibility");
+    element.style.removeProperty("width");
+  }
+}
+
+function isIdentityMatrix(matrix) {
+  const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  return Array.isArray(matrix) && matrix.length === identity.length &&
+    matrix.every((value, index) => value === identity[index]);
+}
+
+function removeEmptyWrapperStyles(mounted) {
+  for (const element of [
+    mounted.cameraElement,
+    mounted.sceneElement,
+    mounted.modelElement,
+    ...mounted.shapeElements.values(),
+  ]) {
+    if (element.getAttribute("style") === "") element.removeAttribute("style");
   }
 }

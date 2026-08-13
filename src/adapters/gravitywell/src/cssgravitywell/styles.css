@@ -17,6 +17,7 @@ body {
 }
 
 body {
+  position: relative;
   overflow: hidden;
   background: linear-gradient(180deg, #0b1119 0%, #000 100%);
 }
@@ -138,6 +139,27 @@ body > .polycss-camera {
   height: 100%;
   overflow: hidden;
   background: transparent;
+  perspective: 824.2432258363864px;
+}
+
+body > .polycss-camera > .polycss-scene {
+  transform: translateZ(824.2432258363864px) scale(1) rotateX(0deg) rotate(0deg) translate3d(0, 0, 0);
+}
+
+body > .polycss-camera > .polycss-scene > div {
+  position: absolute;
+  transform-style: preserve-3d;
+  transform-origin: 0 0 0;
+}
+
+body > .polycss-camera > .polycss-scene > div > .polycss-mesh > b {
+  width: 1px;
+  height: 1px;
+  opacity: 1;
+  visibility: visible;
+  backface-visibility: visible;
+  background-repeat: no-repeat;
+  transform-origin: 0 0;
 }
 
 .cssgravitywell-error-message {

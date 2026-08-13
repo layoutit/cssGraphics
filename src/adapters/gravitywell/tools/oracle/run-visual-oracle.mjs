@@ -262,7 +262,7 @@ async function captureBrowserRun(browser, url, runRoot) {
     }
     const audit = await page.evaluate(() => ({
       elementCount: document.querySelectorAll(".polycss-camera *").length,
-      leafCount: document.querySelectorAll(".polycss-morph-leaf").length,
+      leafCount: document.querySelectorAll(".polycss-scene > div > .polycss-mesh > b").length,
       canvasCount: document.querySelectorAll("canvas").length,
       svgSceneCount: document.querySelectorAll(".polycss-camera svg").length,
       clipPathCount: [...document.querySelectorAll(".polycss-camera *")].filter((element) => getComputedStyle(element).clipPath !== "none").length,

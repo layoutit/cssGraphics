@@ -38,6 +38,8 @@ test("product shell identifies the route and avoids alternate or paint-heavy ren
   assert.match(client, /rule\.style\.setProperty/u);
   assert.doesNotMatch(client, /CSS\?\.supports|(?:host|camera|scene)\.style\.setProperty/u);
   assert.match(client, /verticalCenterOffsetSourcePixels:\s*-35/u);
+  assert.match(client, /PRESENTATION_ARTWORK_SAFE_FRAME_WIDTH = 640/u);
+  assert.match(client, /host\.clientWidth \/ PRESENTATION_ARTWORK_SAFE_FRAME_WIDTH/u);
   assert.match(client, /runtimeStyleWriteCount:\s*0/u);
   assert.doesNotMatch(client, /querySelector\("#scene"\)|aria-busy/u);
   assert.match(snapshotMount, /host\.append\(mountedCamera\)/u);

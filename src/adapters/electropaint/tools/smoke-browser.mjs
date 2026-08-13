@@ -11,14 +11,14 @@ const capture = process.argv.includes("--capture");
 const deploy = process.argv.includes("--deploy");
 const useFirefox = process.argv.includes("--firefox");
 const presentationExtremeStates = Object.freeze({
-  "kent-seed-01": Object.freeze([32_714, 20_382]),
-  "kent-seed-02": Object.freeze([62_653, 45_447]),
-  "kent-seed-03": Object.freeze([51_954, 55_639]),
-  "kent-seed-04": Object.freeze([21_792, 3_144]),
-  "kent-seed-05": Object.freeze([17_138, 46_314]),
-  "kent-seed-06": Object.freeze([15_623, 18]),
-  "kent-seed-07": Object.freeze([39_707, 9_052]),
-  "kent-seed-08": Object.freeze([23_311, 28_913]),
+  "kent-seed-01": Object.freeze([32_714, 20_382, 16_437, 4_540]),
+  "kent-seed-02": Object.freeze([62_653, 45_447, 31_076, 15_189]),
+  "kent-seed-03": Object.freeze([51_954, 55_639, 45_162, 54_865]),
+  "kent-seed-04": Object.freeze([21_792, 3_144, 19_415, 43_357]),
+  "kent-seed-05": Object.freeze([17_138, 46_314, 36_446, 36_456]),
+  "kent-seed-06": Object.freeze([15_623, 18, 13_873, 63_483]),
+  "kent-seed-07": Object.freeze([39_707, 9_052, 56_164, 42_195]),
+  "kent-seed-08": Object.freeze([23_311, 28_913, 63_040, 57_175]),
 });
 const port = await freePort();
 let output = "";
@@ -147,6 +147,8 @@ try {
     const desktopExtremeBounds = await measureExtremeBounds(page, extremeStates);
     await page.setViewportSize({ width: 844, height: 390 });
     const landscapeExtremeBounds = await measureExtremeBounds(page, extremeStates);
+    await page.setViewportSize({ width: 390, height: 844 });
+    const portraitExtremeBounds = await measureExtremeBounds(page, extremeStates);
     if (pageErrors.length > 0 || evidence.quadCount !== 40 || evidence.perQuadWrapperCount !== 0 ||
         evidence.nestedQuadCount !== 0 || evidence.legacySceneHostCount !== 0 ||
         evidence.directCameraCount !== 1 ||
@@ -168,7 +170,11 @@ try {
         evidence.cameraPerspective !== "1000px" ||
         Math.abs(Number.parseFloat(evidence.cameraScale) - (268 / 311)) > 0.000_01 ||
         desktopExtremeBounds.top < 0 || desktopExtremeBounds.bottom > 540 ||
+        desktopExtremeBounds.left < 0 || desktopExtremeBounds.right > 960 ||
         landscapeExtremeBounds.top < 0 || landscapeExtremeBounds.bottom > 390 ||
+        landscapeExtremeBounds.left < 0 || landscapeExtremeBounds.right > 844 ||
+        portraitExtremeBounds.top < 0 || portraitExtremeBounds.bottom > 844 ||
+        portraitExtremeBounds.left < 0 || portraitExtremeBounds.right > 390 ||
         evidence.stats.player.runtimeGeometryConstructionCount !== 0 ||
         evidence.stats.player.runtimeMatrixCalculationCount !== 0 ||
         evidence.stats.player.runtimeColorCalculationCount !== 0 ||
@@ -229,6 +235,7 @@ try {
         evidence.stats.scene.retainedQuadCount !== 40 ||
         evidence.stats.scene.retainedPerQuadWrapperCount !== 0 ||
         evidence.stats.presentation.verticalCenterOffsetSourcePixels !== -35 ||
+        evidence.stats.presentation.artworkSafeFrameWidth !== 640 ||
         evidence.stats.presentation.resizeCount < 1 ||
         evidence.stats.presentation.runtimeStyleWriteCount !== 0 ||
         evidence.stats.presentation.runtimeStylesheetRuleWriteCount < 1) {
@@ -250,6 +257,7 @@ try {
       selectedVariantId,
       desktopExtremeBounds,
       landscapeExtremeBounds,
+      portraitExtremeBounds,
       screenshotPath,
     }, null, 2));
   } finally {
@@ -263,16 +271,20 @@ async function measureExtremeBounds(page, stateIndices) {
   return page.evaluate(async (indices) => {
     const api = window.__cssElectropaint;
     const quads = [...document.querySelectorAll(".polycss-scene > b")];
+    let left = Infinity;
     let top = Infinity;
+    let right = -Infinity;
     let bottom = -Infinity;
     for (const stateIndex of indices) {
       await api.setState(stateIndex);
       await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
       const rectangles = quads.map((quad) => quad.getBoundingClientRect());
+      left = Math.min(left, ...rectangles.map((rectangle) => rectangle.left));
       top = Math.min(top, ...rectangles.map((rectangle) => rectangle.top));
+      right = Math.max(right, ...rectangles.map((rectangle) => rectangle.right));
       bottom = Math.max(bottom, ...rectangles.map((rectangle) => rectangle.bottom));
     }
-    return { top, bottom, viewportHeight: innerHeight };
+    return { left, top, right, bottom, viewportWidth: innerWidth, viewportHeight: innerHeight };
   }, stateIndices);
 }
 

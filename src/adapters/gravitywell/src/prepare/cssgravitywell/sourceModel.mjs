@@ -32,8 +32,13 @@ export const CSSGRAVITYWELL_SEEDS = Object.freeze(Array.from(
   (_, index) => CSSGRAVITYWELL_SEED + index * 104_729,
 ));
 export const PREPARED_FRAME_COUNT = 240;
+export const PREPARED_MAXIMUM_ACTIVE_WELL_COUNT = 2;
+export const PREPARED_MINIMUM_WELL_FRAME_SPEED = 1;
+export const PREPARED_MAXIMUM_WELL_FRAME_SPEED = 1.6;
 export const PREPARED_FOG_LEVELS = 32;
+export const PREPARED_OPACITY_DEPTH_LEVELS = 16;
 export const PREPARED_LINE_COVERAGE = 0.6;
+export const PREPARED_MAXIMUM_DEPTH_OPACITY_REDUCTION = 0.75;
 export const PREPARED_TRANSITION_FRAME_COUNT = 16;
 export const PREPARED_FLAT_HOLD_FRAME_COUNT = 4;
 export const PREPARED_DRAIN_FRAME_BUDGET = 60;
@@ -49,11 +54,7 @@ export function buildPreparedGravityWellStates({
   const rng = createYaRandom(seed);
   const gridWidth = Math.max(2, Math.trunc((SOURCE.resolutionBase * SOURCE.resolution) / SOURCE.gridSegment));
   const sourceExtent = (gridWidth - 1) * SOURCE.gridSegment;
-  const stars = Array.from({ length: SOURCE.count }, (_, index) => {
-    const star = newStar({ rng, index, gridWidth });
-    star.y = rng.frand(star.ro * 2 + gridWidth * SOURCE.gridSegment) - star.ro;
-    return star;
-  });
+  const stars = newPreparedStars({ rng, gridWidth });
   const trackballQuaternion = trackball(
     0,
     0,
@@ -93,11 +94,7 @@ export function buildPreparedGravityWellBankStates({
   const rng = createYaRandom(seed);
   const gridWidth = Math.max(2, Math.trunc((SOURCE.resolutionBase * SOURCE.resolution) / SOURCE.gridSegment));
   const sourceExtent = (gridWidth - 1) * SOURCE.gridSegment;
-  const stars = Array.from({ length: SOURCE.count }, (_, index) => {
-    const star = newStar({ rng, index, gridWidth });
-    star.y = rng.frand(star.ro * 2 + gridWidth * SOURCE.gridSegment) - star.ro;
-    return star;
-  });
+  const stars = newPreparedStars({ rng, gridWidth });
   const trackballQuaternion = trackball(
     0,
     0,
@@ -160,28 +157,43 @@ export function buildPreparedGravityWellTimeline(state, {
   }
   const flatDepths = Object.freeze(Array(state.gridWidth ** 2).fill(0));
   const frames = [];
-  const append = (phase, sourceFrameIndex, depths) => {
+  const append = (phase, sourceFrameIndex, depths, opacityDepths) => {
     frames.push(Object.freeze({
       frameIndex: frames.length,
       phase,
       sourceFrameIndex,
       depths,
+      opacityDepths,
     }));
   };
-  for (let index = 0; index < flatHoldFrameCount; index += 1) append("flat-in", null, flatDepths);
+  for (let index = 0; index < flatHoldFrameCount; index += 1) {
+    append("flat-in", null, flatDepths, flatDepths);
+  }
   for (let index = 1; index < transitionFrameCount; index += 1) {
     const weight = smoothstep(index / transitionFrameCount);
-    append("rise", 0, scaleDepths(state.frames[0].depths, weight));
+    append(
+      "rise",
+      0,
+      scaleDepths(state.frames[0].depths, weight),
+      scaleDepths(state.frames[0].opacityDepths, weight),
+    );
   }
   const sourceFrameStartIndex = frames.length;
   for (const frame of state.frames) {
     const isSource = frame.frameIndex < state.sourceFrameCount;
-    append(isSource ? "source" : "drain", isSource ? frame.frameIndex : null, frame.depths);
+    append(
+      isSource ? "source" : "drain",
+      isSource ? frame.frameIndex : null,
+      frame.depths,
+      frame.opacityDepths,
+    );
   }
   const sourceFrameEndIndex = sourceFrameStartIndex + state.sourceFrameCount - 1;
   const drainFrameStartIndex = sourceFrameEndIndex + 1;
   const allWellsCompleteFrameIndex = frames.length - 1;
-  for (let index = 0; index < flatHoldFrameCount; index += 1) append("flat-out", null, flatDepths);
+  for (let index = 0; index < flatHoldFrameCount; index += 1) {
+    append("flat-out", null, flatDepths, flatDepths);
+  }
   return Object.freeze({
     schema: "cssgravitywell-prepared-timeline@1",
     frameCount: frames.length,
@@ -230,8 +242,14 @@ export function buildGridSegments(gridWidth) {
   return Object.freeze(segments);
 }
 
-export function preparedGridLineQuads(state, depths, lineWidthPixels = 2) {
+export function preparedGridLineQuads(state, depths, lineWidthPixels = 2, opacityDepths = null) {
   const positions = preparedWorldPositions(state, depths);
+  const preparedOpacityDepths = opacityDepths ?? depths.map(
+    (depth) => Math.min(1, Math.max(0, depth / SOURCE.maximumMassColor)),
+  );
+  if (preparedOpacityDepths.length !== depths.length) {
+    throw new RangeError("Gravity Well opacity-depth grid is incomplete");
+  }
   const modelView = nativeModelViewMatrix(state.trackballQuaternion);
   const perspective = 600 / (2 * Math.tan(20 * Math.PI / 180));
   return Object.freeze(buildGridSegments(state.gridWidth).map(([firstIndex, secondIndex]) => {
@@ -260,6 +278,7 @@ export function preparedGridLineQuads(state, depths, lineWidthPixels = 2) {
       width: 1,
       height: 1,
       colorDepth: (depths[firstIndex] + depths[secondIndex]) / 2,
+      opacityDepth: (preparedOpacityDepths[firstIndex] + preparedOpacityDepths[secondIndex]) / 2,
       eyeDepth: -(first[2] + second[2]) / 2,
     });
   }));
@@ -279,19 +298,27 @@ export function preparedColorRamp() {
 }
 
 export function preparedFoggedColorPalette() {
-  const source = preparedColorRamp().map(parseRgb);
-  return Object.freeze(source.flatMap((rgb) => Array.from({ length: PREPARED_FOG_LEVELS }, (_, fogLevel) => {
-    const factor = (fogLevel / (PREPARED_FOG_LEVELS - 1)) * PREPARED_LINE_COVERAGE;
-    return `rgb(${rgb.join(" ")} / ${cssNumber(factor)})`;
-  })));
+  const rgb = [0, 255, 0];
+  return Object.freeze(Array.from(
+    { length: PREPARED_OPACITY_DEPTH_LEVELS },
+    (_, opacityDepthLevel) => Array.from({ length: PREPARED_FOG_LEVELS }, (_, fogLevel) => {
+      const normalizedDepth = opacityDepthLevel / (PREPARED_OPACITY_DEPTH_LEVELS - 1);
+      const depthOpacity = 1 - smoothstep(normalizedDepth) * PREPARED_MAXIMUM_DEPTH_OPACITY_REDUCTION;
+      const factor = (fogLevel / (PREPARED_FOG_LEVELS - 1)) * PREPARED_LINE_COVERAGE * depthOpacity;
+      return `rgb(${rgb.join(" ")} / ${cssNumber(factor)})`;
+    }),
+  ).flat());
 }
 
-export function preparedFoggedColorIndex(depth, eyeDepth) {
-  const colorIndex = preparedDepthColorRow(depth);
+export function preparedFoggedColorIndex(_depth, opacityDepth, eyeDepth) {
+  const opacityDepthIndex = Math.max(0, Math.min(
+    PREPARED_OPACITY_DEPTH_LEVELS - 1,
+    Math.round(opacityDepth * (PREPARED_OPACITY_DEPTH_LEVELS - 1)),
+  ));
   const density = 0.005;
   const fogFactor = Math.exp(-((density * Math.max(0, eyeDepth)) ** 2));
   const fogLevel = Math.max(0, Math.min(PREPARED_FOG_LEVELS - 1, Math.round(fogFactor * (PREPARED_FOG_LEVELS - 1))));
-  return colorIndex * PREPARED_FOG_LEVELS + fogLevel;
+  return opacityDepthIndex * PREPARED_FOG_LEVELS + fogLevel;
 }
 
 export function nativeModelViewMatrix(quaternion) {
@@ -315,13 +342,31 @@ export function nativeModelViewMatrix(quaternion) {
 
 function captureGravityWellFrame(stars, gridWidth, frameIndex, activeStars = null, wellWeights = null) {
   const depths = [];
+  const contributionsByPoint = [];
+  const maximumContributions = Array(stars.length).fill(0);
   for (let yIndex = 0; yIndex < gridWidth; yIndex += 1) {
     const y = yIndex * SOURCE.gridSegment;
     for (let xIndex = 0; xIndex < gridWidth; xIndex += 1) {
       const x = xIndex * SOURCE.gridSegment;
-      depths.push(gravityAt(stars, x, y, activeStars, wellWeights));
+      const contributions = stars.map((star, starIndex) => {
+        if (activeStars && !activeStars[starIndex]) return 0;
+        const contribution = gravityContributionAt(star, x, y);
+        maximumContributions[starIndex] = Math.max(maximumContributions[starIndex], contribution);
+        return contribution;
+      });
+      contributionsByPoint.push(contributions);
+      depths.push(contributions.reduce(
+        (total, contribution, starIndex) => total + contribution * (wellWeights?.[starIndex] ?? 1),
+        0,
+      ));
     }
   }
+  const opacityDepths = contributionsByPoint.map((contributions) => Math.min(1, Math.max(
+    0,
+    ...contributions.map((contribution, starIndex) => maximumContributions[starIndex] === 0
+      ? 0
+      : (contribution / maximumContributions[starIndex]) * (wellWeights?.[starIndex] ?? 1)),
+  )));
   const footprintDepths = stars.map((star, starIndex) => {
     if (activeStars && !activeStars[starIndex]) return 0;
     const starWeight = wellWeights?.[starIndex] ?? 1;
@@ -338,6 +383,7 @@ function captureGravityWellFrame(stars, gridWidth, frameIndex, activeStars = nul
   return Object.freeze({
     frameIndex,
     depths: Object.freeze(depths),
+    opacityDepths: Object.freeze(opacityDepths),
     stars: Object.freeze(stars.map((star, starIndex) => Object.freeze({
       x: star.x,
       y: star.y,
@@ -348,22 +394,14 @@ function captureGravityWellFrame(stars, gridWidth, frameIndex, activeStars = nul
   });
 }
 
-function gravityAt(stars, x, y, activeStars = null, wellWeights = null) {
-  let total = 0;
-  for (let starIndex = 0; starIndex < stars.length; starIndex += 1) {
-    if (activeStars && !activeStars[starIndex]) continue;
-    const star = stars[starIndex];
-    const weight = wellWeights?.[starIndex] ?? 1;
-    if (weight <= 0) continue;
-    const dx = star.x - x;
-    const dy = star.y - y;
-    const distanceSquared = dx * dx + dy * dy;
-    if (distanceSquared > star.ro2) continue;
-    total += (distanceSquared < star.ri2
-      ? star.surfaceGravity
-      : star.mass / Math.max(distanceSquared, 1e-12)) * weight;
-  }
-  return total;
+function gravityContributionAt(star, x, y) {
+  const dx = star.x - x;
+  const dy = star.y - y;
+  const distanceSquared = dx * dx + dy * dy;
+  if (distanceSquared > star.ro2) return 0;
+  return distanceSquared < star.ri2
+    ? star.surfaceGravity
+    : star.mass / Math.max(distanceSquared, 1e-12);
 }
 
 function newStar({ rng, index, gridWidth }) {
@@ -388,6 +426,32 @@ function newStar({ rng, index, gridWidth }) {
   };
 }
 
+function newPreparedStars({ rng, gridWidth }) {
+  const stars = Array.from({ length: SOURCE.count }, (_, index) => {
+    const star = newStar({ rng, index, gridWidth });
+    star.y = rng.frand(star.ro * 2 + gridWidth * SOURCE.gridSegment) - star.ro;
+    return star;
+  }).slice(0, PREPARED_MAXIMUM_ACTIVE_WELL_COUNT);
+  stars.forEach((star, index) => {
+    isolatePreparedWell(star, index, gridWidth);
+    star.y = initialPreparedWellY(index, gridWidth);
+  });
+  return stars;
+}
+
+function isolatePreparedWell(star, index, gridWidth) {
+  star.x = gridWidth * SOURCE.gridSegment * (index === 0 ? 0.32 : 0.68);
+  star.dx = (index === 0 ? -1 : 1) * Math.abs(star.dx);
+  const normalizedSourceSpeed = (star.dy * SOURCE.resolution - 0.1) / 0.6;
+  const preparedFrameSpeed = PREPARED_MINIMUM_WELL_FRAME_SPEED + normalizedSourceSpeed *
+    (PREPARED_MAXIMUM_WELL_FRAME_SPEED - PREPARED_MINIMUM_WELL_FRAME_SPEED);
+  star.dy = preparedFrameSpeed / (SOURCE.speed * SOURCE.speedBase * SOURCE.resolution);
+}
+
+function initialPreparedWellY(index, gridWidth) {
+  return gridWidth * SOURCE.gridSegment * (index === 0 ? 0.3 : 0.65);
+}
+
 function moveStars(stars, rng, gridWidth) {
   const width = gridWidth * SOURCE.gridSegment;
   const height = width;
@@ -398,6 +462,7 @@ function moveStars(stars, rng, gridWidth) {
     star.y += star.dy * offset;
     if (star.x < -star.ro || star.y < -star.ro || star.x >= width + star.ro || star.y >= height + star.ro) {
       const replacement = newStar({ rng, index, gridWidth });
+      isolatePreparedWell(replacement, index, gridWidth);
       Object.assign(star, replacement, { y: -replacement.ro });
     }
   }

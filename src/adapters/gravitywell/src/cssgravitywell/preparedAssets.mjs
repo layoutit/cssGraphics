@@ -23,7 +23,7 @@ export async function loadPreparedGravityWellCatalog() {
       catalog.bankCount !== 24 || catalog.entries?.length !== catalog.bankCount ||
       catalog.colorPaletteAsset?.distribution !== "embedded-prepared-bank-catalog" ||
       catalog.colorPaletteAsset.encoding !== "gzip-newline-utf8-prepared-css-colors" ||
-      catalog.colorPaletteAsset.entryCount !== 4_096 ||
+      catalog.colorPaletteAsset.entryCount !== 512 ||
       catalog.entries.some((entry, index) => entry.index !== index ||
         !Number.isSafeInteger(entry.seed) || entry.seed <= 0 || typeof entry.sceneUrl !== "string" ||
         entry.flatStateSha256 !== catalog.flatStateSha256)) {
@@ -698,7 +698,7 @@ function createPreparedTransformBlockDecoder(bytes, descriptor, playback, loaded
   if (playback.colorAsset.distribution !== "prepared-transform-blocks" ||
       playback.colorAsset.encoding !== "uint16le-block-keyframe-then-frame-major-sparse-fogged-palette-index" ||
       playback.colorAsset.paletteSource !== "prepared-bank-catalog" ||
-      playback.colorAsset.palette?.length !== 4_096 ||
+      playback.colorAsset.palette?.length !== 512 ||
       colorValues.length !== descriptor.colorValueCount) {
     throw new Error(`Transform block ${descriptor.index} prepared color values drifted`);
   }

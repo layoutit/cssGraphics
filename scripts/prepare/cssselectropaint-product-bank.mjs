@@ -12,7 +12,7 @@ const lock = JSON.parse(await readFile(
   "utf8",
 ));
 if (lock.schema !== "cssselectropaint-prepared-bank-lock@1" ||
-    lock.variantCount !== 4 || lock.timelineStateCountPerVariant !== 64_000 ||
+    lock.variantCount !== 8 || lock.timelineStateCountPerVariant !== 64_000 ||
     lock.timelineChunkCountPerVariant !== 128 || lock.retainedQuadCount !== 40 ||
     !Number.isSafeInteger(lock.archiveByteLength) || lock.archiveByteLength <= 0 ||
     !/^[a-f0-9]{64}$/u.test(lock.archiveSha256)) {

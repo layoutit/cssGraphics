@@ -1,11 +1,11 @@
 {
   "schema": "cssselectropaint-prepared-bank-lock@1",
-  "tag": "cssselectropaint-product-bank-v1",
-  "asset": "cssselectropaint-product-bank-v1.tar.gz",
-  "url": "https://github.com/layoutit/cssGraphics/releases/download/cssselectropaint-product-bank-v1/cssselectropaint-product-bank-v1.tar.gz",
-  "archiveByteLength": 150954997,
-  "archiveSha256": "0b80276362690f9d7b8a816064d125c0069aad17d37833d95cd22359334f92b3",
-  "variantCount": 4,
+  "tag": "cssselectropaint-product-bank-v3",
+  "asset": "cssselectropaint-product-bank-v3.tar.gz",
+  "url": "https://github.com/layoutit/cssGraphics/releases/download/cssselectropaint-product-bank-v3/cssselectropaint-product-bank-v3.tar.gz",
+  "archiveByteLength": 343741808,
+  "archiveSha256": "48fccaca88e747673ae647398bdfdfa3ec7e7de834da9139e911aaf9ddb1154d",
+  "variantCount": 8,
   "timelineStateCountPerVariant": 64000,
   "timelineChunkCountPerVariant": 128,
   "retainedQuadCount": 40

@@ -2,6 +2,15 @@
   "schema": "cssgraphics.projects@2",
   "projects": [
     {
+      "number": 4,
+      "id": "menger",
+      "name": "Menger",
+      "route": "/menger/",
+      "preview": "/landing/menger.webp",
+      "source": "XScreenSaver",
+      "date": "2026-08-13"
+    },
+    {
       "number": 3,
       "id": "maze",
       "name": "Maze",

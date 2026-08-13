@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(siteRoot, "..");
 const expectedProjects = [
-  ["electropaint", 5, "Kent Rosenkoetter", "2026-08-10"],
+  ["electropaint", 5, "David Tristram", "2026-08-10"],
   ["menger", 4, "XScreenSaver", "2026-08-13"],
   ["maze", 3, "XScreenSaver", "2026-08-09"],
   ["gears", 2, "XScreenSaver", "2026-08-07"],

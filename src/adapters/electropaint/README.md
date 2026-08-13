@@ -1,7 +1,9 @@
 # cssElectroPaint
 
-This adapter prepares the Kent Rosenkoetter ElectroPaint motion model into eight
-deterministic 64,000-state PolyCSS screensavers. One variant is selected
+This adapter prepares ElectroPaint, originally written by David Tristram, into
+eight deterministic 64,000-state PolyCSS screensavers. Its prepared motion
+model is source-bound through the Kent Rosenkoetter and Douglas McInnes macOS
+port and two browser ports. One variant is selected
 uniformly before any variant asset fetch. It keeps 40 stable retained CSS quads
 and publishes the source 60 Hz sequence. Each 17:46.7 timeline is stored as 128
 continuous 500-frame gzip chunks. Four chunks are fetched, parsed, and decoded

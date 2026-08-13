@@ -197,7 +197,7 @@ async function measureMutationAudit(page, durationMilliseconds) {
         }
       }
     });
-    observer.observe(document.querySelector("#scene"), {
+    observer.observe(document.body, {
       subtree: true,
       attributes: true,
       attributeFilter: ["style", "class"],

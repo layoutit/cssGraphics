@@ -4,6 +4,7 @@ import { mountPreparedElectropaintSnapshot } from "./polycssScene.mjs";
 import { createPreparedElectropaintPlayer } from "./preparedPlayback.mjs";
 
 const SOURCE_VIEWPORT = Object.freeze({ width: 960, height: 540 });
+const PRESENTATION_ARTWORK_SAFE_FRAME_WIDTH = 640;
 const PRESENTATION_RULE_MARKER = "--cssselectropaint-presentation-rule";
 
 export async function mountElectropaintClient(body = document.body) {
@@ -66,7 +67,10 @@ function mountPresentation(host) {
   let resizeCount = 0;
   let runtimeStylesheetRuleWriteCount = 0;
   const resize = () => {
-    const scale = Math.max(0.01, Math.min(host.clientWidth / 960, (host.clientHeight / 2 - 2) / 311));
+    const scale = Math.max(0.01, Math.min(
+      host.clientWidth / PRESENTATION_ARTWORK_SAFE_FRAME_WIDTH,
+      (host.clientHeight / 2 - 2) / 311,
+    ));
     rule.style.setProperty("--cssselectropaint-presentation-scale", String(scale));
     rule.style.setProperty("--cssselectropaint-inverse-presentation-scale", String(1 / scale));
     rule.style.setProperty("--cssselectropaint-presentation-y", `${35 * scale}px`);
@@ -79,6 +83,7 @@ function mountPresentation(host) {
   return Object.freeze({
     stats: () => Object.freeze({
       sourceViewport: SOURCE_VIEWPORT,
+      artworkSafeFrameWidth: PRESENTATION_ARTWORK_SAFE_FRAME_WIDTH,
       policy: "stylesheet-responsive-high-composition-with-top-safe-frame",
       verticalCenterOffsetSourcePixels: -35,
       resizeCount,

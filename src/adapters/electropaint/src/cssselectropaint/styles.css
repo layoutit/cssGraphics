@@ -133,6 +133,15 @@ body.loading::after {
 }
 
 #scene {
+  --cssselectropaint-safe-frame-y: 32px;
+  --cssselectropaint-presentation-scale: min(
+    calc(100dvw / 960px),
+    calc((100dvh - var(--cssselectropaint-safe-frame-y)) / 540px)
+  );
+  --cssselectropaint-inverse-presentation-scale: calc(
+    1 / var(--cssselectropaint-presentation-scale)
+  );
+
   position: absolute;
   inset: 0;
   overflow: hidden;
@@ -143,12 +152,18 @@ body.loading::after {
 #scene > .polycss-camera {
   position: absolute !important;
   left: 50% !important;
-  top: calc(50% + var(--cssselectropaint-presentation-y, 0px)) !important;
+  top: 50% !important;
   width: 960px !important;
   height: 540px !important;
   translate: -50% -50%;
-  scale: var(--cssselectropaint-presentation-scale, 1);
+  scale: var(--cssselectropaint-presentation-scale);
   transform-origin: 50% 50%;
+  perspective: 1000px;
+  perspective-origin: 50% 75%;
+}
+
+#scene > .polycss-camera > .polycss-scene {
+  transform: translateY(135px) rotateX(45deg);
 }
 
 .cssselectropaint-error-message {

@@ -9,6 +9,16 @@ import { adapterRoot, repositoryRoot } from "../src/prepare/cssselectropaint/pat
 
 const capture = process.argv.includes("--capture");
 const deploy = process.argv.includes("--deploy");
+const presentationExtremeStates = Object.freeze({
+  "kent-seed-01": Object.freeze([32_714, 20_382]),
+  "kent-seed-02": Object.freeze([62_653, 45_447]),
+  "kent-seed-03": Object.freeze([51_954, 55_639]),
+  "kent-seed-04": Object.freeze([21_792, 3_144]),
+  "kent-seed-05": Object.freeze([17_138, 46_314]),
+  "kent-seed-06": Object.freeze([15_623, 18]),
+  "kent-seed-07": Object.freeze([39_707, 9_052]),
+  "kent-seed-08": Object.freeze([23_311, 28_913]),
+});
 const port = await freePort();
 let output = "";
 const server = spawn("pnpm", deploy ? [
@@ -83,6 +93,8 @@ try {
       await api.setState(359);
       const rectangles = quads.map((quad) => quad.getBoundingClientRect());
       const hostRectangle = document.querySelector("#scene").getBoundingClientRect();
+      const camera = document.querySelector(".polycss-camera");
+      const scene = document.querySelector(".polycss-scene");
       const visualBounds = {
         left: Math.min(...rectangles.map((rectangle) => rectangle.left)),
         top: Math.min(...rectangles.map((rectangle) => rectangle.top)),
@@ -111,6 +123,10 @@ try {
           rectangle.left < innerWidth && rectangle.top < innerHeight).length,
         visualBounds,
         hostBounds: hostRectangle.toJSON(),
+        cameraInlineStyle: camera.getAttribute("style"),
+        sceneInlineStyle: scene.getAttribute("style"),
+        cameraPerspective: getComputedStyle(camera).perspective,
+        cameraScale: getComputedStyle(camera).scale,
         sparseStepDelta,
         longRunStepDelta,
         middleStepDelta,
@@ -120,6 +136,12 @@ try {
         stats: api.stats(),
       };
     });
+    const selectedVariantId = await page.evaluate(() => window.__cssElectropaint.selectedVariant.id);
+    const extremeStates = presentationExtremeStates[selectedVariantId];
+    if (!extremeStates) throw new Error(`ElectroPaint variant has no presentation extrema: ${selectedVariantId}`);
+    const desktopExtremeBounds = await measureExtremeBounds(page, extremeStates);
+    await page.setViewportSize({ width: 844, height: 390 });
+    const landscapeExtremeBounds = await measureExtremeBounds(page, extremeStates);
     if (pageErrors.length > 0 || evidence.quadCount !== 40 || evidence.perQuadWrapperCount !== 0 ||
         evidence.nestedQuadCount !== 0 ||
         evidence.canvasCount !== 0 || evidence.svgInSceneCount !== 0 ||
@@ -133,8 +155,13 @@ try {
         evidence.visualBounds.right - evidence.visualBounds.left < 25 ||
         evidence.visualBounds.right - evidence.visualBounds.left > 960 ||
         evidence.visualBounds.bottom - evidence.visualBounds.top < 25 ||
-        evidence.visualBounds.bottom - evidence.visualBounds.top > 540 || !evidence.stable ||
-        Math.abs((evidence.visualBounds.top + evidence.visualBounds.bottom) / 2 - 270) > 30 ||
+        evidence.visualBounds.bottom - evidence.visualBounds.top > 540 ||
+        evidence.visualBounds.top < 0 || evidence.visualBounds.bottom > 540 || !evidence.stable ||
+        evidence.cameraInlineStyle !== null || evidence.sceneInlineStyle !== null ||
+        evidence.cameraPerspective !== "1000px" ||
+        Math.abs(Number.parseFloat(evidence.cameraScale) - (508 / 540)) > 0.000_01 ||
+        desktopExtremeBounds.top < 0 || desktopExtremeBounds.bottom > 540 ||
+        landscapeExtremeBounds.top < 0 || landscapeExtremeBounds.bottom > 390 ||
         evidence.stats.player.runtimeGeometryConstructionCount !== 0 ||
         evidence.stats.player.runtimeMatrixCalculationCount !== 0 ||
         evidence.stats.player.runtimeColorCalculationCount !== 0 ||
@@ -194,7 +221,9 @@ try {
         evidence.stats.scene.runtimeDomGrowth !== false ||
         evidence.stats.scene.retainedQuadCount !== 40 ||
         evidence.stats.scene.retainedPerQuadWrapperCount !== 0 ||
-        evidence.stats.presentation.verticalCenterOffsetSourcePixels !== -45) {
+        evidence.stats.presentation.verticalCenterOffsetSourcePixels !== 0 ||
+        evidence.stats.presentation.resizeCount !== 0 ||
+        evidence.stats.presentation.runtimeStyleWriteCount !== 0) {
       throw new Error(`ElectroPaint browser smoke failed: ${JSON.stringify({ pageErrors, evidence }, null, 2)}`);
     }
     let screenshotPath = null;
@@ -205,12 +234,38 @@ try {
       await mkdir(resolve(repositoryRoot, "captures", "electropaint"), { recursive: true });
       await page.screenshot({ path: screenshotPath });
     }
-    console.log(JSON.stringify({ status: "ready", deploy, pageErrors, evidence, screenshotPath }, null, 2));
+    console.log(JSON.stringify({
+      status: "ready",
+      deploy,
+      pageErrors,
+      evidence,
+      selectedVariantId,
+      desktopExtremeBounds,
+      landscapeExtremeBounds,
+      screenshotPath,
+    }, null, 2));
   } finally {
     await browser.close();
   }
 } finally {
   server.kill("SIGTERM");
+}
+
+async function measureExtremeBounds(page, stateIndices) {
+  return page.evaluate(async (indices) => {
+    const api = window.__cssElectropaint;
+    const quads = [...document.querySelectorAll(".polycss-scene > b")];
+    let top = Infinity;
+    let bottom = -Infinity;
+    for (const stateIndex of indices) {
+      await api.setState(stateIndex);
+      await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
+      const rectangles = quads.map((quad) => quad.getBoundingClientRect());
+      top = Math.min(top, ...rectangles.map((rectangle) => rectangle.top));
+      bottom = Math.max(bottom, ...rectangles.map((rectangle) => rectangle.bottom));
+    }
+    return { top, bottom, viewportHeight: innerHeight };
+  }, stateIndices);
 }
 
 function freePort() {

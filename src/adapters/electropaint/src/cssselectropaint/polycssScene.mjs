@@ -18,6 +18,7 @@ export function mountPreparedElectropaintSnapshot({ host, sceneData, snapshotHtm
       scene.querySelector(":scope > div, :scope > b > *")) {
     throw new Error("Prepared ElectroPaint retained graph is incomplete");
   }
+  validateAndRemoveStaticPresentationStyles(camera, scene, sceneData);
   removePreparedSnapshotStyles();
   for (const style of styles) {
     const imported = document.importNode(style, true);
@@ -65,6 +66,19 @@ export function mountPreparedElectropaintSnapshot({ host, sceneData, snapshotHtm
       removePreparedSnapshotStyles();
     },
   });
+}
+
+function validateAndRemoveStaticPresentationStyles(camera, scene, sceneData) {
+  const expectedPerspective = `${sceneData.camera?.perspective}px`;
+  const expectedRootTransform = sceneData.playback?.rootTransform;
+  if ((camera.style.perspective && camera.style.perspective !== expectedPerspective) ||
+      (scene.style.transform && scene.style.transform !== expectedRootTransform)) {
+    throw new Error("Prepared ElectroPaint snapshot presentation drifted");
+  }
+  camera.style.removeProperty("perspective");
+  scene.style.removeProperty("transform");
+  if (camera.getAttribute("style") === "") camera.removeAttribute("style");
+  if (scene.getAttribute("style") === "") scene.removeAttribute("style");
 }
 
 function removePreparedSnapshotStyles() {

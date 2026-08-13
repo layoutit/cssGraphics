@@ -128,8 +128,10 @@ function sanitizeSnapshot(html, playback, flattenedQuadBox) {
     "outline-offset:0;outline-style:solid}" +
     playback.palette.map((entry, index) =>
       `.polycss-scene .${entry.className}{background-color:${entry.fill};outline-color:${entry.outline}}`).join("");
-  camera.style.perspective = perspective;
-  scene.style.transform = playback.rootTransform;
+  camera.style.removeProperty("perspective");
+  scene.style.removeProperty("transform");
+  if (camera.getAttribute("style") === "") camera.removeAttribute("style");
+  if (scene.getAttribute("style") === "") scene.removeAttribute("style");
   const fragment = parsed.createDocumentFragment();
   for (let index = 0; index < leaves.length; index += 1) {
     const transform = roots[index].style.transform;

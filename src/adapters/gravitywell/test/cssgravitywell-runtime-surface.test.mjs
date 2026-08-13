@@ -72,6 +72,10 @@ test("product runtime has one retained DOM renderer and no forbidden geometry ro
   assert.match(source, /changes\.transformIndices/u);
   assert.match(source, /changes\.colorIndices/u);
   assert.doesNotMatch(source, /backface-visibility:\s*visible\s*!important/u);
+  assert.doesNotMatch(source, /document\.body\.dataset/u);
+  assert.match(source, /element\.removeAttribute\("class"\)/u);
+  assert.match(source, /element\.style\.removeProperty\("backface-visibility"\)/u);
+  assert.match(source, /body > \.polycss-camera > \.polycss-scene > div > \.polycss-mesh > b/u);
   assert.match(source, /runtimeGeometryConstructionCount:\s*0/u);
   assert.match(source, /runtimeAffineEvaluationCount:\s*0/u);
 });

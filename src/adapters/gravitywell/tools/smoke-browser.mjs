@@ -69,7 +69,8 @@ try {
   page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
   page.on("console", (message) => { if (message.type() === "error") pageErrors.push(message.text()); });
   await page.goto(route, { waitUntil: "networkidle" });
-  await page.waitForFunction(() => ["ready", "error"].includes(document.body.dataset.portStatus), null, { timeout: 30_000 });
+  await page.waitForFunction(() => document.body.classList.contains("ready") ||
+    document.body.classList.contains("error"), null, { timeout: 30_000 });
   const initialCompleteBankEvidence = await page.evaluate(() => {
     const stats = globalThis.__cssGravityWellDebug.stats().transformBlocks;
     return {
@@ -83,10 +84,13 @@ try {
   await page.evaluate(() => new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame))));
   const evidence = await page.evaluate(() => {
     const debug = globalThis.__cssGravityWellDebug;
-    const leaves = [...document.querySelectorAll(".polycss-morph-leaf")];
+    const leaves = [...document.querySelectorAll(".polycss-scene > div > .polycss-mesh > b")];
     const sceneElements = [...document.querySelectorAll(".polycss-camera, .polycss-camera *")];
+    const dynamicInlineProperties = new Set(["color", "transform", "visibility"]);
+    const dirtyInlineElements = sceneElements.filter((element) =>
+      [...element.style].some((property) => !dynamicInlineProperties.has(property)));
     return {
-      status: document.body.dataset.portStatus,
+      status: document.body.className,
       ready: debug.ready,
       errors: debug.errors(),
       state: debug.state(),
@@ -96,12 +100,17 @@ try {
       stable: debug.assertStableDomIdentity(),
       retainedLeaves: leaves.length,
       retainedSceneElements: sceneElements.length,
-      retainedShapeRoots: document.querySelectorAll(".polycss-morph-shape").length,
+      retainedShapeRoots: document.querySelectorAll(".polycss-scene > div > .polycss-mesh").length,
       forbiddenCanvasCount: document.querySelectorAll(".polycss-camera canvas").length,
       forbiddenSvgCount: document.querySelectorAll(".polycss-camera svg").length,
       clipPathCount: sceneElements.filter((element) => getComputedStyle(element).clipPath !== "none").length,
       dataAttributeCount: sceneElements.reduce((sum, element) => sum +
         element.getAttributeNames().filter((name) => name.startsWith("data-")).length, 0),
+      bodyAttributeNames: document.body.getAttributeNames(),
+      dirtyInlineElementCount: dirtyInlineElements.length,
+      namedLeafCount: leaves.filter((leaf) => leaf.hasAttribute("class") ||
+        leaf.getAttributeNames().some((name) => name.startsWith("data-"))).length,
+      wrapperInlineStyleCount: sceneElements.slice(0, 4).filter((element) => element.hasAttribute("style")).length,
       preparedColorCount: new Set(leaves.map((leaf) => getComputedStyle(leaf).color)).size,
       visibleBackfaceLeafCount: leaves.filter(
         (leaf) => getComputedStyle(leaf).backfaceVisibility === "visible",
@@ -114,19 +123,17 @@ try {
       shellPath: document.querySelector(".site-wordmark-path")?.textContent ?? "",
       bodyClassName: document.body.className,
       loadingIndicatorContent: getComputedStyle(document.body, "::after").content,
-      activeBankDataset: Number(document.body.dataset.activeBank),
-      activeSeedDataset: Number(document.body.dataset.activeSeed),
     };
   });
   if (pageErrors.length || evidence.errors.length || evidence.status !== "ready" || !evidence.ready ||
       !evidence.stable || evidence.state.sourceFrameIndex !== 120 || !evidence.state.paused ||
       evidence.catalogBankCount !== 24 || evidence.stats.preparedBankCount !== 24 ||
-      evidence.state.activeBankIndex !== evidence.activeBankDataset ||
-      evidence.stats.activeSeed !== evidence.activeSeedDataset ||
       evidence.retainedLeaves !== 1_922 || evidence.retainedSceneElements !== 1_926 ||
       evidence.retainedShapeRoots !== 1 || evidence.forbiddenCanvasCount !== 0 ||
       evidence.forbiddenSvgCount !== 0 || evidence.clipPathCount !== 0 ||
-      evidence.dataAttributeCount !== 0 || evidence.preparedColorCount < 8 ||
+      evidence.dataAttributeCount !== 0 || evidence.bodyAttributeNames.join(",") !== "class" ||
+      evidence.dirtyInlineElementCount !== 0 || evidence.namedLeafCount !== 0 ||
+      evidence.wrapperInlineStyleCount !== 0 || evidence.preparedColorCount < 8 ||
       evidence.visibleBackfaceLeafCount !== evidence.retainedLeaves ||
       evidence.visibleLeafCount < 500 || evidence.shellPath !== "/gravitywell" ||
       evidence.bodyClassName !== "ready" || evidence.loadingIndicatorContent !== "none" ||
@@ -147,7 +154,7 @@ try {
   await page.screenshot({ path: screenshotPath });
   const sparseBlockEvidence = await page.evaluate(async () => {
     const debug = globalThis.__cssGravityWellDebug;
-    const leaves = [...document.querySelectorAll(".polycss-morph-leaf")];
+    const leaves = [...document.querySelectorAll(".polycss-scene > div > .polycss-mesh > b")];
     const blockBoundary = debug.scene().playback.blockFrameCount;
     const targetFrame = blockBoundary + 7;
     const styles = () => leaves.map((leaf) => ({
@@ -197,7 +204,7 @@ try {
   );
   const cycleEvidence = await page.evaluate(async () => {
     const debug = globalThis.__cssGravityWellDebug;
-    const leaves = [...document.querySelectorAll(".polycss-morph-leaf")];
+    const leaves = [...document.querySelectorAll(".polycss-scene > div > .polycss-mesh > b")];
     const { allWellsCompleteFrameIndex, terminalFlatFrameIndex: terminalFrameIndex } = debug.scene().timeline;
     await debug.seek(allWellsCompleteFrameIndex);
     const completionBankIndex = debug.state().activeBankIndex;

@@ -153,7 +153,7 @@ try {
   const worstTransitionPublication = await page.evaluate(async ({ previousFrameIndex, frameIndex }) => {
     const debug = globalThis.__cssGravityWellDebug;
     debug.pause();
-    const leaves = [...document.querySelectorAll(".polycss-morph-leaf")];
+    const leaves = [...document.querySelectorAll(".polycss-scene > div > .polycss-mesh > b")];
     const visibleBackfaceLeafCount = leaves.filter(
       (leaf) => getComputedStyle(leaf).backfaceVisibility === "visible",
     ).length;

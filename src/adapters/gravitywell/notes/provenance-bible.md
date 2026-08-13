@@ -138,6 +138,20 @@ source tick 120 selects 1,151 leaves with no hidden leaf intersecting the
 viewport. This is a documented presentation divergence, not native-raster
 parity.
 
+The real Android compositor could still expose apparent interior breaks even
+with the complete 1,984-segment topology and the conservative square profile.
+The next phone-test candidate therefore closes only prepared square-profile
+selection runs: after viewport intersection and one-frame temporal dilation,
+every segment between the first and last selected segment of each complete grid
+row or column is selected. Whole offscreen tails remain culled. The rule adds no
+DOM or runtime projection work and leaves all non-square desktop profiles on the
+prior selection path. At source tick 120, the 390 by 844 DPR-3 smoke selects
+1,287 leaves; the 960 by 600 desktop smoke still selects the 1,024 by 640
+profile and renders 811 visible leaves in that run. Both report zero hidden
+prepared quads intersecting the viewport. These Chrome gates qualify the
+candidate mechanics and bound its desktop scope; the Android refresh remains
+the required acceptance test.
+
 An earlier 960 by 600, 5.5-second production/candidate streaming trace over the same
 bank reduces current-plus-lookahead prepared CSS string residency from
 25,746,023 to 4,816,407 bytes. The production trace records two 91–95 ms long

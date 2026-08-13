@@ -2,6 +2,7 @@ import {
   CSSGRAVITYWELL_VIEWPORT_DILATION_FRAMES,
   CSSGRAVITYWELL_VIEWPORT_MARGIN_PIXELS,
   CSSGRAVITYWELL_VISIBILITY_ENCODING,
+  CSSGRAVITYWELL_VISIBILITY_SELECTION,
   CSSGRAVITYWELL_VISIBILITY_SCHEMA,
 } from "../prepare/cssgravitywell/visibilitySchedule.mjs";
 import { CSSGRAVITYWELL_TRANSFORM_BLOCK_COUNT } from "./renderContract.mjs";
@@ -495,7 +496,7 @@ async function decodePreparedViewportVisibility(descriptor) {
         : CSSGRAVITYWELL_VISIBILITY_ENCODING) ||
       descriptor.selection !== (legacySquare
         ? "smallest-square-profile-covering-maximum-css-viewport-axis-or-disabled"
-        : "smallest-area-rectangular-profile-covering-css-viewport-or-disabled") ||
+        : CSSGRAVITYWELL_VISIBILITY_SELECTION) ||
       descriptor.marginPixels !== CSSGRAVITYWELL_VIEWPORT_MARGIN_PIXELS ||
       descriptor.dilationFrames !== CSSGRAVITYWELL_VIEWPORT_DILATION_FRAMES ||
       !Array.isArray(dimensions) || dimensions.length < 1 ||
@@ -568,7 +569,7 @@ async function decodePreparedViewportVisibility(descriptor) {
   if (offset !== bytes.byteLength) throw new Error("Gravity Well viewport visibility payload has trailing bytes");
   return Object.freeze({
     schema: CSSGRAVITYWELL_VISIBILITY_SCHEMA,
-    selection: "smallest-area-rectangular-profile-covering-css-viewport-or-disabled",
+    selection: descriptor.selection,
     frameCount: descriptor.frameCount,
     leafCount: descriptor.leafCount,
     marginPixels: descriptor.marginPixels,

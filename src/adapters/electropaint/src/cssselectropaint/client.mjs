@@ -3,7 +3,14 @@ import { loadPreparedElectropaint } from "./manifestClient.mjs";
 import { mountPreparedElectropaintSnapshot } from "./polycssScene.mjs";
 import { createPreparedElectropaintPlayer } from "./preparedPlayback.mjs";
 
-const PRESENTATION_VERTICAL_OFFSET_SOURCE_PIXELS = -45;
+const PRESENTATION_STATS = Object.freeze({
+  sourceViewport: Object.freeze({ width: 960, height: 540 }),
+  policy: "stylesheet-responsive-contain-with-safe-frame",
+  verticalCenterOffsetSourcePixels: 0,
+  resizeCount: 0,
+  runtimeStyleWriteCount: 0,
+  semanticCameraCalculationCount: 0,
+});
 
 export async function mountElectropaintClient(body = document.body) {
   const host = body.querySelector("#scene");
@@ -18,7 +25,6 @@ export async function mountElectropaintClient(body = document.body) {
       sceneRoot: mounted.scene,
       quads: mounted.quads,
     });
-    const presentation = mountPresentationScale(host, mounted.camera);
     Object.assign(debug, {
       status: "ready",
       manifest: prepared.manifest,
@@ -32,10 +38,9 @@ export async function mountElectropaintClient(body = document.body) {
       stats: () => Object.freeze({
         scene: mounted.stats(),
         player: player.stats(),
-        presentation: presentation.stats(),
+        presentation: PRESENTATION_STATS,
       }),
       destroy() {
-        presentation.destroy();
         player.destroy();
         mounted.destroy();
         debug.status = "destroyed";
@@ -56,31 +61,4 @@ export async function mountElectropaintClient(body = document.body) {
     host.replaceChildren(message);
     throw error;
   }
-}
-
-function mountPresentationScale(host, camera) {
-  let resizeCount = 0;
-  function resize() {
-    const scale = Math.min(host.clientWidth / 960, host.clientHeight / 540);
-    const boundedScale = Math.max(0.01, scale);
-    camera.style.setProperty("--cssselectropaint-presentation-scale", String(boundedScale));
-    camera.style.setProperty("--cssselectropaint-inverse-presentation-scale", String(1 / boundedScale));
-    camera.style.setProperty(
-      "--cssselectropaint-presentation-y",
-      `${PRESENTATION_VERTICAL_OFFSET_SOURCE_PIXELS * boundedScale}px`,
-    );
-    resizeCount += 1;
-  }
-  const observer = new ResizeObserver(resize);
-  observer.observe(host);
-  resize();
-  return Object.freeze({
-    stats: () => Object.freeze({
-      sourceViewport: Object.freeze({ width: 960, height: 540 }),
-      verticalCenterOffsetSourcePixels: PRESENTATION_VERTICAL_OFFSET_SOURCE_PIXELS,
-      resizeCount,
-      semanticCameraCalculationCount: 0,
-    }),
-    destroy: () => observer.disconnect(),
-  });
 }

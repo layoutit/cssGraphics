@@ -376,7 +376,8 @@ export async function createPreparedElectropaintPlayer({
 
 function validate(playback, sceneRoot, quads) {
   if (playback?.schema !== "cssselectropaint-prepared-playback@4" ||
-      !(sceneRoot instanceof HTMLElement) || !sceneRoot.style.transform ||
+      !(sceneRoot instanceof HTMLElement) || sceneRoot.hasAttribute("style") ||
+      getComputedStyle(sceneRoot).transform === "none" ||
       quads?.length !== 40 ||
       quads.some((quad) => !(quad instanceof HTMLElement) || quad.localName !== "b" ||
         quad.parentElement !== sceneRoot || quad.children.length !== 0) ||

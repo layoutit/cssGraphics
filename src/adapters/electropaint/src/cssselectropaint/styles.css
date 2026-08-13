@@ -133,14 +133,9 @@ body.loading::after {
 }
 
 #scene {
-  --cssselectropaint-presentation-scale: min(
-    calc(100dvw / 960px),
-    calc((50dvh - 2px) / 311px)
-  );
-  --cssselectropaint-inverse-presentation-scale: calc(
-    1 / var(--cssselectropaint-presentation-scale)
-  );
-
+  --cssselectropaint-presentation-scale: 1;
+  --cssselectropaint-inverse-presentation-scale: 1;
+  --cssselectropaint-presentation-y: 35px;
   position: absolute;
   inset: 0;
   overflow: hidden;
@@ -148,12 +143,14 @@ body.loading::after {
   background: linear-gradient(180deg, #0b1119 0%, #000 100%);
 }
 
+html #scene {
+  --cssselectropaint-presentation-rule: 1;
+}
+
 #scene > .polycss-camera {
   position: absolute !important;
   left: 50% !important;
-  top: calc(
-    50% - calc(35px * var(--cssselectropaint-presentation-scale))
-  ) !important;
+  top: calc(50% - var(--cssselectropaint-presentation-y)) !important;
   width: 960px !important;
   height: 540px !important;
   translate: -50% -50%;

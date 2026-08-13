@@ -107,6 +107,7 @@
     "test:electropaint": "node --test src/adapters/electropaint/test/cssselectropaint-shell.test.mjs src/adapters/electropaint/test/cssselectropaint-source-profile.test.mjs",
     "test:electropaint:assets": "node --test src/adapters/electropaint/test/cssselectropaint-assets.test.mjs",
     "test:electropaint:browser": "node src/adapters/electropaint/tools/smoke-browser.mjs",
+    "test:electropaint:browser:firefox": "node src/adapters/electropaint/tools/smoke-browser.mjs --firefox",
     "test:electropaint:deploy": "node src/adapters/electropaint/tools/smoke-browser.mjs --deploy",
     "capture:electropaint:browser": "node src/adapters/electropaint/tools/capture-browser-frame.mjs",
     "capture:electropaint:browser:frames": "node src/adapters/electropaint/tools/capture-browser-frames.mjs",

@@ -45,7 +45,7 @@ schedule with 25 conservative portrait, landscape, and square profiles. Playback
 selects the smallest-area rectangle that covers the CSS viewport, consumes its
 sparse assignments, publishes transforms and colors only to selected leaves,
 and catches a leaf up from its exact prepared state before making it visible
-again. Coarse-pointer devices use a square profile whose prepared row and column
-selections cannot contain an interior hole; whole offscreen tails remain culled
-and non-square desktop profiles remain unchanged. Projection, topology closure,
-and leaf visibility scans remain prepare-time work.
+again. Each prepared two-pixel line quad extends one projected pixel past both
+endpoints so adjacent retained planes cover their shared join after compositor
+quantization. Projection, overlap, and leaf visibility scans remain prepare-time
+work.

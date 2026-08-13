@@ -38,6 +38,8 @@ export const PREPARED_MAXIMUM_WELL_FRAME_SPEED = 1.6;
 export const PREPARED_FOG_LEVELS = 32;
 export const PREPARED_OPACITY_DEPTH_LEVELS = 16;
 export const PREPARED_LINE_COVERAGE = 0.6;
+export const PREPARED_LINE_WIDTH_PIXELS = 2;
+export const PREPARED_LINE_ENDPOINT_OVERLAP_PIXELS = PREPARED_LINE_WIDTH_PIXELS / 2;
 export const PREPARED_MAXIMUM_DEPTH_OPACITY_REDUCTION = 0.75;
 export const PREPARED_TRANSITION_FRAME_COUNT = 16;
 export const PREPARED_FLAT_HOLD_FRAME_COUNT = 4;
@@ -263,13 +265,20 @@ export function buildPreparedGridSegments(gridWidth) {
   ]);
 }
 
-export function preparedGridLineQuads(state, depths, lineWidthPixels = 2, opacityDepths = null) {
+export function preparedGridLineQuads(
+  state,
+  depths,
+  lineWidthPixels = PREPARED_LINE_WIDTH_PIXELS,
+  opacityDepths = null,
+  endpointOverlapPixels = PREPARED_LINE_ENDPOINT_OVERLAP_PIXELS,
+) {
   const positions = preparedWorldPositions(state, depths);
   const preparedOpacityDepths = opacityDepths ?? depths.map(
     (depth) => Math.min(1, Math.max(0, depth / SOURCE.maximumMassColor)),
   );
-  if (preparedOpacityDepths.length !== depths.length) {
-    throw new RangeError("Gravity Well opacity-depth grid is incomplete");
+  if (preparedOpacityDepths.length !== depths.length || !Number.isFinite(endpointOverlapPixels) ||
+      endpointOverlapPixels < 0 || endpointOverlapPixels > 4) {
+    throw new RangeError("Gravity Well prepared line geometry inputs are incomplete");
   }
   const modelView = nativeModelViewMatrix(state.trackballQuaternion);
   const perspective = 600 / (2 * Math.tan(20 * Math.PI / 180));
@@ -281,8 +290,24 @@ export function preparedGridLineQuads(state, depths, lineWidthPixels = 2, opacit
     const screenDx = secondScreen[0] - firstScreen[0];
     const screenDy = secondScreen[1] - firstScreen[1];
     const screenLength = Math.hypot(screenDx, screenDy);
+    const unitScreenX = screenDx / screenLength;
+    const unitScreenY = screenDy / screenLength;
     const offsetScreenX = (-screenDy / screenLength) * lineWidthPixels / 2;
     const offsetScreenY = (screenDx / screenLength) * lineWidthPixels / 2;
+    const firstOverlap = eyeOffsetForScreenPixels(
+      first,
+      -unitScreenX * endpointOverlapPixels,
+      -unitScreenY * endpointOverlapPixels,
+      perspective,
+    );
+    const secondOverlap = eyeOffsetForScreenPixels(
+      second,
+      unitScreenX * endpointOverlapPixels,
+      unitScreenY * endpointOverlapPixels,
+      perspective,
+    );
+    const extendedFirst = [first[0] + firstOverlap[0], first[1] + firstOverlap[1], first[2]];
+    const extendedSecond = [second[0] + secondOverlap[0], second[1] + secondOverlap[1], second[2]];
     const midpoint = [
       (first[0] + second[0]) / 2,
       (first[1] + second[1]) / 2,
@@ -291,10 +316,10 @@ export function preparedGridLineQuads(state, depths, lineWidthPixels = 2, opacit
     const sharedOffset = eyeOffsetForScreenPixels(midpoint, offsetScreenX, offsetScreenY, perspective);
     return Object.freeze({
       points: Object.freeze([
-        Object.freeze([first[0] - sharedOffset[0], first[1] - sharedOffset[1], first[2]]),
-        Object.freeze([second[0] - sharedOffset[0], second[1] - sharedOffset[1], second[2]]),
-        Object.freeze([second[0] + sharedOffset[0], second[1] + sharedOffset[1], second[2]]),
-        Object.freeze([first[0] + sharedOffset[0], first[1] + sharedOffset[1], first[2]]),
+        Object.freeze([extendedFirst[0] - sharedOffset[0], extendedFirst[1] - sharedOffset[1], extendedFirst[2]]),
+        Object.freeze([extendedSecond[0] - sharedOffset[0], extendedSecond[1] - sharedOffset[1], extendedSecond[2]]),
+        Object.freeze([extendedSecond[0] + sharedOffset[0], extendedSecond[1] + sharedOffset[1], extendedSecond[2]]),
+        Object.freeze([extendedFirst[0] + sharedOffset[0], extendedFirst[1] + sharedOffset[1], extendedFirst[2]]),
       ]),
       width: 1,
       height: 1,

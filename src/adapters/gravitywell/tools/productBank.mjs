@@ -6,7 +6,6 @@ import { CSSGRAVITYWELL_TRANSFORM_BLOCK_COUNT } from "../src/cssgravitywell/rend
 import {
   CSSGRAVITYWELL_VIEWPORT_PROFILES,
   CSSGRAVITYWELL_VISIBILITY_ENCODING,
-  CSSGRAVITYWELL_VISIBILITY_SELECTION,
   CSSGRAVITYWELL_VISIBILITY_SCHEMA,
 } from "../src/prepare/cssgravitywell/visibilitySchedule.mjs";
 
@@ -168,7 +167,7 @@ export async function inspectCssgravitywellProductBank(root, { verifyDescriptor 
         visibility.profiles?.length === visibility.profileSizes.length
       : visibility?.schema === CSSGRAVITYWELL_VISIBILITY_SCHEMA &&
         visibility.encoding === CSSGRAVITYWELL_VISIBILITY_ENCODING &&
-        visibility.selection === CSSGRAVITYWELL_VISIBILITY_SELECTION &&
+        visibility.selection === "smallest-area-rectangular-profile-covering-css-viewport-or-disabled" &&
         JSON.stringify(visibility.profileDimensions) === JSON.stringify(CSSGRAVITYWELL_VIEWPORT_PROFILES) &&
         visibility.profiles?.length === visibility.profileDimensions.length;
     assert(preparedVisibilityContract &&

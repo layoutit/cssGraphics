@@ -19,8 +19,6 @@ export const CSSGRAVITYWELL_VIEWPORT_MARGIN_PIXELS = 8;
 export const CSSGRAVITYWELL_VIEWPORT_DILATION_FRAMES = 1;
 export const CSSGRAVITYWELL_VISIBILITY_SCHEMA = "cssgravitywell-prepared-viewport-visibility@2";
 export const CSSGRAVITYWELL_VISIBILITY_ENCODING = "gzip-cgwv2-rectangular-profile-sparse-visibility-assignments";
-export const CSSGRAVITYWELL_VISIBILITY_SELECTION =
-  "smallest-area-rectangular-profile-covering-css-viewport-with-contiguous-square-grid-runs-or-disabled";
 
 const MAGIC = "CGWV";
 const HEADER_BYTES = 8;
@@ -28,7 +26,6 @@ const PROFILE_HEADER_BYTES = 18;
 const PERSPECTIVE = 600 / (2 * Math.tan(20 * Math.PI / 180));
 
 export function prepareGravityWellViewportVisibility(quadsByFrame, {
-  gridWidth = inferClosedGridWidth(quadsByFrame?.[0]?.length),
   profileDimensions = CSSGRAVITYWELL_VIEWPORT_PROFILES,
   marginPixels = CSSGRAVITYWELL_VIEWPORT_MARGIN_PIXELS,
   dilationFrames = CSSGRAVITYWELL_VIEWPORT_DILATION_FRAMES,
@@ -41,7 +38,6 @@ export function prepareGravityWellViewportVisibility(quadsByFrame, {
       profileDimensions.some((profile) => !Number.isSafeInteger(profile?.width) || profile.width < 1 ||
         !Number.isSafeInteger(profile?.height) || profile.height < 1) ||
       new Set(profileDimensions.map((profile) => `${profile.width}x${profile.height}`)).size !== profileDimensions.length ||
-      !Number.isSafeInteger(gridWidth) || gridWidth < 2 || leafCount !== 2 * gridWidth * (gridWidth - 1) ||
       !Number.isSafeInteger(marginPixels) || marginPixels < 0 ||
       !Number.isSafeInteger(dilationFrames) || dilationFrames < 0 || dilationFrames > 4) {
     throw new TypeError("Complete prepared Gravity Well viewport visibility inputs are required");
@@ -51,18 +47,15 @@ export function prepareGravityWellViewportVisibility(quadsByFrame, {
       quads,
       (quad) => preparedQuadIntersectsViewport(quad, width, height, marginPixels) ? 1 : 0,
     ));
-    const frames = rawFrames.map((frame, frameIndex) => {
-      const dilated = Uint8Array.from(frame, (selected, leafIndex) => {
-        if (selected === 1 || dilationFrames === 0) return selected;
-        for (let offset = 1; offset <= dilationFrames; offset += 1) {
-          const previous = (frameIndex - offset + frameCount) % frameCount;
-          const next = (frameIndex + offset) % frameCount;
-          if (rawFrames[previous][leafIndex] === 1 || rawFrames[next][leafIndex] === 1) return 1;
-        }
-        return 0;
-      });
-      return width === height ? closeVisibleGridRuns(dilated, gridWidth) : dilated;
-    });
+    const frames = rawFrames.map((frame, frameIndex) => Uint8Array.from(frame, (selected, leafIndex) => {
+      if (selected === 1 || dilationFrames === 0) return selected;
+      for (let offset = 1; offset <= dilationFrames; offset += 1) {
+        const previous = (frameIndex - offset + frameCount) % frameCount;
+        const next = (frameIndex + offset) % frameCount;
+        if (rawFrames[previous][leafIndex] === 1 || rawFrames[next][leafIndex] === 1) return 1;
+      }
+      return 0;
+    }));
     const initialVisibleIndices = [];
     for (let leafIndex = 0; leafIndex < leafCount; leafIndex += 1) {
       if (frames[0][leafIndex] === 1) initialVisibleIndices.push(leafIndex);
@@ -103,47 +96,13 @@ export function prepareGravityWellViewportVisibility(quadsByFrame, {
   return Object.freeze({
     schema: CSSGRAVITYWELL_VISIBILITY_SCHEMA,
     encoding: CSSGRAVITYWELL_VISIBILITY_ENCODING,
-    selection: CSSGRAVITYWELL_VISIBILITY_SELECTION,
+    selection: "smallest-area-rectangular-profile-covering-css-viewport-or-disabled",
     frameCount,
     leafCount,
     marginPixels,
     dilationFrames,
     profiles: Object.freeze(profiles),
   });
-}
-
-export function closeVisibleGridRuns(selected, gridWidth) {
-  const segmentsPerLine = gridWidth - 1;
-  const sourceSegmentsPerAxis = segmentsPerLine ** 2;
-  const closingSegmentsStart = sourceSegmentsPerAxis * 2;
-  if (!(selected instanceof Uint8Array) || selected.length !== 2 * gridWidth * segmentsPerLine ||
-      !Number.isSafeInteger(gridWidth) || gridWidth < 2) {
-    throw new TypeError("Complete Gravity Well grid-run visibility inputs are required");
-  }
-  const closed = Uint8Array.from(selected);
-  for (let axisIndex = 0; axisIndex < 2; axisIndex += 1) {
-    for (let lineIndex = 0; lineIndex < gridWidth; lineIndex += 1) {
-      const lineStart = lineIndex < segmentsPerLine
-        ? axisIndex * sourceSegmentsPerAxis + lineIndex * segmentsPerLine
-        : closingSegmentsStart + axisIndex * segmentsPerLine;
-      let first = -1;
-      let last = -1;
-      for (let segmentIndex = 0; segmentIndex < segmentsPerLine; segmentIndex += 1) {
-        if (closed[lineStart + segmentIndex] !== 1) continue;
-        if (first === -1) first = segmentIndex;
-        last = segmentIndex;
-      }
-      if (first === -1) continue;
-      closed.fill(1, lineStart + first, lineStart + last + 1);
-    }
-  }
-  return closed;
-}
-
-function inferClosedGridWidth(leafCount) {
-  if (!Number.isSafeInteger(leafCount) || leafCount < 4) return null;
-  const gridWidth = (1 + Math.sqrt(1 + 2 * leafCount)) / 2;
-  return Number.isSafeInteger(gridWidth) ? gridWidth : null;
 }
 
 export function encodeGravityWellViewportVisibility(schedule) {

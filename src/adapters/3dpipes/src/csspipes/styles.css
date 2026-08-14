@@ -65,6 +65,11 @@ body:not(.csspipes-ready):not(.csspipes-error)::after {
   font-synthesis: none;
 }
 
+.site-wordmark-heading {
+  margin: 0;
+  font: inherit;
+}
+
 .site-wordmark {
   display: inline-flex;
   align-items: center;

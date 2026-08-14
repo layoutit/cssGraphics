@@ -56,6 +56,11 @@ body:not(.ready):not(.error)::before {
   font-synthesis: none;
 }
 
+.site-wordmark-heading {
+  margin: 0;
+  font: inherit;
+}
+
 .site-wordmark {
   display: inline-flex;
   align-items: center;

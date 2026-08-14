@@ -9,10 +9,10 @@ const html = readFileSync(join(adapterRoot, "index.html"), "utf8");
 const css = readFileSync(join(adapterRoot, "src/cssgears/styles.css"), "utf8");
 
 test("css.graphics/gears uses the cssPipes product shell", () => {
-  assert.match(html, /<title>css\.graphics\/gears<\/title>/u);
+  assert.match(html, /<title>Gears - Powered by PolyCSS<\/title>/u);
   assert.match(html, /rel="canonical" href="https:\/\/css\.graphics\/gears\/"/u);
   assert.match(html, /class="site-header"/u);
-  assert.match(html, /class="site-wordmark" href="\/" aria-label="css\.graphics home"/u);
+  assert.match(html, /class="site-wordmark" href="\/" aria-label="Gears - css\.graphics home"/u);
   assert.match(html, /class="site-wordmark-path">\/gears<\/tspan>/u);
   assert.match(html, /href="https:\/\/github\.com\/layoutit\/cssGraphics"/u);
   assert.match(html, /<main id="scene"><\/main>/u);

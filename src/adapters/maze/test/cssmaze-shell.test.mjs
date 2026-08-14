@@ -8,11 +8,11 @@ const html = readFileSync(resolve(root, "index.html"), "utf8");
 const css = readFileSync(resolve(root, "src/cssmaze/styles.css"), "utf8");
 
 test("css.graphics/maze uses the shipped cssGraphics product shell", () => {
-  assert.match(html, /<title>css\.graphics\/maze<\/title>/u);
+  assert.match(html, /<title>Maze - Powered by PolyCSS<\/title>/u);
   assert.match(html, /rel="canonical" href="https:\/\/css\.graphics\/maze\/"/u);
   assert.match(html, /rel="icon" href="\/favicon\.ico" sizes="any"/u);
   assert.match(html, /class="site-header"/u);
-  assert.match(html, /class="site-wordmark" href="\/" aria-label="css\.graphics home"/u);
+  assert.match(html, /class="site-wordmark" href="\/" aria-label="Maze - css\.graphics home"/u);
   assert.match(html, /class="site-wordmark-path">\/maze<\/tspan>/u);
   assert.match(html, /href="https:\/\/github\.com\/layoutit\/cssGraphics"/u);
   assert.equal((html.match(/class="site-action-icon-outline"/gu) ?? []).length, 2);

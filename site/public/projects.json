@@ -8,6 +8,7 @@
       "route": "/electropaint/",
       "preview": "/landing/electropaint.webp",
       "source": "David Tristram",
+      "description": "ElectroPaint, originally written by David Tristram, rendered entirely with HTML and CSS using PolyCSS.",
       "date": "2026-08-10"
     },
     {
@@ -17,6 +18,7 @@
       "route": "/menger/",
       "preview": "/landing/menger.webp",
       "source": "XScreenSaver",
+      "description": "XScreenSaver Menger rendered entirely with HTML and CSS using PolyCSS.",
       "date": "2026-08-13"
     },
     {
@@ -26,6 +28,7 @@
       "route": "/maze/",
       "preview": "/landing/maze.webp",
       "source": "XScreenSaver",
+      "description": "XScreenSaver Maze3D rendered entirely with HTML and CSS using PolyCSS.",
       "date": "2026-08-09"
     },
     {
@@ -35,6 +38,7 @@
       "route": "/gears/",
       "preview": "/landing/gears.webp",
       "source": "XScreenSaver",
+      "description": "XScreenSaver Gears rendered entirely with HTML and CSS using PolyCSS.",
       "date": "2026-08-07"
     },
     {
@@ -44,6 +48,7 @@
       "route": "/pipes/",
       "preview": "/landing/pipes.webp",
       "source": "Original",
+      "description": "CSS Pipes rendered entirely with HTML and CSS using PolyCSS.",
       "date": "2026-08-06"
     }
   ]

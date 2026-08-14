@@ -112,7 +112,7 @@ test("product frame loop publishes only separately prepared writes", async () =>
   assert.match(assets, /decoded\.byteLength !== descriptor\.decodedByteLength/u);
   assert.match(assets, /transforms\.length !== descriptor\.transformCount/u);
   assert.match(assets, /gzip-field-major-delta-varint-fixed2-matrix-and-bank-schedule@2/u);
-  assert.match(assets, /decodePreparedTransformBlock\(decoded, descriptor, playback, transformIndices\)/u);
+  assert.match(assets, /decodePreparedTransformBlock\([\s\S]*carrierCoverageScale,[\s\S]*\)/u);
   assert.match(assets, /decodePreparedTransformBlockIncrementally/u);
   assert.doesNotMatch(assets, /requestIdle/u);
   assert.doesNotMatch(assets, /timeRemaining/u);
@@ -121,7 +121,7 @@ test("product frame loop publishes only separately prepared writes", async () =>
   assert.match(assets, /incrementalDecodeMaximumSliceMilliseconds/u);
   assert.match(assets, /preparedCompleteBank/u);
   assert.match(assets, /Promise\.all\(remaining\.map/u);
-  assert.match(assets, /preparedCssStringByteLength !== descriptor\.preparedCssStringByteLength/u);
+  assert.match(assets, /preparedSourceCssStringByteLength !== descriptor\.preparedCssStringByteLength/u);
   assert.match(assets, /frameView\.mode = "delta"/u);
   assert.match(assets, /activationWaitCount/u);
   assert.match(assets, /CSSGRAVITYWELL_VISIBILITY_SELECTION/u);

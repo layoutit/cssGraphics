@@ -7,6 +7,7 @@ export interface LandingProject {
   readonly route: string;
   readonly preview: string;
   readonly source: string;
+  readonly description: string;
   readonly date: string;
 }
 
@@ -26,6 +27,7 @@ export const PROJECTS: readonly LandingProject[] = Object.freeze(
         project.preview !== `/landing/${project.id}.webp` ||
         typeof project.name !== "string" || project.name.length === 0 ||
         typeof project.source !== "string" || project.source.length === 0 ||
+        typeof project.description !== "string" || project.description.length < 40 ||
         !/^\d{4}-\d{2}-\d{2}$/u.test(project.date) ||
         ids.has(project.id) || numbers.has(project.number)) {
       throw new Error(`Invalid css.graphics project manifest entry at index ${index}.`);

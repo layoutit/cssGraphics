@@ -66,6 +66,11 @@ body.loading::after {
   pointer-events: none;
 }
 
+.site-wordmark-heading {
+  margin: 0;
+  font: inherit;
+}
+
 .site-wordmark {
   display: inline-flex;
   align-items: center;

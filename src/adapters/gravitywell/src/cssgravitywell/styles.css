@@ -68,6 +68,11 @@ body.loading::before {
   padding: 0 12px 0 16px;
 }
 
+.site-wordmark-heading {
+  margin: 0;
+  font: inherit;
+}
+
 .site-wordmark {
   display: inline-flex;
   align-items: center;

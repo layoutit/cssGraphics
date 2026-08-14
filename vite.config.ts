@@ -8,6 +8,10 @@ import {
   type DistributionMediaType,
 } from "./site/catalog";
 import { PROJECTS } from "./site/projects";
+import {
+  renderLandingProjectCards,
+  renderLandingStructuredData,
+} from "./site/render-projects";
 
 const repoRoot = import.meta.dirname;
 const publicRoot = resolve(repoRoot, "site/public");
@@ -92,12 +96,28 @@ function distributionPlugin(): Plugin {
   };
 }
 
+function landingHtmlPlugin(): Plugin {
+  return {
+    name: "cssgraphics-landing-html",
+    transformIndexHtml(html) {
+      const projectsMarker = "<!-- cssgraphics-projects -->";
+      const structuredDataMarker = "<!-- cssgraphics-structured-data -->";
+      if (!html.includes(projectsMarker) || !html.includes(structuredDataMarker)) {
+        throw new Error("The css.graphics landing HTML markers are missing.");
+      }
+      return html
+        .replace(projectsMarker, renderLandingProjectCards(PROJECTS))
+        .replace(structuredDataMarker, renderLandingStructuredData(PROJECTS));
+    },
+  };
+}
+
 function siteConfig(): UserConfig {
   const deployBuild = process.env.CSSGRAPHICS_DEPLOY_BUILD === "1";
   return {
     root: resolve(repoRoot, "site"),
     publicDir: false,
-    plugins: [distributionPlugin()],
+    plugins: [landingHtmlPlugin(), distributionPlugin()],
     server: {
       host: "127.0.0.1",
     },

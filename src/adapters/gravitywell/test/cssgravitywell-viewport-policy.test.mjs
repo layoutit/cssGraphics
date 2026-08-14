@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  defaultGravityWellCarrierCoverageScale,
   defaultViewportProfilePolicy,
   GRAVITYWELL_VIEWPORT_PROFILE_POLICY,
   selectGravityWellVisibilityProfile,
@@ -76,4 +77,14 @@ test("coarse primary pointers select the conservative mobile policy without URL 
     defaultViewportProfilePolicy(null),
     GRAVITYWELL_VIEWPORT_PROFILE_POLICY.rectangular,
   );
+});
+
+test("fractional coarse-pointer DPR compensates 1px carrier coverage without changing desktop", () => {
+  const coarse = () => ({ matches: true });
+  const precise = () => ({ matches: false });
+  assert.equal(defaultGravityWellCarrierCoverageScale(coarse, 2.25), 1.125);
+  assert.equal(defaultGravityWellCarrierCoverageScale(coarse, 2), 1);
+  assert.equal(defaultGravityWellCarrierCoverageScale(coarse, 2.625), 1);
+  assert.equal(defaultGravityWellCarrierCoverageScale(precise, 2.25), 1);
+  assert.equal(defaultGravityWellCarrierCoverageScale(coarse, undefined), 1);
 });

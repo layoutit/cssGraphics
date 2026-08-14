@@ -10,7 +10,10 @@ import {
   loadPreparedGravityWellCatalog,
   selectInitialGravityWellBank,
 } from "./preparedAssets.mjs";
-import { createGravityWellPreparedPlayer } from "./preparedPlayback.mjs";
+import {
+  createGravityWellPreparedPlayer,
+  defaultGravityWellCarrierCoverageScale,
+} from "./preparedPlayback.mjs";
 
 export function mountGravityWellClient(host) {
   const state = {
@@ -33,6 +36,7 @@ export function mountGravityWellClient(host) {
   async function main() {
     if (!(host instanceof HTMLElement)) throw new Error("Missing Gravity Well host");
     setStatus("loading");
+    const carrierCoverageScale = defaultGravityWellCarrierCoverageScale();
     const [loaded, catalog] = await Promise.all([
       loadPolyMorphPackage("/cssgravitywell/model/"),
       loadPreparedGravityWellCatalog(),
@@ -44,7 +48,7 @@ export function mountGravityWellClient(host) {
       complete = false,
     } = {}) => {
       const scene = await loadPreparedGravityWellBankScene(catalog, bankIndex);
-      const transformBlocks = createTransformBlockLoader(scene.playback);
+      const transformBlocks = createTransformBlockLoader(scene.playback, { carrierCoverageScale });
       await transformBlocks.prime(0, { lookahead, incremental, complete });
       const { changeSchedule } = transformBlocks.bankData();
       return Object.freeze({ scene, playback: scene.playback, transformBlocks, changeSchedule });

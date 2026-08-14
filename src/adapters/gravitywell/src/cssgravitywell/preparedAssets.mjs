@@ -156,8 +156,10 @@ export function createTransformBlockLoader(playback, scheduling = {}) {
   let destroyed = false;
   const setDelay = scheduling.setDelay ?? globalThis.setTimeout.bind(globalThis);
   const readNow = scheduling.readNow ?? defaultReadNow;
+  const carrierCoverageScale = Number(scheduling.carrierCoverageScale ?? 1);
   const incrementalSliceBudgetMilliseconds = scheduling.incrementalSliceBudgetMilliseconds ?? 2;
   if (typeof setDelay !== "function" || typeof readNow !== "function" ||
+      !Number.isFinite(carrierCoverageScale) || carrierCoverageScale < 1 || carrierCoverageScale > 1.25 ||
       !Number.isFinite(incrementalSliceBudgetMilliseconds) ||
       incrementalSliceBudgetMilliseconds <= 0 || incrementalSliceBudgetMilliseconds > 4) {
     throw new TypeError("Gravity Well incremental transform decoder scheduling is invalid");
@@ -187,6 +189,7 @@ export function createTransformBlockLoader(playback, scheduling = {}) {
           descriptor,
           playback,
           transformIndices,
+          carrierCoverageScale,
           {
             setDelay,
             readNow,
@@ -203,7 +206,13 @@ export function createTransformBlockLoader(playback, scheduling = {}) {
             },
           },
         )
-        : decodePreparedTransformBlock(decoded, descriptor, playback, transformIndices);
+        : decodePreparedTransformBlock(
+          decoded,
+          descriptor,
+          playback,
+          transformIndices,
+          carrierCoverageScale,
+        );
       if (prepared === null) throw new Error(`Transform block ${blockIndex} incremental decode was cancelled`);
       if (prepared.bankSchedule && transformIndices === null) {
         transformIndices = prepared.bankSchedule.transformIndices;
@@ -221,11 +230,12 @@ export function createTransformBlockLoader(playback, scheduling = {}) {
         blockIndex,
         transforms: Object.freeze(transforms),
         colorValues: prepared.colorValues,
+        preparedCssStringByteLength: prepared.preparedCssStringByteLength,
       });
       records.set(blockIndex, record);
       loadCount += 1;
       if (incremental) incrementalDecodeCompletedBlockCount += 1;
-      residentDecodedBytes += descriptor.preparedCssStringByteLength;
+      residentDecodedBytes += record.preparedCssStringByteLength;
       peakResidentDecodedBytes = Math.max(peakResidentDecodedBytes, residentDecodedBytes);
       if (!preparedCompleteBank && blockIndex !== desiredCurrent && blockIndex !== desiredNext) release(blockIndex);
       return record;
@@ -243,7 +253,7 @@ export function createTransformBlockLoader(playback, scheduling = {}) {
     const record = records.get(blockIndex);
     if (!record?.transforms) return;
     records.delete(blockIndex);
-    residentDecodedBytes -= playback.blocks[blockIndex].preparedCssStringByteLength;
+    residentDecodedBytes -= record.preparedCssStringByteLength;
     releaseCount += 1;
   }
 
@@ -638,8 +648,20 @@ function defaultReadNow() {
   return globalThis.performance.now();
 }
 
-function decodePreparedTransformBlock(bytes, descriptor, playback, loadedTransformIndices) {
-  const decoder = createPreparedTransformBlockDecoder(bytes, descriptor, playback, loadedTransformIndices);
+function decodePreparedTransformBlock(
+  bytes,
+  descriptor,
+  playback,
+  loadedTransformIndices,
+  carrierCoverageScale,
+) {
+  const decoder = createPreparedTransformBlockDecoder(
+    bytes,
+    descriptor,
+    playback,
+    loadedTransformIndices,
+    carrierCoverageScale,
+  );
   while (!decoder.done()) decoder.step(Number.MAX_SAFE_INTEGER, () => false);
   return decoder.result();
 }
@@ -649,6 +671,7 @@ async function decodePreparedTransformBlockIncrementally(
   descriptor,
   playback,
   loadedTransformIndices,
+  carrierCoverageScale,
   {
     setDelay,
     readNow,
@@ -657,7 +680,13 @@ async function decodePreparedTransformBlockIncrementally(
     onSlice,
   },
 ) {
-  const decoder = createPreparedTransformBlockDecoder(bytes, descriptor, playback, loadedTransformIndices);
+  const decoder = createPreparedTransformBlockDecoder(
+    bytes,
+    descriptor,
+    playback,
+    loadedTransformIndices,
+    carrierCoverageScale,
+  );
   let firstSlice = true;
   while (!decoder.done()) {
     if (!firstSlice) {
@@ -675,7 +704,13 @@ async function decodePreparedTransformBlockIncrementally(
   return decoder.result();
 }
 
-function createPreparedTransformBlockDecoder(bytes, descriptor, playback, loadedTransformIndices) {
+function createPreparedTransformBlockDecoder(
+  bytes,
+  descriptor,
+  playback,
+  loadedTransformIndices,
+  carrierCoverageScale,
+) {
   if (!(bytes instanceof Uint8Array) || bytes.byteLength < MATRIX_BLOCK_HEADER_BYTES ||
       String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) !== "CGWM" ||
       bytes[4] !== 2 || bytes[5] !== MATRIX_DECIMAL_PLACES ||
@@ -733,6 +768,7 @@ function createPreparedTransformBlockDecoder(bytes, descriptor, playback, loaded
   const state = new Int32Array(descriptor.keyframeTransformCount * componentCount);
   const transforms = new Array(descriptor.transformCount);
   let preparedCssStringByteLength = 0;
+  let preparedSourceCssStringByteLength = 0;
   const maskStream = streams[componentCount];
   if (maskStream.end - maskStream.offset !== descriptor.deltaTransformCount * Uint16Array.BYTES_PER_ELEMENT) {
     throw new Error(`Transform block ${descriptor.index} mask stream drifted`);
@@ -747,7 +783,7 @@ function createPreparedTransformBlockDecoder(bytes, descriptor, playback, loaded
   function finish() {
     assertStreamConsumed(maskStream, descriptor.index);
     for (const stream of componentStreams) assertStreamConsumed(stream, descriptor.index);
-    if (preparedCssStringByteLength !== descriptor.preparedCssStringByteLength) {
+    if (preparedSourceCssStringByteLength !== descriptor.preparedCssStringByteLength) {
       throw new Error(`Transform block ${descriptor.index} prepared CSS byte length drifted`);
     }
     stage = "done";
@@ -773,9 +809,11 @@ function createPreparedTransformBlockDecoder(bytes, descriptor, playback, loaded
             if (component === componentCount) stage = "keyframes";
           }
         } else if (stage === "keyframes") {
-          const transform = formatPreparedMatrix(state, leafIndex * componentCount);
+          const stateOffset = leafIndex * componentCount;
+          const transform = formatPreparedMatrix(state, stateOffset, carrierCoverageScale);
           transforms[leafIndex] = transform;
           preparedCssStringByteLength += transform.length;
+          preparedSourceCssStringByteLength += preparedMatrixCssStringLength(state, stateOffset);
           leafIndex += 1;
           if (leafIndex === descriptor.keyframeTransformCount) {
             leafIndex = 0;
@@ -803,9 +841,10 @@ function createPreparedTransformBlockDecoder(bytes, descriptor, playback, loaded
               descriptor.index,
             );
           }
-          const transform = formatPreparedMatrix(state, stateOffset);
+          const transform = formatPreparedMatrix(state, stateOffset, carrierCoverageScale);
           transforms[descriptor.keyframeTransformCount + rowIndex] = transform;
           preparedCssStringByteLength += transform.length;
+          preparedSourceCssStringByteLength += preparedMatrixCssStringLength(state, stateOffset);
           rowIndex += 1;
           if (rowIndex === descriptor.deltaTransformCount) finish();
         }
@@ -815,7 +854,12 @@ function createPreparedTransformBlockDecoder(bytes, descriptor, playback, loaded
     },
     result() {
       if (stage !== "done") throw new Error(`Transform block ${descriptor.index} decode is incomplete`);
-      return Object.freeze({ transforms, colorValues, bankSchedule });
+      return Object.freeze({
+        transforms,
+        colorValues,
+        bankSchedule,
+        preparedCssStringByteLength,
+      });
     },
   });
 }
@@ -890,11 +934,37 @@ function assertStreamConsumed(stream, blockIndex) {
   if (stream.offset !== stream.end) throw new Error(`Transform block ${blockIndex} stream has trailing bytes`);
 }
 
-function formatPreparedMatrix(state, offset) {
-  return `matrix3d(${formatFixed2(state[offset])},${formatFixed2(state[offset + 1])},${formatFixed2(state[offset + 2])},0,` +
+function formatPreparedMatrix(state, offset, carrierCoverageScale) {
+  const x0 = Math.round(state[offset] * carrierCoverageScale);
+  const x1 = Math.round(state[offset + 1] * carrierCoverageScale);
+  const x2 = Math.round(state[offset + 2] * carrierCoverageScale);
+  const originScale = (carrierCoverageScale - 1) / 2;
+  const tx = Math.round(state[offset + 8] - state[offset] * originScale);
+  const ty = Math.round(state[offset + 9] - state[offset + 1] * originScale);
+  const tz = Math.round(state[offset + 10] - state[offset + 2] * originScale);
+  return `matrix3d(${formatFixed2(x0)},${formatFixed2(x1)},${formatFixed2(x2)},0,` +
     `${formatFixed2(state[offset + 3])},${formatFixed2(state[offset + 4])},0,0,` +
     `${formatFixed2(state[offset + 5])},${formatFixed2(state[offset + 6])},${formatFixed2(state[offset + 7])},0,` +
-    `${formatFixed2(state[offset + 8])},${formatFixed2(state[offset + 9])},${formatFixed2(state[offset + 10])},1)`;
+    `${formatFixed2(tx)},${formatFixed2(ty)},${formatFixed2(tz)},1)`;
+}
+
+function preparedMatrixCssStringLength(state, offset) {
+  let length = 30;
+  for (let component = 0; component < MATRIX_COMPONENTS.length; component += 1) {
+    length += fixed2CssLength(state[offset + component]);
+  }
+  return length;
+}
+
+function fixed2CssLength(value) {
+  if (value === 0) return 1;
+  const absolute = Math.abs(value);
+  const integer = Math.floor(absolute / 100);
+  let length = value < 0 ? 1 : 0;
+  length += integer === 0 ? 1 : Math.floor(Math.log10(integer)) + 1;
+  const fraction = absolute % 100;
+  if (fraction === 0) return length;
+  return length + (fraction % 10 === 0 ? 2 : 3);
 }
 
 function formatFixed2(value) {

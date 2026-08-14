@@ -536,6 +536,21 @@ export function defaultViewportProfilePolicy(
     : GRAVITYWELL_VIEWPORT_PROFILE_POLICY.rectangular;
 }
 
+export function defaultGravityWellCarrierCoverageScale(
+  matchMedia = typeof globalThis.matchMedia === "function"
+    ? globalThis.matchMedia.bind(globalThis)
+    : null,
+  devicePixelRatio = globalThis.devicePixelRatio,
+) {
+  if (matchMedia?.("(pointer: coarse)")?.matches !== true) return 1;
+  const ratio = Number(devicePixelRatio);
+  if (!Number.isFinite(ratio) || ratio < 1) return 1;
+  // Keep the carrier at 1x1 CSS pixels. Only compensate when fractional DPR
+  // rounds its device-pixel coverage down; integral and rounded-up DPRs stay exact.
+  const rasterPixelCount = Math.max(1, Math.round(ratio));
+  return Math.min(1.25, Math.max(1, ratio / rasterPixelCount));
+}
+
 function validateViewportSize(widthValue, heightValue) {
   const width = Number(widthValue);
   const height = Number(heightValue);

@@ -47,21 +47,34 @@ export async function loadPreparedGravityWellCatalog() {
 
 export function selectInitialGravityWellBank(catalog, {
   search = globalThis.location?.search ?? "",
+  previousBankIndex = null,
   randomUint32 = cryptoRandomUint32,
 } = {}) {
+  if (previousBankIndex !== null &&
+      (!Number.isSafeInteger(previousBankIndex) || previousBankIndex < 0 ||
+        previousBankIndex >= catalog.bankCount)) {
+    throw new RangeError("Gravity Well previous bank is invalid");
+  }
   const requested = new URLSearchParams(search).get("bank");
   if (requested !== null) {
     const bankIndex = Number(requested);
     if (!Number.isSafeInteger(bankIndex) || bankIndex < 0 || bankIndex >= catalog.bankCount) {
       throw new RangeError("Gravity Well requested bank is invalid");
     }
-    return Object.freeze({ bankIndex, mode: "explicit" });
+    if (bankIndex !== previousBankIndex || catalog.bankCount === 1) {
+      return Object.freeze({ bankIndex, mode: "explicit" });
+    }
   }
   const value = randomUint32();
   if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff) {
     throw new RangeError("Gravity Well initial-bank random value must be uint32");
   }
-  return Object.freeze({ bankIndex: value % catalog.bankCount, mode: "crypto-random" });
+  if (previousBankIndex === null || catalog.bankCount === 1) {
+    return Object.freeze({ bankIndex: value % catalog.bankCount, mode: "crypto-random" });
+  }
+  const candidate = value % (catalog.bankCount - 1);
+  const bankIndex = candidate >= previousBankIndex ? candidate + 1 : candidate;
+  return Object.freeze({ bankIndex, mode: "crypto-random-no-repeat" });
 }
 
 export async function loadPreparedGravityWellBankScene(catalog, bankIndex) {

@@ -15,6 +15,8 @@ import {
   defaultGravityWellCarrierCoverageScale,
 } from "./preparedPlayback.mjs";
 
+const LAST_BANK_STORAGE_KEY = "cssgravitywell:last-bank-index";
+
 export function mountGravityWellClient(host) {
   const state = {
     ready: false,
@@ -41,7 +43,12 @@ export function mountGravityWellClient(host) {
       loadPolyMorphPackage("/cssgravitywell/model/"),
       loadPreparedGravityWellCatalog(),
     ]);
-    const selection = selectInitialGravityWellBank(catalog);
+    const search = location.search;
+    const previousBankIndex = readPreviousBankIndex(catalog.bankCount);
+    const selection = selectInitialGravityWellBank(catalog, { search, previousBankIndex });
+    const cycleBanks = new URLSearchParams(search).get("cycle") !== "0";
+    rememberBankIndex(selection.bankIndex);
+    clearConsumedRouteControls();
     const loadBank = async (bankIndex, {
       lookahead = false,
       incremental = lookahead,
@@ -81,7 +88,7 @@ export function mountGravityWellClient(host) {
       bankCount: catalog.bankCount,
       initialBankIndex: selection.bankIndex,
       loadBank,
-      cycleBanks: new URLSearchParams(location.search).get("cycle") !== "0",
+      cycleBanks,
       onBankChange(_bankIndex, nextScene) {
         state.scene = nextScene;
       },
@@ -110,6 +117,37 @@ export function mountGravityWellClient(host) {
     output.textContent = message;
     host.append(output);
   }
+}
+
+function readPreviousBankIndex(bankCount) {
+  try {
+    const stored = globalThis.sessionStorage?.getItem(LAST_BANK_STORAGE_KEY);
+    if (stored === null || stored === undefined) return null;
+    const bankIndex = Number(stored);
+    return Number.isSafeInteger(bankIndex) && bankIndex >= 0 && bankIndex < bankCount
+      ? bankIndex
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberBankIndex(bankIndex) {
+  try {
+    globalThis.sessionStorage?.setItem(LAST_BANK_STORAGE_KEY, String(bankIndex));
+  } catch {
+    // Storage can be unavailable in hardened browsing modes; selection remains random.
+  }
+}
+
+function clearConsumedRouteControls() {
+  const url = new URL(location.href);
+  const hadBank = url.searchParams.has("bank");
+  const hadCycle = url.searchParams.has("cycle");
+  if (!hadBank && !hadCycle) return;
+  url.searchParams.delete("bank");
+  url.searchParams.delete("cycle");
+  history.replaceState(history.state, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
 function setStatus(kind) {

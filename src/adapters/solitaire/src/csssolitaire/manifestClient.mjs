@@ -64,7 +64,7 @@ function validateManifest(manifest) {
       JSON.stringify(manifest.renderer?.landscapePresentationBase) !== "[960,540]" ||
       manifest.renderer?.landscapePresentationBaseScale !== 1.40625 ||
       JSON.stringify(manifest.renderer?.portraitPresentationBase) !== "[384,720]" ||
-      manifest.renderer?.portraitMapping !== "progressive-card-count-prepared-wall-reflection" ||
+      manifest.renderer?.portraitMapping !== "progressive-card-count-prepared-source-lane-folding" ||
       JSON.stringify(manifest.renderer?.portraitReflectionReferenceWidths) !== "[384,600,800,960]" ||
       JSON.stringify(manifest.renderer?.portraitCardCounts) !== "[1,2,3,4]" ||
       JSON.stringify(manifest.renderer?.portraitCardBreakpoints) !== "[520,720,920]" ||

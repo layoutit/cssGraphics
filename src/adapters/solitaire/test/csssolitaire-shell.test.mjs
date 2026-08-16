@@ -14,6 +14,9 @@ test("product shell is the standard css.graphics route without demo controls", a
     readFile(resolve(adapterRoot, "src/csssolitaire/polycssScene.mjs"), "utf8"),
   ]);
   assert.match(html, /css\.graphics\/solitaire/u);
+  assert.match(html, /<title>Solitaire - Powered by PolyCSS<\/title>/u);
+  assert.match(html, /property="og:title" content="Solitaire - Powered by PolyCSS"/u);
+  assert.match(html, /name="twitter:title" content="Solitaire - Powered by PolyCSS"/u);
   assert.match(html, /class="site-header"/u);
   assert.match(html, /class="site-wordmark-svg"/u);
   assert.match(html, /href="https:\/\/github\.com\/layoutit\/cssGraphics"/u);

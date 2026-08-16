@@ -59,7 +59,8 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.deepEqual(manifest.renderer.landscapePresentationBase, [960, 540]);
   assert.equal(manifest.renderer.landscapePresentationBaseScale, 1.40625);
   assert.deepEqual(manifest.renderer.portraitPresentationBase, [384, 720]);
-  assert.equal(manifest.renderer.portraitMapping, "progressive-card-count-prepared-wall-reflection");
+  assert.equal(manifest.renderer.portraitMapping,
+    "progressive-card-count-prepared-source-lane-folding");
   assert.deepEqual(manifest.renderer.portraitReflectionReferenceWidths, [384, 600, 800, 960]);
   assert.deepEqual(manifest.renderer.portraitCardCounts, [1, 2, 3, 4]);
   assert.deepEqual(manifest.renderer.portraitCardBreakpoints, [520, 720, 920]);
@@ -124,8 +125,8 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.equal((snapshot.match(/\.solitaire-prepared-scene>s\.l[0-9a-z]+\{transform:/gu) ?? []).length,
     9760);
   assert.equal((snapshot.match(/\.solitaire-prepared-scene>s\.l[0-9a-z]+\{transform:translate\(/gu) ?? []).length,
-    6223);
-  assert.equal((snapshot.match(/\{transform:none\}/gu) ?? []).length, 3537);
+    9760);
+  assert.equal((snapshot.match(/\{transform:none\}/gu) ?? []).length, 0);
   assert.equal((snapshot.match(/\.solitaire-prepared-scene>s\.f[0-9a-z]+\{background-position:/gu) ?? []).length,
     52);
   assert.equal((snapshot.match(/<s class="foundation v lane-[0-3] l[0-3] f[0-9a-z]+"><\/s>/gu) ?? []).length, 4);
@@ -135,6 +136,10 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.doesNotMatch(snapshot, /--csssolitaire-fit/u);
   assert.match(snapshot, /max-width:519px\)\{\.solitaire-prepared-scene>s\.l0\{transform:translate\(/u);
   assert.match(snapshot, /min-width:920px\)\{\.solitaire-prepared-scene>s\.l0\{transform:translate\(/u);
+  assert.match(snapshot,
+    /max-width:519px\)\{.*\.solitaire-prepared-scene>s\.foundation:is\(\.lane-1,\.lane-2,\.lane-3\)\{display:none\}/u);
+  assert.doesNotMatch(snapshot,
+    /\.solitaire-prepared-scene>s:is\(\.lane-1,\.lane-2,\.lane-3\)\{display:none\}/u);
   assert.match(snapshot, /border-radius:14px/u);
   assert.doesNotMatch(snapshot, /box-shadow/u);
   assert.match(snapshot, /image-rendering:auto/u);
@@ -177,12 +182,23 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   })));
   assert.ok(playback.patterns.every((pattern) =>
     pattern.leafPortraitMatricesByCardCount.length === 4 &&
-    pattern.leafPortraitMatricesByCardCount.every((profile) => profile.length === pattern.trailLeafCount)));
+    pattern.leafPortraitMatricesByCardCount.every((profile) =>
+      profile.length === pattern.trailLeafCount && profile.every(Boolean))));
   assert.ok(playback.patterns.every((pattern) =>
     pattern.leafFoundationIndices.length === pattern.trailLeafCount &&
     pattern.leafFoundationIndices.every((foundationIndex) => foundationIndex >= 0 && foundationIndex < 4)));
+  const maximumPortraitUpdateGaps = [1, 2, 3, 4].map((cardCount) => Math.max(
+    ...playback.patterns.map((pattern) => {
+      const updateTimes = pattern.frameTimesMs.filter((_, frameIndex) =>
+        pattern.visibilityRows[frameIndex].length > 0 ||
+        pattern.foundationRows[frameIndex].some(([foundationIndex]) => foundationIndex < cardCount));
+      return Math.max(...updateTimes.slice(1).map((time, index) => time - updateTimes[index]));
+    }),
+  ));
+  assert.deepEqual(maximumPortraitUpdateGaps, [500, 500, 500, 500]);
   const initialPattern = playback.patterns[0];
-  const oneCardTransforms = initialPattern.leafPortraitMatricesByCardCount[0].filter(Boolean);
+  const oneCardTransforms = initialPattern.leafPortraitMatricesByCardCount[0];
+  assert.equal(oneCardTransforms.length, initialPattern.trailLeafCount);
   assert.ok(oneCardTransforms.every((transform) => transform.includes("vw") && transform.includes("vh")));
   assert.ok(new Set(oneCardTransforms).size > 100);
   assert.equal(initialPattern.sourceStepCount, 1679);

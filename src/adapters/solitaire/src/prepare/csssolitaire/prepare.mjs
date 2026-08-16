@@ -167,13 +167,13 @@ function landscapeCardPosition(left, top, foundationIndex, horizontalDirection) 
 }
 
 function portraitCardPosition(left, top, foundationIndex, horizontalDirection, profile) {
-  if (foundationIndex >= profile.cardCount) return null;
   const [width, height] = profile.playfield;
   const presentationScale = Math.min(width / 384, height / 720);
   const cardWidth = CARD_WIDTH * presentationScale;
+  const displayFoundationIndex = foundationIndex % profile.cardCount;
   const startLeft = profile.cardCount === 1
     ? (width - cardWidth) / 2
-    : solitaireSlotLeft(width, STARTING_CARDS[foundationIndex].slot, cardWidth);
+    : solitaireSlotLeft(width, STARTING_CARDS[displayFoundationIndex].slot, cardWidth);
   const sourceStartLeft = STARTING_CARDS[foundationIndex].x;
   const unboundedLeft = startLeft +
     (left - sourceStartLeft) * PORTRAIT_HORIZONTAL_DISTANCE_SCALE * presentationScale;
@@ -523,9 +523,9 @@ function buildSnapshot(leaves, cardAssetUrl) {
     ".polycss-scene.solitaire-prepared-scene>s.v{visibility:visible}",
     faceRules,
     landscapeRules,
-    `@media (orientation:portrait) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[0] - 1}px){${portraitRules[0]}.solitaire-prepared-scene>s:is(.lane-1,.lane-2,.lane-3){display:none}}`,
-    `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[0]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[1] - 1}px){${portraitRules[1]}.solitaire-prepared-scene>s:is(.lane-2,.lane-3){display:none}}`,
-    `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[1]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[2] - 1}px){${portraitRules[2]}.solitaire-prepared-scene>s.lane-3{display:none}}`,
+    `@media (orientation:portrait) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[0] - 1}px){${portraitRules[0]}.solitaire-prepared-scene>s.foundation:is(.lane-1,.lane-2,.lane-3){display:none}}`,
+    `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[0]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[1] - 1}px){${portraitRules[1]}.solitaire-prepared-scene>s.foundation:is(.lane-2,.lane-3){display:none}}`,
+    `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[1]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[2] - 1}px){${portraitRules[2]}.solitaire-prepared-scene>s.foundation.lane-3{display:none}}`,
     `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[2]}px){${portraitRules[3]}}`,
   ].join("");
   return `<!doctype html><html><head><style>${css}</style></head><body><div class="polycss-camera solitaire-prepared-camera"><div class="polycss-scene solitaire-prepared-scene">${cardNodes}</div></div></body></html>\n`;
@@ -651,7 +651,7 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       landscapePresentationBase: LANDSCAPE_PLAYFIELD,
       landscapePresentationBaseScale: LANDSCAPE_PRESENTATION_SCALE,
       portraitPresentationBase: PORTRAIT_PROFILES[0].playfield,
-      portraitMapping: "progressive-card-count-prepared-wall-reflection",
+      portraitMapping: "progressive-card-count-prepared-source-lane-folding",
       portraitReflectionReferenceWidths: PORTRAIT_PROFILES.map(({ playfield }) => playfield[0]),
       portraitCardCounts: PORTRAIT_CARD_COUNTS,
       portraitCardBreakpoints: PORTRAIT_CARD_BREAKPOINTS,

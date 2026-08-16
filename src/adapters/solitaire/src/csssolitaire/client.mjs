@@ -29,7 +29,7 @@ export function mountCsssolitaireClient() {
     });
     state.ready = true;
     setBodyState("ready");
-    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) state.player.resume();
+    state.player.resume();
   }
 
   function recordError(message) {

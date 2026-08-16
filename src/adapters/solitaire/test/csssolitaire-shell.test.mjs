@@ -30,6 +30,8 @@ test("product shell is the standard css.graphics route without demo controls", a
   assert.match(css, /#scene \{[^}]*position: absolute;[^}]*inset: 0;[^}]*contain: layout paint size style;/u);
   assert.doesNotMatch(css, /clip-path|mask(?:-image)?|filter|box-shadow|text-shadow|mix-blend-mode/iu);
   assert.match(client, /loadPreparedSolitaire/u);
+  assert.match(client, /state\.player\.resume\(\)/u);
+  assert.doesNotMatch(client, /prefers-reduced-motion/u);
   assert.match(player, /createPolyMorphPreparedDomTarget/u);
   assert.match(player, /deadline-setTimeout-prepared-visibility-publication/u);
   assert.doesNotMatch(player, /Math\.random|requestAnimationFrame\s*\(|createElement|DOMMatrix/u);

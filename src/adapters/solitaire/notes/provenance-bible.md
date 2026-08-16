@@ -26,8 +26,18 @@ Loren Osborn, released under CC0. The prepared PNG byte identity is pinned in
 Preparation owns the MSVCRT-compatible random stream, King-to-Ace and four-suit
 card order, initial velocities, integer movement, gravity, bounce, horizontal
 exit, card transforms, atlas coordinates, retained leaf order, and sparse
-visibility schedule. The browser loads one complete retained snapshot and
-applies only signed prepared visibility operations.
+visibility schedule. Responsive launch origins preserve the recovered seven-slot
+layout rule: the gap is the greater of `(clientWidth - cardWidth * 7) / 8` and
+`cardWidth / 8 + 3`, with signed integer truncation. The browser loads one
+complete retained snapshot and applies only signed prepared visibility operations.
+Only the one-card mobile presentation reflects at the side walls. Multi-card
+and landscape presentations map the prepared exit boundary fully beyond the
+real viewport. The prepared pattern bank permits occasional rightward exits in
+the first two foundation lanes while keeping the last two lanes leftward.
+The product presentation uses one smooth prepared three-anchor curve from the
+8px apex through the 80px foundation to the lowest retained source bounce point
+at the real viewport floor. It does not clamp or join separate vertical mappings
+at runtime.
 
 The 7.5 ms prepared source step is a browser presentation calibration derived
 from the recovered 5 ms wait plus observed GDI draw cost. It is not a claim of
@@ -38,8 +48,10 @@ pixel identity with Windows XP.
 Runtime must not reconstruct trajectories, randomize cards, rasterize the
 atlas, create card leaves, clear the accumulated ghost trail between card
 handoffs, or load a generic model payload. It may adopt the prepared graph,
-apply prepared visibility rows, fit the fixed playfield after a resize, and own
-the playback timer.
+apply prepared visibility rows, let prepared CSS viewport-unit transforms resolve
+the real viewport, update one retained-root presentation scale on resize, and own
+the playback timer. There is no per-leaf resize calculation, centered reference
+playfield, or letterbox.
 
 ## Public closure
 

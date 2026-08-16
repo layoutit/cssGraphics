@@ -14,6 +14,9 @@ test("source lock binds recovered behavior and excludes proprietary product byte
     "0fb81e48d8b45e9995ae1e05fd28c1631dbbcdc71180904c1356bfa2c1ead506");
   assert.equal(lock.recoveredRoutine.address, "0x01004df0");
   assert.equal(lock.recoveredRoutine.facts.rankOrder, "King through Ace");
+  assert.equal(lock.recoveredRoutine.facts.slotCount, 7);
+  assert.equal(lock.recoveredRoutine.facts.horizontalGap,
+    "max((clientWidth - cardWidth * 7) / 8, cardWidth / 8 + 3), using signed integer truncation");
   assert.equal(lock.recoveredRoutine.facts.cardsRemainUpright, true);
   assert.equal(lock.recoveredRoutine.facts.framebufferClearDuringCard, false);
   assert.equal(lock.preparedDeterminism.rng, "MSVCRT-compatible");

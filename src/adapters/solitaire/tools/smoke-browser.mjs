@@ -63,11 +63,11 @@ try {
       window.__cssSolitaireSmoke = { mutations, observer };
     });
 
-    const sampled = await page.evaluate(() => [0, 1250, 3500, 6500, 10000, 13097, 13098, 14098, 25223, 26223]
+    const sampled = await page.evaluate(() => [0, 1250, 3500, 6500, 10000, 13584, 13585, 14585, 26210, 27210]
       .map((timeMs) => window.__cssSolitaireDebug.seek(timeMs)));
     const [initial, firstArc, secondArc, middle, thirdArc, nearEnd, rewindStart, rewinding, rewound, wrapped] = sampled;
     const autoplayLoop = await page.evaluate(async () => {
-      window.__cssSolitaireDebug.seek(25800);
+      window.__cssSolitaireDebug.seek(26787);
       window.__cssSolitaireDebug.resume();
       await new Promise((resolveWait) => setTimeout(resolveWait, 650));
       return window.__cssSolitaireDebug.pause();
@@ -88,7 +88,20 @@ try {
       const leaves = [...document.querySelectorAll(".csssolitaire-board > s")];
       const first = leaves[0];
       const rect = first.getBoundingClientRect();
+      const foundationRects = leaves.slice(0, 4).map((leaf) => {
+        const foundationRect = leaf.getBoundingClientRect();
+        return {
+          left: foundationRect.left,
+          top: foundationRect.top,
+          width: foundationRect.width,
+          height: foundationRect.height,
+        };
+      });
       const computedTransforms = leaves.map((leaf) => getComputedStyle(leaf).transform);
+      const scene = document.getElementById("scene");
+      const camera = scene?.querySelector(":scope > .solitaire-prepared-camera");
+      const preparedScene = camera?.querySelector(":scope > .solitaire-prepared-scene");
+      const board = preparedScene?.querySelector(":scope > .csssolitaire-board");
       const resources = performance.getEntriesByType("resource")
         .map((entry) => new URL(entry.name).pathname)
         .filter((path) => path.includes("csssolitaire"));
@@ -99,9 +112,24 @@ try {
         retainedLeaves: leaves.length,
         visibleLeaves: leaves.filter((leaf) => getComputedStyle(leaf).visibility === "visible").length,
         forbiddenSceneElements: document.querySelectorAll("#scene canvas, #scene svg").length,
+        structure: {
+          bodyChildren: [...document.body.children].map((element) => element.tagName),
+          sceneChildCount: scene?.childElementCount,
+          cameraChildCount: camera?.childElementCount,
+          preparedSceneChildCount: preparedScene?.childElementCount,
+          boardChildCount: board?.childElementCount,
+          sceneDescendantCount: scene?.querySelectorAll("*").length,
+          unexpectedSceneElementCount: scene?.querySelectorAll(
+            "button,canvas,nav,output,section,svg,style,[contenteditable]",
+          ).length,
+          dataAttributeCount: [...scene.querySelectorAll("*")].reduce((count, element) =>
+            count + [...element.attributes].filter(({ name }) => name.startsWith("data-")).length, 0),
+        },
         radius: getComputedStyle(first).borderRadius,
+        cardEdge: getComputedStyle(first).boxShadow,
         imageRendering: getComputedStyle(first).imageRendering,
         cardRect: { width: rect.width, height: rect.height },
+        foundationRects,
         resources,
         shell: {
           path: document.querySelector(".site-wordmark-path")?.textContent,
@@ -114,11 +142,11 @@ try {
           matrix2dLeafCount: computedTransforms.filter((transform) => transform.startsWith("matrix(")).length,
           matrix3dLeafCount: computedTransforms.filter((transform) => transform.startsWith("matrix3d(")).length,
           landscapePreparedTransformCount: leaves.filter((leaf) =>
-            leaf.style.getPropertyValue("--csssolitaire-landscape-transform").startsWith("matrix(")).length,
+            leaf.style.getPropertyValue("--csssolitaire-landscape-transform").startsWith("translate(")).length,
           portraitPreparedTransformCounts: [1, 2, 3, 4].map((cardCount) =>
             leaves.filter((leaf) => leaf.style
               .getPropertyValue(`--csssolitaire-portrait-${cardCount}-transform`)
-              .startsWith("matrix(")).length),
+              .startsWith("translate(")).length),
         },
       };
     });
@@ -128,29 +156,42 @@ try {
         secondArc.sourceStep !== 400 || secondArc.visibleTrailCards !== 401 ||
         middle.sourceStep !== 800 || middle.visibleTrailCards !== 801 ||
         thirdArc.sourceStep !== 1266 || thirdArc.visibleTrailCards !== 1267 ||
-        thirdArc.visibleFoundationCards !== 1 ||
-        nearEnd.sourceStep !== 1614 || nearEnd.visibleTrailCards !== 1614 ||
+        thirdArc.visibleFoundationCards !== 3 ||
+        nearEnd.sourceStep !== 1679 || nearEnd.visibleTrailCards !== 1679 ||
         nearEnd.visibleFoundationCards !== 0 ||
-        rewindStart.visibleTrailCards !== 1612 || rewindStart.visibleFoundationCards !== 0 ||
+        rewindStart.visibleTrailCards !== 1678 || rewindStart.visibleFoundationCards !== 0 ||
         rewinding.visibleTrailCards <= 0 || rewinding.visibleTrailCards >= nearEnd.visibleTrailCards ||
         rewinding.visibleFoundationCards !== 1 ||
-        rewound.frameIndex !== 584 || rewound.visibleTrailCards !== 0 || rewound.visibleFoundationCards !== 4 ||
+        rewound.frameIndex !== 608 || rewound.visibleTrailCards !== 0 || rewound.visibleFoundationCards !== 4 ||
         wrapped.frameIndex !== 0 || wrapped.visibleTrailCards !== 0 || wrapped.visibleFoundationCards !== 4 ||
         autoplayLoop.playheadMs >= 500 || autoplayLoop.visibleTrailCards !== 0 ||
         autoplayLoop.patternIndex === 0 || autoplayLoop.patternCount !== 24 ||
         bankSequence.length !== 24 || new Set(bankSequence).size !== 24 ||
         bankSequence.some((patternId, index) => index > 0 && patternId === bankSequence[index - 1]) ||
-        !evidence.stable || evidence.retainedLeaves !== 1911 || evidence.visibleLeaves !== 4 ||
+        !evidence.stable || evidence.retainedLeaves !== 1952 || evidence.visibleLeaves !== 4 ||
         evidence.forbiddenSceneElements !== 0 || evidence.mutations.added !== 0 || evidence.mutations.removed !== 0 ||
-        evidence.radius !== "14px" || evidence.imageRendering !== "auto" ||
-        !(evidence.cardRect.height > evidence.cardRect.width) || evidence.shell.path !== "/solitaire" ||
+        JSON.stringify(evidence.structure.bodyChildren) !==
+          JSON.stringify(deploy ? ["HEADER", "MAIN"] : ["HEADER", "MAIN", "SCRIPT"]) ||
+        evidence.structure.sceneChildCount !== 1 || evidence.structure.cameraChildCount !== 1 ||
+        evidence.structure.preparedSceneChildCount !== 1 || evidence.structure.boardChildCount !== 1952 ||
+        evidence.structure.sceneDescendantCount !== 1955 ||
+        evidence.structure.unexpectedSceneElementCount !== 0 || evidence.structure.dataAttributeCount !== 0 ||
+        evidence.radius !== "14px" ||
+        evidence.cardEdge !== "none" ||
+        evidence.imageRendering !== "auto" ||
+        Math.abs(evidence.cardRect.width - 99.84375) > 0.1 || Math.abs(evidence.cardRect.height - 135) > 0.1 ||
+        evidence.foundationRects.some((rect, index) =>
+          Math.abs(rect.left - [430.078125, 562.55859375, 695.0390625, 827.51953125][index]) > 0.1 ||
+          Math.abs(rect.top - 80) > 0.1 || Math.abs(rect.width - 99.84375) > 0.1 ||
+          Math.abs(rect.height - 135) > 0.1) ||
+        evidence.shell.path !== "/solitaire" ||
         evidence.shell.buttons !== 0 ||
-        !evidence.shell.sceneBackground.startsWith("linear-gradient(rgb(11, 17, 25)") ||
+        !evidence.shell.sceneBackground.startsWith("linear-gradient(rgb(0, 128, 0)") ||
         evidence.composition.sceneTransformStyle !== "flat" ||
         evidence.composition.boardTransformStyle !== "flat" ||
-        evidence.composition.matrix2dLeafCount !== 1911 || evidence.composition.matrix3dLeafCount !== 0 ||
-        evidence.composition.landscapePreparedTransformCount !== 1911 ||
-        evidence.composition.portraitPreparedTransformCounts[3] !== 1911 ||
+        evidence.composition.matrix2dLeafCount !== 1952 || evidence.composition.matrix3dLeafCount !== 0 ||
+        evidence.composition.landscapePreparedTransformCount !== 1952 ||
+        evidence.composition.portraitPreparedTransformCounts[3] !== 1952 ||
         evidence.composition.portraitPreparedTransformCounts.some((count, index, counts) =>
           index > 0 && count <= counts[index - 1]) ||
         evidence.stats.runtimeAnimationFrameCallbackCount !== 0 ||
@@ -161,6 +202,10 @@ try {
         evidence.stats.runtimeRandomSelectionCount < 1 ||
         evidence.stats.runtimeRandomSelectionPurpose !== "prepared-pattern-shuffled-bag-index-only" ||
         evidence.stats.runtimeGeometryCalculationCount !== 0 ||
+        evidence.stats.runtimeGeometryBoundsCalculationCount !== 0 ||
+        evidence.stats.runtimeFitCalculationPurpose !== "single-root-presentation-scale-only" ||
+        Math.abs(evidence.stats.runtimePresentationScale - 1.40625) > 0.000001 ||
+        evidence.stats.runtimePresentationScaleWrites < 1 ||
         evidence.stats.runtimeTrajectoryCalculationCount !== 0 ||
         evidence.stats.runtimeAtlasRasterizationCount !== 0 ||
         evidence.stats.runtimeDomMutationCount !== 0 ||
@@ -170,7 +215,11 @@ try {
         evidence.resources.some((path) => path.endsWith("model.json"))) {
       throw new Error(`cssSolitaire smoke contract failed: ${JSON.stringify({ readyMs, sampled, evidence })}`);
     }
-    await page.evaluate(() => window.__cssSolitaireDebug.seek(10000));
+    await page.evaluate(() => {
+      const state = window.__cssSolitaireDebug.snapshot();
+      const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[state.patternIndex].durationMs;
+      window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
+    });
     const visibleBounds = await page.evaluate(() => {
       const rects = [...document.querySelectorAll(".csssolitaire-board > s")]
         .filter((leaf) => getComputedStyle(leaf).visibility === "visible")
@@ -182,7 +231,10 @@ try {
         bottom: Math.max(...rects.map((rect) => rect.bottom)),
       };
     });
-    if (visibleBounds.left >= 0 || visibleBounds.top >= 0 || visibleBounds.bottom <= 540) {
+    if (visibleBounds.left > -0.9 * evidence.cardRect.width ||
+        visibleBounds.right < 960 + 0.9 * evidence.cardRect.width ||
+        visibleBounds.top < 7.9 || visibleBounds.top > 80 ||
+        Math.abs(visibleBounds.bottom - 540) > 0.2) {
       throw new Error(`cssSolitaire cards no longer exit the fixed playfield: ${JSON.stringify(visibleBounds)}`);
     }
     await mkdir(dirname(screenshotPath), { recursive: true });
@@ -221,7 +273,11 @@ try {
         mutations: { ...window.__cssSolitaireSmoke.mutations },
       };
     });
-    await page.evaluate(() => window.__cssSolitaireDebug.seek(10000));
+    await page.evaluate(() => {
+      const state = window.__cssSolitaireDebug.snapshot();
+      const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[state.patternIndex].durationMs;
+      window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
+    });
     const mobileEvidence = await page.evaluate(() => {
       const visibleLeaves = [...document.querySelectorAll(".csssolitaire-board > s")]
         .filter((leaf) => {
@@ -243,18 +299,21 @@ try {
         mutations: { ...window.__cssSolitaireSmoke.mutations },
       };
     });
-    if (!mobileInitial.portraitMedia || !mobileInitial.stable || mobileInitial.retainedLeaves !== 1911 ||
+    if (!mobileInitial.portraitMedia || !mobileInitial.stable || mobileInitial.retainedLeaves !== 1952 ||
         mobileInitial.displayedFoundationCount !== 1 ||
-        mobileInitial.cardRect.width < 65 || mobileInitial.cardRect.width > 80 ||
-        mobileInitial.cardRect.height < 90 || mobileInitial.cardRect.height > 110 ||
+        Math.abs(mobileInitial.cardRect.width - 72.109375) > 0.1 ||
+        Math.abs(mobileInitial.cardRect.height - 97.5) > 0.1 ||
         mobileInitial.cardRect.height <= mobileInitial.cardRect.width ||
-        mobileInitial.cardRect.left < 150 || mobileInitial.cardRect.left > 170 ||
-        mobileInitial.boardTransform !== "matrix(1, 0, 0, 1, -192, -360)" ||
+        Math.abs(mobileInitial.cardRect.left - 158.9453125) > 0.1 ||
+        Math.abs(mobileInitial.cardRect.top - 80) > 0.1 ||
+        mobileInitial.sceneTransform !== "none" || mobileInitial.boardTransform !== "none" ||
         mobileInitial.mutations.added !== 0 || mobileInitial.mutations.removed !== 0 ||
         !mobileEvidence.stable || mobileEvidence.visibleLeaves <= 1 ||
         mobileEvidence.intersectingVisibleLeaves <= 4 ||
         mobileEvidence.visibleBounds.left > 8 || mobileEvidence.visibleBounds.right < 382 ||
+        mobileEvidence.visibleBounds.top < 7.9 ||
         mobileEvidence.visibleBounds.top >= 0.2 * 844 ||
+        Math.abs(mobileEvidence.visibleBounds.bottom - 844) > 0.2 ||
         mobileEvidence.visibleBounds.bottom <= 0.72 * 844 ||
         mobileEvidence.visibleBounds.bottom - mobileEvidence.visibleBounds.top <= 0.65 * 844 ||
         mobileEvidence.mutations.added !== 0 || mobileEvidence.mutations.removed !== 0) {
@@ -273,29 +332,101 @@ try {
     }
     const responsiveCardCounts = [];
     for (const viewport of [
-      { width: 390, height: 844, expected: 1 },
-      { width: 600, height: 900, expected: 2 },
-      { width: 800, height: 1_000, expected: 3 },
-      { width: 960, height: 1_200, expected: 4 },
+      { width: 390, height: 844, expected: 1, expectedSize: [72.109375, 97.5], expectedLefts: [158.9453125] },
+      { width: 600, height: 900, expected: 2, expectedSize: [88.75, 120], expectedLefts: [322.25, 425] },
+      { width: 800, height: 1_000, expected: 3, expectedSize: [98.611111, 133.333333], expectedLefts: [355.833333, 469.444444, 583.055556] },
+      { width: 960, height: 1_200, expected: 4, expectedSize: [118.333333, 160], expectedLefts: [423, 558.333333, 693.666667, 829] },
     ]) {
       await page.setViewportSize(viewport);
       await page.waitForTimeout(50);
-      const displayed = await page.evaluate(() => {
+      const layout = await page.evaluate(() => {
         window.__cssSolitaireDebug.seek(0);
-        return [...document.querySelectorAll(".csssolitaire-board > s.foundation")]
-          .filter((foundation) => getComputedStyle(foundation).display !== "none").length;
+        const cards = [...document.querySelectorAll(".csssolitaire-board > s.foundation")]
+          .filter((foundation) => getComputedStyle(foundation).display !== "none")
+          .map((foundation) => {
+            const rect = foundation.getBoundingClientRect();
+            return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+          });
+        const state = window.__cssSolitaireDebug.snapshot();
+        const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[state.patternIndex].durationMs;
+        window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
+        const visibleRects = [...document.querySelectorAll(".csssolitaire-board > s")]
+          .filter((leaf) => {
+            const style = getComputedStyle(leaf);
+            return style.display !== "none" && style.visibility === "visible";
+          })
+          .map((leaf) => leaf.getBoundingClientRect());
+        return {
+          cards,
+          visibleLeft: Math.min(...visibleRects.map((rect) => rect.left)),
+          visibleRight: Math.max(...visibleRects.map((rect) => rect.right)),
+        };
       });
-      responsiveCardCounts.push({ ...viewport, displayed });
+      responsiveCardCounts.push({
+        ...viewport,
+        expectedTop: 80,
+        displayed: layout.cards.length,
+        ...layout,
+      });
     }
-    if (responsiveCardCounts.some(({ expected, displayed }) => expected !== displayed)) {
-      throw new Error(`cssSolitaire responsive card count drifted: ${JSON.stringify(responsiveCardCounts)}`);
+    if (responsiveCardCounts.some(({
+      width, expected, expectedTop, expectedSize, displayed, expectedLefts, cards, visibleLeft, visibleRight,
+    }) =>
+      expected !== displayed || cards.some((card, index) =>
+        Math.abs(card.left - expectedLefts[index]) > 0.1 ||
+        Math.abs(card.top - expectedTop) > 0.1 ||
+        Math.abs(card.width - expectedSize[0]) > 0.1 || Math.abs(card.height - expectedSize[1]) > 0.1) ||
+      (expected === 1
+        ? visibleLeft < -0.1 || visibleRight > width + 0.1
+        : visibleLeft > -0.9 * expectedSize[0] || visibleRight < width + 0.9 * expectedSize[0]))) {
+      throw new Error(`cssSolitaire responsive slot layout drifted: ${JSON.stringify(responsiveCardCounts)}`);
+    }
+    const landscapeViewports = [];
+    for (const viewport of [
+      { width: 960, height: 540, expectedSize: [99.84375, 135], expectedLefts: [430.078125, 562.558594, 695.039063, 827.519531] },
+      { width: 1_280, height: 720, expectedSize: [133.125, 180], expectedLefts: [573.4375, 750.078125, 926.71875, 1_103.359375] },
+      { width: 1_440, height: 900, expectedSize: [149.765625, 202.5], expectedLefts: [645.117188, 843.837891, 1_042.558594, 1_241.279297] },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(50);
+      const layout = await page.evaluate(() => {
+        window.__cssSolitaireDebug.seek(0);
+        const cards = [...document.querySelectorAll(".csssolitaire-board > s.foundation")]
+          .map((foundation) => {
+            const rect = foundation.getBoundingClientRect();
+            return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+          });
+        const state = window.__cssSolitaireDebug.snapshot();
+        const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[state.patternIndex].durationMs;
+        window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
+        const visible = [...document.querySelectorAll(".csssolitaire-board > s")]
+          .filter((leaf) => getComputedStyle(leaf).visibility === "visible")
+          .map((leaf) => leaf.getBoundingClientRect());
+        return {
+          cards,
+          visibleLeft: Math.min(...visible.map((rect) => rect.left)),
+          visibleTop: Math.min(...visible.map((rect) => rect.top)),
+          visibleBottom: Math.max(...visible.map((rect) => rect.bottom)),
+        };
+      });
+      landscapeViewports.push({ ...viewport, expectedTop: 80, ...layout });
+    }
+    if (landscapeViewports.some(({
+      height, expectedTop, expectedSize, expectedLefts, cards, visibleLeft, visibleTop, visibleBottom,
+    }) =>
+      cards.some((card, index) => Math.abs(card.left - expectedLefts[index]) > 0.1 ||
+        Math.abs(card.top - expectedTop) > 0.1 || Math.abs(card.width - expectedSize[0]) > 0.1 ||
+        Math.abs(card.height - expectedSize[1]) > 0.1) ||
+      visibleLeft > -0.9 * expectedSize[0] ||
+      visibleTop < 7.9 || visibleTop > 80 || Math.abs(visibleBottom - height) > 0.2)) {
+      throw new Error(`cssSolitaire viewport fill drifted: ${JSON.stringify(landscapeViewports)}`);
     }
     await page.evaluate(() => window.__cssSolitaireSmoke.observer.disconnect());
     process.stdout.write(`${JSON.stringify({
       status: "passed", headless: true, browser: browser.version(), deploy, route,
       readyMs, sampled, autoplayLoop, bankSequence, evidence, visibleBounds, cardPixelRatio, screenshotPath,
       mobileInitial, mobileEvidence, mobileCardPixelRatio, mobileScreenshotPath,
-      responsiveCardCounts,
+      responsiveCardCounts, landscapeViewports,
     }, null, 2)}\n`);
   } finally {
     await browser.close();

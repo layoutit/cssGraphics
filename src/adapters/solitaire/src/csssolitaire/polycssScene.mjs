@@ -33,18 +33,31 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
     throw new Error("Mounted cssSolitaire retained DOM census drifted");
   }
   const stableNodes = Object.freeze([mountedCamera, mountedScene, mountedBoard, ...mountedLeaves]);
+  let presentationScale = 1;
+  let presentationScaleWrites = 0;
 
-  function fit() {
-    const portrait = host.clientHeight > host.clientWidth;
-    const [sourceWidth, sourceHeight] = portrait
-      ? manifest.renderer.portraitPlayfield
-      : manifest.sourceProfile.playfield;
-    const scale = Math.min(host.clientWidth / sourceWidth, host.clientHeight / sourceHeight);
-    mountedScene.style.setProperty("--csssolitaire-fit", String(scale));
+  function updatePresentation() {
+    const width = host.clientWidth || manifest.renderer.landscapePresentationBase[0];
+    const height = host.clientHeight || manifest.renderer.landscapePresentationBase[1];
+    presentationScale = height >= width
+      ? Math.min(
+        width / manifest.renderer.portraitPresentationBase[0],
+        height / manifest.renderer.portraitPresentationBase[1],
+      )
+      : manifest.renderer.landscapePresentationBaseScale * Math.min(
+        width / manifest.renderer.landscapePresentationBase[0],
+        height / manifest.renderer.landscapePresentationBase[1],
+      );
+    const serialized = String(Number(presentationScale.toFixed(8)));
+    if (host.style.getPropertyValue("--csssolitaire-presentation-scale") !== serialized) {
+      host.style.setProperty("--csssolitaire-presentation-scale", serialized);
+      presentationScaleWrites += 1;
+    }
   }
-  const resizeObserver = new ResizeObserver(fit);
-  resizeObserver.observe(host);
-  fit();
+  const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(updatePresentation) : null;
+  resizeObserver?.observe(host);
+  globalThis.addEventListener?.("resize", updatePresentation);
+  updatePresentation();
 
   function assertStableDomIdentity() {
     const current = [
@@ -79,12 +92,17 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
         runtimeDomMutationCount: 0,
         runtimeDomMutationObserverInstalled: false,
         runtimeDomGrowth: false,
-        runtimeFitCalculationPurpose: "resize-only-prepared-responsive-playfield",
+        runtimeFitCalculationPurpose: "single-root-presentation-scale-only",
+        runtimePresentationScale: presentationScale,
+        runtimePresentationScaleWrites: presentationScaleWrites,
+        runtimeGeometryBoundsCalculationCount: 0,
       });
     },
     destroy() {
-      resizeObserver.disconnect();
+      resizeObserver?.disconnect();
+      globalThis.removeEventListener?.("resize", updatePresentation);
       host.replaceChildren();
+      host.style.removeProperty("--csssolitaire-presentation-scale");
       mountedStyle?.remove();
       mountedStyle = null;
     },

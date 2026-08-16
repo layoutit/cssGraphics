@@ -24,19 +24,20 @@ test("product shell is the standard css.graphics route without demo controls", a
   assert.match(css, /\.site-wordmark \{[^}]*color: #aeb4bc;/u);
   assert.match(css, /\.site-action-icon-only \{[^}]*pointer-events: auto;/u);
   assert.equal(
-    (css.match(/background: linear-gradient\(180deg, #0b1119 0%, #000 100%\);/gu) ?? []).length,
+    (css.match(/background: linear-gradient\(180deg, #008000 0%, #003d00 100%\);/gu) ?? []).length,
     2,
   );
   assert.match(css, /#scene \{[^}]*position: absolute;[^}]*inset: 0;[^}]*contain: layout paint size style;/u);
-  assert.doesNotMatch(css, /#008000|#001900/u);
   assert.doesNotMatch(css, /clip-path|mask(?:-image)?|filter|box-shadow|text-shadow|mix-blend-mode/iu);
   assert.match(client, /loadPreparedSolitaire/u);
   assert.match(player, /createPolyMorphPreparedDomTarget/u);
   assert.match(player, /deadline-setTimeout-prepared-visibility-publication/u);
   assert.doesNotMatch(player, /Math\.random|requestAnimationFrame\s*\(|createElement|DOMMatrix/u);
-  assert.match(snapshotMount, /new ResizeObserver\(fit\)/u);
-  assert.match(snapshotMount, /manifest\.sourceProfile\.playfield/u);
-  assert.match(snapshotMount, /manifest\.renderer\.portraitPlayfield/u);
-  assert.match(snapshotMount, /host\.clientHeight > host\.clientWidth/u);
+  assert.match(snapshotMount, /new ResizeObserver\(updatePresentation\)/u);
+  assert.match(snapshotMount, /host\.clientWidth/u);
+  assert.match(snapshotMount, /host\.clientHeight/u);
+  assert.match(snapshotMount, /--csssolitaire-presentation-scale/u);
+  assert.match(snapshotMount, /single-root-presentation-scale-only/u);
+  assert.match(snapshotMount, /runtimeGeometryBoundsCalculationCount: 0/u);
   assert.doesNotMatch(snapshotMount, /renderer\.contentBounds/u);
 });

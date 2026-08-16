@@ -7,7 +7,7 @@ accumulate as persistent framebuffer-style ghosts before the scene rewinds.
 Each completed rewind selects from a shuffled bank of 24 prepared trajectory
 patterns without an immediate repeat.
 
-The browser adopts 1,911 prepared card leaves—the largest bank entry plus the
+The browser adopts 1,952 prepared card leaves—the largest bank entry plus the
 four launch cards—and applies sparse signed visibility rows. Card geometry,
 trajectories, ordering, atlas coordinates, and the complete DOM snapshot are
 prepared ahead of time. A handoff changes only the prepared bank index and the
@@ -15,12 +15,25 @@ hidden leaf layout. Runtime does not build a model, generate motion, rasterize
 an atlas, create card leaves, or clear the trail at handoff.
 `@layoutit/polycss-morph` owns the stable prepared-DOM target.
 
-The package carries a 585×384 landscape transform profile plus four 384×720
-portrait profiles. Narrow portrait viewports show one centered full-size card
-stream; wider portrait layouts progressively show two, three, then four.
-Portrait horizontal motion reflects from the prepared side walls, and every
-card remains upright. CSS selects the matching profile without changing the
-retained DOM.
+The source simulation stays bound to the recovered 585×384 playfield. Prepared
+leaf transforms express position in viewport units, so there is no centered
+reference playfield or letterbox. The foundation row keeps a fixed 80px top
+margin while the recovered floor maps to the real viewport bottom at every size.
+One smooth prepared curve maps the source apex to an 8px inset, the launch line
+to 80px, and the lowest retained bounce point to the real viewport bottom.
+Responsive cards therefore keep a natural continuous arch without clipping
+either viewport edge.
+Launch origins follow Solitaire's recovered seven-slot gap
+rule; narrow portrait viewports keep one centered full-size card stream while
+wider layouts progressively expose two, three, then four proper foundation slots.
+The one-card mobile stream reflects from normalized prepared side-wall positions;
+the wider multi-card profiles and landscape map their prepared exit boundary
+fully beyond the real viewport. The first two foundation lanes occasionally
+exit right while the remaining lanes keep their leftward exit. Every card
+remains upright. As in the sibling
+cssGraphics adapters, one
+retained-root presentation scale follows the viewport; CSS derives card dimensions
+from it without per-leaf geometry work or retained-DOM changes.
 
 ## Run
 

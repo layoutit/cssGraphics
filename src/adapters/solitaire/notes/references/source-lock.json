@@ -24,6 +24,8 @@
       "waitMilliseconds": 5,
       "preparedCadenceMillisecondsPerDraw": 7.5,
       "exit": "x <= -cardWidth or x >= clientWidth",
+      "slotCount": 7,
+      "horizontalGap": "max((clientWidth - cardWidth * 7) / 8, cardWidth / 8 + 3), using signed integer truncation",
       "cardsRemainUpright": true,
       "framebufferClearDuringCard": false
     }
@@ -31,7 +33,12 @@
   "preparedDeterminism": {
     "rng": "MSVCRT-compatible",
     "entryState": 1,
-    "playfield": [585, 384]
+    "playfield": [585, 384],
+    "horizontalVelocityDistribution": "mild-slow-bias-first-two-lanes-quarter-right-unique-per-lane-cycle",
+    "horizontalVelocityBiasExponent": 1.1,
+    "rightwardFoundationIndices": [0, 1],
+    "rightwardSelection": "random-value-modulo-4-zero",
+    "exactSameLaneTrajectoryRepeats": false
   },
   "cardArtwork": {
     "id": "loren-osborn-english-pattern-playing-cards-deck-plus-cc0",

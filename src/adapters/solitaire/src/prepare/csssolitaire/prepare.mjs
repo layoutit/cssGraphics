@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+
+import sharp from "sharp";
 
 import {
   generatedProductRoot,
@@ -10,8 +12,14 @@ import {
 
 const SOURCE_WIDTH = 585;
 const SOURCE_HEIGHT = 384;
-const PORTRAIT_WIDTH = SOURCE_HEIGHT;
-const PORTRAIT_HEIGHT = 720;
+const LANDSCAPE_PLAYFIELD = Object.freeze([960, 540]);
+const LANDSCAPE_PRESENTATION_SCALE = Math.min(
+  LANDSCAPE_PLAYFIELD[0] / SOURCE_WIDTH,
+  LANDSCAPE_PLAYFIELD[1] / SOURCE_HEIGHT,
+);
+const FOUNDATION_PRESENTATION_TOP = 80;
+const ARCH_PRESENTATION_TOP = 8;
+const SOURCE_ARCH_TOP = -71;
 const SOURCE_WAIT_MS = 5;
 const GDI_PLAYBACK_SCALE = 1.5;
 const SOURCE_STEP_MS = SOURCE_WAIT_MS * GDI_PLAYBACK_SCALE;
@@ -23,11 +31,17 @@ const CARD_ATLAS_WIDTH = 960;
 const CARD_ATLAS_HEIGHT = 2_080;
 const CARD_SOURCE_WIDTH = 240;
 const CARD_SOURCE_HEIGHT = 160;
+const CARD_ATLAS_PIXEL_SCALE = 2;
+const CARD_BORDER_COLOR = Object.freeze([69, 72, 77]);
+const CARD_RED_SOURCE = Object.freeze([255, 85, 85]);
+const CARD_RED_COLOR = Object.freeze([230, 24, 10]);
 const CARD_WIDTH = 71;
 const CARD_HEIGHT = 96;
 const FLOOR_Y = SOURCE_HEIGHT - CARD_HEIGHT;
+const SOURCE_BOUNCE_BOTTOM = 299;
 const FOUNDATION_Y = 4;
-const FOUNDATION_GAP = (SOURCE_WIDTH - CARD_WIDTH * 7) / 8;
+const SOLITAIRE_SLOT_COUNT = 7;
+const MINIMUM_SLOT_GAP = Math.trunc(CARD_WIDTH / 8) + 3;
 const STARTING_CARDS = Object.freeze([
   Object.freeze({ id: "king-of-spades", rank: 13, suit: 0, slot: 3, velocityY: -70 }),
   Object.freeze({ id: "queen-of-hearts", rank: 12, suit: 1, slot: 4, velocityY: -50 }),
@@ -35,10 +49,16 @@ const STARTING_CARDS = Object.freeze([
   Object.freeze({ id: "ace-of-clubs", rank: 1, suit: 3, slot: 6, velocityY: -10 }),
 ].map((card) => Object.freeze({
   ...card,
-  x: FOUNDATION_GAP + card.slot * (CARD_WIDTH + FOUNDATION_GAP),
+  x: solitaireSlotLeft(SOURCE_WIDTH, card.slot),
 })));
 const FOUNDATION_COUNT = STARTING_CARDS.length;
-const PORTRAIT_CARD_COUNTS = Object.freeze([1, 2, 3, 4]);
+const PORTRAIT_PROFILES = Object.freeze([
+  Object.freeze({ cardCount: 1, playfield: Object.freeze([384, 720]) }),
+  Object.freeze({ cardCount: 2, playfield: Object.freeze([600, 900]) }),
+  Object.freeze({ cardCount: 3, playfield: Object.freeze([800, 1_000]) }),
+  Object.freeze({ cardCount: 4, playfield: Object.freeze([960, 1_200]) }),
+]);
+const PORTRAIT_CARD_COUNTS = Object.freeze(PORTRAIT_PROFILES.map(({ cardCount }) => cardCount));
 const PORTRAIT_CARD_BREAKPOINTS = Object.freeze([520, 720, 920]);
 const PORTRAIT_HORIZONTAL_DISTANCE_SCALE = 2;
 const LAUNCH_CYCLE_COUNT = 3;
@@ -63,6 +83,7 @@ const LAUNCH_CARDS = Object.freeze(Array.from(
   }),
 ).flat());
 const TRAIL_SAMPLE_DISTANCE = 2;
+const HORIZONTAL_VELOCITY_BIAS_EXPONENT = 1.1;
 const PREPARED_PATTERN_COUNT = 24;
 const PREPARED_PATTERN_SEEDS = Object.freeze(Array.from(
   { length: PREPARED_PATTERN_COUNT },
@@ -76,71 +97,25 @@ function rounded(value) {
   return Object.is(next, -0) ? 0 : next;
 }
 
-function matrix(values) {
-  return values.map(rounded);
-}
-
-function multiply(left, right) {
-  const output = Array(16).fill(0);
-  for (let column = 0; column < 4; column += 1) {
-    for (let row = 0; row < 4; row += 1) {
-      for (let axis = 0; axis < 4; axis += 1) {
-        output[column * 4 + row] += left[axis * 4 + row] * right[column * 4 + axis];
-      }
-    }
+function calcLength(viewportValue, viewportUnit, pixelValue, variableFactor, variableName) {
+  const terms = [`${rounded(viewportValue)}${viewportUnit}`];
+  for (const [value, suffix] of [
+    [pixelValue, "px"],
+    [variableFactor, ` * var(${variableName})`],
+  ]) {
+    const roundedValue = rounded(value);
+    terms.push(`${roundedValue < 0 ? "-" : "+"} ${rounded(Math.abs(roundedValue))}${suffix}`);
   }
-  return matrix(output);
+  return `calc(${terms.join(" ")})`;
 }
 
-function identity() {
+function cardTransform({ xViewport, xCardWidthFactor, yViewport, yPixels, yCardHeightFactor }) {
   return [
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, 0,
-    0, 0, 0, 1,
-  ];
-}
-
-function compose(...values) {
-  return values.reduce((result, value) => multiply(result, value), identity());
-}
-
-function translation(x, y, z) {
-  return matrix([
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, 0,
-    x, y, z, 1,
-  ]);
-}
-
-function rotationZ(degrees) {
-  const radians = degrees * Math.PI / 180;
-  const cosine = Math.cos(radians);
-  const sine = Math.sin(radians);
-  return matrix([
-    cosine, sine, 0, 0,
-    -sine, cosine, 0, 0,
-    0, 0, 1, 0,
-    0, 0, 0, 1,
-  ]);
-}
-
-function scale(x, y, z) {
-  return matrix([
-    x, 0, 0, 0,
-    0, y, 0, 0,
-    0, 0, z, 0,
-    0, 0, 0, 1,
-  ]);
-}
-
-function cardMatrix(left, top, z) {
-  return compose(
-    translation(left + CARD_WIDTH, top, z),
-    rotationZ(90),
-    scale(CARD_HEIGHT / CARD_SOURCE_WIDTH, CARD_WIDTH / CARD_SOURCE_HEIGHT, 1),
-  );
+    `translate(${calcLength(xViewport, "vw", 0, xCardWidthFactor, "--csssolitaire-card-width")},` +
+      `${calcLength(yViewport, "vh", yPixels, yCardHeightFactor, "--csssolitaire-card-height")})`,
+    "rotate(90deg)",
+    "scale(var(--csssolitaire-card-transform-x),var(--csssolitaire-card-transform-y))",
+  ].join(" ");
 }
 
 function reflectBetween(value, minimum, maximum) {
@@ -150,18 +125,82 @@ function reflectBetween(value, minimum, maximum) {
   return offset <= range ? minimum + offset : maximum - (offset - range);
 }
 
-function portraitCardPosition(left, top, foundationIndex, cardCount) {
-  if (foundationIndex >= cardCount) return null;
-  const gap = (PORTRAIT_WIDTH - cardCount * CARD_WIDTH) / (cardCount + 1);
-  const startLeft = gap + foundationIndex * (CARD_WIDTH + gap);
-  const sourceStartLeft = STARTING_CARDS[foundationIndex].x;
+function solitaireSlotGap(width, cardWidth = CARD_WIDTH) {
+  return Math.max(
+    (width - cardWidth * SOLITAIRE_SLOT_COUNT) / (SOLITAIRE_SLOT_COUNT + 1),
+    Math.trunc(cardWidth / 8) + 3,
+  );
+}
+
+function solitaireSlotLeft(width, slot, cardWidth = CARD_WIDTH) {
+  const gap = solitaireSlotGap(width, cardWidth);
+  return gap + slot * (cardWidth + gap);
+}
+
+function verticalCardPosition(top) {
+  const archWeight = (top - FOUNDATION_Y) * (top - SOURCE_BOUNCE_BOTTOM) /
+    ((SOURCE_ARCH_TOP - FOUNDATION_Y) * (SOURCE_ARCH_TOP - SOURCE_BOUNCE_BOTTOM));
+  const foundationWeight = (top - SOURCE_ARCH_TOP) * (top - SOURCE_BOUNCE_BOTTOM) /
+    ((FOUNDATION_Y - SOURCE_ARCH_TOP) * (FOUNDATION_Y - SOURCE_BOUNCE_BOTTOM));
+  const floorWeight = (top - SOURCE_ARCH_TOP) * (top - FOUNDATION_Y) /
+    ((SOURCE_BOUNCE_BOTTOM - SOURCE_ARCH_TOP) * (SOURCE_BOUNCE_BOTTOM - FOUNDATION_Y));
   return Object.freeze({
-    left: reflectBetween(
-      startLeft + (left - sourceStartLeft) * PORTRAIT_HORIZONTAL_DISTANCE_SCALE,
-      0,
-      PORTRAIT_WIDTH - CARD_WIDTH,
-    ),
-    top: (top + CARD_HEIGHT / 2) * PORTRAIT_HEIGHT / SOURCE_HEIGHT - CARD_HEIGHT / 2,
+    yViewport: floorWeight * 100,
+    yPixels: archWeight * ARCH_PRESENTATION_TOP +
+      foundationWeight * FOUNDATION_PRESENTATION_TOP,
+    yCardHeightFactor: -floorWeight,
+  });
+}
+
+function landscapeCardPosition(left, top, foundationIndex, horizontalDirection) {
+  const sourceStartLeft = STARTING_CARDS[foundationIndex].x;
+  const slot = STARTING_CARDS[foundationIndex].slot;
+  const slotFraction = (slot + 1) / (SOLITAIRE_SLOT_COUNT + 1);
+  const horizontalPosition = horizontalDirection > 0
+    ? slotFraction + (1 - slotFraction) * (left - sourceStartLeft) / (SOURCE_WIDTH - sourceStartLeft)
+    : slotFraction * (1 - (sourceStartLeft - left) / (sourceStartLeft + CARD_WIDTH));
+  return Object.freeze({
+    xViewport: horizontalPosition * 100,
+    xCardWidthFactor: horizontalPosition,
+    ...verticalCardPosition(top),
+  });
+}
+
+function portraitCardPosition(left, top, foundationIndex, horizontalDirection, profile) {
+  if (foundationIndex >= profile.cardCount) return null;
+  const [width, height] = profile.playfield;
+  const presentationScale = Math.min(width / 384, height / 720);
+  const cardWidth = CARD_WIDTH * presentationScale;
+  const startLeft = profile.cardCount === 1
+    ? (width - cardWidth) / 2
+    : solitaireSlotLeft(width, STARTING_CARDS[foundationIndex].slot, cardWidth);
+  const sourceStartLeft = STARTING_CARDS[foundationIndex].x;
+  const unboundedLeft = startLeft +
+    (left - sourceStartLeft) * PORTRAIT_HORIZONTAL_DISTANCE_SCALE * presentationScale;
+  const vertical = verticalCardPosition(top);
+  if (profile.cardCount > 1) {
+    const startProgress = startLeft / (width - cardWidth);
+    if (horizontalDirection > 0) {
+      const progress = (left - sourceStartLeft) / (SOURCE_WIDTH - sourceStartLeft);
+      return Object.freeze({
+        xViewport: (startProgress + (1 - startProgress) * progress) * 100,
+        xCardWidthFactor: 1 - startProgress + startProgress * progress,
+        ...vertical,
+      });
+    }
+    const remainingHorizontalProgress = 1 - (sourceStartLeft - left) / (sourceStartLeft + CARD_WIDTH);
+    return Object.freeze({
+      xViewport: startProgress * remainingHorizontalProgress * 100,
+      xCardWidthFactor: (1 - startProgress) * remainingHorizontalProgress,
+      ...vertical,
+    });
+  }
+  const reflectedLeft = reflectBetween(unboundedLeft, 0, width - cardWidth);
+  const horizontalProgress = reflectedLeft / (width - cardWidth);
+  return Object.freeze({
+    xViewport: horizontalProgress * 100,
+    xCardWidthFactor: 1 - horizontalProgress,
+    ...vertical,
   });
 }
 
@@ -177,6 +216,78 @@ function faceNumber(rank, suit) {
   return suit * 13 + rank;
 }
 
+async function prepareCardAtlas(cardBytes) {
+  const { data, info } = await sharp(cardBytes).raw().toBuffer({ resolveWithObject: true });
+  const cellWidth = CARD_SOURCE_WIDTH * CARD_ATLAS_PIXEL_SCALE;
+  const cellHeight = CARD_SOURCE_HEIGHT * CARD_ATLAS_PIXEL_SCALE;
+  if (info.width !== CARD_ATLAS_WIDTH * CARD_ATLAS_PIXEL_SCALE ||
+      info.height !== CARD_ATLAS_HEIGHT * CARD_ATLAS_PIXEL_SCALE || info.channels < 3) {
+    throw new Error("cssSolitaire CC0 card atlas dimensions drifted");
+  }
+  let recoloredRedPixelCount = 0;
+  const redChannelDeltas = CARD_RED_SOURCE.map((sourceChannel, index) =>
+    sourceChannel - CARD_RED_COLOR[index]);
+  for (let pixelIndex = 0; pixelIndex < data.length; pixelIndex += info.channels) {
+    const red = data[pixelIndex];
+    const green = data[pixelIndex + 1];
+    const blue = data[pixelIndex + 2];
+    const chroma = red - Math.max(green, blue);
+    if (red <= 120 || chroma <= 24 || Math.abs(green - blue) > 32) continue;
+    const strength = Math.min(1, chroma / (CARD_RED_SOURCE[0] - CARD_RED_SOURCE[1]));
+    data[pixelIndex] = Math.round(red - redChannelDeltas[0] * strength);
+    data[pixelIndex + 1] = Math.round(green - redChannelDeltas[1] * strength);
+    data[pixelIndex + 2] = Math.round(blue - redChannelDeltas[2] * strength);
+    recoloredRedPixelCount += 1;
+  }
+  let recoloredBorderPixelCount = 0;
+  for (let row = 0; row < 13; row += 1) {
+    for (let column = 0; column < 4; column += 1) {
+      const visited = new Uint8Array(cellWidth * cellHeight);
+      const queue = new Int32Array(cellWidth * cellHeight);
+      let head = 0;
+      let tail = 0;
+      const enqueue = (x, y) => {
+        const localIndex = y * cellWidth + x;
+        if (visited[localIndex]) return;
+        const pixelIndex = ((row * cellHeight + y) * info.width + column * cellWidth + x) * info.channels;
+        if (data[pixelIndex] > 8 || data[pixelIndex + 1] > 8 || data[pixelIndex + 2] > 8) return;
+        visited[localIndex] = 1;
+        queue[tail] = localIndex;
+        tail += 1;
+      };
+      for (let x = 0; x < cellWidth; x += 1) {
+        enqueue(x, 0);
+        enqueue(x, cellHeight - 1);
+      }
+      for (let y = 1; y < cellHeight - 1; y += 1) {
+        enqueue(0, y);
+        enqueue(cellWidth - 1, y);
+      }
+      while (head < tail) {
+        const localIndex = queue[head];
+        head += 1;
+        const x = localIndex % cellWidth;
+        const y = Math.floor(localIndex / cellWidth);
+        const pixelIndex = ((row * cellHeight + y) * info.width + column * cellWidth + x) * info.channels;
+        data[pixelIndex] = CARD_BORDER_COLOR[0];
+        data[pixelIndex + 1] = CARD_BORDER_COLOR[1];
+        data[pixelIndex + 2] = CARD_BORDER_COLOR[2];
+        recoloredBorderPixelCount += 1;
+        for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
+          for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+            const nextX = x + offsetX;
+            const nextY = y + offsetY;
+            if ((offsetX !== 0 || offsetY !== 0) && nextX >= 0 && nextX < cellWidth &&
+                nextY >= 0 && nextY < cellHeight) enqueue(nextX, nextY);
+          }
+        }
+      }
+    }
+  }
+  const bytes = await sharp(data, { raw: info }).png({ compressionLevel: 9 }).toBuffer();
+  return Object.freeze({ bytes, recoloredBorderPixelCount, recoloredRedPixelCount });
+}
+
 function msvcRandom(initialState) {
   let state = initialState >>> 0;
   return () => {
@@ -185,23 +296,44 @@ function msvcRandom(initialState) {
   };
 }
 
-function matrixText(value) {
-  return `matrix(${[value[0], value[1], value[4], value[5], value[12], value[13]].join(",")})`;
-}
-
 function snapshotId(index) {
   return `trail-${String(index).padStart(5, "0")}`;
+}
+
+function biasedHorizontalVelocity(randomValue, allowRightward) {
+  const normalized = (randomValue % 46) / 45;
+  const magnitude = 20 + Math.round(45 * normalized ** HORIZONTAL_VELOCITY_BIAS_EXPONENT);
+  return allowRightward && randomValue % 4 === 0 ? magnitude : -magnitude;
+}
+
+function nearestUnusedVelocity(velocity, usedVelocities) {
+  if (!usedVelocities.has(velocity)) return velocity;
+  const direction = Math.sign(velocity);
+  for (let delta = 1; delta <= 45; delta += 1) {
+    for (const candidate of [velocity - direction * delta, velocity + direction * delta]) {
+      if (Math.abs(candidate) >= 20 && Math.abs(candidate) <= 65 && !usedVelocities.has(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  throw new Error("Unable to prepare a unique same-lane Solitaire trajectory");
 }
 
 function simulateSource(seed) {
   const random = msvcRandom(seed);
   const snapshots = [];
   const cards = [];
+  const laneVelocities = Array.from({ length: FOUNDATION_COUNT }, () => new Set());
   let sourceStep = 0;
   let sourceDraws = 0;
   for (const startingCard of LAUNCH_CARDS) {
     const startStep = sourceStep;
-    const velocityX = -(20 + random() % 46);
+    const usedVelocities = laneVelocities[startingCard.foundationIndex];
+    const velocityX = nearestUnusedVelocity(
+      biasedHorizontalVelocity(random(), startingCard.foundationIndex < 2),
+      usedVelocities,
+    );
+    usedVelocities.add(velocityX);
     let velocityY = startingCard.velocityY;
     let x = startingCard.x;
     let y = FOUNDATION_Y;
@@ -214,6 +346,7 @@ function simulateSource(seed) {
           id: snapshotId(snapshots.length),
           faceNumber: faceNumber(startingCard.rank, startingCard.suit),
           foundationIndex: startingCard.foundationIndex,
+          horizontalDirection: Math.sign(velocityX),
           sourceStep,
           timeMs: INITIAL_HOLD_MS + sourceStep * SOURCE_STEP_MS,
           x,
@@ -241,14 +374,15 @@ function simulateSource(seed) {
   return Object.freeze({ cards, snapshots, sourceDraws, sourceSteps: sourceStep });
 }
 
-function cardLeaf({ cardFace, foundationIndex, left, top, z }) {
-  const portraitMatrices = PORTRAIT_CARD_COUNTS.map((cardCount) => {
-    const portrait = portraitCardPosition(left, top, foundationIndex, cardCount);
-    return portrait ? cardMatrix(portrait.left, portrait.top, z) : null;
+function cardLeaf({ cardFace, foundationIndex, horizontalDirection, left, top }) {
+  const landscape = landscapeCardPosition(left, top, foundationIndex, horizontalDirection);
+  const portraitMatrices = PORTRAIT_PROFILES.map((profile) => {
+    const portrait = portraitCardPosition(left, top, foundationIndex, horizontalDirection, profile);
+    return portrait ? cardTransform(portrait) : null;
   });
   return Object.freeze({
     foundationIndex,
-    matrix: cardMatrix(left, top, z),
+    matrix: cardTransform(landscape),
     portraitMatrices: Object.freeze(portraitMatrices),
     atlas: atlasPosition(cardFace),
   });
@@ -318,9 +452,9 @@ function buildPreparedPattern(seed, index) {
   const trailLeaves = source.snapshots.map((snapshot, leafIndex) => cardLeaf({
     cardFace: snapshot.faceNumber,
     foundationIndex: snapshot.foundationIndex,
+    horizontalDirection: snapshot.horizontalDirection,
     left: snapshot.x,
     top: snapshot.y,
-    z: leafIndex * 0.0001,
   }));
   const timeline = buildPatternPlayback(source.snapshots, source.cards, source.sourceSteps);
   const contentBounds = buildContentBounds(source.snapshots);
@@ -344,11 +478,11 @@ function buildPreparedPattern(seed, index) {
       frameTimesMs: timeline.frameTimesMs,
       visibilityRows: timeline.visibilityRows,
       foundationRows: timeline.foundationRows,
-      leafMatrices: trailLeaves.map(({ matrix: leafMatrix }) => matrixText(leafMatrix)),
+      leafMatrices: trailLeaves.map(({ matrix: leafMatrix }) => leafMatrix),
       leafPortraitMatricesByCardCount: PORTRAIT_CARD_COUNTS.map((_, profileIndex) =>
         trailLeaves.map(({ portraitMatrices }) => {
           const portraitMatrix = portraitMatrices[profileIndex];
-          return portraitMatrix ? matrixText(portraitMatrix) : null;
+          return portraitMatrix;
         })),
       leafAtlasIndices: source.snapshots.map(({ faceNumber: cardFace }) => cardFace - 1),
     }),
@@ -361,17 +495,16 @@ function buildSnapshot(leaves, cardAssetUrl) {
       .filter(Boolean).join(" ");
     const portraitProperties = leaf.portraitMatrices.map((portraitMatrix, profileIndex) =>
       portraitMatrix
-        ? `--csssolitaire-portrait-${profileIndex + 1}-transform:${matrixText(portraitMatrix)};`
+        ? `--csssolitaire-portrait-${profileIndex + 1}-transform:${portraitMatrix};`
         : "").join("");
-    return `<s class="${classes}" style="--csssolitaire-landscape-transform:${matrixText(leaf.matrix)};${portraitProperties}background-position:${-leaf.atlas.x}px ${-leaf.atlas.y}px"></s>`;
+    return `<s class="${classes}" style="--csssolitaire-landscape-transform:${leaf.matrix};${portraitProperties}background-position:${-leaf.atlas.x}px ${-leaf.atlas.y}px"></s>`;
   }).join("");
   const css = [
-    ".polycss-camera.solitaire-prepared-camera{position:relative;display:block;width:100%;height:100%;overflow:hidden}",
-    ".polycss-scene.solitaire-prepared-scene{position:absolute;top:50%;left:50%;width:0;height:0;transform:scale(var(--csssolitaire-fit,1));transform-origin:0 0}",
-    `.csssolitaire-board{position:absolute;transform:translate(${-SOURCE_WIDTH / 2}px,${-SOURCE_HEIGHT / 2}px);transform-origin:0 0}`,
+    `.polycss-camera.solitaire-prepared-camera{position:relative;display:block;width:100%;height:100%;overflow:hidden;--csssolitaire-card-width:calc(${CARD_WIDTH}px * var(--csssolitaire-presentation-scale,${LANDSCAPE_PRESENTATION_SCALE}));--csssolitaire-card-height:calc(${CARD_HEIGHT}px * var(--csssolitaire-presentation-scale,${LANDSCAPE_PRESENTATION_SCALE}));--csssolitaire-card-transform-x:calc(${CARD_HEIGHT / CARD_SOURCE_WIDTH} * var(--csssolitaire-presentation-scale,${LANDSCAPE_PRESENTATION_SCALE}));--csssolitaire-card-transform-y:calc(${CARD_WIDTH / CARD_SOURCE_HEIGHT} * var(--csssolitaire-presentation-scale,${LANDSCAPE_PRESENTATION_SCALE}))}`,
+    ".polycss-scene.solitaire-prepared-scene{position:absolute;inset:0}",
+    ".csssolitaire-board{position:absolute;inset:0}",
     `.csssolitaire-board>s{position:absolute;display:block;width:${CARD_SOURCE_WIDTH}px;height:${CARD_SOURCE_HEIGHT}px;margin:0;padding:0;overflow:hidden;border:0;border-radius:14px;background-image:url('${cardAssetUrl}');background-repeat:no-repeat;background-size:${CARD_ATLAS_WIDTH}px ${CARD_ATLAS_HEIGHT}px;transform:var(--csssolitaire-landscape-transform);transform-origin:0 0;visibility:hidden;pointer-events:none;text-decoration:none;font:normal normal normal 0/0 serif;image-rendering:auto}`,
     ".csssolitaire-board>s.foundation{visibility:visible}",
-    `@media (orientation:portrait){.csssolitaire-board{transform:translate(${-PORTRAIT_WIDTH / 2}px,${-PORTRAIT_HEIGHT / 2}px)}}`,
     `@media (orientation:portrait) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[0] - 1}px){.csssolitaire-board>s{transform:var(--csssolitaire-portrait-1-transform)}.csssolitaire-board>s:is(.lane-1,.lane-2,.lane-3){display:none}}`,
     `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[0]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[1] - 1}px){.csssolitaire-board>s{transform:var(--csssolitaire-portrait-2-transform)}.csssolitaire-board>s:is(.lane-2,.lane-3){display:none}}`,
     `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[1]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[2] - 1}px){.csssolitaire-board>s{transform:var(--csssolitaire-portrait-3-transform)}.csssolitaire-board>s.lane-3{display:none}}`,
@@ -385,8 +518,10 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
     readFile(join(sourceRoot, CARD_SOURCE_FILE)),
     readFile(referencePath),
   ]);
-  const cardSha256 = sha256(cardBytes);
-  if (cardSha256 !== EXPECTED_CARD_SHA256) throw new Error("cssSolitaire CC0 card atlas identity mismatch");
+  const sourceCardSha256 = sha256(cardBytes);
+  if (sourceCardSha256 !== EXPECTED_CARD_SHA256) throw new Error("cssSolitaire CC0 card atlas identity mismatch");
+  const preparedCardAtlas = await prepareCardAtlas(cardBytes);
+  const cardSha256 = sha256(preparedCardAtlas.bytes);
 
   const preparedPatterns = PREPARED_PATTERN_SEEDS.map((seed, index) => buildPreparedPattern(seed, index));
   const initialPattern = preparedPatterns[0];
@@ -396,9 +531,9 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
   const foundationLeaves = STARTING_CARDS.map((card, foundationIndex) => cardLeaf({
     cardFace: faceNumber(card.rank, card.suit),
     foundationIndex,
+    horizontalDirection: -1,
     left: card.x,
     top: FOUNDATION_Y,
-    z: -1,
   }));
   const trailLeaves = [...initialPattern.trailLeaves];
   while (trailLeaves.length < retainedTrailLeafCount) {
@@ -447,7 +582,13 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       patternSeeds: PREPARED_PATTERN_SEEDS,
       patternCount: preparedPatterns.length,
       patternSelection: playback.selection,
-      horizontalVelocityRange: [-65, -20],
+      horizontalVelocityRange: [-65, 65],
+      minimumHorizontalSpeed: 20,
+      horizontalVelocityDistribution: "mild-slow-bias-first-two-lanes-quarter-right-unique-per-lane-cycle",
+      horizontalVelocityBiasExponent: HORIZONTAL_VELOCITY_BIAS_EXPONENT,
+      rightwardFoundationIndices: [0, 1],
+      rightwardSelection: "random-value-modulo-4-zero",
+      exactSameLaneTrajectoryRepeats: false,
       initialVelocityY: STARTING_CARDS.map(({ velocityY }) => velocityY),
       rankOrder: "three-cycles-from-king-queen-jack-ace",
       startingCards: STARTING_CARDS.map(({ id }) => id),
@@ -463,6 +604,7 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
         seed,
         sourceDraws: patternSource.sourceDraws,
         sourceSteps: patternSource.sourceSteps,
+        rightwardLaunchCount: patternSource.cards.filter(({ velocityX }) => velocityX > 0).length,
         trailLeafCount: patternLeaves.length,
         preparedFrameCount: timeline.frameTimesMs.length,
         durationMs: timeline.durationMs,
@@ -479,12 +621,28 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       textureImageRendering: "auto",
       composition: "flat-2d-card-plane",
       contentBounds: [contentBounds.left, contentBounds.top, contentBounds.right, contentBounds.bottom],
-      portraitPlayfield: [PORTRAIT_WIDTH, PORTRAIT_HEIGHT],
       responsiveProfiles: ["landscape", "portrait"],
+      viewportPositioning: "prepared-css-vw-vh-no-letterbox",
+      viewportFill: true,
+      verticalMapping: "foundation-and-retained-bounce-bottom-anchored",
+      foundationTopCssPixels: FOUNDATION_PRESENTATION_TOP,
+      archTopCssPixels: ARCH_PRESENTATION_TOP,
+      sourceVerticalAnchors: [SOURCE_ARCH_TOP, FOUNDATION_Y, SOURCE_BOUNCE_BOTTOM],
+      upwardArchMapping: "prepared-source-smooth-three-anchor-curve",
+      cardSourceSize: [CARD_WIDTH, CARD_HEIGHT],
+      landscapePresentationBase: LANDSCAPE_PLAYFIELD,
+      landscapePresentationBaseScale: LANDSCAPE_PRESENTATION_SCALE,
+      portraitPresentationBase: PORTRAIT_PROFILES[0].playfield,
       portraitMapping: "progressive-card-count-prepared-wall-reflection",
+      portraitReflectionReferenceWidths: PORTRAIT_PROFILES.map(({ playfield }) => playfield[0]),
       portraitCardCounts: PORTRAIT_CARD_COUNTS,
       portraitCardBreakpoints: PORTRAIT_CARD_BREAKPOINTS,
-      portraitHorizontalMotion: "prepared-reflected-wall-bounce",
+      portraitHorizontalMotion: "mobile-reflected-wall-bounce-multi-card-full-exit",
+      portraitWallBounceCardCounts: [1],
+      preparedSlotLayout: "source-seven-slot-presentation-scaled-card-size",
+      slotCount: SOLITAIRE_SLOT_COUNT,
+      minimumSlotGap: MINIMUM_SLOT_GAP,
+      presentationScaleMode: "single-root-contain-scale-viewport-positioned",
       preparedPatternBankCount: preparedPatterns.length,
       runtimePatternSelectionOnly: true,
       seamBleed: 0.2,
@@ -492,6 +650,7 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       runtimeAtlasRasterization: false,
       runtimeGeometryCalculation: false,
       runtimeTrajectoryCalculation: false,
+      runtimeResizeCalculation: "single-root-presentation-scale-only",
       runtimeDomGrowth: false,
     },
     transport: {
@@ -522,7 +681,13 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
         id: "loren-osborn-english-pattern-playing-cards-deck-plus-cc0",
         uri: "https://commons.wikimedia.org/wiki/File:English_pattern_playing_cards_deck_PLUS_CC0.svg",
         license: "CC0-1.0",
+        sourceSha256: sourceCardSha256,
         sha256: cardSha256,
+        borderColor: "#45484d",
+        borderPixelsRecolored: preparedCardAtlas.recoloredBorderPixelCount,
+        redColor: "#e6180a",
+        redPixelsRecolored: preparedCardAtlas.recoloredRedPixelCount,
+        redPaletteReference: "https://github.com/htdebeer/SVG-cards",
       },
       proprietaryProductBytesIncluded: false,
       nativeCaptureIncluded: false,
@@ -535,14 +700,14 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
   await mkdir(join(stagingRoot, "assets"), { recursive: true });
   try {
     await Promise.all([
-      copyFile(join(sourceRoot, CARD_SOURCE_FILE), join(stagingRoot, "assets", cardAssetName)),
+      writeFile(join(stagingRoot, "assets", cardAssetName), preparedCardAtlas.bytes),
       writeFile(join(stagingRoot, "solitaire.polycss.html"), snapshotText),
       writeFile(join(stagingRoot, "solitaire-playback.json"), playbackText),
     ]);
     manifest.assets = {
       snapshot: descriptor("solitaire.polycss.html", Buffer.from(snapshotText)),
       playback: descriptor("solitaire-playback.json", Buffer.from(playbackText)),
-      cardAtlas: descriptor(`assets/${cardAssetName}`, cardBytes),
+      cardAtlas: descriptor(`assets/${cardAssetName}`, preparedCardAtlas.bytes),
     };
     await writeFile(join(stagingRoot, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
     await mkdir(dirname(outputRoot), { recursive: true });

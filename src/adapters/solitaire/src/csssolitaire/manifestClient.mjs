@@ -51,17 +51,43 @@ function validateManifest(manifest) {
       manifest.renderer?.runtimeDomGrowth !== false ||
       manifest.renderer?.preparedPatternBankCount !== 24 ||
       manifest.renderer?.runtimePatternSelectionOnly !== true ||
-      JSON.stringify(manifest.renderer?.portraitPlayfield) !== "[384,720]" ||
       JSON.stringify(manifest.renderer?.responsiveProfiles) !== '["landscape","portrait"]' ||
+      manifest.renderer?.viewportPositioning !== "prepared-css-vw-vh-no-letterbox" ||
+      manifest.renderer?.viewportFill !== true ||
+      manifest.renderer?.verticalMapping !== "foundation-and-retained-bounce-bottom-anchored" ||
+      manifest.renderer?.foundationTopCssPixels !== 80 ||
+      manifest.renderer?.archTopCssPixels !== 8 ||
+      JSON.stringify(manifest.renderer?.sourceVerticalAnchors) !== "[-71,4,299]" ||
+      manifest.renderer?.upwardArchMapping !==
+        "prepared-source-smooth-three-anchor-curve" ||
+      JSON.stringify(manifest.renderer?.cardSourceSize) !== "[71,96]" ||
+      JSON.stringify(manifest.renderer?.landscapePresentationBase) !== "[960,540]" ||
+      manifest.renderer?.landscapePresentationBaseScale !== 1.40625 ||
+      JSON.stringify(manifest.renderer?.portraitPresentationBase) !== "[384,720]" ||
       manifest.renderer?.portraitMapping !== "progressive-card-count-prepared-wall-reflection" ||
+      JSON.stringify(manifest.renderer?.portraitReflectionReferenceWidths) !== "[384,600,800,960]" ||
       JSON.stringify(manifest.renderer?.portraitCardCounts) !== "[1,2,3,4]" ||
       JSON.stringify(manifest.renderer?.portraitCardBreakpoints) !== "[520,720,920]" ||
-      manifest.renderer?.portraitHorizontalMotion !== "prepared-reflected-wall-bounce" ||
+      manifest.renderer?.portraitHorizontalMotion !==
+        "mobile-reflected-wall-bounce-multi-card-full-exit" ||
+      JSON.stringify(manifest.renderer?.portraitWallBounceCardCounts) !== "[1]" ||
+      manifest.renderer?.preparedSlotLayout !== "source-seven-slot-presentation-scaled-card-size" ||
+      manifest.renderer?.slotCount !== 7 || manifest.renderer?.minimumSlotGap !== 11 ||
+      manifest.renderer?.presentationScaleMode !== "single-root-contain-scale-viewport-positioned" ||
+      manifest.renderer?.runtimeResizeCalculation !== "single-root-presentation-scale-only" ||
       manifest.transport?.runtimeModelPayload !== false ||
       manifest.sourceProfile?.cards !== 12 ||
-      manifest.sourceProfile?.sourceSteps !== 1614 ||
+      manifest.sourceProfile?.sourceSteps !== 1679 ||
       manifest.sourceProfile?.patternCount !== 24 ||
       manifest.sourceProfile?.patternSelection !== "crypto-random-shuffled-bag-no-immediate-repeat" ||
+      manifest.sourceProfile?.horizontalVelocityDistribution !==
+        "mild-slow-bias-first-two-lanes-quarter-right-unique-per-lane-cycle" ||
+      JSON.stringify(manifest.sourceProfile?.horizontalVelocityRange) !== "[-65,65]" ||
+      manifest.sourceProfile?.minimumHorizontalSpeed !== 20 ||
+      manifest.sourceProfile?.horizontalVelocityBiasExponent !== 1.1 ||
+      JSON.stringify(manifest.sourceProfile?.rightwardFoundationIndices) !== "[0,1]" ||
+      manifest.sourceProfile?.rightwardSelection !== "random-value-modulo-4-zero" ||
+      manifest.sourceProfile?.exactSameLaneTrajectoryRepeats !== false ||
       !Array.isArray(manifest.sourceProfile?.patternSeeds) ||
       manifest.sourceProfile.patternSeeds.length !== 24 ||
       new Set(manifest.sourceProfile.patternSeeds).size !== 24 ||
@@ -69,17 +95,27 @@ function validateManifest(manifest) {
       manifest.sourceProfile?.launchCycleCount !== 3 ||
       JSON.stringify(manifest.sourceProfile?.startingCards) !==
         '["king-of-spades","queen-of-hearts","jack-of-diamonds","ace-of-clubs"]' ||
-      JSON.stringify(manifest.renderer?.contentBounds) !== "[-70,-71,574,395]" ||
-      manifest.metrics?.retainedLeafCount !== 1911 ||
+      JSON.stringify(manifest.renderer?.contentBounds) !== "[-69,-71,655,395]" ||
+      manifest.metrics?.retainedLeafCount !== 1952 ||
       manifest.metrics?.foundationLeafCount !== 4 ||
-      manifest.metrics?.retainedTrailLeafCount !== 1907 ||
+      manifest.metrics?.retainedTrailLeafCount !== 1948 ||
       manifest.metrics?.preparedPatternCount !== 24 ||
       manifest.metrics?.preparedFoundationOperationCount !== 576 ||
-      manifest.metrics?.preparedFrameCount !== 13640 ||
-      manifest.metrics?.preparedLeafLayoutCount !== 37634 ||
-      manifest.metrics?.initialPatternDurationMs !== 26223 ||
-      manifest.metrics?.minimumPatternDurationMs !== 21305 ||
-      manifest.metrics?.maximumPatternDurationMs !== 30628) {
+      manifest.metrics?.preparedFrameCount !== 13774 ||
+      manifest.metrics?.preparedLeafLayoutCount !== 38014 ||
+      manifest.metrics?.initialPatternDurationMs !== 27210 ||
+      manifest.metrics?.minimumPatternDurationMs !== 20475 ||
+      manifest.metrics?.maximumPatternDurationMs !== 31228 ||
+      manifest.provenance?.cardAtlas?.sourceSha256 !==
+        "e782179fb60932722548e3e6b46038a2df16d15001d3ea8cbdd22cc005f2841d" ||
+      manifest.provenance?.cardAtlas?.sha256 !==
+        "cb5832bac7b12c650ddae6880a1ce63825db07974dd378def9d6e1630bcca207" ||
+      manifest.provenance?.cardAtlas?.borderColor !== "#45484d" ||
+      manifest.provenance?.cardAtlas?.borderPixelsRecolored !== 62598 ||
+      manifest.provenance?.cardAtlas?.redColor !== "#e6180a" ||
+      manifest.provenance?.cardAtlas?.redPixelsRecolored !== 468866 ||
+      manifest.provenance?.cardAtlas?.redPaletteReference !==
+        "https://github.com/htdebeer/SVG-cards") {
     throw new Error("Prepared cssSolitaire manifest drifted");
   }
 }
@@ -144,12 +180,12 @@ function validPattern(pattern, playback, manifest, index) {
       !((operation[1] === -1 && operation[2] === -1) ||
         (operation[1] >= 0 && operation[1] <= 720 && operation[2] >= 0 && operation[2] <= 1920)))) &&
     Array.isArray(pattern.leafMatrices) && pattern.leafMatrices.length === pattern.trailLeafCount &&
-    !pattern.leafMatrices.some((transform) => !/^matrix\([^)]*\)$/u.test(transform)) &&
+    !pattern.leafMatrices.some((transform) => !validPreparedTransform(transform)) &&
     Array.isArray(pattern.leafPortraitMatricesByCardCount) &&
     pattern.leafPortraitMatricesByCardCount.length === 4 &&
     !pattern.leafPortraitMatricesByCardCount.some((profile) =>
       !Array.isArray(profile) || profile.length !== pattern.trailLeafCount ||
-      profile.some((transform) => transform !== null && !/^matrix\([^)]*\)$/u.test(transform))) &&
+      profile.some((transform) => transform !== null && !validPreparedTransform(transform))) &&
     !pattern.leafPortraitMatricesByCardCount[3].some((transform) => transform === null) &&
     !Array.from({ length: pattern.trailLeafCount }, (_, leafIndex) => leafIndex).some((leafIndex) =>
       pattern.leafPortraitMatricesByCardCount.some((profile, profileIndex, profiles) =>
@@ -157,4 +193,14 @@ function validPattern(pattern, playback, manifest, index) {
     Array.isArray(pattern.leafAtlasIndices) && pattern.leafAtlasIndices.length === pattern.trailLeafCount &&
     !pattern.leafAtlasIndices.some((atlasIndex) =>
       !Number.isSafeInteger(atlasIndex) || atlasIndex < 0 || atlasIndex >= playback.atlasPositions.length);
+}
+
+function validPreparedTransform(transform) {
+  return typeof transform === "string" &&
+    transform.startsWith("translate(calc(") && transform.includes("vw") &&
+    transform.includes("--csssolitaire-card-width") && transform.includes("vh") &&
+    transform.includes("--csssolitaire-card-height") &&
+    transform.endsWith(
+      "rotate(90deg) scale(var(--csssolitaire-card-transform-x),var(--csssolitaire-card-transform-y))",
+    );
 }

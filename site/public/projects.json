@@ -2,6 +2,16 @@
   "schema": "cssgraphics.projects@2",
   "projects": [
     {
+      "number": 6,
+      "id": "solitaire",
+      "name": "Solitaire Victory",
+      "route": "/solitaire/",
+      "preview": "/landing/solitaire.webp",
+      "source": "Classic Solitaire",
+      "description": "The classic Solitaire victory cascade rendered entirely with retained HTML and CSS using PolyCSS.",
+      "date": "2026-08-16"
+    },
+    {
       "number": 5,
       "id": "electropaint",
       "name": "ElectroPaint",

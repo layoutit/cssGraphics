@@ -4,14 +4,13 @@ export function createCsssolitairePreparedPlayer({
   playback,
   scene,
   leaves,
-  layoutRulesByProfile,
+  portraitBreakpoints,
   randomUint32 = cryptoRandomUint32,
 }) {
   if (playback?.schema !== "csssolitaire-prepared-playback@2" ||
       !(scene instanceof HTMLElement) || !Array.isArray(leaves) ||
-      leaves.length !== playback.retainedLeafCount || !Array.isArray(layoutRulesByProfile) ||
-      layoutRulesByProfile.length !== 5 ||
-      layoutRulesByProfile.some((rules) => !Array.isArray(rules) || rules.length !== leaves.length)) {
+      leaves.length !== playback.retainedLeafCount ||
+      JSON.stringify(portraitBreakpoints) !== "[520,720,920]") {
     throw new Error("Prepared cssSolitaire player input drifted");
   }
   const target = createPolyMorphPreparedDomTarget({
@@ -36,18 +35,11 @@ export function createCsssolitairePreparedPlayer({
   const foundationVisibility = new Uint8Array(foundationLeafCount);
   foundationVisibility.fill(1);
   const trailVisibility = new Uint8Array(trailLeaves.length);
-  const trailLandscapeTransforms = layoutRulesByProfile[0]
-    .slice(foundationLeafCount)
-    .map((rule) => rule?.style.transform ?? "");
-  const trailPortraitTransformsByCardCount = Array.from({ length: 4 }, (_, profileIndex) =>
-    layoutRulesByProfile[profileIndex + 1]
-      .slice(foundationLeafCount)
-      .map((rule) => rule?.style.transform ?? ""));
-  const trailLaneIndices = trailLeaves.map(readLaneIndex);
   const trailFaceIndices = trailLeaves.map(readFaceIndex);
   const atlasFaceIndices = new Map(playback.atlasPositions.map((position, index) => [position, index]));
   let activePatternIndex = playback.initialPatternIndex;
   let pattern = patterns[activePatternIndex];
+  let activeProfileIndex = 0;
   let shuffleBag = [];
   let paused = true;
   let timer = null;
@@ -62,6 +54,8 @@ export function createCsssolitairePreparedPlayer({
   let foundationOperationsApplied = 0;
   let patternLayoutWrites = 0;
   let patternLayoutLeavesVisited = 0;
+  let responsiveTransformWrites = 0;
+  let responsiveProfileSwitchCount = 0;
   let patternSwitchCount = 0;
   let randomSelectionCount = 0;
   let timerCallbackCount = 0;
@@ -73,6 +67,38 @@ export function createCsssolitairePreparedPlayer({
     layoutWrites: 0,
     dirtyLeavesVisited: 0,
   });
+
+  function transformForPattern(nextPattern, index, profileIndex = activeProfileIndex) {
+    return profileIndex === 0
+      ? nextPattern.leafMatrices[index]
+      : nextPattern.leafPortraitMatricesByCardCount[profileIndex - 1][index];
+  }
+
+  function applyResponsiveProfile(nextProfileIndex) {
+    let writes = 0;
+    for (let index = 0; index < foundationLeafCount; index += 1) {
+      const transform = nextProfileIndex === 0
+        ? playback.foundationMatrices[index]
+        : playback.foundationPortraitMatricesByCardCount[nextProfileIndex - 1][index];
+      if (foundationLeaves[index].style.transform === transform) continue;
+      foundationLeaves[index].style.transform = transform;
+      writes += 1;
+    }
+    for (let index = 0; index < pattern.trailLeafCount; index += 1) {
+      const transform = transformForPattern(pattern, index, nextProfileIndex);
+      if (trailLeaves[index].style.transform === transform) continue;
+      trailLeaves[index].style.transform = transform;
+      writes += 1;
+    }
+    activeProfileIndex = nextProfileIndex;
+    responsiveTransformWrites += writes;
+    responsiveProfileSwitchCount += 1;
+  }
+
+  function syncResponsiveProfile() {
+    const nextProfileIndex = resolveResponsiveProfileIndex(portraitBreakpoints);
+    if (nextProfileIndex !== activeProfileIndex) applyResponsiveProfile(nextProfileIndex);
+  }
 
   function applyRow(row) {
     let writes = 0;
@@ -127,30 +153,11 @@ export function createCsssolitairePreparedPlayer({
     let writes = 0;
     for (let index = 0; index < nextPattern.trailLeafCount; index += 1) {
       const leaf = trailLeaves[index];
-      const leafIndex = foundationLeafCount + index;
-      const landscapeTransform = nextPattern.leafMatrices[index];
-      const laneIndex = nextPattern.leafFoundationIndices[index];
+      const transform = transformForPattern(nextPattern, index);
       const faceIndex = nextPattern.leafAtlasIndices[index];
       patternLayoutLeavesVisited += 1;
-      if (trailLandscapeTransforms[index] !== landscapeTransform) {
-        trailLandscapeTransforms[index] = landscapeTransform;
-        layoutRulesByProfile[0][leafIndex].style.transform = landscapeTransform;
-        writes += 1;
-      }
-      for (let profileIndex = 0; profileIndex < 4; profileIndex += 1) {
-        const portraitTransform = nextPattern.leafPortraitMatricesByCardCount[profileIndex][index];
-        if (portraitTransform === null ||
-            trailPortraitTransformsByCardCount[profileIndex][index] === portraitTransform) continue;
-        const rule = layoutRulesByProfile[profileIndex + 1][leafIndex];
-        if (!rule) throw new Error("Prepared cssSolitaire portrait rule bank drifted");
-        trailPortraitTransformsByCardCount[profileIndex][index] = portraitTransform;
-        rule.style.transform = portraitTransform;
-        writes += 1;
-      }
-      if (trailLaneIndices[index] !== laneIndex) {
-        leaf.classList.remove(`lane-${trailLaneIndices[index]}`);
-        leaf.classList.add(`lane-${laneIndex}`);
-        trailLaneIndices[index] = laneIndex;
+      if (leaf.style.transform !== transform) {
+        leaf.style.transform = transform;
         writes += 1;
       }
       if (trailFaceIndices[index] !== faceIndex) {
@@ -301,6 +308,7 @@ export function createCsssolitairePreparedPlayer({
       patternIndex: activePatternIndex,
       patternId: pattern.id,
       patternCount: patterns.length,
+      responsiveProfileIndex: activeProfileIndex,
       playheadMs,
       frameIndex,
       rewinding: playheadMs >= pattern.rewindStartMilliseconds && playheadMs <= pattern.rewindEndMilliseconds,
@@ -316,6 +324,9 @@ export function createCsssolitairePreparedPlayer({
       lastApply,
     });
   }
+
+  globalThis.addEventListener?.("resize", syncResponsiveProfile);
+  syncResponsiveProfile();
 
   return Object.freeze({
     get ready() { return true; },
@@ -374,6 +385,9 @@ export function createCsssolitairePreparedPlayer({
         runtimeFoundationClassWrites: foundationClassWrites,
         runtimePatternLayoutWrites: patternLayoutWrites,
         runtimePatternLayoutLeavesVisited: patternLayoutLeavesVisited,
+        runtimeResponsiveTransformWrites: responsiveTransformWrites,
+        runtimeResponsiveProfileSwitchCount: responsiveProfileSwitchCount,
+        responsiveProfileIndex: activeProfileIndex,
         runtimePreparedPatternSwitchCount: patternSwitchCount,
         runtimeRandomSelectionCount: randomSelectionCount,
         runtimeRandomSelectionPurpose: "prepared-pattern-shuffled-bag-index-only",
@@ -390,9 +404,19 @@ export function createCsssolitairePreparedPlayer({
     },
     destroy() {
       this.pause();
+      globalThis.removeEventListener?.("resize", syncResponsiveProfile);
       target.destroy();
     },
   });
+}
+
+function resolveResponsiveProfileIndex(portraitBreakpoints) {
+  if (!matchMedia("(orientation: portrait)").matches) return 0;
+  const width = document.documentElement.clientWidth || innerWidth;
+  if (width < portraitBreakpoints[0]) return 1;
+  if (width < portraitBreakpoints[1]) return 2;
+  if (width < portraitBreakpoints[2]) return 3;
+  return 4;
 }
 
 function readFaceIndex(leaf) {
@@ -402,14 +426,6 @@ function readFaceIndex(leaf) {
     if (Number.isSafeInteger(index) && index >= 0 && index < 52) return index;
   }
   throw new Error("Prepared cssSolitaire face class drifted");
-}
-
-function readLaneIndex(leaf) {
-  for (const className of leaf.classList) {
-    const match = className.match(/^lane-([0-3])$/u);
-    if (match) return Number(match[1]);
-  }
-  throw new Error("Prepared cssSolitaire lane class drifted");
 }
 
 function setFaceClass(leaf, previousIndex, nextIndex) {

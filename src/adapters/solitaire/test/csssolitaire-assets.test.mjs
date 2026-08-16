@@ -42,9 +42,11 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.equal(manifest.sourceProfile.patterns.length, 24);
   assert.equal(manifest.renderer.morphTarget, "createPolyMorphPreparedDomTarget");
   assert.equal(manifest.renderer.profile, "prepared-playback");
+  assert.equal(manifest.renderer.leafTag, "b");
   assert.equal(manifest.renderer.textureBackend, "atlas");
   assert.equal(manifest.renderer.textureLeafSizing, "raster");
   assert.equal(manifest.renderer.composition, "flat-2d-card-plane");
+  assert.equal(manifest.renderer.transformPublication, "prepared-inline-style");
   assert.deepEqual(manifest.renderer.contentBounds, [-69, -71, 655, 395]);
   assert.deepEqual(manifest.renderer.responsiveProfiles, ["landscape", "portrait"]);
   assert.equal(manifest.renderer.viewportPositioning, "prepared-css-vw-vh-no-letterbox");
@@ -72,7 +74,8 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.equal(manifest.renderer.slotCount, 7);
   assert.equal(manifest.renderer.minimumSlotGap, 11);
   assert.equal(manifest.renderer.presentationScaleMode, "single-root-contain-scale-viewport-positioned");
-  assert.equal(manifest.renderer.runtimeResizeCalculation, "single-root-presentation-scale-only");
+  assert.equal(manifest.renderer.runtimeResizeCalculation,
+    "single-root-scale-and-responsive-inline-transform-publication");
   assert.equal(manifest.renderer.seamBleed, 0.2);
   assert.equal(manifest.renderer.runtimeAtlasRasterization, false);
   assert.equal(manifest.renderer.runtimeGeometryCalculation, false);
@@ -117,30 +120,27 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   }
 
   const snapshot = await readFile(join(generated, "solitaire.polycss.txt"), "utf8");
-  assert.match(snapshot, /class="polycss-camera solitaire-prepared-camera"/u);
-  assert.match(snapshot, /class="polycss-scene solitaire-prepared-scene"/u);
+  assert.match(snapshot, /class="polycss-camera"/u);
+  assert.match(snapshot, /class="polycss-scene"/u);
+  assert.doesNotMatch(snapshot, /solitaire-prepared-(?:camera|scene)/u);
   assert.doesNotMatch(snapshot, /csssolitaire-board/u);
-  assert.equal((snapshot.match(/<s class="[^"]+"><\/s>/gu) ?? []).length, 1952);
-  assert.doesNotMatch(snapshot, /<s[^>]+\sstyle=/u);
+  assert.equal((snapshot.match(/<b class="[^"]+" style="transform:[^"]+"><\/b>/gu) ?? []).length, 1952);
+  assert.doesNotMatch(snapshot, /<s\b/u);
   assert.doesNotMatch(snapshot, /--csssolitaire-(?:landscape|portrait)-/u);
-  assert.equal((snapshot.match(/\.solitaire-prepared-scene>s\.l[0-9a-z]+\{transform:/gu) ?? []).length,
-    9760);
-  assert.equal((snapshot.match(/\.solitaire-prepared-scene>s\.l[0-9a-z]+\{transform:translate\(/gu) ?? []).length,
-    9760);
+  assert.equal((snapshot.match(/\sstyle="transform:/gu) ?? []).length, 1952);
+  assert.doesNotMatch(snapshot, /class="[^"]*\bl[0-9a-z]+\b/u);
+  assert.doesNotMatch(snapshot, /\.polycss-scene>b\.[^{]+\{transform:/u);
   assert.equal((snapshot.match(/\{transform:none\}/gu) ?? []).length, 0);
-  assert.equal((snapshot.match(/\.solitaire-prepared-scene>s\.f[0-9a-z]+\{background-position:/gu) ?? []).length,
+  assert.equal((snapshot.match(/\.polycss-scene>b\.f[0-9a-z]+\{background-position:/gu) ?? []).length,
     52);
-  assert.equal((snapshot.match(/<s class="foundation v lane-[0-3] l[0-3] f[0-9a-z]+"><\/s>/gu) ?? []).length, 4);
-  assert.match(snapshot, /\.polycss-scene\.solitaire-prepared-scene\{position:absolute;inset:0\}/u);
-  assert.match(snapshot, /\.polycss-scene\.solitaire-prepared-scene>s\{position:absolute/u);
+  assert.equal((snapshot.match(/<b class="v f[0-9a-z]+" style="transform:[^"]+"><\/b>/gu) ?? []).length, 4);
+  assert.doesNotMatch(snapshot, /\bfoundation\b|\blane-[0-3]\b/u);
+  assert.match(snapshot, /\.polycss-scene\{position:absolute;inset:0\}/u);
+  assert.match(snapshot, /\.polycss-scene>b\{position:absolute/u);
   assert.match(snapshot, /--csssolitaire-card-width:calc\(71px \* var\(--csssolitaire-presentation-scale/u);
   assert.doesNotMatch(snapshot, /--csssolitaire-fit/u);
-  assert.match(snapshot, /max-width:519px\)\{\.solitaire-prepared-scene>s\.l0\{transform:translate\(/u);
-  assert.match(snapshot, /min-width:920px\)\{\.solitaire-prepared-scene>s\.l0\{transform:translate\(/u);
   assert.match(snapshot,
-    /max-width:519px\)\{.*\.solitaire-prepared-scene>s\.foundation:is\(\.lane-1,\.lane-2,\.lane-3\)\{display:none\}/u);
-  assert.doesNotMatch(snapshot,
-    /\.solitaire-prepared-scene>s:is\(\.lane-1,\.lane-2,\.lane-3\)\{display:none\}/u);
+    /max-width:519px\)\{\.polycss-scene>b:nth-child\(2\),\.polycss-scene>b:nth-child\(3\),\.polycss-scene>b:nth-child\(4\)\{display:none\}/u);
   assert.match(snapshot, /border-radius:14px/u);
   assert.doesNotMatch(snapshot, /box-shadow/u);
   assert.match(snapshot, /image-rendering:auto/u);
@@ -152,7 +152,7 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   const preparedTransforms = playback.patterns.flatMap((pattern) => [
     ...pattern.leafMatrices,
     ...pattern.leafPortraitMatricesByCardCount.flat().filter(Boolean),
-  ]);
+  ]).concat(playback.foundationMatrices, playback.foundationPortraitMatricesByCardCount.flat());
   const topAnchoredPixels = preparedTransforms
     .map((transform) => transform.match(/,calc\(0vh \+ ([\d.]+)px/u)?.[1])
     .filter(Boolean)
@@ -185,9 +185,7 @@ test("generated product is one complete retained snapshot plus sparse prepared p
     pattern.leafPortraitMatricesByCardCount.length === 4 &&
     pattern.leafPortraitMatricesByCardCount.every((profile) =>
       profile.length === pattern.trailLeafCount && profile.every(Boolean))));
-  assert.ok(playback.patterns.every((pattern) =>
-    pattern.leafFoundationIndices.length === pattern.trailLeafCount &&
-    pattern.leafFoundationIndices.every((foundationIndex) => foundationIndex >= 0 && foundationIndex < 4)));
+  assert.ok(playback.patterns.every((pattern) => !("leafFoundationIndices" in pattern)));
   const maximumPortraitUpdateGaps = [1, 2, 3, 4].map((cardCount) => Math.max(
     ...playback.patterns.map((pattern) => {
       const updateTimes = pattern.frameTimesMs.filter((_, frameIndex) =>

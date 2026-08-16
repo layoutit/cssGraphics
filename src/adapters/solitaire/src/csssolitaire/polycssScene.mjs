@@ -35,7 +35,11 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
   const stableNodes = Object.freeze([mountedCamera, mountedScene, mountedBoard, ...mountedLeaves]);
 
   function fit() {
-    const scale = Math.min(host.clientWidth / 585, host.clientHeight / 384);
+    const portrait = host.clientHeight > host.clientWidth;
+    const [sourceWidth, sourceHeight] = portrait
+      ? manifest.renderer.portraitPlayfield
+      : manifest.sourceProfile.playfield;
+    const scale = Math.min(host.clientWidth / sourceWidth, host.clientHeight / sourceHeight);
     mountedScene.style.setProperty("--csssolitaire-fit", String(scale));
   }
   const resizeObserver = new ResizeObserver(fit);
@@ -75,7 +79,7 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
         runtimeDomMutationCount: 0,
         runtimeDomMutationObserverInstalled: false,
         runtimeDomGrowth: false,
-        runtimeFitCalculationPurpose: "resize-only-fixed-playfield",
+        runtimeFitCalculationPurpose: "resize-only-prepared-responsive-playfield",
       });
     },
     destroy() {

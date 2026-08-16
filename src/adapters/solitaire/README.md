@@ -1,14 +1,26 @@
 # cssSolitaire
 
 A behavior-backed retained-DOM PolyCSS recreation of the classic Solitaire
-victory cascade. Cards remain upright, bounce under the recovered integer
-motion rules, and accumulate as persistent framebuffer-style ghosts.
+victory cascade. A king, queen, jack, and ace form the starting row. Three
+descending four-card cycles run the recovered integer-motion trajectories and
+accumulate as persistent framebuffer-style ghosts before the scene rewinds.
+Each completed rewind selects from a shuffled bank of 24 prepared trajectory
+patterns without an immediate repeat.
 
-The browser adopts 8,839 prepared card leaves and applies sparse signed
-visibility rows. Card geometry, trajectories, ordering, atlas coordinates, and
-the complete DOM snapshot are prepared ahead of time. Runtime does not build a
-model, randomize motion, rasterize an atlas, create card leaves, or clear the
-trail at handoff. `@layoutit/polycss-morph` owns the stable prepared-DOM target.
+The browser adopts 1,911 prepared card leaves—the largest bank entry plus the
+four launch cards—and applies sparse signed visibility rows. Card geometry,
+trajectories, ordering, atlas coordinates, and the complete DOM snapshot are
+prepared ahead of time. A handoff changes only the prepared bank index and the
+hidden leaf layout. Runtime does not build a model, generate motion, rasterize
+an atlas, create card leaves, or clear the trail at handoff.
+`@layoutit/polycss-morph` owns the stable prepared-DOM target.
+
+The package carries a 585×384 landscape transform profile plus four 384×720
+portrait profiles. Narrow portrait viewports show one centered full-size card
+stream; wider portrait layouts progressively show two, three, then four.
+Portrait horizontal motion reflects from the prepared side walls, and every
+card remains upright. CSS selects the matching profile without changing the
+retained DOM.
 
 ## Run
 

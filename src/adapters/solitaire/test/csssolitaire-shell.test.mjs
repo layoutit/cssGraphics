@@ -21,12 +21,22 @@ test("product shell is the standard css.graphics route without demo controls", a
   assert.doesNotMatch(html, /<button\b|<nav\b|<section\b|<output\b|<canvas\b/u);
   assert.match(css, /\.site-header \{[^}]*position: fixed;[^}]*pointer-events: none;/u);
   assert.match(css, /\.site-wordmark \{[^}]*pointer-events: auto;/u);
+  assert.match(css, /\.site-wordmark \{[^}]*color: #aeb4bc;/u);
   assert.match(css, /\.site-action-icon-only \{[^}]*pointer-events: auto;/u);
-  assert.match(css, /#scene \{[^}]*position: absolute;[^}]*inset: 0;/u);
+  assert.equal(
+    (css.match(/background: linear-gradient\(180deg, #0b1119 0%, #000 100%\);/gu) ?? []).length,
+    2,
+  );
+  assert.match(css, /#scene \{[^}]*position: absolute;[^}]*inset: 0;[^}]*contain: layout paint size style;/u);
+  assert.doesNotMatch(css, /#008000|#001900/u);
   assert.doesNotMatch(css, /clip-path|mask(?:-image)?|filter|box-shadow|text-shadow|mix-blend-mode/iu);
   assert.match(client, /loadPreparedSolitaire/u);
   assert.match(player, /createPolyMorphPreparedDomTarget/u);
   assert.match(player, /deadline-setTimeout-prepared-visibility-publication/u);
   assert.doesNotMatch(player, /Math\.random|requestAnimationFrame\s*\(|createElement|DOMMatrix/u);
   assert.match(snapshotMount, /new ResizeObserver\(fit\)/u);
+  assert.match(snapshotMount, /manifest\.sourceProfile\.playfield/u);
+  assert.match(snapshotMount, /manifest\.renderer\.portraitPlayfield/u);
+  assert.match(snapshotMount, /host\.clientHeight > host\.clientWidth/u);
+  assert.doesNotMatch(snapshotMount, /renderer\.contentBounds/u);
 });

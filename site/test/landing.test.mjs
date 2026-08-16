@@ -7,14 +7,13 @@ import { fileURLToPath } from "node:url";
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(siteRoot, "..");
 const expectedProjects = [
-  ["solitaire", 6, "Classic Solitaire", "2026-08-16", "The classic Solitaire victory cascade"],
   ["electropaint", 5, "David Tristram", "2026-08-10", "ElectroPaint, originally written by David Tristram"],
   ["menger", 4, "XScreenSaver", "2026-08-13", "XScreenSaver Menger"],
   ["maze", 3, "XScreenSaver", "2026-08-09", "XScreenSaver Maze3D"],
   ["gears", 2, "XScreenSaver", "2026-08-07", "XScreenSaver Gears"],
   ["pipes", 1, "Original", "2026-08-06", "CSS Pipes"],
 ];
-const projectsExcludedFromLanding = ["flowerbox", "gravitywell"];
+const projectsExcludedFromLanding = ["flowerbox", "gravitywell", "solitaire"];
 const projectAdapterDirectories = new Map([
   ["electropaint", "electropaint"],
   ["flowerbox", "flowerbox"],

@@ -59,13 +59,27 @@ try {
           mutations.removed += record.removedNodes.length;
         }
       });
-      observer.observe(document.querySelector(".csssolitaire-board"), { childList: true, subtree: true });
+      observer.observe(document.querySelector(".solitaire-prepared-scene"), { childList: true, subtree: true });
       window.__cssSolitaireSmoke = { mutations, observer };
     });
 
     const sampled = await page.evaluate(() => [0, 1250, 3500, 6500, 10000, 13584, 13585, 14585, 26210, 27210]
       .map((timeMs) => window.__cssSolitaireDebug.seek(timeMs)));
     const [initial, firstArc, secondArc, middle, thirdArc, nearEnd, rewindStart, rewinding, rewound, wrapped] = sampled;
+    const visibleBounds = await page.evaluate(() => {
+      const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[0].durationMs;
+      window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
+      const rects = [...document.querySelectorAll(".solitaire-prepared-scene > s")]
+        .filter((leaf) => getComputedStyle(leaf).visibility === "visible")
+        .map((leaf) => leaf.getBoundingClientRect());
+      window.__cssSolitaireDebug.seek(0);
+      return {
+        left: Math.min(...rects.map((rect) => rect.left)),
+        top: Math.min(...rects.map((rect) => rect.top)),
+        right: Math.max(...rects.map((rect) => rect.right)),
+        bottom: Math.max(...rects.map((rect) => rect.bottom)),
+      };
+    });
     const autoplayLoop = await page.evaluate(async () => {
       window.__cssSolitaireDebug.seek(26787);
       window.__cssSolitaireDebug.resume();
@@ -85,7 +99,7 @@ try {
       return patternIds;
     }, initial.patternId);
     const evidence = await page.evaluate(() => {
-      const leaves = [...document.querySelectorAll(".csssolitaire-board > s")];
+      const leaves = [...document.querySelectorAll(".solitaire-prepared-scene > s")];
       const first = leaves[0];
       const rect = first.getBoundingClientRect();
       const foundationRects = leaves.slice(0, 4).map((leaf) => {
@@ -101,7 +115,6 @@ try {
       const scene = document.getElementById("scene");
       const camera = scene?.querySelector(":scope > .solitaire-prepared-camera");
       const preparedScene = camera?.querySelector(":scope > .solitaire-prepared-scene");
-      const board = preparedScene?.querySelector(":scope > .csssolitaire-board");
       const resources = performance.getEntriesByType("resource")
         .map((entry) => new URL(entry.name).pathname)
         .filter((path) => path.includes("csssolitaire"));
@@ -117,13 +130,14 @@ try {
           sceneChildCount: scene?.childElementCount,
           cameraChildCount: camera?.childElementCount,
           preparedSceneChildCount: preparedScene?.childElementCount,
-          boardChildCount: board?.childElementCount,
           sceneDescendantCount: scene?.querySelectorAll("*").length,
           unexpectedSceneElementCount: scene?.querySelectorAll(
             "button,canvas,nav,output,section,svg,style,[contenteditable]",
           ).length,
           dataAttributeCount: [...scene.querySelectorAll("*")].reduce((count, element) =>
             count + [...element.attributes].filter(({ name }) => name.startsWith("data-")).length, 0),
+          inlineStyleDeclarationCount: [...scene.querySelectorAll("*")].reduce((count, element) =>
+            count + element.style.length, 0),
         },
         radius: getComputedStyle(first).borderRadius,
         cardEdge: getComputedStyle(first).boxShadow,
@@ -138,15 +152,9 @@ try {
         },
         composition: {
           sceneTransformStyle: getComputedStyle(document.querySelector(".solitaire-prepared-scene")).transformStyle,
-          boardTransformStyle: getComputedStyle(document.querySelector(".csssolitaire-board")).transformStyle,
           matrix2dLeafCount: computedTransforms.filter((transform) => transform.startsWith("matrix(")).length,
           matrix3dLeafCount: computedTransforms.filter((transform) => transform.startsWith("matrix3d(")).length,
-          landscapePreparedTransformCount: leaves.filter((leaf) =>
-            leaf.style.getPropertyValue("--csssolitaire-landscape-transform").startsWith("translate(")).length,
-          portraitPreparedTransformCounts: [1, 2, 3, 4].map((cardCount) =>
-            leaves.filter((leaf) => leaf.style
-              .getPropertyValue(`--csssolitaire-portrait-${cardCount}-transform`)
-              .startsWith("translate(")).length),
+          leafInlineStyleDeclarationCount: leaves.reduce((count, leaf) => count + leaf.style.length, 0),
         },
       };
     });
@@ -173,9 +181,9 @@ try {
         JSON.stringify(evidence.structure.bodyChildren) !==
           JSON.stringify(deploy ? ["HEADER", "MAIN"] : ["HEADER", "MAIN", "SCRIPT"]) ||
         evidence.structure.sceneChildCount !== 1 || evidence.structure.cameraChildCount !== 1 ||
-        evidence.structure.preparedSceneChildCount !== 1 || evidence.structure.boardChildCount !== 1952 ||
-        evidence.structure.sceneDescendantCount !== 1955 ||
+        evidence.structure.preparedSceneChildCount !== 1952 || evidence.structure.sceneDescendantCount !== 1954 ||
         evidence.structure.unexpectedSceneElementCount !== 0 || evidence.structure.dataAttributeCount !== 0 ||
+        evidence.structure.inlineStyleDeclarationCount !== 0 ||
         evidence.radius !== "14px" ||
         evidence.cardEdge !== "none" ||
         evidence.imageRendering !== "auto" ||
@@ -188,12 +196,8 @@ try {
         evidence.shell.buttons !== 0 ||
         !evidence.shell.sceneBackground.startsWith("linear-gradient(rgb(0, 128, 0)") ||
         evidence.composition.sceneTransformStyle !== "flat" ||
-        evidence.composition.boardTransformStyle !== "flat" ||
         evidence.composition.matrix2dLeafCount !== 1952 || evidence.composition.matrix3dLeafCount !== 0 ||
-        evidence.composition.landscapePreparedTransformCount !== 1952 ||
-        evidence.composition.portraitPreparedTransformCounts[3] !== 1952 ||
-        evidence.composition.portraitPreparedTransformCounts.some((count, index, counts) =>
-          index > 0 && count <= counts[index - 1]) ||
+        evidence.composition.leafInlineStyleDeclarationCount !== 0 ||
         evidence.stats.runtimeAnimationFrameCallbackCount !== 0 ||
         evidence.stats.runtimeTimerCallbackCount < 1 || evidence.stats.loopCount < 1 ||
         evidence.stats.preparedPatternCount !== 24 ||
@@ -205,7 +209,7 @@ try {
         evidence.stats.runtimeGeometryBoundsCalculationCount !== 0 ||
         evidence.stats.runtimeFitCalculationPurpose !== "single-root-presentation-scale-only" ||
         Math.abs(evidence.stats.runtimePresentationScale - 1.40625) > 0.000001 ||
-        evidence.stats.runtimePresentationScaleWrites < 1 ||
+        evidence.stats.runtimePresentationScaleWrites !== 0 ||
         evidence.stats.runtimeTrajectoryCalculationCount !== 0 ||
         evidence.stats.runtimeAtlasRasterizationCount !== 0 ||
         evidence.stats.runtimeDomMutationCount !== 0 ||
@@ -215,28 +219,17 @@ try {
         evidence.resources.some((path) => path.endsWith("model.json"))) {
       throw new Error(`cssSolitaire smoke contract failed: ${JSON.stringify({ readyMs, sampled, evidence })}`);
     }
-    await page.evaluate(() => {
-      const state = window.__cssSolitaireDebug.snapshot();
-      const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[state.patternIndex].durationMs;
-      window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
-    });
-    const visibleBounds = await page.evaluate(() => {
-      const rects = [...document.querySelectorAll(".csssolitaire-board > s")]
-        .filter((leaf) => getComputedStyle(leaf).visibility === "visible")
-        .map((leaf) => leaf.getBoundingClientRect());
-      return {
-        left: Math.min(...rects.map((rect) => rect.left)),
-        top: Math.min(...rects.map((rect) => rect.top)),
-        right: Math.max(...rects.map((rect) => rect.right)),
-        bottom: Math.max(...rects.map((rect) => rect.bottom)),
-      };
-    });
     if (visibleBounds.left > -0.9 * evidence.cardRect.width ||
         visibleBounds.right < 960 + 0.9 * evidence.cardRect.width ||
         visibleBounds.top < 7.9 || visibleBounds.top > 80 ||
         Math.abs(visibleBounds.bottom - 540) > 0.2) {
       throw new Error(`cssSolitaire cards no longer exit the fixed playfield: ${JSON.stringify(visibleBounds)}`);
     }
+    await page.evaluate(() => {
+      const state = window.__cssSolitaireDebug.snapshot();
+      const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[state.patternIndex].durationMs;
+      window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
+    });
     await mkdir(dirname(screenshotPath), { recursive: true });
     const screenshot = await page.screenshot({ path: screenshotPath });
     const png = PNG.sync.read(screenshot);
@@ -252,7 +245,7 @@ try {
     await page.waitForTimeout(100);
     const mobileInitial = await page.evaluate(() => {
       window.__cssSolitaireDebug.seek(0);
-      const displayedFoundations = [...document.querySelectorAll(".csssolitaire-board > s.foundation")]
+      const displayedFoundations = [...document.querySelectorAll(".solitaire-prepared-scene > s.foundation")]
         .filter((foundation) => getComputedStyle(foundation).display !== "none");
       const leaf = displayedFoundations[0];
       const rect = leaf.getBoundingClientRect();
@@ -264,12 +257,11 @@ try {
       return {
         portraitMedia: matchMedia("(orientation: portrait)").matches,
         stable: window.__cssSolitaireDebug.assertStableDomIdentity(),
-        retainedLeaves: document.querySelectorAll(".csssolitaire-board > s").length,
+        retainedLeaves: document.querySelectorAll(".solitaire-prepared-scene > s").length,
         displayedFoundationCount: displayedFoundations.length,
         cardRect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
         foundationRects,
         sceneTransform: getComputedStyle(document.querySelector(".solitaire-prepared-scene")).transform,
-        boardTransform: getComputedStyle(document.querySelector(".csssolitaire-board")).transform,
         mutations: { ...window.__cssSolitaireSmoke.mutations },
       };
     });
@@ -279,7 +271,7 @@ try {
       window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
     });
     const mobileEvidence = await page.evaluate(() => {
-      const visibleLeaves = [...document.querySelectorAll(".csssolitaire-board > s")]
+      const visibleLeaves = [...document.querySelectorAll(".solitaire-prepared-scene > s")]
         .filter((leaf) => {
           const style = getComputedStyle(leaf);
           return style.display !== "none" && style.visibility === "visible";
@@ -306,7 +298,7 @@ try {
         mobileInitial.cardRect.height <= mobileInitial.cardRect.width ||
         Math.abs(mobileInitial.cardRect.left - 158.9453125) > 0.1 ||
         Math.abs(mobileInitial.cardRect.top - 80) > 0.1 ||
-        mobileInitial.sceneTransform !== "none" || mobileInitial.boardTransform !== "none" ||
+        mobileInitial.sceneTransform !== "none" ||
         mobileInitial.mutations.added !== 0 || mobileInitial.mutations.removed !== 0 ||
         !mobileEvidence.stable || mobileEvidence.visibleLeaves <= 1 ||
         mobileEvidence.intersectingVisibleLeaves <= 4 ||
@@ -341,7 +333,7 @@ try {
       await page.waitForTimeout(50);
       const layout = await page.evaluate(() => {
         window.__cssSolitaireDebug.seek(0);
-        const cards = [...document.querySelectorAll(".csssolitaire-board > s.foundation")]
+        const cards = [...document.querySelectorAll(".solitaire-prepared-scene > s.foundation")]
           .filter((foundation) => getComputedStyle(foundation).display !== "none")
           .map((foundation) => {
             const rect = foundation.getBoundingClientRect();
@@ -350,7 +342,7 @@ try {
         const state = window.__cssSolitaireDebug.snapshot();
         const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[state.patternIndex].durationMs;
         window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
-        const visibleRects = [...document.querySelectorAll(".csssolitaire-board > s")]
+        const visibleRects = [...document.querySelectorAll(".solitaire-prepared-scene > s")]
           .filter((leaf) => {
             const style = getComputedStyle(leaf);
             return style.display !== "none" && style.visibility === "visible";
@@ -391,7 +383,7 @@ try {
       await page.waitForTimeout(50);
       const layout = await page.evaluate(() => {
         window.__cssSolitaireDebug.seek(0);
-        const cards = [...document.querySelectorAll(".csssolitaire-board > s.foundation")]
+        const cards = [...document.querySelectorAll(".solitaire-prepared-scene > s.foundation")]
           .map((foundation) => {
             const rect = foundation.getBoundingClientRect();
             return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
@@ -399,7 +391,7 @@ try {
         const state = window.__cssSolitaireDebug.snapshot();
         const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[state.patternIndex].durationMs;
         window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
-        const visible = [...document.querySelectorAll(".csssolitaire-board > s")]
+        const visible = [...document.querySelectorAll(".solitaire-prepared-scene > s")]
           .filter((leaf) => getComputedStyle(leaf).visibility === "visible")
           .map((leaf) => leaf.getBoundingClientRect());
         return {

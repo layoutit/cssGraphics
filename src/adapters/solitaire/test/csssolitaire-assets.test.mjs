@@ -117,21 +117,24 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   const snapshot = await readFile(join(generated, "solitaire.polycss.txt"), "utf8");
   assert.match(snapshot, /class="polycss-camera solitaire-prepared-camera"/u);
   assert.match(snapshot, /class="polycss-scene solitaire-prepared-scene"/u);
-  assert.match(snapshot, /class="csssolitaire-board"/u);
-  assert.equal((snapshot.match(/<s class="[^"]+" style=/gu) ?? []).length, 1952);
-  assert.equal((snapshot.match(/--csssolitaire-landscape-transform:translate\(/gu) ?? []).length, 1952);
-  const portraitTransformCounts = [1, 2, 3, 4].map((cardCount) =>
-    (snapshot.match(new RegExp(`--csssolitaire-portrait-${cardCount}-transform:translate\\(`, "gu")) ?? []).length);
-  assert.ok(portraitTransformCounts.every((count, index) => index === 0 || count > portraitTransformCounts[index - 1]));
-  assert.equal(portraitTransformCounts[3], 1952);
-  assert.equal((snapshot.match(/transform:var\(--csssolitaire-landscape-transform\)/gu) ?? []).length, 1);
-  assert.equal((snapshot.match(/<s class="foundation lane-[0-3]"/gu) ?? []).length, 4);
+  assert.doesNotMatch(snapshot, /csssolitaire-board/u);
+  assert.equal((snapshot.match(/<s class="[^"]+"><\/s>/gu) ?? []).length, 1952);
+  assert.doesNotMatch(snapshot, /<s[^>]+\sstyle=/u);
+  assert.doesNotMatch(snapshot, /--csssolitaire-(?:landscape|portrait)-/u);
+  assert.equal((snapshot.match(/\.solitaire-prepared-scene>s\.l[0-9a-z]+\{transform:/gu) ?? []).length,
+    9760);
+  assert.equal((snapshot.match(/\.solitaire-prepared-scene>s\.l[0-9a-z]+\{transform:translate\(/gu) ?? []).length,
+    6223);
+  assert.equal((snapshot.match(/\{transform:none\}/gu) ?? []).length, 3537);
+  assert.equal((snapshot.match(/\.solitaire-prepared-scene>s\.f[0-9a-z]+\{background-position:/gu) ?? []).length,
+    52);
+  assert.equal((snapshot.match(/<s class="foundation v lane-[0-3] l[0-3] f[0-9a-z]+"><\/s>/gu) ?? []).length, 4);
   assert.match(snapshot, /\.polycss-scene\.solitaire-prepared-scene\{position:absolute;inset:0\}/u);
-  assert.match(snapshot, /\.csssolitaire-board\{position:absolute;inset:0\}/u);
+  assert.match(snapshot, /\.polycss-scene\.solitaire-prepared-scene>s\{position:absolute/u);
   assert.match(snapshot, /--csssolitaire-card-width:calc\(71px \* var\(--csssolitaire-presentation-scale/u);
-  assert.doesNotMatch(snapshot, /--csssolitaire-fit|\.csssolitaire-board\{[^}]*translate/u);
-  assert.match(snapshot, /max-width:519px\)\{\.csssolitaire-board>s\{transform:var\(--csssolitaire-portrait-1-transform\)\}/u);
-  assert.match(snapshot, /min-width:920px\)\{\.csssolitaire-board>s\{transform:var\(--csssolitaire-portrait-4-transform\)\}/u);
+  assert.doesNotMatch(snapshot, /--csssolitaire-fit/u);
+  assert.match(snapshot, /max-width:519px\)\{\.solitaire-prepared-scene>s\.l0\{transform:translate\(/u);
+  assert.match(snapshot, /min-width:920px\)\{\.solitaire-prepared-scene>s\.l0\{transform:translate\(/u);
   assert.match(snapshot, /border-radius:14px/u);
   assert.doesNotMatch(snapshot, /box-shadow/u);
   assert.match(snapshot, /image-rendering:auto/u);
@@ -175,6 +178,9 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.ok(playback.patterns.every((pattern) =>
     pattern.leafPortraitMatricesByCardCount.length === 4 &&
     pattern.leafPortraitMatricesByCardCount.every((profile) => profile.length === pattern.trailLeafCount)));
+  assert.ok(playback.patterns.every((pattern) =>
+    pattern.leafFoundationIndices.length === pattern.trailLeafCount &&
+    pattern.leafFoundationIndices.every((foundationIndex) => foundationIndex >= 0 && foundationIndex < 4)));
   const initialPattern = playback.patterns[0];
   const oneCardTransforms = initialPattern.leafPortraitMatricesByCardCount[0].filter(Boolean);
   assert.ok(oneCardTransforms.every((transform) => transform.includes("vw") && transform.includes("vh")));

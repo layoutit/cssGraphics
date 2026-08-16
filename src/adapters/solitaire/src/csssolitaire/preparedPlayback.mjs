@@ -2,20 +2,23 @@ import { createPolyMorphPreparedDomTarget } from "@layoutit/polycss-morph";
 
 export function createCsssolitairePreparedPlayer({
   playback,
-  board,
+  scene,
   leaves,
+  layoutRulesByProfile,
   randomUint32 = cryptoRandomUint32,
 }) {
   if (playback?.schema !== "csssolitaire-prepared-playback@2" ||
-      !(board instanceof HTMLElement) || !Array.isArray(leaves) ||
-      leaves.length !== playback.retainedLeafCount) {
+      !(scene instanceof HTMLElement) || !Array.isArray(leaves) ||
+      leaves.length !== playback.retainedLeafCount || !Array.isArray(layoutRulesByProfile) ||
+      layoutRulesByProfile.length !== 5 ||
+      layoutRulesByProfile.some((rules) => !Array.isArray(rules) || rules.length !== leaves.length)) {
     throw new Error("Prepared cssSolitaire player input drifted");
   }
   const target = createPolyMorphPreparedDomTarget({
     model: {
-      element: board,
+      element: scene,
       writeTransform(transform) {
-        board.style.transform = transform;
+        scene.style.transform = transform;
         return true;
       },
     },
@@ -28,17 +31,21 @@ export function createCsssolitairePreparedPlayer({
   const foundationLeafCount = playback.foundationLeafCount;
   const foundationLeaves = leaves.slice(0, foundationLeafCount);
   const trailLeaves = leaves.slice(foundationLeafCount);
-  const initialFoundationPositions = foundationLeaves.map((leaf) => leaf.style.backgroundPosition);
-  const foundationPositions = [...initialFoundationPositions];
+  const initialFoundationFaceIndices = foundationLeaves.map(readFaceIndex);
+  const foundationFaceIndices = [...initialFoundationFaceIndices];
   const foundationVisibility = new Uint8Array(foundationLeafCount);
   foundationVisibility.fill(1);
   const trailVisibility = new Uint8Array(trailLeaves.length);
-  const trailLandscapeTransforms = trailLeaves.map((leaf) =>
-    leaf.style.getPropertyValue("--csssolitaire-landscape-transform"));
+  const trailLandscapeTransforms = layoutRulesByProfile[0]
+    .slice(foundationLeafCount)
+    .map((rule) => rule?.style.transform ?? "");
   const trailPortraitTransformsByCardCount = Array.from({ length: 4 }, (_, profileIndex) =>
-    trailLeaves.map((leaf) =>
-      leaf.style.getPropertyValue(`--csssolitaire-portrait-${profileIndex + 1}-transform`)));
-  const trailBackgroundPositions = trailLeaves.map((leaf) => leaf.style.backgroundPosition);
+    layoutRulesByProfile[profileIndex + 1]
+      .slice(foundationLeafCount)
+      .map((rule) => rule?.style.transform ?? ""));
+  const trailLaneIndices = trailLeaves.map(readLaneIndex);
+  const trailFaceIndices = trailLeaves.map(readFaceIndex);
+  const atlasFaceIndices = new Map(playback.atlasPositions.map((position, index) => [position, index]));
   let activePatternIndex = playback.initialPatternIndex;
   let pattern = patterns[activePatternIndex];
   let shuffleBag = [];
@@ -51,7 +58,7 @@ export function createCsssolitairePreparedPlayer({
   let visibleFoundationCards = foundationLeafCount;
   let visibilityWrites = 0;
   let visibilityOperationsApplied = 0;
-  let foundationStyleWrites = 0;
+  let foundationClassWrites = 0;
   let foundationOperationsApplied = 0;
   let patternLayoutWrites = 0;
   let patternLayoutLeavesVisited = 0;
@@ -76,7 +83,7 @@ export function createCsssolitairePreparedPlayer({
       visibilityOperationsApplied += 1;
       if (Boolean(trailVisibility[trailIndex]) === visible) continue;
       trailVisibility[trailIndex] = Number(visible);
-      leaves[leafIndex].style.visibility = visible ? "visible" : "hidden";
+      leaves[leafIndex].classList.toggle("v", visible);
       visibleTrailCards += visible ? 1 : -1;
       visibilityWrites += 1;
       writes += 1;
@@ -92,25 +99,27 @@ export function createCsssolitairePreparedPlayer({
       if (atlasX < 0) {
         if (foundationVisibility[foundationIndex] === 0) continue;
         foundationVisibility[foundationIndex] = 0;
-        leaf.style.visibility = "hidden";
+        leaf.classList.remove("v");
         visibleFoundationCards -= 1;
         writes += 1;
         continue;
       }
       const position = `${-atlasX}px ${-atlasY}px`;
-      if (foundationPositions[foundationIndex] !== position) {
-        foundationPositions[foundationIndex] = position;
-        leaf.style.backgroundPosition = position;
+      const faceIndex = atlasFaceIndices.get(position);
+      if (!Number.isInteger(faceIndex)) throw new Error("Prepared cssSolitaire atlas position drifted");
+      if (foundationFaceIndices[foundationIndex] !== faceIndex) {
+        setFaceClass(leaf, foundationFaceIndices[foundationIndex], faceIndex);
+        foundationFaceIndices[foundationIndex] = faceIndex;
         writes += 1;
       }
       if (foundationVisibility[foundationIndex] === 0) {
         foundationVisibility[foundationIndex] = 1;
-        leaf.style.visibility = "visible";
+        leaf.classList.add("v");
         visibleFoundationCards += 1;
         writes += 1;
       }
     }
-    foundationStyleWrites += writes;
+    foundationClassWrites += writes;
     return writes;
   }
 
@@ -118,28 +127,35 @@ export function createCsssolitairePreparedPlayer({
     let writes = 0;
     for (let index = 0; index < nextPattern.trailLeafCount; index += 1) {
       const leaf = trailLeaves[index];
+      const leafIndex = foundationLeafCount + index;
       const landscapeTransform = nextPattern.leafMatrices[index];
-      const backgroundPosition = playback.atlasPositions[nextPattern.leafAtlasIndices[index]];
+      const laneIndex = nextPattern.leafFoundationIndices[index];
+      const faceIndex = nextPattern.leafAtlasIndices[index];
       patternLayoutLeavesVisited += 1;
       if (trailLandscapeTransforms[index] !== landscapeTransform) {
         trailLandscapeTransforms[index] = landscapeTransform;
-        leaf.style.setProperty("--csssolitaire-landscape-transform", landscapeTransform);
+        layoutRulesByProfile[0][leafIndex].style.transform = landscapeTransform;
         writes += 1;
       }
       for (let profileIndex = 0; profileIndex < 4; profileIndex += 1) {
         const portraitTransform = nextPattern.leafPortraitMatricesByCardCount[profileIndex][index];
         if (portraitTransform === null ||
             trailPortraitTransformsByCardCount[profileIndex][index] === portraitTransform) continue;
+        const rule = layoutRulesByProfile[profileIndex + 1][leafIndex];
+        if (!rule) throw new Error("Prepared cssSolitaire portrait rule bank drifted");
         trailPortraitTransformsByCardCount[profileIndex][index] = portraitTransform;
-        leaf.style.setProperty(
-          `--csssolitaire-portrait-${profileIndex + 1}-transform`,
-          portraitTransform,
-        );
+        rule.style.transform = portraitTransform;
         writes += 1;
       }
-      if (trailBackgroundPositions[index] !== backgroundPosition) {
-        trailBackgroundPositions[index] = backgroundPosition;
-        leaf.style.backgroundPosition = backgroundPosition;
+      if (trailLaneIndices[index] !== laneIndex) {
+        leaf.classList.remove(`lane-${trailLaneIndices[index]}`);
+        leaf.classList.add(`lane-${laneIndex}`);
+        trailLaneIndices[index] = laneIndex;
+        writes += 1;
+      }
+      if (trailFaceIndices[index] !== faceIndex) {
+        setFaceClass(leaf, trailFaceIndices[index], faceIndex);
+        trailFaceIndices[index] = faceIndex;
         writes += 1;
       }
     }
@@ -152,21 +168,21 @@ export function createCsssolitairePreparedPlayer({
     for (let index = 0; index < trailVisibility.length; index += 1) {
       if (trailVisibility[index] === 0) continue;
       trailVisibility[index] = 0;
-      trailLeaves[index].style.visibility = "hidden";
+      trailLeaves[index].classList.remove("v");
       writes += 1;
     }
     let foundationWrites = 0;
     for (let index = 0; index < foundationLeafCount; index += 1) {
       const leaf = foundationLeaves[index];
-      const initialPosition = initialFoundationPositions[index];
-      if (foundationPositions[index] !== initialPosition) {
-        foundationPositions[index] = initialPosition;
-        leaf.style.backgroundPosition = initialPosition;
+      const initialFaceIndex = initialFoundationFaceIndices[index];
+      if (foundationFaceIndices[index] !== initialFaceIndex) {
+        setFaceClass(leaf, foundationFaceIndices[index], initialFaceIndex);
+        foundationFaceIndices[index] = initialFaceIndex;
         foundationWrites += 1;
       }
       if (foundationVisibility[index] === 0) {
         foundationVisibility[index] = 1;
-        leaf.style.visibility = "visible";
+        leaf.classList.add("v");
         foundationWrites += 1;
       }
     }
@@ -175,7 +191,7 @@ export function createCsssolitairePreparedPlayer({
     frameIndex = 0;
     playheadMs = 0;
     visibilityWrites += writes;
-    foundationStyleWrites += foundationWrites;
+    foundationClassWrites += foundationWrites;
     resetCount += 1;
     lastApply = Object.freeze({
       visibilityWrites: writes,
@@ -355,7 +371,7 @@ export function createCsssolitairePreparedPlayer({
         runtimeVisibilityOperationsApplied: visibilityOperationsApplied,
         runtimeFoundationOperationsApplied: foundationOperationsApplied,
         runtimeLeafVisibilityWrites: visibilityWrites,
-        runtimeFoundationStyleWrites: foundationStyleWrites,
+        runtimeFoundationClassWrites: foundationClassWrites,
         runtimePatternLayoutWrites: patternLayoutWrites,
         runtimePatternLayoutLeavesVisited: patternLayoutLeavesVisited,
         runtimePreparedPatternSwitchCount: patternSwitchCount,
@@ -377,6 +393,28 @@ export function createCsssolitairePreparedPlayer({
       target.destroy();
     },
   });
+}
+
+function readFaceIndex(leaf) {
+  for (const className of leaf.classList) {
+    if (!/^f[0-9a-z]+$/u.test(className)) continue;
+    const index = Number.parseInt(className.slice(1), 36);
+    if (Number.isSafeInteger(index) && index >= 0 && index < 52) return index;
+  }
+  throw new Error("Prepared cssSolitaire face class drifted");
+}
+
+function readLaneIndex(leaf) {
+  for (const className of leaf.classList) {
+    const match = className.match(/^lane-([0-3])$/u);
+    if (match) return Number(match[1]);
+  }
+  throw new Error("Prepared cssSolitaire lane class drifted");
+}
+
+function setFaceClass(leaf, previousIndex, nextIndex) {
+  leaf.classList.remove(`f${previousIndex.toString(36)}`);
+  leaf.classList.add(`f${nextIndex.toString(36)}`);
 }
 
 function cryptoRandomUint32() {

@@ -191,6 +191,11 @@ function validPattern(pattern, playback, manifest, index) {
     !Array.from({ length: pattern.trailLeafCount }, (_, leafIndex) => leafIndex).some((leafIndex) =>
       pattern.leafPortraitMatricesByCardCount.some((profile, profileIndex, profiles) =>
         profileIndex > 0 && profiles[profileIndex - 1][leafIndex] !== null && profile[leafIndex] === null)) &&
+    Array.isArray(pattern.leafFoundationIndices) &&
+    pattern.leafFoundationIndices.length === pattern.trailLeafCount &&
+    !pattern.leafFoundationIndices.some((foundationIndex) =>
+      !Number.isSafeInteger(foundationIndex) || foundationIndex < 0 ||
+      foundationIndex >= playback.foundationLeafCount) &&
     Array.isArray(pattern.leafAtlasIndices) && pattern.leafAtlasIndices.length === pattern.trailLeafCount &&
     !pattern.leafAtlasIndices.some((atlasIndex) =>
       !Number.isSafeInteger(atlasIndex) || atlasIndex < 0 || atlasIndex >= playback.atlasPositions.length);

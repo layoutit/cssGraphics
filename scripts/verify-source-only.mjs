@@ -44,11 +44,13 @@ const README_MEDIA_PATHS = new Set([
   "site/public/landing/maze.webp",
   "site/public/landing/menger.webp",
   "site/public/landing/pipes.webp",
+  "site/public/landing/solitaire.webp",
   "site/readme/animated-morph-sphere.gif",
   "site/readme/cube-to-sphere.gif",
   "site/readme/pipes.gif",
   "src/adapters/3dpipes/public/pipes-social.png",
   "src/adapters/flowerbox/public/flower-social.png",
+  "src/adapters/solitaire/source/card-faces-english-pattern-cc0.png",
 ]);
 const SHA256 = /^[a-f0-9]{64}$/u;
 

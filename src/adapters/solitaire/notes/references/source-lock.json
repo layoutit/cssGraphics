@@ -1,0 +1,56 @@
+{
+  "schema": "csssolitaire-source-lock@1",
+  "name": "Windows XP Solitaire victory cascade",
+  "referenceRepository": "https://github.com/esc0rtd3w/xp-cards",
+  "referenceRevision": "33a6d492ffa63f0b16b1ad982930c16d367f6bbb",
+  "referenceBoundary": "Microsoft proprietary binaries; ignored local static-analysis and headless oracle inputs only; not redistributed",
+  "binaryIdentities": {
+    "sol.exe": "a6fc95a5b288593c9559bd177ec43bf9b30d8a98cf19e82bf5a1ba5600857f04",
+    "cards.dll": "0fb81e48d8b45e9995ae1e05fd28c1631dbbcdc71180904c1356bfa2c1ead506"
+  },
+  "recoveredRoutine": {
+    "tool": "Ghidra 12.1.2",
+    "name": "FUN_01004df0",
+    "address": "0x01004df0",
+    "facts": {
+      "rankOrder": "King through Ace",
+      "foundationCount": 4,
+      "horizontalVelocity": "rand() % 110 - 65; values with abs(v) < 15 become -20",
+      "verticalVelocity": "rand() % 110 - 75",
+      "horizontalStep": "signed integer truncation of velocity / 10",
+      "verticalStep": "signed integer truncation of velocity / 10",
+      "gravityPerDraw": 3,
+      "bounceRetention": 0.8,
+      "waitMilliseconds": 5,
+      "preparedCadenceMillisecondsPerDraw": 7.5,
+      "exit": "x <= -cardWidth or x >= clientWidth",
+      "slotCount": 7,
+      "horizontalGap": "max((clientWidth - cardWidth * 7) / 8, cardWidth / 8 + 3), using signed integer truncation",
+      "cardsRemainUpright": true,
+      "framebufferClearDuringCard": false
+    }
+  },
+  "preparedDeterminism": {
+    "rng": "MSVCRT-compatible",
+    "entryState": 1,
+    "playfield": [585, 384],
+    "horizontalVelocityDistribution": "mild-slow-bias-first-two-lanes-quarter-right-unique-per-lane-cycle",
+    "horizontalVelocityBiasExponent": 1.1,
+    "rightwardFoundationIndices": [0, 1],
+    "rightwardSelection": "random-value-modulo-4-zero",
+    "exactSameLaneTrajectoryRepeats": false
+  },
+  "cardArtwork": {
+    "id": "loren-osborn-english-pattern-playing-cards-deck-plus-cc0",
+    "uri": "https://commons.wikimedia.org/wiki/File:English_pattern_playing_cards_deck_PLUS_CC0.svg",
+    "license": "CC0-1.0",
+    "preparedPngSha256": "e782179fb60932722548e3e6b46038a2df16d15001d3ea8cbdd22cc005f2841d"
+  },
+  "publicBoundary": {
+    "proprietaryBinaryIncluded": false,
+    "microsoftCardArtworkIncluded": false,
+    "nativeCaptureIncluded": false,
+    "ghidraProjectIncluded": false,
+    "cc0CardArtworkIncluded": true
+  }
+}

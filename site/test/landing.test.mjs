@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(siteRoot, "..");
 const expectedProjects = [
+  ["solitaire", 6, "Classic Solitaire", "2026-08-16", "The classic Solitaire victory cascade"],
   ["electropaint", 5, "David Tristram", "2026-08-10", "ElectroPaint, originally written by David Tristram"],
   ["menger", 4, "XScreenSaver", "2026-08-13", "XScreenSaver Menger"],
   ["maze", 3, "XScreenSaver", "2026-08-09", "XScreenSaver Maze3D"],
@@ -22,6 +23,7 @@ const projectAdapterDirectories = new Map([
   ["maze", "maze"],
   ["gears", "gears"],
   ["pipes", "3dpipes"],
+  ["solitaire", "solitaire"],
 ]);
 
 test("landing presents the current deployed collection", async () => {
@@ -166,7 +168,7 @@ test("deployment serves the landing at the root", async () => {
   assert.doesNotMatch(netlify, /to\s*=\s*"\/pipes\/"/u);
   assert.match(
     packageManifest,
-    /CSSMAZE_DEPLOY_BUILD=1 pnpm build:maze && CSSSELECTROPAINT_DEPLOY_BUILD=1 pnpm build:electropaint && CSSGRAPHICS_DEPLOY_BUILD=1 pnpm build:site/u,
+    /CSSMAZE_DEPLOY_BUILD=1 pnpm build:maze && CSSSELECTROPAINT_DEPLOY_BUILD=1 pnpm build:electropaint && CSSSOLITAIRE_DEPLOY_BUILD=1 pnpm build:solitaire && CSSGRAPHICS_DEPLOY_BUILD=1 pnpm build:site/u,
   );
   assert.match(
     packageManifest,

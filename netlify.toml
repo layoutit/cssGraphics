@@ -58,6 +58,16 @@
     Cache-Control = "public, max-age=31536000, immutable"
 
 [[headers]]
+  for = "/csssolitaire/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/csssolitaire/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
   for = "/cssselectropaint/variants/*/chunks/*.gz"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"

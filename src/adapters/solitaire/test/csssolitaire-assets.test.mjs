@@ -106,7 +106,7 @@ test("generated product is one complete retained snapshot plus sparse prepared p
     `assets/card-faces-${manifest.provenance.cardAtlas.sha256}.png`,
     "manifest.json",
     "solitaire-playback.json",
-    "solitaire.polycss.html",
+    "solitaire.polycss.txt",
   ]);
   for (const descriptor of Object.values(manifest.assets)) {
     const bytes = await readFile(join(generated, descriptor.path));
@@ -114,7 +114,7 @@ test("generated product is one complete retained snapshot plus sparse prepared p
     assert.equal(createHash("sha256").update(bytes).digest("hex"), descriptor.sha256);
   }
 
-  const snapshot = await readFile(join(generated, "solitaire.polycss.html"), "utf8");
+  const snapshot = await readFile(join(generated, "solitaire.polycss.txt"), "utf8");
   assert.match(snapshot, /class="polycss-camera solitaire-prepared-camera"/u);
   assert.match(snapshot, /class="polycss-scene solitaire-prepared-scene"/u);
   assert.match(snapshot, /class="csssolitaire-board"/u);

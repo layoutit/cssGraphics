@@ -210,7 +210,7 @@ try {
         evidence.stats.runtimeAtlasRasterizationCount !== 0 ||
         evidence.stats.runtimeDomMutationCount !== 0 ||
         !evidence.resources.includes("/csssolitaire/manifest.json") ||
-        !evidence.resources.includes("/csssolitaire/solitaire.polycss.html") ||
+        !evidence.resources.includes("/csssolitaire/solitaire.polycss.txt") ||
         !evidence.resources.includes("/csssolitaire/solitaire-playback.json") ||
         evidence.resources.some((path) => path.endsWith("model.json"))) {
       throw new Error(`cssSolitaire smoke contract failed: ${JSON.stringify({ readyMs, sampled, evidence })}`);

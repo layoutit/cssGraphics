@@ -75,6 +75,7 @@ function validateManifest(manifest) {
       manifest.renderer?.slotCount !== 7 || manifest.renderer?.minimumSlotGap !== 11 ||
       manifest.renderer?.presentationScaleMode !== "single-root-contain-scale-viewport-positioned" ||
       manifest.renderer?.runtimeResizeCalculation !== "single-root-presentation-scale-only" ||
+      manifest.transport?.snapshotUrl !== "/csssolitaire/solitaire.polycss.txt" ||
       manifest.transport?.runtimeModelPayload !== false ||
       manifest.sourceProfile?.cards !== 12 ||
       manifest.sourceProfile?.sourceSteps !== 1679 ||

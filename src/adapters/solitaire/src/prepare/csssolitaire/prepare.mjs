@@ -654,7 +654,7 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       runtimeDomGrowth: false,
     },
     transport: {
-      snapshotUrl: "/csssolitaire/solitaire.polycss.html",
+      snapshotUrl: "/csssolitaire/solitaire.polycss.txt",
       playbackUrl: "/csssolitaire/solitaire-playback.json",
       cardAtlasUrl: cardAssetUrl,
       runtimeModelPayload: false,
@@ -701,11 +701,11 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
   try {
     await Promise.all([
       writeFile(join(stagingRoot, "assets", cardAssetName), preparedCardAtlas.bytes),
-      writeFile(join(stagingRoot, "solitaire.polycss.html"), snapshotText),
+      writeFile(join(stagingRoot, "solitaire.polycss.txt"), snapshotText),
       writeFile(join(stagingRoot, "solitaire-playback.json"), playbackText),
     ]);
     manifest.assets = {
-      snapshot: descriptor("solitaire.polycss.html", Buffer.from(snapshotText)),
+      snapshot: descriptor("solitaire.polycss.txt", Buffer.from(snapshotText)),
       playback: descriptor("solitaire-playback.json", Buffer.from(playbackText)),
       cardAtlas: descriptor(`assets/${cardAssetName}`, preparedCardAtlas.bytes),
     };

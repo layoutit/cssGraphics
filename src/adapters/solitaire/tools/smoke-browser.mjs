@@ -223,9 +223,10 @@ try {
         evidence.stats.runtimeRandomSelectionPurpose !== "prepared-pattern-shuffled-bag-index-only" ||
         evidence.stats.runtimeGeometryCalculationCount !== 0 ||
         evidence.stats.runtimeGeometryBoundsCalculationCount !== 0 ||
-        evidence.stats.runtimeFitCalculationPurpose !== "single-root-presentation-scale-only" ||
+        evidence.stats.runtimeFitCalculationPurpose !== "prepared-layout-inline-matrix-resolution" ||
         Math.abs(evidence.stats.runtimePresentationScale - 1.40625) > 0.000001 ||
-        evidence.stats.runtimePresentationScaleWrites !== 0 ||
+        evidence.stats.runtimePresentationUpdateCount !== 0 ||
+        evidence.stats.runtimeResponsiveMatrixResolutionCount < 1 ||
         evidence.stats.runtimeTrajectoryCalculationCount !== 0 ||
         evidence.stats.runtimeAtlasRasterizationCount !== 0 ||
         evidence.stats.runtimeDomMutationCount !== 0 ||

@@ -58,6 +58,7 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.deepEqual(manifest.renderer.cardSourceSize, [71, 96]);
   assert.deepEqual(manifest.renderer.landscapePresentationBase, [960, 540]);
   assert.equal(manifest.renderer.landscapePresentationBaseScale, 1.40625);
+  assert.equal(manifest.renderer.landscapeCardMaximumWidthCssPixels, 200);
   assert.deepEqual(manifest.renderer.portraitPresentationBase, [384, 720]);
   assert.equal(manifest.renderer.portraitMapping,
     "progressive-card-count-prepared-source-lane-folding");

@@ -378,6 +378,7 @@ try {
       { width: 960, height: 540, expectedSize: [99.84375, 135], expectedLefts: [430.078125, 562.558594, 695.039063, 827.519531] },
       { width: 1_280, height: 720, expectedSize: [133.125, 180], expectedLefts: [573.4375, 750.078125, 926.71875, 1_103.359375] },
       { width: 1_440, height: 900, expectedSize: [149.765625, 202.5], expectedLefts: [645.117188, 843.837891, 1_042.558594, 1_241.279297] },
+      { width: 2_560, height: 1_440, expectedSize: [200, 270.422535], expectedLefts: [1_180, 1_525, 1_870, 2_215] },
     ]) {
       await page.setViewportSize(viewport);
       await page.waitForTimeout(50);

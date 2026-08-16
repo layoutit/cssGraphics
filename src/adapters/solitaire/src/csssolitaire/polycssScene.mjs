@@ -45,9 +45,12 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
         width / manifest.renderer.portraitPresentationBase[0],
         height / manifest.renderer.portraitPresentationBase[1],
       )
-      : manifest.renderer.landscapePresentationBaseScale * Math.min(
-        width / manifest.renderer.landscapePresentationBase[0],
-        height / manifest.renderer.landscapePresentationBase[1],
+      : Math.min(
+        manifest.renderer.landscapeCardMaximumWidthCssPixels / manifest.renderer.cardSourceSize[0],
+        manifest.renderer.landscapePresentationBaseScale * Math.min(
+          width / manifest.renderer.landscapePresentationBase[0],
+          height / manifest.renderer.landscapePresentationBase[1],
+        ),
       );
     const serialized = String(Number(presentationScale.toFixed(8)));
     if (ruleBank.presentation.style.getPropertyValue("--csssolitaire-presentation-scale") !== serialized) {

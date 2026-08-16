@@ -20,7 +20,9 @@ test("product shell is the standard css.graphics route without demo controls", a
   assert.match(html, /class="site-header"/u);
   assert.match(html, /class="site-wordmark-svg"/u);
   assert.match(html, /href="https:\/\/github\.com\/layoutit\/cssGraphics"/u);
-  assert.match(html, /<main id="scene"/u);
+  assert.match(html, /<main id="scene"><\/main>/u);
+  assert.equal((html.match(/\saria-label=/gu) ?? []).length, 1);
+  assert.doesNotMatch(html, /aria-busy/u);
   assert.doesNotMatch(html, /<button\b|<nav\b|<section\b|<output\b|<canvas\b/u);
   assert.match(css, /\.site-header \{[^}]*position: fixed;[^}]*pointer-events: none;/u);
   assert.match(css, /\.site-wordmark \{[^}]*pointer-events: auto;/u);
@@ -34,10 +36,12 @@ test("product shell is the standard css.graphics route without demo controls", a
   assert.doesNotMatch(css, /clip-path|mask(?:-image)?|filter|box-shadow|text-shadow|mix-blend-mode/iu);
   assert.match(client, /loadPreparedSolitaire/u);
   assert.match(client, /state\.player\.resume\(\)/u);
+  assert.doesNotMatch(client, /aria-busy/u);
   assert.doesNotMatch(client, /prefers-reduced-motion/u);
   assert.match(player, /createPolyMorphPreparedDomTarget/u);
   assert.match(player, /deadline-setTimeout-prepared-visibility-publication/u);
   assert.doesNotMatch(player, /Math\.random|requestAnimationFrame\s*\(|createElement|DOMMatrix/u);
+  assert.doesNotMatch(player, /lane-/u);
   assert.match(snapshotMount, /new ResizeObserver\(updatePresentation\)/u);
   assert.match(snapshotMount, /host\.clientWidth/u);
   assert.match(snapshotMount, /host\.clientHeight/u);

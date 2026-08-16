@@ -486,50 +486,36 @@ function buildPreparedPattern(seed, index) {
           const portraitMatrix = portraitMatrices[profileIndex];
           return portraitMatrix;
         })),
-      leafFoundationIndices: source.snapshots.map(({ foundationIndex }) => foundationIndex),
       leafAtlasIndices: source.snapshots.map(({ faceNumber: cardFace }) => cardFace - 1),
     }),
   });
 }
 
 function buildSnapshot(leaves, cardAssetUrl) {
-  const leafClass = (index) => `l${index.toString(36)}`;
   const faceClass = (index) => `f${index.toString(36)}`;
-  const leafSelector = (index) => `.solitaire-prepared-scene>s.${leafClass(index)}`;
   const cardNodes = leaves.map((leaf, index) => {
     const classes = [
-      index < FOUNDATION_COUNT ? "foundation" : null,
       index < FOUNDATION_COUNT ? "v" : null,
-      `lane-${leaf.foundationIndex}`,
-      leafClass(index),
       faceClass(leaf.faceIndex),
     ]
       .filter(Boolean).join(" ");
-    return `<s class="${classes}"></s>`;
+    return `<b class="${classes}" style="transform:${leaf.matrix}"></b>`;
   }).join("");
   const faceRules = Array.from({ length: 52 }, (_, faceIndex) => {
     const atlas = atlasPosition(faceIndex + 1);
-    return `.solitaire-prepared-scene>s.${faceClass(faceIndex)}{background-position:${-atlas.x}px ${-atlas.y}px}`;
+    return `.polycss-scene>b.${faceClass(faceIndex)}{background-position:${-atlas.x}px ${-atlas.y}px}`;
   }).join("");
-  const landscapeRules = leaves.map((leaf, index) =>
-    `${leafSelector(index)}{transform:${leaf.matrix}}`).join("");
-  const portraitRules = PORTRAIT_PROFILES.map((_, profileIndex) => leaves
-    .map((leaf, index) =>
-      `${leafSelector(index)}{transform:${leaf.portraitMatrices[profileIndex] ?? "none"}}`)
-    .join(""));
   const css = [
-    `.polycss-camera.solitaire-prepared-camera{position:relative;display:block;width:100%;height:100%;overflow:hidden;--csssolitaire-presentation-scale:${LANDSCAPE_PRESENTATION_SCALE};--csssolitaire-card-width:calc(${CARD_WIDTH}px * var(--csssolitaire-presentation-scale));--csssolitaire-card-height:calc(${CARD_HEIGHT}px * var(--csssolitaire-presentation-scale));--csssolitaire-card-transform-x:calc(${CARD_HEIGHT / CARD_SOURCE_WIDTH} * var(--csssolitaire-presentation-scale));--csssolitaire-card-transform-y:calc(${CARD_WIDTH / CARD_SOURCE_HEIGHT} * var(--csssolitaire-presentation-scale))}`,
-    ".polycss-scene.solitaire-prepared-scene{position:absolute;inset:0}",
-    `.polycss-scene.solitaire-prepared-scene>s{position:absolute;display:block;width:${CARD_SOURCE_WIDTH}px;height:${CARD_SOURCE_HEIGHT}px;margin:0;padding:0;overflow:hidden;border:0;border-radius:14px;background-image:url('${cardAssetUrl}');background-repeat:no-repeat;background-size:${CARD_ATLAS_WIDTH}px ${CARD_ATLAS_HEIGHT}px;transform-origin:0 0;visibility:hidden;pointer-events:none;text-decoration:none;font:normal normal normal 0/0 serif;image-rendering:auto}`,
-    ".polycss-scene.solitaire-prepared-scene>s.v{visibility:visible}",
+    `.polycss-camera{position:relative;display:block;width:100%;height:100%;overflow:hidden;--csssolitaire-presentation-scale:${LANDSCAPE_PRESENTATION_SCALE};--csssolitaire-card-width:calc(${CARD_WIDTH}px * var(--csssolitaire-presentation-scale));--csssolitaire-card-height:calc(${CARD_HEIGHT}px * var(--csssolitaire-presentation-scale));--csssolitaire-card-transform-x:calc(${CARD_HEIGHT / CARD_SOURCE_WIDTH} * var(--csssolitaire-presentation-scale));--csssolitaire-card-transform-y:calc(${CARD_WIDTH / CARD_SOURCE_HEIGHT} * var(--csssolitaire-presentation-scale))}`,
+    ".polycss-scene{position:absolute;inset:0}",
+    `.polycss-scene>b{position:absolute;display:block;width:${CARD_SOURCE_WIDTH}px;height:${CARD_SOURCE_HEIGHT}px;margin:0;padding:0;overflow:hidden;border:0;border-radius:14px;background-image:url('${cardAssetUrl}');background-repeat:no-repeat;background-size:${CARD_ATLAS_WIDTH}px ${CARD_ATLAS_HEIGHT}px;transform-origin:0 0;visibility:hidden;pointer-events:none;text-decoration:none;font:normal normal normal 0/0 serif;image-rendering:auto}`,
+    ".polycss-scene>b.v{visibility:visible}",
     faceRules,
-    landscapeRules,
-    `@media (orientation:portrait) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[0] - 1}px){${portraitRules[0]}.solitaire-prepared-scene>s.foundation:is(.lane-1,.lane-2,.lane-3){display:none}}`,
-    `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[0]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[1] - 1}px){${portraitRules[1]}.solitaire-prepared-scene>s.foundation:is(.lane-2,.lane-3){display:none}}`,
-    `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[1]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[2] - 1}px){${portraitRules[2]}.solitaire-prepared-scene>s.foundation.lane-3{display:none}}`,
-    `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[2]}px){${portraitRules[3]}}`,
+    `@media (orientation:portrait) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[0] - 1}px){.polycss-scene>b:nth-child(2),.polycss-scene>b:nth-child(3),.polycss-scene>b:nth-child(4){display:none}}`,
+    `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[0]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[1] - 1}px){.polycss-scene>b:nth-child(3),.polycss-scene>b:nth-child(4){display:none}}`,
+    `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[1]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[2] - 1}px){.polycss-scene>b:nth-child(4){display:none}}`,
   ].join("");
-  return `<!doctype html><html><head><style>${css}</style></head><body><div class="polycss-camera solitaire-prepared-camera"><div class="polycss-scene solitaire-prepared-scene">${cardNodes}</div></div></body></html>\n`;
+  return `<!doctype html><html><head><style>${css}</style></head><body><div class="polycss-camera"><div class="polycss-scene">${cardNodes}</div></div></body></html>\n`;
 }
 
 export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() } = {}) {
@@ -570,6 +556,9 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
     foundationLeafCount: FOUNDATION_COUNT,
     retainedLeafCount: leaves.length,
     retainedTrailLeafCount,
+    foundationMatrices: foundationLeaves.map(({ matrix: leafMatrix }) => leafMatrix),
+    foundationPortraitMatricesByCardCount: PORTRAIT_CARD_COUNTS.map((_, profileIndex) =>
+      foundationLeaves.map(({ portraitMatrices }) => portraitMatrices[profileIndex])),
     atlasPositions: Array.from({ length: 52 }, (_, index) => {
       const atlas = atlasPosition(index + 1);
       return `${-atlas.x}px ${-atlas.y}px`;
@@ -634,11 +623,12 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       morphTarget: "createPolyMorphPreparedDomTarget",
       profile: "prepared-playback",
       retainedDom: true,
-      leafTag: "s",
+      leafTag: "b",
       textureBackend: "atlas",
       textureLeafSizing: "raster",
       textureImageRendering: "auto",
       composition: "flat-2d-card-plane",
+      transformPublication: "prepared-inline-style",
       contentBounds: [contentBounds.left, contentBounds.top, contentBounds.right, contentBounds.bottom],
       responsiveProfiles: ["landscape", "portrait"],
       viewportPositioning: "prepared-css-vw-vh-no-letterbox",
@@ -670,7 +660,7 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       runtimeAtlasRasterization: false,
       runtimeGeometryCalculation: false,
       runtimeTrajectoryCalculation: false,
-      runtimeResizeCalculation: "single-root-presentation-scale-only",
+      runtimeResizeCalculation: "single-root-scale-and-responsive-inline-transform-publication",
       runtimeDomGrowth: false,
     },
     transport: {

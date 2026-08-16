@@ -59,7 +59,7 @@ try {
           mutations.removed += record.removedNodes.length;
         }
       });
-      observer.observe(document.querySelector(".solitaire-prepared-scene"), { childList: true, subtree: true });
+      observer.observe(document.querySelector(".polycss-scene"), { childList: true, subtree: true });
       window.__cssSolitaireSmoke = { mutations, observer };
     });
 
@@ -69,7 +69,7 @@ try {
     const visibleBounds = await page.evaluate(() => {
       const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[0].durationMs;
       window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
-      const rects = [...document.querySelectorAll(".solitaire-prepared-scene > s")]
+      const rects = [...document.querySelectorAll(".polycss-scene > b")]
         .filter((leaf) => getComputedStyle(leaf).visibility === "visible")
         .map((leaf) => leaf.getBoundingClientRect());
       window.__cssSolitaireDebug.seek(0);
@@ -99,7 +99,7 @@ try {
       return patternIds;
     }, initial.patternId);
     const evidence = await page.evaluate(() => {
-      const leaves = [...document.querySelectorAll(".solitaire-prepared-scene > s")];
+      const leaves = [...document.querySelectorAll(".polycss-scene > b")];
       const first = leaves[0];
       const rect = first.getBoundingClientRect();
       const foundationRects = leaves.slice(0, 4).map((leaf) => {
@@ -113,8 +113,8 @@ try {
       });
       const computedTransforms = leaves.map((leaf) => getComputedStyle(leaf).transform);
       const scene = document.getElementById("scene");
-      const camera = scene?.querySelector(":scope > .solitaire-prepared-camera");
-      const preparedScene = camera?.querySelector(":scope > .solitaire-prepared-scene");
+      const camera = scene?.querySelector(":scope > .polycss-camera");
+      const preparedScene = camera?.querySelector(":scope > .polycss-scene");
       const resources = performance.getEntriesByType("resource")
         .map((entry) => new URL(entry.name).pathname)
         .filter((path) => path.includes("csssolitaire"));
@@ -130,6 +130,8 @@ try {
           sceneChildCount: scene?.childElementCount,
           cameraChildCount: camera?.childElementCount,
           preparedSceneChildCount: preparedScene?.childElementCount,
+          cameraClassName: camera?.className,
+          preparedSceneClassName: preparedScene?.className,
           sceneDescendantCount: scene?.querySelectorAll("*").length,
           unexpectedSceneElementCount: scene?.querySelectorAll(
             "button,canvas,nav,output,section,svg,style,[contenteditable]",
@@ -138,6 +140,13 @@ try {
             count + [...element.attributes].filter(({ name }) => name.startsWith("data-")).length, 0),
           inlineStyleDeclarationCount: [...scene.querySelectorAll("*")].reduce((count, element) =>
             count + element.style.length, 0),
+          invalidLeafClassCount: leaves.filter((leaf) => {
+            const classes = [...leaf.classList];
+            return classes.length < 1 || classes.length > 2 ||
+              classes.filter((className) => className === "v").length > 1 ||
+              classes.filter((className) => /^f[0-9a-z]+$/u.test(className)).length !== 1 ||
+              classes.some((className) => className !== "v" && !/^f[0-9a-z]+$/u.test(className));
+          }).length,
         },
         radius: getComputedStyle(first).borderRadius,
         cardEdge: getComputedStyle(first).boxShadow,
@@ -148,10 +157,13 @@ try {
         shell: {
           path: document.querySelector(".site-wordmark-path")?.textContent,
           buttons: document.querySelectorAll("button, nav, section, output").length,
+          ariaLabels: [...document.querySelectorAll("[aria-label]")]
+            .map((element) => element.getAttribute("aria-label")),
+          ariaBusyCount: document.querySelectorAll("[aria-busy]").length,
           sceneBackground: getComputedStyle(document.getElementById("scene")).backgroundImage,
         },
         composition: {
-          sceneTransformStyle: getComputedStyle(document.querySelector(".solitaire-prepared-scene")).transformStyle,
+          sceneTransformStyle: getComputedStyle(document.querySelector(".polycss-scene")).transformStyle,
           matrix2dLeafCount: computedTransforms.filter((transform) => transform.startsWith("matrix(")).length,
           matrix3dLeafCount: computedTransforms.filter((transform) => transform.startsWith("matrix3d(")).length,
           leafInlineStyleDeclarationCount: leaves.reduce((count, leaf) => count + leaf.style.length, 0),
@@ -182,8 +194,10 @@ try {
           JSON.stringify(deploy ? ["HEADER", "MAIN"] : ["HEADER", "MAIN", "SCRIPT"]) ||
         evidence.structure.sceneChildCount !== 1 || evidence.structure.cameraChildCount !== 1 ||
         evidence.structure.preparedSceneChildCount !== 1952 || evidence.structure.sceneDescendantCount !== 1954 ||
+        evidence.structure.cameraClassName !== "polycss-camera" ||
+        evidence.structure.preparedSceneClassName !== "polycss-scene" ||
         evidence.structure.unexpectedSceneElementCount !== 0 || evidence.structure.dataAttributeCount !== 0 ||
-        evidence.structure.inlineStyleDeclarationCount !== 0 ||
+        evidence.structure.inlineStyleDeclarationCount !== 1952 || evidence.structure.invalidLeafClassCount !== 0 ||
         evidence.radius !== "14px" ||
         evidence.cardEdge !== "none" ||
         evidence.imageRendering !== "auto" ||
@@ -194,10 +208,12 @@ try {
           Math.abs(rect.height - 135) > 0.1) ||
         evidence.shell.path !== "/solitaire" ||
         evidence.shell.buttons !== 0 ||
+        JSON.stringify(evidence.shell.ariaLabels) !== JSON.stringify(["View cssGraphics on GitHub"]) ||
+        evidence.shell.ariaBusyCount !== 0 ||
         !evidence.shell.sceneBackground.startsWith("linear-gradient(rgb(0, 128, 0)") ||
         evidence.composition.sceneTransformStyle !== "flat" ||
         evidence.composition.matrix2dLeafCount !== 1952 || evidence.composition.matrix3dLeafCount !== 0 ||
-        evidence.composition.leafInlineStyleDeclarationCount !== 0 ||
+        evidence.composition.leafInlineStyleDeclarationCount !== 1952 ||
         evidence.stats.runtimeAnimationFrameCallbackCount !== 0 ||
         evidence.stats.runtimeTimerCallbackCount < 1 || evidence.stats.loopCount < 1 ||
         evidence.stats.preparedPatternCount !== 24 ||
@@ -245,7 +261,7 @@ try {
     await page.waitForTimeout(100);
     const mobileInitial = await page.evaluate(() => {
       window.__cssSolitaireDebug.seek(0);
-      const displayedFoundations = [...document.querySelectorAll(".solitaire-prepared-scene > s.foundation")]
+      const displayedFoundations = [...document.querySelectorAll(".polycss-scene > b")].slice(0, 4)
         .filter((foundation) => getComputedStyle(foundation).display !== "none");
       const leaf = displayedFoundations[0];
       const rect = leaf.getBoundingClientRect();
@@ -257,11 +273,11 @@ try {
       return {
         portraitMedia: matchMedia("(orientation: portrait)").matches,
         stable: window.__cssSolitaireDebug.assertStableDomIdentity(),
-        retainedLeaves: document.querySelectorAll(".solitaire-prepared-scene > s").length,
+        retainedLeaves: document.querySelectorAll(".polycss-scene > b").length,
         displayedFoundationCount: displayedFoundations.length,
         cardRect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
         foundationRects,
-        sceneTransform: getComputedStyle(document.querySelector(".solitaire-prepared-scene")).transform,
+        sceneTransform: getComputedStyle(document.querySelector(".polycss-scene")).transform,
         mutations: { ...window.__cssSolitaireSmoke.mutations },
       };
     });
@@ -271,7 +287,7 @@ try {
       window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
     });
     const mobileEvidence = await page.evaluate(() => {
-      const visibleLeaves = [...document.querySelectorAll(".solitaire-prepared-scene > s")]
+      const visibleLeaves = [...document.querySelectorAll(".polycss-scene > b")]
         .filter((leaf) => {
           const style = getComputedStyle(leaf);
           return style.display !== "none" && style.visibility === "visible";
@@ -324,16 +340,16 @@ try {
     }
     const responsiveCardCounts = [];
     for (const viewport of [
-      { width: 390, height: 844, expected: 1, expectedSize: [72.109375, 97.5], expectedLefts: [158.9453125] },
-      { width: 600, height: 900, expected: 2, expectedSize: [88.75, 120], expectedLefts: [322.25, 425] },
-      { width: 800, height: 1_000, expected: 3, expectedSize: [98.611111, 133.333333], expectedLefts: [355.833333, 469.444444, 583.055556] },
-      { width: 960, height: 1_200, expected: 4, expectedSize: [118.333333, 160], expectedLefts: [423, 558.333333, 693.666667, 829] },
+      { width: 390, height: 844, expected: 1, expectedProfile: 1, expectedSize: [72.109375, 97.5], expectedLefts: [158.9453125] },
+      { width: 600, height: 900, expected: 2, expectedProfile: 2, expectedSize: [88.75, 120], expectedLefts: [322.25, 425] },
+      { width: 800, height: 1_000, expected: 3, expectedProfile: 3, expectedSize: [98.611111, 133.333333], expectedLefts: [355.833333, 469.444444, 583.055556] },
+      { width: 960, height: 1_200, expected: 4, expectedProfile: 4, expectedSize: [118.333333, 160], expectedLefts: [423, 558.333333, 693.666667, 829] },
     ]) {
       await page.setViewportSize(viewport);
       await page.waitForTimeout(50);
       const layout = await page.evaluate(() => {
         window.__cssSolitaireDebug.seek(0);
-        const cards = [...document.querySelectorAll(".solitaire-prepared-scene > s.foundation")]
+        const cards = [...document.querySelectorAll(".polycss-scene > b")].slice(0, 4)
           .filter((foundation) => getComputedStyle(foundation).display !== "none")
           .map((foundation) => {
             const rect = foundation.getBoundingClientRect();
@@ -342,7 +358,7 @@ try {
         const state = window.__cssSolitaireDebug.snapshot();
         const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[state.patternIndex].durationMs;
         window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
-        const visibleRects = [...document.querySelectorAll(".solitaire-prepared-scene > s")]
+        const visibleRects = [...document.querySelectorAll(".polycss-scene > b")]
           .filter((leaf) => {
             const style = getComputedStyle(leaf);
             return style.display !== "none" && style.visibility === "visible";
@@ -350,6 +366,7 @@ try {
           .map((leaf) => leaf.getBoundingClientRect());
         return {
           cards,
+          profileIndex: state.responsiveProfileIndex,
           visibleLeft: Math.min(...visibleRects.map((rect) => rect.left)),
           visibleRight: Math.max(...visibleRects.map((rect) => rect.right)),
         };
@@ -362,9 +379,10 @@ try {
       });
     }
     if (responsiveCardCounts.some(({
-      width, expected, expectedTop, expectedSize, displayed, expectedLefts, cards, visibleLeft, visibleRight,
+      width, expected, expectedProfile, expectedTop, expectedSize, displayed, expectedLefts, cards,
+      profileIndex, visibleLeft, visibleRight,
     }) =>
-      expected !== displayed || cards.some((card, index) =>
+      expected !== displayed || profileIndex !== expectedProfile || cards.some((card, index) =>
         Math.abs(card.left - expectedLefts[index]) > 0.1 ||
         Math.abs(card.top - expectedTop) > 0.1 ||
         Math.abs(card.width - expectedSize[0]) > 0.1 || Math.abs(card.height - expectedSize[1]) > 0.1) ||
@@ -384,7 +402,7 @@ try {
       await page.waitForTimeout(50);
       const layout = await page.evaluate(() => {
         window.__cssSolitaireDebug.seek(0);
-        const cards = [...document.querySelectorAll(".solitaire-prepared-scene > s.foundation")]
+        const cards = [...document.querySelectorAll(".polycss-scene > b")].slice(0, 4)
           .map((foundation) => {
             const rect = foundation.getBoundingClientRect();
             return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
@@ -392,11 +410,12 @@ try {
         const state = window.__cssSolitaireDebug.snapshot();
         const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[state.patternIndex].durationMs;
         window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
-        const visible = [...document.querySelectorAll(".solitaire-prepared-scene > s")]
+        const visible = [...document.querySelectorAll(".polycss-scene > b")]
           .filter((leaf) => getComputedStyle(leaf).visibility === "visible")
           .map((leaf) => leaf.getBoundingClientRect());
         return {
           cards,
+          profileIndex: state.responsiveProfileIndex,
           visibleLeft: Math.min(...visible.map((rect) => rect.left)),
           visibleTop: Math.min(...visible.map((rect) => rect.top)),
           visibleBottom: Math.max(...visible.map((rect) => rect.bottom)),
@@ -405,9 +424,9 @@ try {
       landscapeViewports.push({ ...viewport, expectedTop: 80, ...layout });
     }
     if (landscapeViewports.some(({
-      height, expectedTop, expectedSize, expectedLefts, cards, visibleLeft, visibleTop, visibleBottom,
+      height, expectedTop, expectedSize, expectedLefts, cards, profileIndex, visibleLeft, visibleTop, visibleBottom,
     }) =>
-      cards.some((card, index) => Math.abs(card.left - expectedLefts[index]) > 0.1 ||
+      profileIndex !== 0 || cards.some((card, index) => Math.abs(card.left - expectedLefts[index]) > 0.1 ||
         Math.abs(card.top - expectedTop) > 0.1 || Math.abs(card.width - expectedSize[0]) > 0.1 ||
         Math.abs(card.height - expectedSize[1]) > 0.1) ||
       visibleLeft > -0.9 * expectedSize[0] ||
@@ -496,7 +515,7 @@ async function captureMobileContinuity(browser, port, route) {
       return {
         samples: [1_000, 2_000, 3_000, 4_000].map((timeMs) => {
           window.__cssSolitaireDebug.seek(timeMs);
-          const visiblePaintedLeaves = [...document.querySelectorAll(".solitaire-prepared-scene > s")]
+          const visiblePaintedLeaves = [...document.querySelectorAll(".polycss-scene > b")]
             .filter((leaf) => {
               const style = getComputedStyle(leaf);
               return style.display !== "none" && style.visibility === "visible";

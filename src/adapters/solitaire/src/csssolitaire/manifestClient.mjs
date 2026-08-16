@@ -40,9 +40,11 @@ function validateManifest(manifest) {
       manifest.renderer?.morphTarget !== "createPolyMorphPreparedDomTarget" ||
       manifest.renderer?.profile !== "prepared-playback" ||
       manifest.renderer?.retainedDom !== true ||
+      manifest.renderer?.leafTag !== "b" ||
       manifest.renderer?.textureBackend !== "atlas" ||
       manifest.renderer?.textureLeafSizing !== "raster" ||
       manifest.renderer?.composition !== "flat-2d-card-plane" ||
+      manifest.renderer?.transformPublication !== "prepared-inline-style" ||
       manifest.renderer?.seamBleed !== 0.2 ||
       manifest.renderer?.runtimeCanvasCount !== 0 ||
       manifest.renderer?.runtimeAtlasRasterization !== false ||
@@ -75,7 +77,8 @@ function validateManifest(manifest) {
       manifest.renderer?.preparedSlotLayout !== "source-seven-slot-presentation-scaled-card-size" ||
       manifest.renderer?.slotCount !== 7 || manifest.renderer?.minimumSlotGap !== 11 ||
       manifest.renderer?.presentationScaleMode !== "single-root-contain-scale-viewport-positioned" ||
-      manifest.renderer?.runtimeResizeCalculation !== "single-root-presentation-scale-only" ||
+      manifest.renderer?.runtimeResizeCalculation !==
+        "single-root-scale-and-responsive-inline-transform-publication" ||
       manifest.transport?.snapshotUrl !== "/csssolitaire/solitaire.polycss.txt" ||
       manifest.transport?.runtimeModelPayload !== false ||
       manifest.sourceProfile?.cards !== 12 ||
@@ -130,6 +133,14 @@ function validatePlayback(playback, manifest) {
       playback.foundationLeafCount !== manifest.metrics.foundationLeafCount ||
       playback.retainedLeafCount !== manifest.metrics.retainedLeafCount ||
       playback.retainedTrailLeafCount !== manifest.metrics.retainedTrailLeafCount ||
+      !Array.isArray(playback.foundationMatrices) ||
+      playback.foundationMatrices.length !== playback.foundationLeafCount ||
+      playback.foundationMatrices.some((transform) => !validPreparedTransform(transform)) ||
+      !Array.isArray(playback.foundationPortraitMatricesByCardCount) ||
+      playback.foundationPortraitMatricesByCardCount.length !== 4 ||
+      playback.foundationPortraitMatricesByCardCount.some((profile) =>
+        !Array.isArray(profile) || profile.length !== playback.foundationLeafCount ||
+        profile.some((transform) => !validPreparedTransform(transform))) ||
       !Array.isArray(playback.atlasPositions) || playback.atlasPositions.length !== 52 ||
       playback.atlasPositions.some((position) => !/^-?\d+px -?\d+px$/u.test(position)) ||
       !Array.isArray(playback.patterns) || playback.patterns.length !== playback.patternCount ||
@@ -192,11 +203,6 @@ function validPattern(pattern, playback, manifest, index) {
     !Array.from({ length: pattern.trailLeafCount }, (_, leafIndex) => leafIndex).some((leafIndex) =>
       pattern.leafPortraitMatricesByCardCount.some((profile, profileIndex, profiles) =>
         profileIndex > 0 && profiles[profileIndex - 1][leafIndex] !== null && profile[leafIndex] === null)) &&
-    Array.isArray(pattern.leafFoundationIndices) &&
-    pattern.leafFoundationIndices.length === pattern.trailLeafCount &&
-    !pattern.leafFoundationIndices.some((foundationIndex) =>
-      !Number.isSafeInteger(foundationIndex) || foundationIndex < 0 ||
-      foundationIndex >= playback.foundationLeafCount) &&
     Array.isArray(pattern.leafAtlasIndices) && pattern.leafAtlasIndices.length === pattern.trailLeafCount &&
     !pattern.leafAtlasIndices.some((atlasIndex) =>
       !Number.isSafeInteger(atlasIndex) || atlasIndex < 0 || atlasIndex >= playback.atlasPositions.length);

@@ -4,33 +4,35 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
   if (!(host instanceof HTMLElement)) throw new Error("Missing cssSolitaire host");
   if (typeof snapshotHtml !== "string") throw new Error("Prepared cssSolitaire snapshot is required");
   const snapshot = new DOMParser().parseFromString(snapshotHtml, "text/html");
-  if (snapshot.querySelector("script,canvas,svg,[style]") ||
+  if (snapshot.querySelector("script,canvas,svg") ||
       snapshot.querySelectorAll("style").length !== 1 || hasPreparedMetadata(snapshot)) {
     throw new Error("Prepared cssSolitaire snapshot contains a forbidden or incomplete graph");
   }
   const style = snapshot.querySelector("style");
-  const camera = snapshot.querySelector(".solitaire-prepared-camera");
-  const scene = camera?.querySelector(":scope > .solitaire-prepared-scene");
-  const leaves = [...(scene?.querySelectorAll(":scope > s") ?? [])];
+  const camera = snapshot.querySelector(".polycss-camera");
+  const scene = camera?.querySelector(":scope > .polycss-scene");
+  const leaves = [...(scene?.querySelectorAll(":scope > b") ?? [])];
   if (!(style instanceof HTMLStyleElement) || !(camera instanceof HTMLElement) ||
       !(scene instanceof HTMLElement) || scene.childElementCount !== manifest.metrics.retainedLeafCount ||
       leaves.length !== manifest.metrics.retainedLeafCount ||
-      leaves.some((leaf) => !(leaf instanceof HTMLElement) || leaf.localName !== "s" || leaf.style.length !== 0)) {
+      snapshot.querySelectorAll("[style]").length !== leaves.length ||
+      leaves.some((leaf) => !(leaf instanceof HTMLElement) || leaf.localName !== "b" ||
+        !hasInlineTransformOnly(leaf))) {
     throw new Error("Prepared cssSolitaire retained DOM census drifted");
   }
 
   mountedStyle?.remove();
   mountedStyle = document.importNode(style, true);
   document.head.append(mountedStyle);
-  const ruleBank = collectPreparedRuleBank(mountedStyle, manifest.metrics.retainedLeafCount);
+  const ruleBank = collectPreparedRuleBank(mountedStyle);
   const mountedCamera = document.importNode(camera, true);
   host.replaceChildren(mountedCamera);
-  const mountedScene = mountedCamera.querySelector(":scope > .solitaire-prepared-scene");
-  const mountedLeaves = [...(mountedScene?.querySelectorAll(":scope > s") ?? [])];
+  const mountedScene = mountedCamera.querySelector(":scope > .polycss-scene");
+  const mountedLeaves = [...(mountedScene?.querySelectorAll(":scope > b") ?? [])];
   if (!(mountedScene instanceof HTMLElement) ||
       mountedScene.childElementCount !== manifest.metrics.retainedLeafCount ||
       mountedLeaves.length !== manifest.metrics.retainedLeafCount ||
-      mountedLeaves.some((leaf) => leaf.style.length !== 0)) {
+      mountedLeaves.some((leaf) => !hasInlineTransformOnly(leaf))) {
     throw new Error("Mounted cssSolitaire retained DOM census drifted");
   }
   const stableNodes = Object.freeze([mountedCamera, mountedScene, ...mountedLeaves]);
@@ -65,12 +67,12 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
 
   function assertStableDomIdentity() {
     const current = [
-      host.querySelector(":scope > .solitaire-prepared-camera"),
-      host.querySelector(":scope > .solitaire-prepared-camera > .solitaire-prepared-scene"),
-      ...host.querySelectorAll(":scope > .solitaire-prepared-camera > .solitaire-prepared-scene > s"),
+      host.querySelector(":scope > .polycss-camera"),
+      host.querySelector(":scope > .polycss-camera > .polycss-scene"),
+      ...host.querySelectorAll(":scope > .polycss-camera > .polycss-scene > b"),
     ];
     if (current.length !== stableNodes.length || current.some((node, index) => node !== stableNodes[index]) ||
-        mountedLeaves.some((leaf) => leaf.style.length !== 0)) {
+        mountedLeaves.some((leaf) => !hasInlineTransformOnly(leaf))) {
       throw new Error("Prepared cssSolitaire retained DOM identity changed");
     }
     return true;
@@ -80,7 +82,6 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
     camera: mountedCamera,
     scene: mountedScene,
     leaves: Object.freeze(mountedLeaves),
-    layoutRulesByProfile: ruleBank.layouts,
     assertStableDomIdentity,
     stats() {
       assertStableDomIdentity();
@@ -91,7 +92,7 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
         retainedBoardRootCount: 0,
         retainedRenderWrapperCount: 2,
         retainedPolygonLeafCount: mountedLeaves.length,
-        retainedLeafInlineStyleDeclarationCount: 0,
+        retainedLeafInlineStyleDeclarationCount: mountedLeaves.length,
         retainedDataAttributeCount: 0,
         runtimeDomCreationCount: 0,
         runtimeDomRemovalCount: 0,
@@ -114,38 +115,20 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
   });
 }
 
-function collectPreparedRuleBank(style, retainedLeafCount) {
+function collectPreparedRuleBank(style) {
   const sheet = style.sheet;
   if (!(sheet instanceof CSSStyleSheet)) throw new Error("Prepared cssSolitaire stylesheet did not mount");
   const topLevelRules = [...sheet.cssRules];
   const presentation = topLevelRules.find((rule) =>
-    rule.selectorText === ".polycss-camera.solitaire-prepared-camera");
-  const mediaRules = topLevelRules.filter((rule) => rule.type === CSSRule.MEDIA_RULE);
-  const layouts = [
-    collectLayoutRules(topLevelRules, retainedLeafCount),
-    ...mediaRules.map((rule) => collectLayoutRules([...rule.cssRules], retainedLeafCount)),
-  ];
-  if (!presentation || layouts.length !== 5 || layouts.some((rules) => rules.some((rule) => !rule))) {
+    rule.selectorText === ".polycss-camera");
+  if (!presentation) {
     throw new Error("Prepared cssSolitaire stylesheet rule bank drifted");
   }
-  return Object.freeze({
-    presentation,
-    layouts: Object.freeze(layouts.map((rules) => Object.freeze(rules))),
-  });
+  return Object.freeze({ presentation });
 }
 
-function collectLayoutRules(rules, retainedLeafCount) {
-  const result = Array(retainedLeafCount).fill(null);
-  for (const rule of rules) {
-    const match = rule.selectorText?.match(/^\.solitaire-prepared-scene\s*>\s*s\.l([0-9a-z]+)$/u);
-    if (!match) continue;
-    const index = Number.parseInt(match[1], 36);
-    if (!Number.isSafeInteger(index) || index < 0 || index >= retainedLeafCount || result[index]) {
-      throw new Error("Prepared cssSolitaire leaf rule index drifted");
-    }
-    result[index] = rule;
-  }
-  return result;
+function hasInlineTransformOnly(leaf) {
+  return leaf.style.length === 1 && leaf.style[0] === "transform" && leaf.style.transform.length > 0;
 }
 
 function hasPreparedMetadata(doc) {

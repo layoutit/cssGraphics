@@ -25,7 +25,7 @@ export function mountCsssolitaireClient() {
       playback: prepared.playback,
       scene: state.mount.scene,
       leaves: state.mount.leaves,
-      layoutRulesByProfile: state.mount.layoutRulesByProfile,
+      portraitBreakpoints: prepared.manifest.renderer.portraitCardBreakpoints,
     });
     state.ready = true;
     setBodyState("ready");
@@ -46,7 +46,6 @@ export function mountCsssolitaireClient() {
   function setBodyState(kind) {
     document.body.classList.remove("loading", "ready", "error");
     document.body.classList.add(kind);
-    host?.setAttribute("aria-busy", kind === "loading" ? "true" : "false");
   }
 }
 

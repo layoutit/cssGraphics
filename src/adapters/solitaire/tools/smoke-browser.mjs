@@ -414,12 +414,13 @@ try {
       throw new Error(`cssSolitaire viewport fill drifted: ${JSON.stringify(landscapeViewports)}`);
     }
     const reducedMotionMobileAutoplay = await captureReducedMotionMobileAutoplay(browser, port, route);
+    const mobileContinuity = await captureMobileContinuity(browser, port, route);
     await page.evaluate(() => window.__cssSolitaireSmoke.observer.disconnect());
     process.stdout.write(`${JSON.stringify({
       status: "passed", headless: true, browser: browser.version(), deploy, route,
       readyMs, sampled, autoplayLoop, bankSequence, evidence, visibleBounds, cardPixelRatio, screenshotPath,
       mobileInitial, mobileEvidence, mobileCardPixelRatio, mobileScreenshotPath,
-      responsiveCardCounts, landscapeViewports, reducedMotionMobileAutoplay,
+      responsiveCardCounts, landscapeViewports, reducedMotionMobileAutoplay, mobileContinuity,
     }, null, 2)}\n`);
   } finally {
     await browser.close();
@@ -470,6 +471,43 @@ async function captureReducedMotionMobileAutoplay(browser, port, route) {
         result.advanced.frameIndex <= result.initial.frameIndex ||
         result.timerCallbacks === 0 || result.visibilityWrites === 0) {
       throw new Error(`cssSolitaire reduced-motion mobile autoplay failed: ${JSON.stringify(result)}`);
+    }
+    return result;
+  } finally {
+    await page.close();
+  }
+}
+
+async function captureMobileContinuity(browser, port, route) {
+  const page = await browser.newPage({
+    viewport: { width: 390, height: 844 },
+    screen: { width: 390, height: 844 },
+    deviceScaleFactor: 3,
+    isMobile: true,
+    hasTouch: true,
+  });
+  try {
+    await page.goto(`http://127.0.0.1:${port}${route}`, { waitUntil: "networkidle" });
+    await page.waitForFunction(() => window.__cssSolitaireDebug?.ready === true ||
+      window.__cssSolitaireDebug?.errors().length > 0, null, { timeout: 30_000 });
+    const result = await page.evaluate(() => {
+      window.__cssSolitaireDebug.pause();
+      return {
+        samples: [1_000, 2_000, 3_000, 4_000].map((timeMs) => {
+          window.__cssSolitaireDebug.seek(timeMs);
+          const visiblePaintedLeaves = [...document.querySelectorAll(".solitaire-prepared-scene > s")]
+            .filter((leaf) => {
+              const style = getComputedStyle(leaf);
+              return style.display !== "none" && style.visibility === "visible";
+            }).length;
+          return { timeMs, visiblePaintedLeaves };
+        }),
+        errors: window.__cssSolitaireDebug.errors(),
+      };
+    });
+    if (result.errors.length || result.samples.some((sample, index) =>
+      index > 0 && sample.visiblePaintedLeaves <= result.samples[index - 1].visiblePaintedLeaves)) {
+      throw new Error(`cssSolitaire mobile continuity failed: ${JSON.stringify(result)}`);
     }
     return result;
   } finally {

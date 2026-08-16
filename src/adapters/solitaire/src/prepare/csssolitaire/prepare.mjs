@@ -37,6 +37,7 @@ const CARD_RED_SOURCE = Object.freeze([255, 85, 85]);
 const CARD_RED_COLOR = Object.freeze([230, 24, 10]);
 const CARD_WIDTH = 71;
 const CARD_HEIGHT = 96;
+const LANDSCAPE_CARD_MAXIMUM_WIDTH = 200;
 const FLOOR_Y = SOURCE_HEIGHT - CARD_HEIGHT;
 const SOURCE_BOUNCE_BOTTOM = 299;
 const FOUNDATION_Y = 4;
@@ -650,6 +651,7 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       cardSourceSize: [CARD_WIDTH, CARD_HEIGHT],
       landscapePresentationBase: LANDSCAPE_PLAYFIELD,
       landscapePresentationBaseScale: LANDSCAPE_PRESENTATION_SCALE,
+      landscapeCardMaximumWidthCssPixels: LANDSCAPE_CARD_MAXIMUM_WIDTH,
       portraitPresentationBase: PORTRAIT_PROFILES[0].playfield,
       portraitMapping: "progressive-card-count-prepared-source-lane-folding",
       portraitReflectionReferenceWidths: PORTRAIT_PROFILES.map(({ playfield }) => playfield[0]),

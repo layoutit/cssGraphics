@@ -381,6 +381,7 @@ function cardLeaf({ cardFace, foundationIndex, horizontalDirection, left, top })
     return portrait ? cardTransform(portrait) : null;
   });
   return Object.freeze({
+    faceIndex: cardFace - 1,
     foundationIndex,
     matrix: cardTransform(landscape),
     portraitMatrices: Object.freeze(portraitMatrices),
@@ -484,33 +485,50 @@ function buildPreparedPattern(seed, index) {
           const portraitMatrix = portraitMatrices[profileIndex];
           return portraitMatrix;
         })),
+      leafFoundationIndices: source.snapshots.map(({ foundationIndex }) => foundationIndex),
       leafAtlasIndices: source.snapshots.map(({ faceNumber: cardFace }) => cardFace - 1),
     }),
   });
 }
 
 function buildSnapshot(leaves, cardAssetUrl) {
+  const leafClass = (index) => `l${index.toString(36)}`;
+  const faceClass = (index) => `f${index.toString(36)}`;
+  const leafSelector = (index) => `.solitaire-prepared-scene>s.${leafClass(index)}`;
   const cardNodes = leaves.map((leaf, index) => {
-    const classes = [index < FOUNDATION_COUNT ? "foundation" : null, `lane-${leaf.foundationIndex}`]
+    const classes = [
+      index < FOUNDATION_COUNT ? "foundation" : null,
+      index < FOUNDATION_COUNT ? "v" : null,
+      `lane-${leaf.foundationIndex}`,
+      leafClass(index),
+      faceClass(leaf.faceIndex),
+    ]
       .filter(Boolean).join(" ");
-    const portraitProperties = leaf.portraitMatrices.map((portraitMatrix, profileIndex) =>
-      portraitMatrix
-        ? `--csssolitaire-portrait-${profileIndex + 1}-transform:${portraitMatrix};`
-        : "").join("");
-    return `<s class="${classes}" style="--csssolitaire-landscape-transform:${leaf.matrix};${portraitProperties}background-position:${-leaf.atlas.x}px ${-leaf.atlas.y}px"></s>`;
+    return `<s class="${classes}"></s>`;
   }).join("");
+  const faceRules = Array.from({ length: 52 }, (_, faceIndex) => {
+    const atlas = atlasPosition(faceIndex + 1);
+    return `.solitaire-prepared-scene>s.${faceClass(faceIndex)}{background-position:${-atlas.x}px ${-atlas.y}px}`;
+  }).join("");
+  const landscapeRules = leaves.map((leaf, index) =>
+    `${leafSelector(index)}{transform:${leaf.matrix}}`).join("");
+  const portraitRules = PORTRAIT_PROFILES.map((_, profileIndex) => leaves
+    .map((leaf, index) =>
+      `${leafSelector(index)}{transform:${leaf.portraitMatrices[profileIndex] ?? "none"}}`)
+    .join(""));
   const css = [
-    `.polycss-camera.solitaire-prepared-camera{position:relative;display:block;width:100%;height:100%;overflow:hidden;--csssolitaire-card-width:calc(${CARD_WIDTH}px * var(--csssolitaire-presentation-scale,${LANDSCAPE_PRESENTATION_SCALE}));--csssolitaire-card-height:calc(${CARD_HEIGHT}px * var(--csssolitaire-presentation-scale,${LANDSCAPE_PRESENTATION_SCALE}));--csssolitaire-card-transform-x:calc(${CARD_HEIGHT / CARD_SOURCE_WIDTH} * var(--csssolitaire-presentation-scale,${LANDSCAPE_PRESENTATION_SCALE}));--csssolitaire-card-transform-y:calc(${CARD_WIDTH / CARD_SOURCE_HEIGHT} * var(--csssolitaire-presentation-scale,${LANDSCAPE_PRESENTATION_SCALE}))}`,
+    `.polycss-camera.solitaire-prepared-camera{position:relative;display:block;width:100%;height:100%;overflow:hidden;--csssolitaire-presentation-scale:${LANDSCAPE_PRESENTATION_SCALE};--csssolitaire-card-width:calc(${CARD_WIDTH}px * var(--csssolitaire-presentation-scale));--csssolitaire-card-height:calc(${CARD_HEIGHT}px * var(--csssolitaire-presentation-scale));--csssolitaire-card-transform-x:calc(${CARD_HEIGHT / CARD_SOURCE_WIDTH} * var(--csssolitaire-presentation-scale));--csssolitaire-card-transform-y:calc(${CARD_WIDTH / CARD_SOURCE_HEIGHT} * var(--csssolitaire-presentation-scale))}`,
     ".polycss-scene.solitaire-prepared-scene{position:absolute;inset:0}",
-    ".csssolitaire-board{position:absolute;inset:0}",
-    `.csssolitaire-board>s{position:absolute;display:block;width:${CARD_SOURCE_WIDTH}px;height:${CARD_SOURCE_HEIGHT}px;margin:0;padding:0;overflow:hidden;border:0;border-radius:14px;background-image:url('${cardAssetUrl}');background-repeat:no-repeat;background-size:${CARD_ATLAS_WIDTH}px ${CARD_ATLAS_HEIGHT}px;transform:var(--csssolitaire-landscape-transform);transform-origin:0 0;visibility:hidden;pointer-events:none;text-decoration:none;font:normal normal normal 0/0 serif;image-rendering:auto}`,
-    ".csssolitaire-board>s.foundation{visibility:visible}",
-    `@media (orientation:portrait) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[0] - 1}px){.csssolitaire-board>s{transform:var(--csssolitaire-portrait-1-transform)}.csssolitaire-board>s:is(.lane-1,.lane-2,.lane-3){display:none}}`,
-    `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[0]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[1] - 1}px){.csssolitaire-board>s{transform:var(--csssolitaire-portrait-2-transform)}.csssolitaire-board>s:is(.lane-2,.lane-3){display:none}}`,
-    `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[1]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[2] - 1}px){.csssolitaire-board>s{transform:var(--csssolitaire-portrait-3-transform)}.csssolitaire-board>s.lane-3{display:none}}`,
-    `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[2]}px){.csssolitaire-board>s{transform:var(--csssolitaire-portrait-4-transform)}}`,
+    `.polycss-scene.solitaire-prepared-scene>s{position:absolute;display:block;width:${CARD_SOURCE_WIDTH}px;height:${CARD_SOURCE_HEIGHT}px;margin:0;padding:0;overflow:hidden;border:0;border-radius:14px;background-image:url('${cardAssetUrl}');background-repeat:no-repeat;background-size:${CARD_ATLAS_WIDTH}px ${CARD_ATLAS_HEIGHT}px;transform-origin:0 0;visibility:hidden;pointer-events:none;text-decoration:none;font:normal normal normal 0/0 serif;image-rendering:auto}`,
+    ".polycss-scene.solitaire-prepared-scene>s.v{visibility:visible}",
+    faceRules,
+    landscapeRules,
+    `@media (orientation:portrait) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[0] - 1}px){${portraitRules[0]}.solitaire-prepared-scene>s:is(.lane-1,.lane-2,.lane-3){display:none}}`,
+    `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[0]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[1] - 1}px){${portraitRules[1]}.solitaire-prepared-scene>s:is(.lane-2,.lane-3){display:none}}`,
+    `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[1]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[2] - 1}px){${portraitRules[2]}.solitaire-prepared-scene>s.lane-3{display:none}}`,
+    `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[2]}px){${portraitRules[3]}}`,
   ].join("");
-  return `<!doctype html><html><head><style>${css}</style></head><body><div class="polycss-camera solitaire-prepared-camera"><div class="polycss-scene solitaire-prepared-scene"><div class="csssolitaire-board">${cardNodes}</div></div></div></body></html>\n`;
+  return `<!doctype html><html><head><style>${css}</style></head><body><div class="polycss-camera solitaire-prepared-camera"><div class="polycss-scene solitaire-prepared-scene">${cardNodes}</div></div></body></html>\n`;
 }
 
 export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() } = {}) {

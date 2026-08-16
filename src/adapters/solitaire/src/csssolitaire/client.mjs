@@ -23,8 +23,9 @@ export function mountCsssolitaireClient() {
     });
     state.player = createCsssolitairePreparedPlayer({
       playback: prepared.playback,
-      board: state.mount.board,
+      scene: state.mount.scene,
       leaves: state.mount.leaves,
+      layoutRulesByProfile: state.mount.layoutRulesByProfile,
     });
     state.ready = true;
     setBodyState("ready");

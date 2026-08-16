@@ -49,7 +49,8 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.equal(manifest.renderer.transformPublication, "prepared-inline-style");
   assert.deepEqual(manifest.renderer.contentBounds, [-69, -71, 655, 395]);
   assert.deepEqual(manifest.renderer.responsiveProfiles, ["landscape", "portrait"]);
-  assert.equal(manifest.renderer.viewportPositioning, "prepared-css-vw-vh-no-letterbox");
+  assert.equal(manifest.renderer.viewportPositioning,
+    "prepared-layout-resolved-inline-matrix-no-letterbox");
   assert.equal(manifest.renderer.viewportFill, true);
   assert.equal(manifest.renderer.verticalMapping, "foundation-and-retained-bounce-bottom-anchored");
   assert.equal(manifest.renderer.foundationTopCssPixels, 80);
@@ -58,6 +59,7 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.equal(manifest.renderer.upwardArchMapping,
     "prepared-source-smooth-three-anchor-curve");
   assert.deepEqual(manifest.renderer.cardSourceSize, [71, 96]);
+  assert.deepEqual(manifest.renderer.cardPrimitiveSize, [240, 160]);
   assert.deepEqual(manifest.renderer.landscapePresentationBase, [960, 540]);
   assert.equal(manifest.renderer.landscapePresentationBaseScale, 1.40625);
   assert.equal(manifest.renderer.landscapeCardMaximumWidthCssPixels, 200);
@@ -75,7 +77,7 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.equal(manifest.renderer.minimumSlotGap, 11);
   assert.equal(manifest.renderer.presentationScaleMode, "single-root-contain-scale-viewport-positioned");
   assert.equal(manifest.renderer.runtimeResizeCalculation,
-    "single-root-scale-and-responsive-inline-transform-publication");
+    "prepared-layout-inline-matrix-resolution");
   assert.equal(manifest.renderer.seamBleed, 0.2);
   assert.equal(manifest.renderer.runtimeAtlasRasterization, false);
   assert.equal(manifest.renderer.runtimeGeometryCalculation, false);
@@ -124,7 +126,8 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.match(snapshot, /class="polycss-scene"/u);
   assert.doesNotMatch(snapshot, /solitaire-prepared-(?:camera|scene)/u);
   assert.doesNotMatch(snapshot, /csssolitaire-board/u);
-  assert.equal((snapshot.match(/<b class="[^"]+" style="transform:[^"]+"><\/b>/gu) ?? []).length, 1952);
+  assert.equal((snapshot.match(/<b class="[^"]+" style="transform:matrix\([^)]+\)"><\/b>/gu) ?? []).length,
+    1952);
   assert.doesNotMatch(snapshot, /<s\b/u);
   assert.doesNotMatch(snapshot, /--csssolitaire-(?:landscape|portrait)-/u);
   assert.equal((snapshot.match(/\sstyle="transform:/gu) ?? []).length, 1952);
@@ -137,26 +140,25 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.doesNotMatch(snapshot, /\bfoundation\b|\blane-[0-3]\b/u);
   assert.match(snapshot, /\.polycss-scene\{position:absolute;inset:0\}/u);
   assert.match(snapshot, /\.polycss-scene>b\{position:absolute/u);
-  assert.match(snapshot, /--csssolitaire-card-width:calc\(71px \* var\(--csssolitaire-presentation-scale/u);
+  assert.doesNotMatch(snapshot, /--csssolitaire-/u);
   assert.doesNotMatch(snapshot, /--csssolitaire-fit/u);
   assert.match(snapshot,
     /max-width:519px\)\{\.polycss-scene>b:nth-child\(2\),\.polycss-scene>b:nth-child\(3\),\.polycss-scene>b:nth-child\(4\)\{display:none\}/u);
   assert.match(snapshot, /border-radius:14px/u);
   assert.doesNotMatch(snapshot, /box-shadow/u);
   assert.match(snapshot, /image-rendering:auto/u);
-  assert.doesNotMatch(snapshot, /matrix3d|preserve-3d|backface-visibility/u);
+  assert.doesNotMatch(snapshot, /matrix3d|translate\(calc|preserve-3d|backface-visibility/u);
   assert.doesNotMatch(snapshot, /<(?:script|canvas|svg)\b|\sdata-[a-z0-9-]+=/iu);
 
   const playback = JSON.parse(await readFile(join(generated, "solitaire-playback.json"), "utf8"));
   assert.equal(playback.schema, "csssolitaire-prepared-playback@2");
-  const preparedTransforms = playback.patterns.flatMap((pattern) => [
-    ...pattern.leafMatrices,
-    ...pattern.leafPortraitMatricesByCardCount.flat().filter(Boolean),
-  ]).concat(playback.foundationMatrices, playback.foundationPortraitMatricesByCardCount.flat());
-  const topAnchoredPixels = preparedTransforms
-    .map((transform) => transform.match(/,calc\(0vh \+ ([\d.]+)px/u)?.[1])
-    .filter(Boolean)
-    .map(Number);
+  const preparedLayouts = playback.patterns.flatMap((pattern) => [
+    ...pattern.leafLayouts,
+    ...pattern.leafPortraitLayoutsByCardCount.flat().filter(Boolean),
+  ]).concat(playback.foundationLayouts, playback.foundationPortraitLayoutsByCardCount.flat());
+  const topAnchoredPixels = preparedLayouts
+    .filter((layout) => layout[2] === 0)
+    .map((layout) => layout[3]);
   assert.ok(topAnchoredPixels.length > 0);
   assert.equal(Math.min(...topAnchoredPixels), 8);
   assert.ok(Math.max(...topAnchoredPixels) <= 80);
@@ -182,8 +184,8 @@ test("generated product is one complete retained snapshot plus sparse prepared p
     return new Set(velocities).size === velocities.length;
   })));
   assert.ok(playback.patterns.every((pattern) =>
-    pattern.leafPortraitMatricesByCardCount.length === 4 &&
-    pattern.leafPortraitMatricesByCardCount.every((profile) =>
+    pattern.leafPortraitLayoutsByCardCount.length === 4 &&
+    pattern.leafPortraitLayoutsByCardCount.every((profile) =>
       profile.length === pattern.trailLeafCount && profile.every(Boolean))));
   assert.ok(playback.patterns.every((pattern) => !("leafFoundationIndices" in pattern)));
   const maximumPortraitUpdateGaps = [1, 2, 3, 4].map((cardCount) => Math.max(
@@ -196,10 +198,10 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   ));
   assert.deepEqual(maximumPortraitUpdateGaps, [500, 500, 500, 500]);
   const initialPattern = playback.patterns[0];
-  const oneCardTransforms = initialPattern.leafPortraitMatricesByCardCount[0];
-  assert.equal(oneCardTransforms.length, initialPattern.trailLeafCount);
-  assert.ok(oneCardTransforms.every((transform) => transform.includes("vw") && transform.includes("vh")));
-  assert.ok(new Set(oneCardTransforms).size > 100);
+  const oneCardLayouts = initialPattern.leafPortraitLayoutsByCardCount[0];
+  assert.equal(oneCardLayouts.length, initialPattern.trailLeafCount);
+  assert.ok(oneCardLayouts.every((layout) => layout.length === 5 && layout.every(Number.isFinite)));
+  assert.ok(new Set(oneCardLayouts.map(JSON.stringify)).size > 100);
   assert.equal(initialPattern.sourceStepCount, 1679);
   assert.equal(initialPattern.frameTimesMs.length, 609);
   assert.equal(initialPattern.visibilityRows.length, 609);

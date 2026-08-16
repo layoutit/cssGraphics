@@ -2,12 +2,15 @@ import { createPolyMorphPreparedDomTarget } from "@layoutit/polycss-morph";
 
 export function createCsssolitairePreparedPlayer({
   playback,
+  host,
+  renderer,
   scene,
   leaves,
   portraitBreakpoints,
   randomUint32 = cryptoRandomUint32,
 }) {
   if (playback?.schema !== "csssolitaire-prepared-playback@2" ||
+      !(host instanceof HTMLElement) || !validRenderer(renderer) ||
       !(scene instanceof HTMLElement) || !Array.isArray(leaves) ||
       leaves.length !== playback.retainedLeafCount ||
       JSON.stringify(portraitBreakpoints) !== "[520,720,920]") {
@@ -56,11 +59,16 @@ export function createCsssolitairePreparedPlayer({
   let patternLayoutLeavesVisited = 0;
   let responsiveTransformWrites = 0;
   let responsiveProfileSwitchCount = 0;
+  let responsiveMatrixResolutionCount = 0;
+  let presentationUpdateCount = 0;
   let patternSwitchCount = 0;
   let randomSelectionCount = 0;
   let timerCallbackCount = 0;
   let loopCount = 0;
   let resetCount = 0;
+  let presentationWidth = renderer.landscapePresentationBase[0];
+  let presentationHeight = renderer.landscapePresentationBase[1];
+  let presentationScale = renderer.landscapePresentationBaseScale;
   let lastApply = Object.freeze({
     visibilityWrites: 0,
     foundationWrites: 0,
@@ -68,36 +76,52 @@ export function createCsssolitairePreparedPlayer({
     dirtyLeavesVisited: 0,
   });
 
-  function transformForPattern(nextPattern, index, profileIndex = activeProfileIndex) {
+  function layoutForPattern(nextPattern, index, profileIndex = activeProfileIndex) {
     return profileIndex === 0
-      ? nextPattern.leafMatrices[index]
-      : nextPattern.leafPortraitMatricesByCardCount[profileIndex - 1][index];
+      ? nextPattern.leafLayouts[index]
+      : nextPattern.leafPortraitLayoutsByCardCount[profileIndex - 1][index];
   }
 
-  function applyResponsiveProfile(nextProfileIndex) {
+  function matrixForLayout(layout, width = presentationWidth, height = presentationHeight,
+    scale = presentationScale) {
+    responsiveMatrixResolutionCount += 1;
+    return preparedMatrix(layout, width, height, scale, renderer);
+  }
+
+  function applyPresentation(nextProfileIndex, width, height, scale) {
     let writes = 0;
     for (let index = 0; index < foundationLeafCount; index += 1) {
-      const transform = nextProfileIndex === 0
-        ? playback.foundationMatrices[index]
-        : playback.foundationPortraitMatricesByCardCount[nextProfileIndex - 1][index];
+      const layout = nextProfileIndex === 0
+        ? playback.foundationLayouts[index]
+        : playback.foundationPortraitLayoutsByCardCount[nextProfileIndex - 1][index];
+      const transform = matrixForLayout(layout, width, height, scale);
       if (foundationLeaves[index].style.transform === transform) continue;
       foundationLeaves[index].style.transform = transform;
       writes += 1;
     }
     for (let index = 0; index < pattern.trailLeafCount; index += 1) {
-      const transform = transformForPattern(pattern, index, nextProfileIndex);
+      const transform = matrixForLayout(layoutForPattern(pattern, index, nextProfileIndex), width, height, scale);
       if (trailLeaves[index].style.transform === transform) continue;
       trailLeaves[index].style.transform = transform;
       writes += 1;
     }
+    if (nextProfileIndex !== activeProfileIndex) responsiveProfileSwitchCount += 1;
     activeProfileIndex = nextProfileIndex;
+    presentationWidth = width;
+    presentationHeight = height;
+    presentationScale = scale;
     responsiveTransformWrites += writes;
-    responsiveProfileSwitchCount += 1;
+    presentationUpdateCount += 1;
   }
 
-  function syncResponsiveProfile() {
-    const nextProfileIndex = resolveResponsiveProfileIndex(portraitBreakpoints);
-    if (nextProfileIndex !== activeProfileIndex) applyResponsiveProfile(nextProfileIndex);
+  function syncPresentation() {
+    const width = host.clientWidth || renderer.landscapePresentationBase[0];
+    const height = host.clientHeight || renderer.landscapePresentationBase[1];
+    const nextProfileIndex = resolveResponsiveProfileIndex(portraitBreakpoints, width, height);
+    const scale = resolvePresentationScale(renderer, width, height);
+    if (nextProfileIndex === activeProfileIndex && width === presentationWidth &&
+        height === presentationHeight && scale === presentationScale) return;
+    applyPresentation(nextProfileIndex, width, height, scale);
   }
 
   function applyRow(row) {
@@ -153,7 +177,7 @@ export function createCsssolitairePreparedPlayer({
     let writes = 0;
     for (let index = 0; index < nextPattern.trailLeafCount; index += 1) {
       const leaf = trailLeaves[index];
-      const transform = transformForPattern(nextPattern, index);
+      const transform = matrixForLayout(layoutForPattern(nextPattern, index));
       const faceIndex = nextPattern.leafAtlasIndices[index];
       patternLayoutLeavesVisited += 1;
       if (leaf.style.transform !== transform) {
@@ -325,8 +349,10 @@ export function createCsssolitairePreparedPlayer({
     });
   }
 
-  globalThis.addEventListener?.("resize", syncResponsiveProfile);
-  syncResponsiveProfile();
+  const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(syncPresentation) : null;
+  resizeObserver?.observe(host);
+  globalThis.addEventListener?.("resize", syncPresentation);
+  syncPresentation();
 
   return Object.freeze({
     get ready() { return true; },
@@ -387,6 +413,10 @@ export function createCsssolitairePreparedPlayer({
         runtimePatternLayoutLeavesVisited: patternLayoutLeavesVisited,
         runtimeResponsiveTransformWrites: responsiveTransformWrites,
         runtimeResponsiveProfileSwitchCount: responsiveProfileSwitchCount,
+        runtimeResponsiveMatrixResolutionCount: responsiveMatrixResolutionCount,
+        runtimeFitCalculationPurpose: "prepared-layout-inline-matrix-resolution",
+        runtimePresentationScale: presentationScale,
+        runtimePresentationUpdateCount: presentationUpdateCount,
         responsiveProfileIndex: activeProfileIndex,
         runtimePreparedPatternSwitchCount: patternSwitchCount,
         runtimeRandomSelectionCount: randomSelectionCount,
@@ -404,19 +434,60 @@ export function createCsssolitairePreparedPlayer({
     },
     destroy() {
       this.pause();
-      globalThis.removeEventListener?.("resize", syncResponsiveProfile);
+      resizeObserver?.disconnect();
+      globalThis.removeEventListener?.("resize", syncPresentation);
       target.destroy();
     },
   });
 }
 
-function resolveResponsiveProfileIndex(portraitBreakpoints) {
-  if (!matchMedia("(orientation: portrait)").matches) return 0;
-  const width = document.documentElement.clientWidth || innerWidth;
+function resolveResponsiveProfileIndex(portraitBreakpoints, width, height) {
+  if (height < width) return 0;
   if (width < portraitBreakpoints[0]) return 1;
   if (width < portraitBreakpoints[1]) return 2;
   if (width < portraitBreakpoints[2]) return 3;
   return 4;
+}
+
+function resolvePresentationScale(renderer, width, height) {
+  if (height >= width) {
+    return Math.min(
+      width / renderer.portraitPresentationBase[0],
+      height / renderer.portraitPresentationBase[1],
+    );
+  }
+  return Math.min(
+    renderer.landscapeCardMaximumWidthCssPixels / renderer.cardSourceSize[0],
+    renderer.landscapePresentationBaseScale * Math.min(
+      width / renderer.landscapePresentationBase[0],
+      height / renderer.landscapePresentationBase[1],
+    ),
+  );
+}
+
+function preparedMatrix(layout, width, height, presentationScale, renderer) {
+  const [xViewport, xCardWidthFactor, yViewport, yPixels, yCardHeightFactor] = layout;
+  const [cardWidth, cardHeight] = renderer.cardSourceSize;
+  const [primitiveWidth, primitiveHeight] = renderer.cardPrimitiveSize;
+  const scaleX = cardHeight / primitiveWidth * presentationScale;
+  const scaleY = cardWidth / primitiveHeight * presentationScale;
+  const x = xViewport / 100 * width + xCardWidthFactor * cardWidth * presentationScale;
+  const y = yViewport / 100 * height + yPixels + yCardHeightFactor * cardHeight * presentationScale;
+  return `matrix(0,${rounded(scaleX)},${rounded(-scaleY)},0,${rounded(x)},${rounded(y)})`;
+}
+
+function rounded(value) {
+  const next = Math.round(value * 1e6) / 1e6;
+  return Object.is(next, -0) ? 0 : next;
+}
+
+function validRenderer(renderer) {
+  return Array.isArray(renderer?.cardSourceSize) && renderer.cardSourceSize.length === 2 &&
+    Array.isArray(renderer.cardPrimitiveSize) && renderer.cardPrimitiveSize.length === 2 &&
+    Array.isArray(renderer.landscapePresentationBase) && renderer.landscapePresentationBase.length === 2 &&
+    Array.isArray(renderer.portraitPresentationBase) && renderer.portraitPresentationBase.length === 2 &&
+    Number.isFinite(renderer.landscapePresentationBaseScale) &&
+    Number.isFinite(renderer.landscapeCardMaximumWidthCssPixels);
 }
 
 function readFaceIndex(leaf) {

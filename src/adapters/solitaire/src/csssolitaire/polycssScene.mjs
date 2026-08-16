@@ -24,7 +24,6 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
   mountedStyle?.remove();
   mountedStyle = document.importNode(style, true);
   document.head.append(mountedStyle);
-  const ruleBank = collectPreparedRuleBank(mountedStyle);
   const mountedCamera = document.importNode(camera, true);
   host.replaceChildren(mountedCamera);
   const mountedScene = mountedCamera.querySelector(":scope > .polycss-scene");
@@ -36,34 +35,6 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
     throw new Error("Mounted cssSolitaire retained DOM census drifted");
   }
   const stableNodes = Object.freeze([mountedCamera, mountedScene, ...mountedLeaves]);
-  let presentationScale = 1;
-  let presentationScaleWrites = 0;
-
-  function updatePresentation() {
-    const width = host.clientWidth || manifest.renderer.landscapePresentationBase[0];
-    const height = host.clientHeight || manifest.renderer.landscapePresentationBase[1];
-    presentationScale = height >= width
-      ? Math.min(
-        width / manifest.renderer.portraitPresentationBase[0],
-        height / manifest.renderer.portraitPresentationBase[1],
-      )
-      : Math.min(
-        manifest.renderer.landscapeCardMaximumWidthCssPixels / manifest.renderer.cardSourceSize[0],
-        manifest.renderer.landscapePresentationBaseScale * Math.min(
-          width / manifest.renderer.landscapePresentationBase[0],
-          height / manifest.renderer.landscapePresentationBase[1],
-        ),
-      );
-    const serialized = String(Number(presentationScale.toFixed(8)));
-    if (ruleBank.presentation.style.getPropertyValue("--csssolitaire-presentation-scale") !== serialized) {
-      ruleBank.presentation.style.setProperty("--csssolitaire-presentation-scale", serialized);
-      presentationScaleWrites += 1;
-    }
-  }
-  const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(updatePresentation) : null;
-  resizeObserver?.observe(host);
-  globalThis.addEventListener?.("resize", updatePresentation);
-  updatePresentation();
 
   function assertStableDomIdentity() {
     const current = [
@@ -99,32 +70,15 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
         runtimeDomMutationCount: 0,
         runtimeDomMutationObserverInstalled: false,
         runtimeDomGrowth: false,
-        runtimeFitCalculationPurpose: "single-root-presentation-scale-only",
-        runtimePresentationScale: presentationScale,
-        runtimePresentationScaleWrites: presentationScaleWrites,
         runtimeGeometryBoundsCalculationCount: 0,
       });
     },
     destroy() {
-      resizeObserver?.disconnect();
-      globalThis.removeEventListener?.("resize", updatePresentation);
       host.replaceChildren();
       mountedStyle?.remove();
       mountedStyle = null;
     },
   });
-}
-
-function collectPreparedRuleBank(style) {
-  const sheet = style.sheet;
-  if (!(sheet instanceof CSSStyleSheet)) throw new Error("Prepared cssSolitaire stylesheet did not mount");
-  const topLevelRules = [...sheet.cssRules];
-  const presentation = topLevelRules.find((rule) =>
-    rule.selectorText === ".polycss-camera");
-  if (!presentation) {
-    throw new Error("Prepared cssSolitaire stylesheet rule bank drifted");
-  }
-  return Object.freeze({ presentation });
 }
 
 function hasInlineTransformOnly(leaf) {

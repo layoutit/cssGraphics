@@ -23,6 +23,8 @@ export function mountCsssolitaireClient() {
     });
     state.player = createCsssolitairePreparedPlayer({
       playback: prepared.playback,
+      host,
+      renderer: prepared.manifest.renderer,
       scene: state.mount.scene,
       leaves: state.mount.leaves,
       portraitBreakpoints: prepared.manifest.renderer.portraitCardBreakpoints,

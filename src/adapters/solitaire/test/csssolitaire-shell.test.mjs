@@ -42,11 +42,11 @@ test("product shell is the standard css.graphics route without demo controls", a
   assert.match(player, /deadline-setTimeout-prepared-visibility-publication/u);
   assert.doesNotMatch(player, /Math\.random|requestAnimationFrame\s*\(|createElement|DOMMatrix/u);
   assert.doesNotMatch(player, /lane-/u);
-  assert.match(snapshotMount, /new ResizeObserver\(updatePresentation\)/u);
-  assert.match(snapshotMount, /host\.clientWidth/u);
-  assert.match(snapshotMount, /host\.clientHeight/u);
-  assert.match(snapshotMount, /--csssolitaire-presentation-scale/u);
-  assert.match(snapshotMount, /single-root-presentation-scale-only/u);
+  assert.match(player, /new ResizeObserver\(syncPresentation\)/u);
+  assert.match(player, /host\.clientWidth/u);
+  assert.match(player, /host\.clientHeight/u);
+  assert.match(player, /prepared-layout-inline-matrix-resolution/u);
+  assert.match(player, /return `matrix\(0,/u);
   assert.match(snapshotMount, /runtimeGeometryBoundsCalculationCount: 0/u);
   assert.doesNotMatch(snapshotMount, /renderer\.contentBounds/u);
 });

@@ -98,25 +98,24 @@ function rounded(value) {
   return Object.is(next, -0) ? 0 : next;
 }
 
-function calcLength(viewportValue, viewportUnit, pixelValue, variableFactor, variableName) {
-  const terms = [`${rounded(viewportValue)}${viewportUnit}`];
-  for (const [value, suffix] of [
-    [pixelValue, "px"],
-    [variableFactor, ` * var(${variableName})`],
-  ]) {
-    const roundedValue = rounded(value);
-    terms.push(`${roundedValue < 0 ? "-" : "+"} ${rounded(Math.abs(roundedValue))}${suffix}`);
-  }
-  return `calc(${terms.join(" ")})`;
+function cardLayout({ xViewport, xCardWidthFactor, yViewport, yPixels, yCardHeightFactor }) {
+  return Object.freeze([
+    xViewport,
+    xCardWidthFactor,
+    yViewport,
+    yPixels,
+    yCardHeightFactor,
+  ].map(rounded));
 }
 
-function cardTransform({ xViewport, xCardWidthFactor, yViewport, yPixels, yCardHeightFactor }) {
-  return [
-    `translate(${calcLength(xViewport, "vw", 0, xCardWidthFactor, "--csssolitaire-card-width")},` +
-      `${calcLength(yViewport, "vh", yPixels, yCardHeightFactor, "--csssolitaire-card-height")})`,
-    "rotate(90deg)",
-    "scale(var(--csssolitaire-card-transform-x),var(--csssolitaire-card-transform-y))",
-  ].join(" ");
+function cardMatrix(layout, viewportWidth, viewportHeight, presentationScale) {
+  const [xViewport, xCardWidthFactor, yViewport, yPixels, yCardHeightFactor] = layout;
+  const scaleX = CARD_HEIGHT / CARD_SOURCE_WIDTH * presentationScale;
+  const scaleY = CARD_WIDTH / CARD_SOURCE_HEIGHT * presentationScale;
+  const x = xViewport / 100 * viewportWidth + xCardWidthFactor * CARD_WIDTH * presentationScale;
+  const y = yViewport / 100 * viewportHeight + yPixels +
+    yCardHeightFactor * CARD_HEIGHT * presentationScale;
+  return `matrix(0,${rounded(scaleX)},${rounded(-scaleY)},0,${rounded(x)},${rounded(y)})`;
 }
 
 function reflectBetween(value, minimum, maximum) {
@@ -376,16 +375,24 @@ function simulateSource(seed) {
 }
 
 function cardLeaf({ cardFace, foundationIndex, horizontalDirection, left, top }) {
-  const landscape = landscapeCardPosition(left, top, foundationIndex, horizontalDirection);
-  const portraitMatrices = PORTRAIT_PROFILES.map((profile) => {
+  const landscapeLayout = cardLayout(
+    landscapeCardPosition(left, top, foundationIndex, horizontalDirection),
+  );
+  const portraitLayouts = PORTRAIT_PROFILES.map((profile) => {
     const portrait = portraitCardPosition(left, top, foundationIndex, horizontalDirection, profile);
-    return portrait ? cardTransform(portrait) : null;
+    return portrait ? cardLayout(portrait) : null;
   });
   return Object.freeze({
     faceIndex: cardFace - 1,
     foundationIndex,
-    matrix: cardTransform(landscape),
-    portraitMatrices: Object.freeze(portraitMatrices),
+    matrix: cardMatrix(
+      landscapeLayout,
+      LANDSCAPE_PLAYFIELD[0],
+      LANDSCAPE_PLAYFIELD[1],
+      LANDSCAPE_PRESENTATION_SCALE,
+    ),
+    layout: landscapeLayout,
+    portraitLayouts: Object.freeze(portraitLayouts),
     atlas: atlasPosition(cardFace),
   });
 }
@@ -480,11 +487,11 @@ function buildPreparedPattern(seed, index) {
       frameTimesMs: timeline.frameTimesMs,
       visibilityRows: timeline.visibilityRows,
       foundationRows: timeline.foundationRows,
-      leafMatrices: trailLeaves.map(({ matrix: leafMatrix }) => leafMatrix),
-      leafPortraitMatricesByCardCount: PORTRAIT_CARD_COUNTS.map((_, profileIndex) =>
-        trailLeaves.map(({ portraitMatrices }) => {
-          const portraitMatrix = portraitMatrices[profileIndex];
-          return portraitMatrix;
+      leafLayouts: trailLeaves.map(({ layout }) => layout),
+      leafPortraitLayoutsByCardCount: PORTRAIT_CARD_COUNTS.map((_, profileIndex) =>
+        trailLeaves.map(({ portraitLayouts }) => {
+          const portraitLayout = portraitLayouts[profileIndex];
+          return portraitLayout;
         })),
       leafAtlasIndices: source.snapshots.map(({ faceNumber: cardFace }) => cardFace - 1),
     }),
@@ -506,7 +513,7 @@ function buildSnapshot(leaves, cardAssetUrl) {
     return `.polycss-scene>b.${faceClass(faceIndex)}{background-position:${-atlas.x}px ${-atlas.y}px}`;
   }).join("");
   const css = [
-    `.polycss-camera{position:relative;display:block;width:100%;height:100%;overflow:hidden;--csssolitaire-presentation-scale:${LANDSCAPE_PRESENTATION_SCALE};--csssolitaire-card-width:calc(${CARD_WIDTH}px * var(--csssolitaire-presentation-scale));--csssolitaire-card-height:calc(${CARD_HEIGHT}px * var(--csssolitaire-presentation-scale));--csssolitaire-card-transform-x:calc(${CARD_HEIGHT / CARD_SOURCE_WIDTH} * var(--csssolitaire-presentation-scale));--csssolitaire-card-transform-y:calc(${CARD_WIDTH / CARD_SOURCE_HEIGHT} * var(--csssolitaire-presentation-scale))}`,
+    ".polycss-camera{position:relative;display:block;width:100%;height:100%;overflow:hidden}",
     ".polycss-scene{position:absolute;inset:0}",
     `.polycss-scene>b{position:absolute;display:block;width:${CARD_SOURCE_WIDTH}px;height:${CARD_SOURCE_HEIGHT}px;margin:0;padding:0;overflow:hidden;border:0;border-radius:14px;background-image:url('${cardAssetUrl}');background-repeat:no-repeat;background-size:${CARD_ATLAS_WIDTH}px ${CARD_ATLAS_HEIGHT}px;transform-origin:0 0;visibility:hidden;pointer-events:none;text-decoration:none;font:normal normal normal 0/0 serif;image-rendering:auto}`,
     ".polycss-scene>b.v{visibility:visible}",
@@ -556,9 +563,16 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
     foundationLeafCount: FOUNDATION_COUNT,
     retainedLeafCount: leaves.length,
     retainedTrailLeafCount,
-    foundationMatrices: foundationLeaves.map(({ matrix: leafMatrix }) => leafMatrix),
-    foundationPortraitMatricesByCardCount: PORTRAIT_CARD_COUNTS.map((_, profileIndex) =>
-      foundationLeaves.map(({ portraitMatrices }) => portraitMatrices[profileIndex])),
+    layoutComponentOrder: [
+      "xViewportPercent",
+      "xCardWidthFactor",
+      "yViewportPercent",
+      "yPixels",
+      "yCardHeightFactor",
+    ],
+    foundationLayouts: foundationLeaves.map(({ layout }) => layout),
+    foundationPortraitLayoutsByCardCount: PORTRAIT_CARD_COUNTS.map((_, profileIndex) =>
+      foundationLeaves.map(({ portraitLayouts }) => portraitLayouts[profileIndex])),
     atlasPositions: Array.from({ length: 52 }, (_, index) => {
       const atlas = atlasPosition(index + 1);
       return `${-atlas.x}px ${-atlas.y}px`;
@@ -631,7 +645,7 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       transformPublication: "prepared-inline-style",
       contentBounds: [contentBounds.left, contentBounds.top, contentBounds.right, contentBounds.bottom],
       responsiveProfiles: ["landscape", "portrait"],
-      viewportPositioning: "prepared-css-vw-vh-no-letterbox",
+      viewportPositioning: "prepared-layout-resolved-inline-matrix-no-letterbox",
       viewportFill: true,
       verticalMapping: "foundation-and-retained-bounce-bottom-anchored",
       foundationTopCssPixels: FOUNDATION_PRESENTATION_TOP,
@@ -639,6 +653,7 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       sourceVerticalAnchors: [SOURCE_ARCH_TOP, FOUNDATION_Y, SOURCE_BOUNCE_BOTTOM],
       upwardArchMapping: "prepared-source-smooth-three-anchor-curve",
       cardSourceSize: [CARD_WIDTH, CARD_HEIGHT],
+      cardPrimitiveSize: [CARD_SOURCE_WIDTH, CARD_SOURCE_HEIGHT],
       landscapePresentationBase: LANDSCAPE_PLAYFIELD,
       landscapePresentationBaseScale: LANDSCAPE_PRESENTATION_SCALE,
       landscapeCardMaximumWidthCssPixels: LANDSCAPE_CARD_MAXIMUM_WIDTH,
@@ -660,7 +675,7 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       runtimeAtlasRasterization: false,
       runtimeGeometryCalculation: false,
       runtimeTrajectoryCalculation: false,
-      runtimeResizeCalculation: "single-root-scale-and-responsive-inline-transform-publication",
+      runtimeResizeCalculation: "prepared-layout-inline-matrix-resolution",
       runtimeDomGrowth: false,
     },
     transport: {

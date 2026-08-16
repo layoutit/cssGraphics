@@ -54,7 +54,7 @@ function validateManifest(manifest) {
       manifest.renderer?.preparedPatternBankCount !== 24 ||
       manifest.renderer?.runtimePatternSelectionOnly !== true ||
       JSON.stringify(manifest.renderer?.responsiveProfiles) !== '["landscape","portrait"]' ||
-      manifest.renderer?.viewportPositioning !== "prepared-css-vw-vh-no-letterbox" ||
+      manifest.renderer?.viewportPositioning !== "prepared-layout-resolved-inline-matrix-no-letterbox" ||
       manifest.renderer?.viewportFill !== true ||
       manifest.renderer?.verticalMapping !== "foundation-and-retained-bounce-bottom-anchored" ||
       manifest.renderer?.foundationTopCssPixels !== 80 ||
@@ -63,6 +63,7 @@ function validateManifest(manifest) {
       manifest.renderer?.upwardArchMapping !==
         "prepared-source-smooth-three-anchor-curve" ||
       JSON.stringify(manifest.renderer?.cardSourceSize) !== "[71,96]" ||
+      JSON.stringify(manifest.renderer?.cardPrimitiveSize) !== "[240,160]" ||
       JSON.stringify(manifest.renderer?.landscapePresentationBase) !== "[960,540]" ||
       manifest.renderer?.landscapePresentationBaseScale !== 1.40625 ||
       manifest.renderer?.landscapeCardMaximumWidthCssPixels !== 200 ||
@@ -77,8 +78,7 @@ function validateManifest(manifest) {
       manifest.renderer?.preparedSlotLayout !== "source-seven-slot-presentation-scaled-card-size" ||
       manifest.renderer?.slotCount !== 7 || manifest.renderer?.minimumSlotGap !== 11 ||
       manifest.renderer?.presentationScaleMode !== "single-root-contain-scale-viewport-positioned" ||
-      manifest.renderer?.runtimeResizeCalculation !==
-        "single-root-scale-and-responsive-inline-transform-publication" ||
+      manifest.renderer?.runtimeResizeCalculation !== "prepared-layout-inline-matrix-resolution" ||
       manifest.transport?.snapshotUrl !== "/csssolitaire/solitaire.polycss.txt" ||
       manifest.transport?.runtimeModelPayload !== false ||
       manifest.sourceProfile?.cards !== 12 ||
@@ -133,14 +133,16 @@ function validatePlayback(playback, manifest) {
       playback.foundationLeafCount !== manifest.metrics.foundationLeafCount ||
       playback.retainedLeafCount !== manifest.metrics.retainedLeafCount ||
       playback.retainedTrailLeafCount !== manifest.metrics.retainedTrailLeafCount ||
-      !Array.isArray(playback.foundationMatrices) ||
-      playback.foundationMatrices.length !== playback.foundationLeafCount ||
-      playback.foundationMatrices.some((transform) => !validPreparedTransform(transform)) ||
-      !Array.isArray(playback.foundationPortraitMatricesByCardCount) ||
-      playback.foundationPortraitMatricesByCardCount.length !== 4 ||
-      playback.foundationPortraitMatricesByCardCount.some((profile) =>
+      JSON.stringify(playback.layoutComponentOrder) !==
+        '["xViewportPercent","xCardWidthFactor","yViewportPercent","yPixels","yCardHeightFactor"]' ||
+      !Array.isArray(playback.foundationLayouts) ||
+      playback.foundationLayouts.length !== playback.foundationLeafCount ||
+      playback.foundationLayouts.some((layout) => !validPreparedLayout(layout)) ||
+      !Array.isArray(playback.foundationPortraitLayoutsByCardCount) ||
+      playback.foundationPortraitLayoutsByCardCount.length !== 4 ||
+      playback.foundationPortraitLayoutsByCardCount.some((profile) =>
         !Array.isArray(profile) || profile.length !== playback.foundationLeafCount ||
-        profile.some((transform) => !validPreparedTransform(transform))) ||
+        profile.some((layout) => !validPreparedLayout(layout))) ||
       !Array.isArray(playback.atlasPositions) || playback.atlasPositions.length !== 52 ||
       playback.atlasPositions.some((position) => !/^-?\d+px -?\d+px$/u.test(position)) ||
       !Array.isArray(playback.patterns) || playback.patterns.length !== playback.patternCount ||
@@ -192,28 +194,22 @@ function validPattern(pattern, playback, manifest, index) {
       !Number.isSafeInteger(operation[1]) || !Number.isSafeInteger(operation[2]) ||
       !((operation[1] === -1 && operation[2] === -1) ||
         (operation[1] >= 0 && operation[1] <= 720 && operation[2] >= 0 && operation[2] <= 1920)))) &&
-    Array.isArray(pattern.leafMatrices) && pattern.leafMatrices.length === pattern.trailLeafCount &&
-    !pattern.leafMatrices.some((transform) => !validPreparedTransform(transform)) &&
-    Array.isArray(pattern.leafPortraitMatricesByCardCount) &&
-    pattern.leafPortraitMatricesByCardCount.length === 4 &&
-    !pattern.leafPortraitMatricesByCardCount.some((profile) =>
+    Array.isArray(pattern.leafLayouts) && pattern.leafLayouts.length === pattern.trailLeafCount &&
+    !pattern.leafLayouts.some((layout) => !validPreparedLayout(layout)) &&
+    Array.isArray(pattern.leafPortraitLayoutsByCardCount) &&
+    pattern.leafPortraitLayoutsByCardCount.length === 4 &&
+    !pattern.leafPortraitLayoutsByCardCount.some((profile) =>
       !Array.isArray(profile) || profile.length !== pattern.trailLeafCount ||
-      profile.some((transform) => transform !== null && !validPreparedTransform(transform))) &&
-    !pattern.leafPortraitMatricesByCardCount[3].some((transform) => transform === null) &&
+      profile.some((layout) => layout !== null && !validPreparedLayout(layout))) &&
+    !pattern.leafPortraitLayoutsByCardCount[3].some((layout) => layout === null) &&
     !Array.from({ length: pattern.trailLeafCount }, (_, leafIndex) => leafIndex).some((leafIndex) =>
-      pattern.leafPortraitMatricesByCardCount.some((profile, profileIndex, profiles) =>
+      pattern.leafPortraitLayoutsByCardCount.some((profile, profileIndex, profiles) =>
         profileIndex > 0 && profiles[profileIndex - 1][leafIndex] !== null && profile[leafIndex] === null)) &&
     Array.isArray(pattern.leafAtlasIndices) && pattern.leafAtlasIndices.length === pattern.trailLeafCount &&
     !pattern.leafAtlasIndices.some((atlasIndex) =>
       !Number.isSafeInteger(atlasIndex) || atlasIndex < 0 || atlasIndex >= playback.atlasPositions.length);
 }
 
-function validPreparedTransform(transform) {
-  return typeof transform === "string" &&
-    transform.startsWith("translate(calc(") && transform.includes("vw") &&
-    transform.includes("--csssolitaire-card-width") && transform.includes("vh") &&
-    transform.includes("--csssolitaire-card-height") &&
-    transform.endsWith(
-      "rotate(90deg) scale(var(--csssolitaire-card-transform-x),var(--csssolitaire-card-transform-y))",
-    );
+function validPreparedLayout(layout) {
+  return Array.isArray(layout) && layout.length === 5 && layout.every(Number.isFinite);
 }

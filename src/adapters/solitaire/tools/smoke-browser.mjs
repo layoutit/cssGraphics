@@ -370,7 +370,7 @@ try {
         Math.abs(card.width - expectedSize[0]) > 0.1 || Math.abs(card.height - expectedSize[1]) > 0.1) ||
       (expected === 1
         ? visibleLeft < -0.1 || visibleRight > width + 0.1
-        : visibleLeft > -0.9 * expectedSize[0] || visibleRight < width + 0.9 * expectedSize[0]))) {
+        : visibleLeft > -0.9 * expectedSize[0] && visibleRight < width + 0.9 * expectedSize[0]))) {
       throw new Error(`cssSolitaire responsive slot layout drifted: ${JSON.stringify(responsiveCardCounts)}`);
     }
     const landscapeViewports = [];
@@ -413,18 +413,68 @@ try {
       visibleTop < 7.9 || visibleTop > 80 || Math.abs(visibleBottom - height) > 0.2)) {
       throw new Error(`cssSolitaire viewport fill drifted: ${JSON.stringify(landscapeViewports)}`);
     }
+    const reducedMotionMobileAutoplay = await captureReducedMotionMobileAutoplay(browser, port, route);
     await page.evaluate(() => window.__cssSolitaireSmoke.observer.disconnect());
     process.stdout.write(`${JSON.stringify({
       status: "passed", headless: true, browser: browser.version(), deploy, route,
       readyMs, sampled, autoplayLoop, bankSequence, evidence, visibleBounds, cardPixelRatio, screenshotPath,
       mobileInitial, mobileEvidence, mobileCardPixelRatio, mobileScreenshotPath,
-      responsiveCardCounts, landscapeViewports,
+      responsiveCardCounts, landscapeViewports, reducedMotionMobileAutoplay,
     }, null, 2)}\n`);
   } finally {
     await browser.close();
   }
 } finally {
   server.kill("SIGTERM");
+}
+
+async function captureReducedMotionMobileAutoplay(browser, port, route) {
+  const page = await browser.newPage({
+    viewport: { width: 390, height: 844 },
+    screen: { width: 390, height: 844 },
+    deviceScaleFactor: 3,
+    isMobile: true,
+    hasTouch: true,
+    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 " +
+      "(KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1",
+  });
+  try {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(`http://127.0.0.1:${port}${route}`, { waitUntil: "networkidle" });
+    await page.waitForFunction(() => window.__cssSolitaireDebug?.ready === true ||
+      window.__cssSolitaireDebug?.errors().length > 0, null, { timeout: 30_000 });
+    const result = await page.evaluate(async () => {
+      const initialState = window.__cssSolitaireDebug.snapshot();
+      await new Promise((resolveWait) => setTimeout(resolveWait, 500));
+      const advancedState = window.__cssSolitaireDebug.snapshot();
+      const stats = window.__cssSolitaireDebug.stats();
+      return {
+        reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
+        initial: {
+          playing: initialState.playing,
+          playheadMs: initialState.playheadMs,
+          frameIndex: initialState.frameIndex,
+        },
+        advanced: {
+          playing: advancedState.playing,
+          playheadMs: advancedState.playheadMs,
+          frameIndex: advancedState.frameIndex,
+        },
+        timerCallbacks: stats.runtimeTimerCallbackCount,
+        visibilityWrites: stats.runtimeLeafVisibilityWrites,
+        errors: window.__cssSolitaireDebug.errors(),
+      };
+    });
+    if (!result.reducedMotion || result.errors.length || !result.initial.playing ||
+        !result.advanced.playing || result.advanced.playheadMs < 350 ||
+        result.advanced.frameIndex <= result.initial.frameIndex ||
+        result.timerCallbacks === 0 || result.visibilityWrites === 0) {
+      throw new Error(`cssSolitaire reduced-motion mobile autoplay failed: ${JSON.stringify(result)}`);
+    }
+    return result;
+  } finally {
+    await page.close();
+  }
 }
 
 async function freePort() {

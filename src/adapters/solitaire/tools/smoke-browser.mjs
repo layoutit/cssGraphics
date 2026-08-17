@@ -223,6 +223,14 @@ try {
         evidence.stats.preparedPatternCount !== 24 ||
         evidence.stats.runtimePreparedPatternSwitchCount !== 23 ||
         evidence.stats.runtimePatternLayoutWrites < 1 ||
+        evidence.stats.runtimePatternLayoutLeavesVisited !==
+          evidence.stats.runtimePatternLayoutLeavesRequired ||
+        evidence.stats.runtimePatternLayoutUnusedLeavesVisited !== 0 ||
+        evidence.stats.runtimeResponsiveFaceLeavesVisited !==
+          evidence.stats.runtimeResponsiveFaceLeavesRequired ||
+        evidence.stats.runtimeResponsiveFaceUnusedLeavesVisited !== 0 ||
+        evidence.stats.runtimeResetTrailLeavesVisited !== evidence.stats.runtimeResetTrailLeavesRequired ||
+        evidence.stats.runtimeResetUnusedLeavesVisited !== 0 ||
         evidence.stats.runtimeRandomSelectionCount < 1 ||
         evidence.stats.runtimeRandomSelectionPurpose !== "prepared-pattern-shuffled-bag-index-only" ||
         evidence.stats.runtimeGeometryCalculationCount !== 0 ||
@@ -440,12 +448,14 @@ try {
     }
     const reducedMotionMobileAutoplay = await captureReducedMotionMobileAutoplay(browser, port, route);
     const mobileContinuity = await captureMobileContinuity(browser, port, route);
+    const mobileHandoffWork = await captureMobileHandoffWork(browser, port, route);
     await page.evaluate(() => window.__cssSolitaireSmoke.observer.disconnect());
     process.stdout.write(`${JSON.stringify({
       status: "passed", headless: true, browser: browser.version(), deploy, route,
       readyMs, sampled, autoplayLoop, bankSequence, evidence, visibleBounds, cardPixelRatio, screenshotPath,
       mobileInitial, mobileEvidence, mobileCardPixelRatio, mobileScreenshotPath,
       responsiveCardCounts, landscapeViewports, reducedMotionMobileAutoplay, mobileContinuity,
+      mobileHandoffWork,
     }, null, 2)}\n`);
   } finally {
     await browser.close();
@@ -577,6 +587,99 @@ async function captureMobileContinuity(browser, port, route) {
         result.samples.some((sample, index) =>
       index > 0 && sample.visiblePaintedLeaves <= result.samples[index - 1].visiblePaintedLeaves)) {
       throw new Error(`cssSolitaire mobile continuity failed: ${JSON.stringify(result)}`);
+    }
+    return result;
+  } finally {
+    await page.close();
+  }
+}
+
+async function captureMobileHandoffWork(browser, port, route) {
+  const page = await browser.newPage({
+    viewport: { width: 390, height: 844 },
+    screen: { width: 390, height: 844 },
+    deviceScaleFactor: 3,
+    isMobile: true,
+    hasTouch: true,
+  });
+  try {
+    await page.goto(`http://127.0.0.1:${port}${route}`, { waitUntil: "networkidle" });
+    await page.waitForFunction(() => window.__cssSolitaireDebug?.ready === true ||
+      window.__cssSolitaireDebug?.errors().length > 0, null, { timeout: 30_000 });
+    const reset = await page.evaluate(() => {
+      window.__cssSolitaireDebug.pause();
+      const visible = window.__cssSolitaireDebug.seek(5_000).visibleTrailCards;
+      const before = window.__cssSolitaireDebug.stats();
+      window.__cssSolitaireDebug.seek(0);
+      const after = window.__cssSolitaireDebug.stats();
+      return {
+        visible,
+        visited: after.runtimeResetTrailLeavesVisited - before.runtimeResetTrailLeavesVisited,
+        required: after.runtimeResetTrailLeavesRequired - before.runtimeResetTrailLeavesRequired,
+        unused: after.runtimeResetUnusedLeavesVisited - before.runtimeResetUnusedLeavesVisited,
+      };
+    });
+    const handoffStart = await page.evaluate(() => {
+      const state = window.__cssSolitaireDebug.snapshot();
+      window.__cssSolitaireDebug.seek(state.durationMs - 40);
+      const before = window.__cssSolitaireDebug.stats();
+      const patternIndex = window.__cssSolitaireDebug.snapshot().patternIndex;
+      window.__cssSolitaireDebug.resume();
+      return { before, patternIndex };
+    });
+    await page.waitForFunction((patternIndex) =>
+      window.__cssSolitaireDebug.snapshot().patternIndex !== patternIndex,
+    handoffStart.patternIndex, { timeout: 2_000 });
+    const handoff = await page.evaluate((before) => {
+      const state = window.__cssSolitaireDebug.pause();
+      const after = window.__cssSolitaireDebug.stats();
+      const fullTrailLeafCount = window.__cssSolitaireDebug.manifest.sourceProfile
+        .patterns[state.patternIndex].trailLeafCount;
+      return {
+        patternIndex: state.patternIndex,
+        profileIndex: state.responsiveProfileIndex,
+        activeTrailLeafCount: state.timelineTrailLeafCount,
+        fullTrailLeafCount,
+        initializedFaceLeafCount: after.activePatternFaceInitializedLeafCount,
+        patternSwitches: after.runtimePreparedPatternSwitchCount - before.runtimePreparedPatternSwitchCount,
+        visited: after.runtimePatternLayoutLeavesVisited - before.runtimePatternLayoutLeavesVisited,
+        required: after.runtimePatternLayoutLeavesRequired - before.runtimePatternLayoutLeavesRequired,
+        unused: after.runtimePatternLayoutUnusedLeavesVisited - before.runtimePatternLayoutUnusedLeavesVisited,
+      };
+    }, handoffStart.before);
+    const beforeExpansion = await page.evaluate(() => window.__cssSolitaireDebug.stats());
+    await page.setViewportSize({ width: 600, height: 900 });
+    await page.waitForFunction(() => window.__cssSolitaireDebug.snapshot().responsiveProfileIndex === 2);
+    const expansion = await page.evaluate((before) => {
+      const state = window.__cssSolitaireDebug.snapshot();
+      const after = window.__cssSolitaireDebug.stats();
+      return {
+        profileIndex: state.responsiveProfileIndex,
+        activeTrailLeafCount: state.timelineTrailLeafCount,
+        initializedFaceLeafCount: after.activePatternFaceInitializedLeafCount,
+        visited: after.runtimeResponsiveFaceLeavesVisited - before.runtimeResponsiveFaceLeavesVisited,
+        required: after.runtimeResponsiveFaceLeavesRequired - before.runtimeResponsiveFaceLeavesRequired,
+        unused: after.runtimeResponsiveFaceUnusedLeavesVisited - before.runtimeResponsiveFaceUnusedLeavesVisited,
+      };
+    }, beforeExpansion);
+    const result = {
+      reset,
+      handoff,
+      expansion,
+      errors: await page.evaluate(() => window.__cssSolitaireDebug.errors()),
+    };
+    const expansionLeafCount = handoff.fullTrailLeafCount - handoff.activeTrailLeafCount;
+    if (result.errors.length || reset.visible <= 0 || reset.visited !== reset.visible ||
+        reset.required !== reset.visible || reset.unused !== 0 || handoff.patternSwitches !== 1 ||
+        handoff.profileIndex !== 1 || handoff.activeTrailLeafCount >= handoff.fullTrailLeafCount ||
+        handoff.initializedFaceLeafCount !== handoff.activeTrailLeafCount ||
+        handoff.visited !== handoff.activeTrailLeafCount ||
+        handoff.required !== handoff.activeTrailLeafCount || handoff.unused !== 0 ||
+        expansion.profileIndex !== 2 || expansion.activeTrailLeafCount !== handoff.fullTrailLeafCount ||
+        expansion.initializedFaceLeafCount !== handoff.fullTrailLeafCount ||
+        expansion.visited !== expansionLeafCount || expansion.required !== expansionLeafCount ||
+        expansion.unused !== 0) {
+      throw new Error(`cssSolitaire mobile handoff work failed: ${JSON.stringify(result)}`);
     }
     return result;
   } finally {

@@ -32,7 +32,10 @@ try {
   });
   const browser = await chromium.launch({ channel: "chrome", headless: true });
   try {
-    const page = await browser.newPage({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 });
+    const page = await newPageWithRandomValue(
+      browser,
+      { viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 },
+    );
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("console", (message) => {
@@ -203,7 +206,7 @@ try {
         rewound.frameIndex !== 608 || rewound.visibleTrailCards !== 0 || rewound.visibleFoundationCards !== 4 ||
         wrapped.frameIndex !== 0 || wrapped.visibleTrailCards !== 0 || wrapped.visibleFoundationCards !== 4 ||
         autoplayLoop.playheadMs >= 500 || autoplayLoop.visibleTrailCards !== 0 ||
-        autoplayLoop.patternIndex === 0 || autoplayLoop.patternCount !== 24 ||
+        autoplayLoop.patternId === initial.patternId || autoplayLoop.patternCount !== 24 ||
         bankSequence.length !== 24 || new Set(bankSequence).size !== 24 ||
         bankSequence.some((patternId, index) => index > 0 && patternId === bankSequence[index - 1]) ||
         bankDirections.some((direction, index) => index > 0 && direction === bankDirections[index - 1]) ||
@@ -256,7 +259,7 @@ try {
         evidence.stats.runtimeResetUnusedLeavesVisited !== 0 ||
         evidence.stats.runtimeRandomSelectionCount < 1 ||
         evidence.stats.runtimeRandomSelectionPurpose !==
-          "prepared-pattern-shuffled-bag-alternating-phone-direction-unique-angle" ||
+          "prepared-pattern-random-initial-and-shuffled-bag-alternating-phone-direction-unique-angle" ||
         evidence.stats.runtimeGeometryCalculationCount !== 0 ||
         evidence.stats.runtimeGeometryBoundsCalculationCount !== 0 ||
         evidence.stats.runtimeFitCalculationPurpose !== "prepared-layout-inline-matrix-resolution" ||
@@ -473,6 +476,7 @@ try {
     const reducedMotionMobileAutoplay = await captureReducedMotionMobileAutoplay(browser, port, route);
     const mobileContinuity = await captureMobileContinuity(browser, port, route);
     const mobileHandoffWork = await captureMobileHandoffWork(browser, port, route);
+    const startupPatternSelections = await captureStartupPatternSelections(browser, port, route);
     await page.evaluate(() => window.__cssSolitaireSmoke.observer.disconnect());
     process.stdout.write(`${JSON.stringify({
       status: "passed", headless: true, browser: browser.version(), deploy, route,
@@ -481,7 +485,7 @@ try {
       screenshotPath,
       mobileInitial, mobileEvidence, mobileCardPixelRatio, mobileScreenshotPath,
       responsiveCardCounts, landscapeViewports, reducedMotionMobileAutoplay, mobileContinuity,
-      mobileHandoffWork,
+      mobileHandoffWork, startupPatternSelections,
     }, null, 2)}\n`);
   } finally {
     await browser.close();
@@ -491,7 +495,7 @@ try {
 }
 
 async function captureReducedMotionMobileAutoplay(browser, port, route) {
-  const page = await browser.newPage({
+  const page = await newPageWithRandomValue(browser, {
     viewport: { width: 390, height: 844 },
     screen: { width: 390, height: 844 },
     deviceScaleFactor: 3,
@@ -540,7 +544,7 @@ async function captureReducedMotionMobileAutoplay(browser, port, route) {
 }
 
 async function captureMobileContinuity(browser, port, route) {
-  const page = await browser.newPage({
+  const page = await newPageWithRandomValue(browser, {
     viewport: { width: 390, height: 844 },
     screen: { width: 390, height: 844 },
     deviceScaleFactor: 3,
@@ -640,7 +644,7 @@ async function captureMobileContinuity(browser, port, route) {
 }
 
 async function captureMobileHandoffWork(browser, port, route) {
-  const page = await browser.newPage({
+  const page = await newPageWithRandomValue(browser, {
     viewport: { width: 390, height: 844 },
     screen: { width: 390, height: 844 },
     deviceScaleFactor: 3,
@@ -730,6 +734,57 @@ async function captureMobileHandoffWork(browser, port, route) {
   } finally {
     await page.close();
   }
+}
+
+async function captureStartupPatternSelections(browser, port, route) {
+  const selections = [];
+  for (const randomValue of [0, 1, 23]) {
+    const page = await newPageWithRandomValue(browser, {
+      viewport: { width: 390, height: 844 },
+      screen: { width: 390, height: 844 },
+      deviceScaleFactor: 3,
+      isMobile: true,
+      hasTouch: true,
+    }, randomValue);
+    try {
+      await page.goto(`http://127.0.0.1:${port}${route}`, { waitUntil: "networkidle" });
+      await page.waitForFunction(() => window.__cssSolitaireDebug?.ready === true ||
+        window.__cssSolitaireDebug?.errors().length > 0, null, { timeout: 30_000 });
+      selections.push(await page.evaluate((value) => {
+        const state = window.__cssSolitaireDebug.pause();
+        return {
+          randomValue: value,
+          patternIndex: state.patternIndex,
+          patternId: state.patternId,
+          stable: window.__cssSolitaireDebug.assertStableDomIdentity(),
+          errors: window.__cssSolitaireDebug.errors(),
+        };
+      }, randomValue));
+    } finally {
+      await page.close();
+    }
+  }
+  if (selections.some(({ randomValue, patternIndex, patternId, stable, errors }) =>
+    patternIndex !== randomValue || patternId !== `pattern-${String(randomValue + 1).padStart(2, "0")}` ||
+    !stable || errors.length)) {
+    throw new Error(`cssSolitaire initial pattern selection failed: ${JSON.stringify(selections)}`);
+  }
+  return selections;
+}
+
+async function newPageWithRandomValue(browser, options, randomValue = 0) {
+  const page = await browser.newPage(options);
+  await page.addInitScript((value) => {
+    Object.defineProperty(Crypto.prototype, "getRandomValues", {
+      configurable: true,
+      writable: true,
+      value(array) {
+        array.fill(value);
+        return array;
+      },
+    });
+  }, randomValue);
+  return page;
 }
 
 async function freePort() {

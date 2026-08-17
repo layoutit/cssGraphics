@@ -46,8 +46,8 @@ viewport. The prepared pattern bank permits occasional rightward exits in
 the first two foundation lanes while keeping the last two lanes leftward.
 The phone-only bank derives 24 distinct effective launch-angle ratios from the
 recovered integer horizontal and vertical step ranges. Its prepared paths are
-geometrically distinct, balance horizontal signs 12/12, and alternate sign at
-handoff inside the shuffled bag.
+geometrically distinct, balance horizontal signs 12/12, select the initial pattern
+cryptographically on each load, and alternate sign at handoff inside the shuffled bag.
 The product presentation uses one smooth prepared three-anchor curve from the
 8px apex through the 80px foundation to the lowest retained source bounce point
 at the real viewport floor. It does not clamp or join separate vertical mappings

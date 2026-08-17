@@ -753,7 +753,7 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
   const playback = Object.freeze({
     schema: "csssolitaire-prepared-playback@2",
     loop: true,
-    selection: "crypto-random-shuffled-bag-alternating-phone-direction-unique-angle",
+    selection: "crypto-random-initial-and-shuffled-bag-alternating-phone-direction-unique-angle",
     patternCount: preparedPatterns.length,
     initialPatternIndex: 0,
     phoneProfileIndex: PHONE_PROFILE_INDEX,

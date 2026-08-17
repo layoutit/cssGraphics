@@ -94,7 +94,7 @@ function validateManifest(manifest) {
       manifest.sourceProfile?.sourceSteps !== 1679 ||
       manifest.sourceProfile?.patternCount !== 24 ||
       manifest.sourceProfile?.patternSelection !==
-        "crypto-random-shuffled-bag-alternating-phone-direction-unique-angle" ||
+        "crypto-random-initial-and-shuffled-bag-alternating-phone-direction-unique-angle" ||
       manifest.sourceProfile?.horizontalVelocityDistribution !==
         "mild-slow-bias-first-two-lanes-quarter-right-unique-per-lane-cycle" ||
       JSON.stringify(manifest.sourceProfile?.horizontalVelocityRange) !== "[-65,65]" ||
@@ -145,7 +145,7 @@ function validateManifest(manifest) {
 function validatePlayback(playback, manifest) {
   if (playback?.schema !== "csssolitaire-prepared-playback@2" || playback.loop !== true ||
       playback.selection !==
-        "crypto-random-shuffled-bag-alternating-phone-direction-unique-angle" ||
+        "crypto-random-initial-and-shuffled-bag-alternating-phone-direction-unique-angle" ||
       playback.patternCount !== 24 || playback.initialPatternIndex !== 0 ||
       playback.phoneProfileIndex !== 1 ||
       playback.sourceStepMilliseconds !== 7.5 || playback.initialHoldMilliseconds !== 500 ||

@@ -3,7 +3,7 @@ import { mountPreparedSolitaireSnapshot } from "./polycssScene.mjs";
 import { createCsssolitairePreparedPlayer } from "./preparedPlayback.mjs";
 
 export function mountCsssolitaireClient() {
-  const host = document.getElementById("scene");
+  const host = document.body;
   const state = { ready: false, manifest: null, mount: null, player: null, errors: [] };
   installDebugApi(state);
   window.addEventListener("error", (event) => recordError(event.message || String(event.error || "error")));
@@ -12,7 +12,6 @@ export function mountCsssolitaireClient() {
   main().catch((error) => recordError(error.stack || error.message || String(error)));
 
   async function main() {
-    if (!(host instanceof HTMLElement)) throw new Error("Missing #scene host");
     setBodyState("loading");
     const prepared = await loadPreparedSolitaire();
     state.manifest = prepared.manifest;

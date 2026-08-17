@@ -112,8 +112,8 @@ try {
         };
       });
       const computedTransforms = leaves.map((leaf) => getComputedStyle(leaf).transform);
-      const scene = document.getElementById("scene");
-      const camera = scene?.querySelector(":scope > .polycss-camera");
+      const host = document.body;
+      const camera = host.querySelector(":scope > .polycss-camera");
       const preparedScene = camera?.querySelector(":scope > .polycss-scene");
       const resources = performance.getEntriesByType("resource")
         .map((entry) => new URL(entry.name).pathname)
@@ -124,21 +124,23 @@ try {
         mutations: { ...window.__cssSolitaireSmoke.mutations },
         retainedLeaves: leaves.length,
         visibleLeaves: leaves.filter((leaf) => getComputedStyle(leaf).visibility === "visible").length,
-        forbiddenSceneElements: document.querySelectorAll("#scene canvas, #scene svg").length,
+        forbiddenSceneElements: camera?.querySelectorAll("canvas, svg").length,
         structure: {
-          bodyChildren: [...document.body.children].map((element) => element.tagName),
-          sceneChildCount: scene?.childElementCount,
+          bodyChildren: [...host.children].map((element) =>
+            `${element.tagName}${element.className ? `.${element.className}` : ""}`),
+          mainCount: host.querySelectorAll(":scope > main").length,
+          sceneHostCount: host.querySelectorAll(":scope > #scene").length,
           cameraChildCount: camera?.childElementCount,
           preparedSceneChildCount: preparedScene?.childElementCount,
           cameraClassName: camera?.className,
           preparedSceneClassName: preparedScene?.className,
-          sceneDescendantCount: scene?.querySelectorAll("*").length,
-          unexpectedSceneElementCount: scene?.querySelectorAll(
+          cameraDescendantCount: camera?.querySelectorAll("*").length,
+          unexpectedSceneElementCount: camera?.querySelectorAll(
             "button,canvas,nav,output,section,svg,style,[contenteditable]",
           ).length,
-          dataAttributeCount: [...scene.querySelectorAll("*")].reduce((count, element) =>
+          dataAttributeCount: [...camera.querySelectorAll("*")].reduce((count, element) =>
             count + [...element.attributes].filter(({ name }) => name.startsWith("data-")).length, 0),
-          inlineStyleDeclarationCount: [...scene.querySelectorAll("*")].reduce((count, element) =>
+          inlineStyleDeclarationCount: [...camera.querySelectorAll("*")].reduce((count, element) =>
             count + element.style.length, 0),
           invalidLeafClassCount: leaves.filter((leaf) => leaf.classList.length > 0).length,
           inlineBackgroundPositionCount: leaves.filter((leaf) => leaf.style.backgroundPosition).length,
@@ -156,7 +158,7 @@ try {
           ariaLabels: [...document.querySelectorAll("[aria-label]")]
             .map((element) => element.getAttribute("aria-label")),
           ariaBusyCount: document.querySelectorAll("[aria-busy]").length,
-          sceneBackground: getComputedStyle(document.getElementById("scene")).backgroundImage,
+          sceneBackground: getComputedStyle(host).backgroundImage,
         },
         composition: {
           sceneTransformStyle: getComputedStyle(document.querySelector(".polycss-scene")).transformStyle,
@@ -187,9 +189,12 @@ try {
         !evidence.stable || evidence.retainedLeaves !== 1952 || evidence.visibleLeaves !== 4 ||
         evidence.forbiddenSceneElements !== 0 || evidence.mutations.added !== 0 || evidence.mutations.removed !== 0 ||
         JSON.stringify(evidence.structure.bodyChildren) !==
-          JSON.stringify(deploy ? ["HEADER", "MAIN"] : ["HEADER", "MAIN", "SCRIPT"]) ||
-        evidence.structure.sceneChildCount !== 1 || evidence.structure.cameraChildCount !== 1 ||
-        evidence.structure.preparedSceneChildCount !== 1952 || evidence.structure.sceneDescendantCount !== 1954 ||
+          JSON.stringify(deploy
+            ? ["HEADER.site-header", "DIV.polycss-camera"]
+            : ["HEADER.site-header", "SCRIPT", "DIV.polycss-camera"]) ||
+        evidence.structure.mainCount !== 0 || evidence.structure.sceneHostCount !== 0 ||
+        evidence.structure.cameraChildCount !== 1 || evidence.structure.preparedSceneChildCount !== 1952 ||
+        evidence.structure.cameraDescendantCount !== 1953 ||
         evidence.structure.cameraClassName !== "polycss-camera" ||
         evidence.structure.preparedSceneClassName !== "polycss-scene" ||
         evidence.structure.unexpectedSceneElementCount !== 0 || evidence.structure.dataAttributeCount !== 0 ||

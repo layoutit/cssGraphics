@@ -20,7 +20,7 @@ test("product shell is the standard css.graphics route without demo controls", a
   assert.match(html, /class="site-header"/u);
   assert.match(html, /class="site-wordmark-svg"/u);
   assert.match(html, /href="https:\/\/github\.com\/layoutit\/cssGraphics"/u);
-  assert.match(html, /<main id="scene"><\/main>/u);
+  assert.doesNotMatch(html, /<main\b|id="scene"/iu);
   assert.equal((html.match(/\saria-label=/gu) ?? []).length, 1);
   assert.doesNotMatch(html, /aria-busy/u);
   assert.doesNotMatch(html, /<button\b|<nav\b|<section\b|<output\b|<canvas\b/u);
@@ -32,11 +32,13 @@ test("product shell is the standard css.graphics route without demo controls", a
     (css.match(/background: linear-gradient\(180deg, #008000 0%, #003d00 100%\);/gu) ?? []).length,
     2,
   );
-  assert.match(css, /#scene \{[^}]*position: absolute;[^}]*inset: 0;[^}]*contain: layout paint size style;/u);
+  assert.match(css,
+    /body > \.polycss-camera \{[^}]*position: absolute;[^}]*inset: 0;[^}]*contain: layout paint size style;/u);
   assert.doesNotMatch(css, /clip-path|mask(?:-image)?|filter|box-shadow|text-shadow|mix-blend-mode/iu);
   assert.match(client, /loadPreparedSolitaire/u);
   assert.match(client, /state\.player\.resume\(\)/u);
   assert.doesNotMatch(client, /aria-busy/u);
+  assert.doesNotMatch(client, /getElementById\("scene"\)|querySelector\("#scene"\)/u);
   assert.doesNotMatch(client, /prefers-reduced-motion/u);
   assert.match(player, /createPolyMorphPreparedDomTarget/u);
   assert.match(player, /deadline-setTimeout-prepared-visibility-publication/u);
@@ -48,5 +50,7 @@ test("product shell is the standard css.graphics route without demo controls", a
   assert.match(player, /prepared-layout-inline-matrix-resolution/u);
   assert.match(player, /return `matrix\(0,/u);
   assert.match(snapshotMount, /runtimeGeometryBoundsCalculationCount: 0/u);
+  assert.match(snapshotMount, /host\.append\(mountedCamera\)/u);
+  assert.doesNotMatch(snapshotMount, /host\.replaceChildren/u);
   assert.doesNotMatch(snapshotMount, /renderer\.contentBounds/u);
 });

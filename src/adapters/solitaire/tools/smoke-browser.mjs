@@ -86,7 +86,7 @@ try {
       await new Promise((resolveWait) => setTimeout(resolveWait, 650));
       return window.__cssSolitaireDebug.pause();
     });
-    const bankSequence = await page.evaluate(async (firstPatternId) => {
+    const bank = await page.evaluate(async (firstPatternId) => {
       const patternIds = [firstPatternId, window.__cssSolitaireDebug.snapshot().patternId];
       for (let index = 0; index < 22; index += 1) {
         const state = window.__cssSolitaireDebug.snapshot();
@@ -96,8 +96,28 @@ try {
         await new Promise((resolveWait) => setTimeout(resolveWait, 100));
         patternIds.push(window.__cssSolitaireDebug.pause().patternId);
       }
-      return patternIds;
+      const sourcePatterns = window.__cssSolitaireDebug.manifest.sourceProfile.patterns;
+      const selectedPatterns = patternIds.map((patternId) =>
+        sourcePatterns.find(({ id }) => id === patternId));
+      return {
+        patternIds,
+        directions: selectedPatterns.map(({ phoneHorizontalVelocity }) =>
+          Math.sign(phoneHorizontalVelocity)),
+        angles: selectedPatterns.map(({ phoneHorizontalVelocity, phoneVerticalVelocity }) => {
+          let horizontalStep = Math.abs(Math.trunc(phoneHorizontalVelocity / 10));
+          let verticalStep = Math.abs(Math.trunc(phoneVerticalVelocity / 10));
+          let left = horizontalStep;
+          let right = verticalStep;
+          while (right !== 0) [left, right] = [right, left % right];
+          horizontalStep /= left;
+          verticalStep /= left;
+          return `${horizontalStep}:${verticalStep}`;
+        }),
+      };
     }, initial.patternId);
+    const bankSequence = bank.patternIds;
+    const bankDirections = bank.directions;
+    const bankAngles = bank.angles;
     const evidence = await page.evaluate(() => {
       const leaves = [...document.querySelectorAll(".polycss-scene > b")];
       const first = leaves[0];
@@ -186,6 +206,9 @@ try {
         autoplayLoop.patternIndex === 0 || autoplayLoop.patternCount !== 24 ||
         bankSequence.length !== 24 || new Set(bankSequence).size !== 24 ||
         bankSequence.some((patternId, index) => index > 0 && patternId === bankSequence[index - 1]) ||
+        bankDirections.some((direction, index) => index > 0 && direction === bankDirections[index - 1]) ||
+        new Set(bankAngles).size !== 24 ||
+        bankAngles.some((angle, index) => index > 0 && angle === bankAngles[index - 1]) ||
         !evidence.stable || evidence.retainedLeaves !== 1952 || evidence.visibleLeaves !== 4 ||
         evidence.forbiddenSceneElements !== 0 || evidence.mutations.added !== 0 || evidence.mutations.removed !== 0 ||
         JSON.stringify(evidence.structure.bodyChildren) !==
@@ -232,7 +255,8 @@ try {
         evidence.stats.runtimeResetTrailLeavesVisited !== evidence.stats.runtimeResetTrailLeavesRequired ||
         evidence.stats.runtimeResetUnusedLeavesVisited !== 0 ||
         evidence.stats.runtimeRandomSelectionCount < 1 ||
-        evidence.stats.runtimeRandomSelectionPurpose !== "prepared-pattern-shuffled-bag-index-only" ||
+        evidence.stats.runtimeRandomSelectionPurpose !==
+          "prepared-pattern-shuffled-bag-alternating-phone-direction-unique-angle" ||
         evidence.stats.runtimeGeometryCalculationCount !== 0 ||
         evidence.stats.runtimeGeometryBoundsCalculationCount !== 0 ||
         evidence.stats.runtimeFitCalculationPurpose !== "prepared-layout-inline-matrix-resolution" ||
@@ -452,7 +476,9 @@ try {
     await page.evaluate(() => window.__cssSolitaireSmoke.observer.disconnect());
     process.stdout.write(`${JSON.stringify({
       status: "passed", headless: true, browser: browser.version(), deploy, route,
-      readyMs, sampled, autoplayLoop, bankSequence, evidence, visibleBounds, cardPixelRatio, screenshotPath,
+      readyMs, sampled, autoplayLoop, bankSequence, bankDirections, bankAngles, evidence, visibleBounds,
+      cardPixelRatio,
+      screenshotPath,
       mobileInitial, mobileEvidence, mobileCardPixelRatio, mobileScreenshotPath,
       responsiveCardCounts, landscapeViewports, reducedMotionMobileAutoplay, mobileContinuity,
       mobileHandoffWork,
@@ -481,7 +507,7 @@ async function captureReducedMotionMobileAutoplay(browser, port, route) {
       window.__cssSolitaireDebug?.errors().length > 0, null, { timeout: 30_000 });
     const result = await page.evaluate(async () => {
       const initialState = window.__cssSolitaireDebug.snapshot();
-      await new Promise((resolveWait) => setTimeout(resolveWait, 500));
+      await new Promise((resolveWait) => setTimeout(resolveWait, 3_500));
       const advancedState = window.__cssSolitaireDebug.snapshot();
       const stats = window.__cssSolitaireDebug.stats();
       return {
@@ -502,7 +528,7 @@ async function captureReducedMotionMobileAutoplay(browser, port, route) {
       };
     });
     if (!result.reducedMotion || result.errors.length || !result.initial.playing ||
-        !result.advanced.playing || result.advanced.playheadMs < 350 ||
+        !result.advanced.playing || result.advanced.playheadMs < 3_000 ||
         result.advanced.frameIndex <= result.initial.frameIndex ||
         result.timerCallbacks === 0 || result.visibilityWrites === 0) {
       throw new Error(`cssSolitaire reduced-motion mobile autoplay failed: ${JSON.stringify(result)}`);
@@ -561,6 +587,23 @@ async function captureMobileContinuity(browser, port, route) {
         }
         return changes;
       });
+      let lastForwardTimeMs = 0;
+      let firstRewindTimeMs = initial.durationMs;
+      while (firstRewindTimeMs - lastForwardTimeMs > 1) {
+        const middleTimeMs = Math.floor((lastForwardTimeMs + firstRewindTimeMs) / 2);
+        if (window.__cssSolitaireDebug.seek(middleTimeMs).rewinding) {
+          firstRewindTimeMs = middleTimeMs;
+        } else {
+          lastForwardTimeMs = middleTimeMs;
+        }
+      }
+      window.__cssSolitaireDebug.seek(lastForwardTimeMs);
+      const endLeaves = [...document.querySelectorAll(".polycss-scene > b")];
+      let endLeafIndex = endLeaves.length - 1;
+      while (endLeafIndex >= 4 && endLeaves[endLeafIndex].style.visibility !== "visible") {
+        endLeafIndex -= 1;
+      }
+      const endRect = endLeaves[endLeafIndex].getBoundingClientRect();
       return {
         timeline: {
           durationMs: initial.durationMs,
@@ -568,6 +611,7 @@ async function captureMobileContinuity(browser, port, route) {
           trailLeafCount: initial.timelineTrailLeafCount,
           faceCount: faceGroups.length,
           directionChanges,
+          floorGapCssPixels: innerHeight - endRect.bottom,
         },
         samples: [1_000, 2_000, 3_000, 4_000].map((timeMs) => {
           window.__cssSolitaireDebug.seek(timeMs);
@@ -581,9 +625,10 @@ async function captureMobileContinuity(browser, port, route) {
         errors: window.__cssSolitaireDebug.errors(),
       };
     });
-    if (result.errors.length || result.timeline.durationMs !== 15067 ||
-        result.timeline.launchCardCount !== 3 || result.timeline.trailLeafCount !== 291 ||
-        result.timeline.faceCount !== 3 || result.timeline.directionChanges.some((changes) => changes < 5) ||
+    if (result.errors.length || result.timeline.durationMs !== 12210 ||
+        result.timeline.launchCardCount !== 1 || result.timeline.trailLeafCount !== 679 ||
+        result.timeline.faceCount !== 1 || Math.abs(result.timeline.floorGapCssPixels) > 0.1 ||
+        result.timeline.directionChanges.some((changes) => changes < 3) ||
         result.samples.some((sample, index) =>
       index > 0 && sample.visiblePaintedLeaves <= result.samples[index - 1].visiblePaintedLeaves)) {
       throw new Error(`cssSolitaire mobile continuity failed: ${JSON.stringify(result)}`);
@@ -668,7 +713,7 @@ async function captureMobileHandoffWork(browser, port, route) {
       expansion,
       errors: await page.evaluate(() => window.__cssSolitaireDebug.errors()),
     };
-    const expansionLeafCount = handoff.fullTrailLeafCount - handoff.activeTrailLeafCount;
+    const expansionLeafCount = handoff.fullTrailLeafCount;
     if (result.errors.length || reset.visible <= 0 || reset.visited !== reset.visible ||
         reset.required !== reset.visible || reset.unused !== 0 || handoff.patternSwitches !== 1 ||
         handoff.profileIndex !== 1 || handoff.activeTrailLeafCount >= handoff.fullTrailLeafCount ||

@@ -77,6 +77,7 @@ export function createCsssolitairePreparedPlayer({
   let presentationHeight = renderer.landscapePresentationBase[1];
   let presentationScale = renderer.landscapePresentationBaseScale;
   let patternFaceInitializedLeafCount = pattern.trailLeafCount;
+  let patternFacesUsePhoneCard = false;
   let lastApply = Object.freeze({
     visibilityWrites: 0,
     foundationWrites: 0,
@@ -96,6 +97,12 @@ export function createCsssolitairePreparedPlayer({
 
   function trailLeafCountFor(nextPattern = pattern, profileIndex = activeProfileIndex) {
     return timelineFor(nextPattern, profileIndex).trailLeafCount;
+  }
+
+  function faceIndexForPattern(nextPattern, index, profileIndex = activeProfileIndex) {
+    return profileIndex === playback.phoneProfileIndex
+      ? nextPattern.leafAtlasIndices[0]
+      : nextPattern.leafAtlasIndices[index];
   }
 
   function matrixForLayout(layout, width = presentationWidth, height = presentationHeight,
@@ -124,11 +131,15 @@ export function createCsssolitairePreparedPlayer({
       trailLeaves[index].style.transform = transform;
       writes += 1;
     }
-    if (patternFaceInitializedLeafCount < nextTrailLeafCount) {
-      const required = nextTrailLeafCount - patternFaceInitializedLeafCount;
+    const nextFacesUsePhoneCard = nextProfileIndex === playback.phoneProfileIndex;
+    const faceStartIndex = patternFacesUsePhoneCard === nextFacesUsePhoneCard
+      ? Math.min(patternFaceInitializedLeafCount, nextTrailLeafCount)
+      : 0;
+    if (faceStartIndex < nextTrailLeafCount) {
+      const required = nextTrailLeafCount - faceStartIndex;
       responsiveFaceLeavesRequired += required;
-      for (let index = patternFaceInitializedLeafCount; index < nextTrailLeafCount; index += 1) {
-        const faceIndex = pattern.leafAtlasIndices[index];
+      for (let index = faceStartIndex; index < nextTrailLeafCount; index += 1) {
+        const faceIndex = faceIndexForPattern(pattern, index, nextProfileIndex);
         responsiveFaceLeavesVisited += 1;
         if (trailFaceIndices[index] === faceIndex) continue;
         trailLeaves[index].style.backgroundPosition = playback.atlasPositions[faceIndex];
@@ -136,6 +147,7 @@ export function createCsssolitairePreparedPlayer({
         patternLayoutWrites += 1;
       }
       patternFaceInitializedLeafCount = nextTrailLeafCount;
+      patternFacesUsePhoneCard = nextFacesUsePhoneCard;
     }
     if (nextProfileIndex !== activeProfileIndex) responsiveProfileSwitchCount += 1;
     activeProfileIndex = nextProfileIndex;
@@ -221,7 +233,7 @@ export function createCsssolitairePreparedPlayer({
     for (let index = 0; index < requiredLeafCount; index += 1) {
       const leaf = trailLeaves[index];
       const transform = matrixForLayout(layoutForPattern(nextPattern, index));
-      const faceIndex = nextPattern.leafAtlasIndices[index];
+      const faceIndex = faceIndexForPattern(nextPattern, index);
       patternLayoutLeavesVisited += 1;
       if (leaf.style.transform !== transform) {
         leaf.style.transform = transform;
@@ -234,6 +246,7 @@ export function createCsssolitairePreparedPlayer({
       }
     }
     patternFaceInitializedLeafCount = requiredLeafCount;
+    patternFacesUsePhoneCard = activeProfileIndex === playback.phoneProfileIndex;
     patternLayoutWrites += writes;
     return writes;
   }
@@ -291,7 +304,10 @@ export function createCsssolitairePreparedPlayer({
         randomSelectionCount += 1;
       }
     }
-    return shuffleBag.shift();
+    const oppositeDirection = -Math.sign(pattern.phoneHorizontalVelocity);
+    const oppositeIndex = shuffleBag.findIndex((patternIndex) =>
+      Math.sign(patterns[patternIndex].phoneHorizontalVelocity) === oppositeDirection);
+    return oppositeIndex < 0 ? shuffleBag.shift() : shuffleBag.splice(oppositeIndex, 1)[0];
   }
 
   function activatePattern(nextIndex) {
@@ -489,7 +505,8 @@ export function createCsssolitairePreparedPlayer({
         responsiveProfileIndex: activeProfileIndex,
         runtimePreparedPatternSwitchCount: patternSwitchCount,
         runtimeRandomSelectionCount: randomSelectionCount,
-        runtimeRandomSelectionPurpose: "prepared-pattern-shuffled-bag-index-only",
+        runtimeRandomSelectionPurpose:
+          "prepared-pattern-shuffled-bag-alternating-phone-direction-unique-angle",
         runtimeTimerCallbackCount: timerCallbackCount,
         runtimeAnimationFrameCallbackCount: 0,
         runtimeSchedulerTransport: "deadline-setTimeout-prepared-visibility-publication",

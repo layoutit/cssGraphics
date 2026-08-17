@@ -2,7 +2,7 @@
 
 Status: behavior-backed prepared product; native pixel parity is not claimed
 
-Last verified: 2026-08-16
+Last verified: 2026-08-17
 
 Target behavior: the Windows XP Solitaire victory cascade routine identified as
 `FUN_01004df0` at `0x01004df0` in the locally held, hash-bound reference
@@ -30,10 +30,24 @@ visibility schedule. Responsive launch origins preserve the recovered seven-slot
 layout rule: the gap is the greater of `(clientWidth - cardWidth * 7) / 8` and
 `cardWidth / 8 + 3`, with signed integer truncation. The browser loads one
 complete retained snapshot and applies only signed prepared visibility operations.
-Only the one-card mobile presentation reflects at the side walls. Multi-card
-and landscape presentations map the prepared exit boundary fully beyond the
-real viewport. The prepared pattern bank permits occasional rightward exits in
+Only the one-card mobile presentation reflects at the side walls. Its prepared
+forward pass keeps the recovered integer motion through three complete floor
+bounces before rewind. Prepared floor-crossing samples anchor the visible card
+to the real viewport floor while the recovered integer position and velocity
+continue to govern the next step. The mobile-only retention adaptation changes
+to a different recovered-range integer horizontal step after every wall and
+nonterminal floor impact; this intentional deviation prevents one retained card
+from repeating a single reflected angle while gravity and floor restitution remain
+the recovered values. Two prepared interpolated ghosts between source
+motion steps tightens the trail without changing its physical states; no runtime
+physics reconstructs the path. Multi-card and
+landscape presentations map the prepared exit boundary fully beyond the real
+viewport. The prepared pattern bank permits occasional rightward exits in
 the first two foundation lanes while keeping the last two lanes leftward.
+The phone-only bank derives 24 distinct effective launch-angle ratios from the
+recovered integer horizontal and vertical step ranges. Its prepared paths are
+geometrically distinct, balance horizontal signs 12/12, and alternate sign at
+handoff inside the shuffled bag.
 The product presentation uses one smooth prepared three-anchor curve from the
 8px apex through the 80px foundation to the lowest retained source bounce point
 at the real viewport floor. It does not clamp or join separate vertical mappings

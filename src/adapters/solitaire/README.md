@@ -24,10 +24,18 @@ to 80px, and the lowest retained bounce point to the real viewport bottom.
 Responsive cards therefore keep a natural continuous arch without clipping
 either viewport edge.
 Launch origins follow Solitaire's recovered seven-slot gap
-rule; narrow portrait viewports keep one centered full-size card stream while
-wider layouts progressively expose two, three, then four proper foundation slots.
-The one-card mobile stream reflects from normalized prepared side-wall positions;
-the wider multi-card profiles and landscape map their prepared exit boundary
+rule; narrow portrait viewports launch one centered full-size card per pattern,
+and the other retained copies are only its classic ghost trail. That card follows
+three complete prepared floor-bounce cycles and reflects from normalized prepared
+side-wall positions. On phone layouts, every wall and nonterminal floor impact
+selects a different prepared source-range horizontal step, so one card does not
+repeat the same outgoing angle through the whole path. Two prepared in-between ghosts per recovered motion step keep
+the trail tight without changing its physics; wider layouts progressively expose two, three, then four
+proper foundation slots.
+The phone bank has 24 distinct effective launch angles from the recovered integer
+horizontal and vertical step ranges. It balances direction 12/12, never reuses a
+prepared path in one shuffled pass, and alternates starting direction at handoff.
+The wider multi-card profiles and landscape map their prepared exit boundary
 fully beyond the real viewport. The first two foundation lanes occasionally
 exit right while the remaining lanes keep their leftward exit. Every card
 remains upright. As in the sibling

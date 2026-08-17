@@ -73,11 +73,16 @@ function validateManifest(manifest) {
       JSON.stringify(manifest.renderer?.portraitCardCounts) !== "[1,2,3,4]" ||
       JSON.stringify(manifest.renderer?.portraitCardBreakpoints) !== "[520,720,920]" ||
       manifest.renderer?.portraitHorizontalMotion !==
-        "phone-reflected-three-card-cycle-wider-multi-card-exit" ||
+        "phone-source-gravity-prepared-wall-and-floor-impact-response-one-card" ||
       JSON.stringify(manifest.renderer?.portraitWallBounceCardCounts) !== "[1]" ||
-      manifest.renderer?.phoneLaunchCardCount !== 3 ||
+      manifest.renderer?.phoneLaunchCardCount !== 1 ||
       manifest.renderer?.phonePlaybackTimeScale !== 3 ||
-      manifest.renderer?.phoneHorizontalDistanceScale !== 8 ||
+      manifest.renderer?.phoneHorizontalDistanceScale !== 2 ||
+      manifest.renderer?.phoneFloorBounceCount !== 3 ||
+      manifest.renderer?.phoneImpactResponse !==
+        "prepared-new-horizontal-step-after-wall-and-nonterminal-floor-impact" ||
+      JSON.stringify(manifest.renderer?.phoneImpactHorizontalSteps) !== "[6,2,5,3,4]" ||
+      manifest.renderer?.phoneTrailSubstepCount !== 3 ||
       manifest.renderer?.phoneProfileIndex !== 1 ||
       manifest.renderer?.preparedSlotLayout !== "source-seven-slot-presentation-scaled-card-size" ||
       manifest.renderer?.slotCount !== 7 || manifest.renderer?.minimumSlotGap !== 11 ||
@@ -88,12 +93,18 @@ function validateManifest(manifest) {
       manifest.sourceProfile?.cards !== 12 ||
       manifest.sourceProfile?.sourceSteps !== 1679 ||
       manifest.sourceProfile?.patternCount !== 24 ||
-      manifest.sourceProfile?.patternSelection !== "crypto-random-shuffled-bag-no-immediate-repeat" ||
+      manifest.sourceProfile?.patternSelection !==
+        "crypto-random-shuffled-bag-alternating-phone-direction-unique-angle" ||
       manifest.sourceProfile?.horizontalVelocityDistribution !==
         "mild-slow-bias-first-two-lanes-quarter-right-unique-per-lane-cycle" ||
       JSON.stringify(manifest.sourceProfile?.horizontalVelocityRange) !== "[-65,65]" ||
       manifest.sourceProfile?.minimumHorizontalSpeed !== 20 ||
       manifest.sourceProfile?.horizontalVelocityBiasExponent !== 1.1 ||
+      manifest.sourceProfile?.phoneLaunchVelocityDistribution !==
+        "source-effective-steps-balanced-direction-unique-angle" ||
+      manifest.sourceProfile?.phoneRightwardPatternCount !== 12 ||
+      manifest.sourceProfile?.phoneEffectiveLaunchAngleCount !== 24 ||
+      manifest.sourceProfile?.phoneExactTrajectoryRepeats !== false ||
       JSON.stringify(manifest.sourceProfile?.rightwardFoundationIndices) !== "[0,1]" ||
       manifest.sourceProfile?.rightwardSelection !== "random-value-modulo-4-zero" ||
       manifest.sourceProfile?.exactSameLaneTrajectoryRepeats !== false ||
@@ -133,7 +144,8 @@ function validateManifest(manifest) {
 
 function validatePlayback(playback, manifest) {
   if (playback?.schema !== "csssolitaire-prepared-playback@2" || playback.loop !== true ||
-      playback.selection !== "crypto-random-shuffled-bag-no-immediate-repeat" ||
+      playback.selection !==
+        "crypto-random-shuffled-bag-alternating-phone-direction-unique-angle" ||
       playback.patternCount !== 24 || playback.initialPatternIndex !== 0 ||
       playback.phoneProfileIndex !== 1 ||
       playback.sourceStepMilliseconds !== 7.5 || playback.initialHoldMilliseconds !== 500 ||
@@ -154,6 +166,8 @@ function validatePlayback(playback, manifest) {
       playback.atlasPositions.some((position) => !/^-?\d+px -?\d+px$/u.test(position)) ||
       !Array.isArray(playback.patterns) || playback.patterns.length !== playback.patternCount ||
       playback.patterns.some((pattern, index) => !validPattern(pattern, playback, manifest, index)) ||
+      new Set(playback.patterns.map(phoneLaunchAngleKey)).size !== 24 ||
+      playback.patterns.filter(({ phoneHorizontalVelocity }) => phoneHorizontalVelocity > 0).length !== 12 ||
       playback.patterns.reduce((sum, pattern) => sum + pattern.frameTimesMs.length, 0) !==
         manifest.metrics.preparedFrameCount ||
       playback.patterns.reduce((sum, pattern) => sum + pattern.phoneTimeline.frameTimesMs.length, 0) !==
@@ -183,6 +197,17 @@ function validPattern(pattern, playback, manifest, index) {
     pattern.sourceDrawCount === sourcePattern.sourceDraws &&
     pattern.sourceStepCount === sourcePattern.sourceSteps &&
     pattern.sourceStepMilliseconds === playback.sourceStepMilliseconds &&
+    pattern.phoneHorizontalVelocity === sourcePattern.phoneHorizontalVelocity &&
+    pattern.phoneVerticalVelocity === sourcePattern.phoneVerticalVelocity &&
+    JSON.stringify(pattern.phoneImpactVelocitySteps) ===
+      JSON.stringify(sourcePattern.phoneImpactVelocitySteps) &&
+    validPhoneImpactVelocitySteps(pattern.phoneImpactVelocitySteps) &&
+    Number.isSafeInteger(pattern.phoneHorizontalVelocity) &&
+    Math.abs(pattern.phoneHorizontalVelocity) >= 20 && Math.abs(pattern.phoneHorizontalVelocity) <= 60 &&
+    pattern.phoneHorizontalVelocity % 10 === 0 &&
+    Number.isSafeInteger(pattern.phoneVerticalVelocity) &&
+    pattern.phoneVerticalVelocity >= -70 && pattern.phoneVerticalVelocity <= -10 &&
+    pattern.phoneVerticalVelocity % 10 === 0 &&
     pattern.durationMs === sourcePattern.durationMs &&
     pattern.rewindStartMilliseconds > 0 &&
     pattern.rewindEndMilliseconds > pattern.rewindStartMilliseconds &&
@@ -219,15 +244,15 @@ function validPattern(pattern, playback, manifest, index) {
     Array.isArray(pattern.leafAtlasIndices) && pattern.leafAtlasIndices.length === pattern.trailLeafCount &&
     !pattern.leafAtlasIndices.some((atlasIndex) =>
       !Number.isSafeInteger(atlasIndex) || atlasIndex < 0 || atlasIndex >= playback.atlasPositions.length) &&
-    validPhoneTimeline(pattern.phoneTimeline, playback, pattern.trailLeafCount);
+    validPhoneTimeline(pattern.phoneTimeline, playback, pattern.trailLeafCount, sourcePattern);
 }
 
-function validPhoneTimeline(timeline, playback, patternTrailLeafCount) {
+function validPhoneTimeline(timeline, playback, patternTrailLeafCount, sourcePattern) {
   const frameTimes = timeline?.frameTimesMs;
   const visibilityRows = timeline?.visibilityRows;
   const foundationRows = timeline?.foundationRows;
-  return timeline?.launchCardCount === 3 && timeline.sourceStepMilliseconds === 22.5 &&
-    Number.isSafeInteger(timeline.sourceStepCount) && timeline.sourceStepCount > 0 &&
+  return timeline?.launchCardCount === 1 && timeline.sourceStepMilliseconds === 22.5 &&
+    timeline.sourceStepCount === sourcePattern.phoneSourceSteps &&
     Number.isSafeInteger(timeline.trailLeafCount) && timeline.trailLeafCount > 0 &&
     timeline.trailLeafCount <= patternTrailLeafCount &&
     timeline.durationMs > timeline.rewindEndMilliseconds &&
@@ -254,4 +279,25 @@ function validPhoneTimeline(timeline, playback, patternTrailLeafCount) {
 
 function validPreparedLayout(layout) {
   return Array.isArray(layout) && layout.length === 5 && layout.every(Number.isFinite);
+}
+
+function validPhoneImpactVelocitySteps(steps) {
+  return Array.isArray(steps) && steps.length >= 3 &&
+    steps.filter((entry) => Array.isArray(entry) && entry[0] === "floor").length === 2 &&
+    steps.some((entry) => Array.isArray(entry) && entry[0] === "wall") &&
+    steps.every((entry, index) => Array.isArray(entry) && entry.length === 2 &&
+      (entry[0] === "wall" || entry[0] === "floor") &&
+      Number.isSafeInteger(entry[1]) && Math.abs(entry[1]) >= 2 && Math.abs(entry[1]) <= 6 &&
+      (index === 0 || Math.abs(entry[1]) !== Math.abs(steps[index - 1][1])));
+}
+
+function phoneLaunchAngleKey({ phoneHorizontalVelocity, phoneVerticalVelocity }) {
+  let horizontalStep = Math.abs(Math.trunc(phoneHorizontalVelocity / 10));
+  let verticalStep = Math.abs(Math.trunc(phoneVerticalVelocity / 10));
+  let left = horizontalStep;
+  let right = verticalStep;
+  while (right !== 0) [left, right] = [right, left % right];
+  horizontalStep /= left;
+  verticalStep /= left;
+  return `${horizontalStep}:${verticalStep}`;
 }

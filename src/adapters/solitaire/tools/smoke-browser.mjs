@@ -243,7 +243,7 @@ try {
     }
     await page.evaluate(() => {
       const state = window.__cssSolitaireDebug.snapshot();
-      const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[state.patternIndex].durationMs;
+      const durationMs = state.durationMs;
       window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
     });
     await mkdir(dirname(screenshotPath), { recursive: true });
@@ -283,7 +283,7 @@ try {
     });
     await page.evaluate(() => {
       const state = window.__cssSolitaireDebug.snapshot();
-      const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[state.patternIndex].durationMs;
+      const durationMs = state.durationMs;
       window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
     });
     const mobileEvidence = await page.evaluate(() => {
@@ -356,7 +356,7 @@ try {
             return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
           });
         const state = window.__cssSolitaireDebug.snapshot();
-        const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[state.patternIndex].durationMs;
+        const durationMs = state.durationMs;
         window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
         const visibleRects = [...document.querySelectorAll(".polycss-scene > b")]
           .filter((leaf) => {
@@ -512,7 +512,48 @@ async function captureMobileContinuity(browser, port, route) {
       window.__cssSolitaireDebug?.errors().length > 0, null, { timeout: 30_000 });
     const result = await page.evaluate(() => {
       window.__cssSolitaireDebug.pause();
+      const initial = window.__cssSolitaireDebug.seek(0);
+      const motionSamples = [];
+      for (let timeMs = 500; timeMs < initial.durationMs; timeMs += 50) {
+        const state = window.__cssSolitaireDebug.seek(timeMs);
+        if (state.rewinding) break;
+        const leaves = [...document.querySelectorAll(".polycss-scene > b")];
+        let leafIndex = leaves.length - 1;
+        while (leafIndex >= 4 && leaves[leafIndex].style.visibility !== "visible") leafIndex -= 1;
+        if (leafIndex < 4) continue;
+        const leaf = leaves[leafIndex];
+        motionSamples.push({
+          face: leaf.style.backgroundPosition,
+          x: leaf.getBoundingClientRect().x,
+        });
+      }
+      const faceGroups = [];
+      for (const sample of motionSamples) {
+        let group = faceGroups.at(-1);
+        if (!group || group.face !== sample.face) {
+          group = { face: sample.face, positions: [] };
+          faceGroups.push(group);
+        }
+        group.positions.push(sample.x);
+      }
+      const directionChanges = faceGroups.map(({ positions }) => {
+        let previousDirection = 0;
+        let changes = 0;
+        for (let index = 1; index < positions.length; index += 1) {
+          const direction = Math.sign(positions[index] - positions[index - 1]);
+          if (direction !== 0 && previousDirection !== 0 && direction !== previousDirection) changes += 1;
+          if (direction !== 0) previousDirection = direction;
+        }
+        return changes;
+      });
       return {
+        timeline: {
+          durationMs: initial.durationMs,
+          launchCardCount: initial.launchCardCount,
+          trailLeafCount: initial.timelineTrailLeafCount,
+          faceCount: faceGroups.length,
+          directionChanges,
+        },
         samples: [1_000, 2_000, 3_000, 4_000].map((timeMs) => {
           window.__cssSolitaireDebug.seek(timeMs);
           const visiblePaintedLeaves = [...document.querySelectorAll(".polycss-scene > b")]
@@ -525,7 +566,10 @@ async function captureMobileContinuity(browser, port, route) {
         errors: window.__cssSolitaireDebug.errors(),
       };
     });
-    if (result.errors.length || result.samples.some((sample, index) =>
+    if (result.errors.length || result.timeline.durationMs !== 15067 ||
+        result.timeline.launchCardCount !== 3 || result.timeline.trailLeafCount !== 291 ||
+        result.timeline.faceCount !== 3 || result.timeline.directionChanges.some((changes) => changes < 5) ||
+        result.samples.some((sample, index) =>
       index > 0 && sample.visiblePaintedLeaves <= result.samples[index - 1].visiblePaintedLeaves)) {
       throw new Error(`cssSolitaire mobile continuity failed: ${JSON.stringify(result)}`);
     }

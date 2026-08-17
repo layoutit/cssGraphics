@@ -13,6 +13,7 @@ export function createCsssolitairePreparedPlayer({
       !(host instanceof HTMLElement) || !validRenderer(renderer) ||
       !(scene instanceof HTMLElement) || !Array.isArray(leaves) ||
       leaves.length !== playback.retainedLeafCount ||
+      playback.phoneProfileIndex !== 1 ||
       JSON.stringify(portraitBreakpoints) !== "[520,720,920]") {
     throw new Error("Prepared cssSolitaire player input drifted");
   }
@@ -76,6 +77,10 @@ export function createCsssolitairePreparedPlayer({
     dirtyLeavesVisited: 0,
   });
 
+  function timelineFor(nextPattern = pattern, profileIndex = activeProfileIndex) {
+    return profileIndex === playback.phoneProfileIndex ? nextPattern.phoneTimeline : nextPattern;
+  }
+
   function layoutForPattern(nextPattern, index, profileIndex = activeProfileIndex) {
     return profileIndex === 0
       ? nextPattern.leafLayouts[index]
@@ -89,6 +94,8 @@ export function createCsssolitairePreparedPlayer({
   }
 
   function applyPresentation(nextProfileIndex, width, height, scale) {
+    const timelineChanged = (activeProfileIndex === playback.phoneProfileIndex) !==
+      (nextProfileIndex === playback.phoneProfileIndex);
     let writes = 0;
     for (let index = 0; index < foundationLeafCount; index += 1) {
       const layout = nextProfileIndex === 0
@@ -112,6 +119,13 @@ export function createCsssolitairePreparedPlayer({
     presentationScale = scale;
     responsiveTransformWrites += writes;
     presentationUpdateCount += 1;
+    if (timelineChanged) {
+      resetInitial();
+      cycleStartedAt = performance.now();
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      schedule();
+    }
   }
 
   function syncPresentation() {
@@ -266,23 +280,24 @@ export function createCsssolitairePreparedPlayer({
     });
   }
 
-  function frameAt(timeMs) {
+  function frameAt(timeMs, timeline) {
     let low = 0;
-    let high = pattern.frameTimesMs.length - 1;
+    let high = timeline.frameTimesMs.length - 1;
     while (low <= high) {
       const middle = Math.floor((low + high) / 2);
-      if (pattern.frameTimesMs[middle] <= timeMs) low = middle + 1;
+      if (timeline.frameTimesMs[middle] <= timeMs) low = middle + 1;
       else high = middle - 1;
     }
     return Math.max(0, high);
   }
 
   function applyCycleTime(timeMs) {
-    const targetFrame = frameAt(timeMs);
+    const timeline = timelineFor();
+    const targetFrame = frameAt(timeMs, timeline);
     if (targetFrame < frameIndex) resetInitial();
     for (let index = frameIndex + 1; index <= targetFrame; index += 1) {
-      const visibilityRow = pattern.visibilityRows[index];
-      const foundationRow = pattern.foundationRows[index];
+      const visibilityRow = timeline.visibilityRows[index];
+      const foundationRow = timeline.foundationRows[index];
       const trailWrites = applyRow(visibilityRow);
       const foundationWrites = applyFoundationRow(foundationRow);
       lastApply = Object.freeze({
@@ -298,11 +313,13 @@ export function createCsssolitairePreparedPlayer({
 
   function publishNow(now = performance.now()) {
     let elapsed = Math.max(0, now - cycleStartedAt);
-    while (elapsed >= pattern.durationMs) {
-      cycleStartedAt += pattern.durationMs;
+    let timeline = timelineFor();
+    while (elapsed >= timeline.durationMs) {
+      cycleStartedAt += timeline.durationMs;
       elapsed = Math.max(0, now - cycleStartedAt);
       resetInitial();
       activatePattern(nextPatternIndex());
+      timeline = timelineFor();
       loopCount += 1;
     }
     applyCycleTime(elapsed);
@@ -311,8 +328,9 @@ export function createCsssolitairePreparedPlayer({
   function schedule() {
     if (paused || timer !== null) return;
     const now = performance.now();
-    const nextFrameTime = pattern.frameTimesMs[frameIndex + 1];
-    const deadline = cycleStartedAt + (nextFrameTime ?? pattern.durationMs);
+    const timeline = timelineFor();
+    const nextFrameTime = timeline.frameTimesMs[frameIndex + 1];
+    const deadline = cycleStartedAt + (nextFrameTime ?? timeline.durationMs);
     timer = setTimeout(tick, Math.max(0, deadline - now));
   }
 
@@ -326,6 +344,7 @@ export function createCsssolitairePreparedPlayer({
 
   function snapshot() {
     target.assertStableDomIdentity();
+    const timeline = timelineFor();
     return Object.freeze({
       ready: true,
       playing: !paused,
@@ -335,12 +354,17 @@ export function createCsssolitairePreparedPlayer({
       responsiveProfileIndex: activeProfileIndex,
       playheadMs,
       frameIndex,
-      rewinding: playheadMs >= pattern.rewindStartMilliseconds && playheadMs <= pattern.rewindEndMilliseconds,
+      durationMs: timeline.durationMs,
+      launchCardCount: timeline.launchCardCount,
+      timelineTrailLeafCount: timeline.trailLeafCount,
+      rewinding: playheadMs >= timeline.rewindStartMilliseconds && playheadMs <= timeline.rewindEndMilliseconds,
       sourceStep: Math.min(
-        pattern.sourceStepCount,
-        Math.max(0, Math.floor((playheadMs - playback.initialHoldMilliseconds) / playback.sourceStepMilliseconds)),
+        timeline.sourceStepCount,
+        Math.max(0, Math.floor(
+          (playheadMs - playback.initialHoldMilliseconds) / timeline.sourceStepMilliseconds,
+        )),
       ),
-      frameCount: pattern.frameTimesMs.length,
+      frameCount: timeline.frameTimesMs.length,
       visibleTrailCards,
       visibleFoundationCards,
       retainedLeafCount: leaves.length,
@@ -356,7 +380,7 @@ export function createCsssolitairePreparedPlayer({
 
   return Object.freeze({
     get ready() { return true; },
-    get durationMs() { return pattern.durationMs; },
+    get durationMs() { return timelineFor().durationMs; },
     get loop() { return true; },
     pause() {
       if (!paused) publishNow();
@@ -378,7 +402,7 @@ export function createCsssolitairePreparedPlayer({
       }
       this.pause();
       resetInitial();
-      applyCycleTime(timeMs % pattern.durationMs);
+      applyCycleTime(timeMs % timelineFor().durationMs);
       return snapshot();
     },
     assertStableDomIdentity() {
@@ -400,6 +424,10 @@ export function createCsssolitairePreparedPlayer({
         playheadMs,
         frameIndex,
         preparedTimelineStateCount: patterns.reduce((sum, entry) => sum + entry.frameTimesMs.length, 0),
+        preparedPhoneTimelineStateCount: patterns.reduce(
+          (sum, entry) => sum + entry.phoneTimeline.frameTimesMs.length,
+          0,
+        ),
         preparedVisibilityOperationCount: patterns.reduce((sum, entry) =>
           sum + entry.visibilityRows.reduce((entrySum, row) => entrySum + row.length, 0), 0),
         preparedFoundationOperationCount: patterns.reduce((sum, entry) =>

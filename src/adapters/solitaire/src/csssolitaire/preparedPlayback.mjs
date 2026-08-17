@@ -33,13 +33,13 @@ export function createCsssolitairePreparedPlayer({
   const foundationLeafCount = playback.foundationLeafCount;
   const foundationLeaves = leaves.slice(0, foundationLeafCount);
   const trailLeaves = leaves.slice(foundationLeafCount);
-  const initialFoundationFaceIndices = foundationLeaves.map(readFaceIndex);
+  const atlasFaceIndices = new Map(playback.atlasPositions.map((position, index) => [position, index]));
+  const initialFoundationFaceIndices = foundationLeaves.map((leaf) => readFaceIndex(leaf, atlasFaceIndices));
   const foundationFaceIndices = [...initialFoundationFaceIndices];
   const foundationVisibility = new Uint8Array(foundationLeafCount);
   foundationVisibility.fill(1);
   const trailVisibility = new Uint8Array(trailLeaves.length);
-  const trailFaceIndices = trailLeaves.map(readFaceIndex);
-  const atlasFaceIndices = new Map(playback.atlasPositions.map((position, index) => [position, index]));
+  const trailFaceIndices = trailLeaves.map((leaf) => readFaceIndex(leaf, atlasFaceIndices));
   let activePatternIndex = playback.initialPatternIndex;
   let pattern = patterns[activePatternIndex];
   let activeProfileIndex = 0;
@@ -53,7 +53,7 @@ export function createCsssolitairePreparedPlayer({
   let visibleFoundationCards = foundationLeafCount;
   let visibilityWrites = 0;
   let visibilityOperationsApplied = 0;
-  let foundationClassWrites = 0;
+  let foundationStyleWrites = 0;
   let foundationOperationsApplied = 0;
   let patternLayoutWrites = 0;
   let patternLayoutLeavesVisited = 0;
@@ -133,7 +133,7 @@ export function createCsssolitairePreparedPlayer({
       visibilityOperationsApplied += 1;
       if (Boolean(trailVisibility[trailIndex]) === visible) continue;
       trailVisibility[trailIndex] = Number(visible);
-      leaves[leafIndex].classList.toggle("v", visible);
+      leaves[leafIndex].style.visibility = visible ? "visible" : "";
       visibleTrailCards += visible ? 1 : -1;
       visibilityWrites += 1;
       writes += 1;
@@ -149,7 +149,7 @@ export function createCsssolitairePreparedPlayer({
       if (atlasX < 0) {
         if (foundationVisibility[foundationIndex] === 0) continue;
         foundationVisibility[foundationIndex] = 0;
-        leaf.classList.remove("v");
+        leaf.style.visibility = "";
         visibleFoundationCards -= 1;
         writes += 1;
         continue;
@@ -158,18 +158,18 @@ export function createCsssolitairePreparedPlayer({
       const faceIndex = atlasFaceIndices.get(position);
       if (!Number.isInteger(faceIndex)) throw new Error("Prepared cssSolitaire atlas position drifted");
       if (foundationFaceIndices[foundationIndex] !== faceIndex) {
-        setFaceClass(leaf, foundationFaceIndices[foundationIndex], faceIndex);
+        leaf.style.backgroundPosition = position;
         foundationFaceIndices[foundationIndex] = faceIndex;
         writes += 1;
       }
       if (foundationVisibility[foundationIndex] === 0) {
         foundationVisibility[foundationIndex] = 1;
-        leaf.classList.add("v");
+        leaf.style.visibility = "visible";
         visibleFoundationCards += 1;
         writes += 1;
       }
     }
-    foundationClassWrites += writes;
+    foundationStyleWrites += writes;
     return writes;
   }
 
@@ -185,7 +185,7 @@ export function createCsssolitairePreparedPlayer({
         writes += 1;
       }
       if (trailFaceIndices[index] !== faceIndex) {
-        setFaceClass(leaf, trailFaceIndices[index], faceIndex);
+        leaf.style.backgroundPosition = playback.atlasPositions[faceIndex];
         trailFaceIndices[index] = faceIndex;
         writes += 1;
       }
@@ -199,7 +199,7 @@ export function createCsssolitairePreparedPlayer({
     for (let index = 0; index < trailVisibility.length; index += 1) {
       if (trailVisibility[index] === 0) continue;
       trailVisibility[index] = 0;
-      trailLeaves[index].classList.remove("v");
+      trailLeaves[index].style.visibility = "";
       writes += 1;
     }
     let foundationWrites = 0;
@@ -207,13 +207,13 @@ export function createCsssolitairePreparedPlayer({
       const leaf = foundationLeaves[index];
       const initialFaceIndex = initialFoundationFaceIndices[index];
       if (foundationFaceIndices[index] !== initialFaceIndex) {
-        setFaceClass(leaf, foundationFaceIndices[index], initialFaceIndex);
+        leaf.style.backgroundPosition = playback.atlasPositions[initialFaceIndex];
         foundationFaceIndices[index] = initialFaceIndex;
         foundationWrites += 1;
       }
       if (foundationVisibility[index] === 0) {
         foundationVisibility[index] = 1;
-        leaf.classList.add("v");
+        leaf.style.visibility = "visible";
         foundationWrites += 1;
       }
     }
@@ -222,7 +222,7 @@ export function createCsssolitairePreparedPlayer({
     frameIndex = 0;
     playheadMs = 0;
     visibilityWrites += writes;
-    foundationClassWrites += foundationWrites;
+    foundationStyleWrites += foundationWrites;
     resetCount += 1;
     lastApply = Object.freeze({
       visibilityWrites: writes,
@@ -408,7 +408,7 @@ export function createCsssolitairePreparedPlayer({
         runtimeVisibilityOperationsApplied: visibilityOperationsApplied,
         runtimeFoundationOperationsApplied: foundationOperationsApplied,
         runtimeLeafVisibilityWrites: visibilityWrites,
-        runtimeFoundationClassWrites: foundationClassWrites,
+        runtimeFoundationStyleWrites: foundationStyleWrites,
         runtimePatternLayoutWrites: patternLayoutWrites,
         runtimePatternLayoutLeavesVisited: patternLayoutLeavesVisited,
         runtimeResponsiveTransformWrites: responsiveTransformWrites,
@@ -490,18 +490,10 @@ function validRenderer(renderer) {
     Number.isFinite(renderer.landscapeCardMaximumWidthCssPixels);
 }
 
-function readFaceIndex(leaf) {
-  for (const className of leaf.classList) {
-    if (!/^f[0-9a-z]+$/u.test(className)) continue;
-    const index = Number.parseInt(className.slice(1), 36);
-    if (Number.isSafeInteger(index) && index >= 0 && index < 52) return index;
-  }
-  throw new Error("Prepared cssSolitaire face class drifted");
-}
-
-function setFaceClass(leaf, previousIndex, nextIndex) {
-  leaf.classList.remove(`f${previousIndex.toString(36)}`);
-  leaf.classList.add(`f${nextIndex.toString(36)}`);
+function readFaceIndex(leaf, atlasFaceIndices) {
+  const index = atlasFaceIndices.get(leaf.style.backgroundPosition);
+  if (Number.isSafeInteger(index)) return index;
+  throw new Error("Prepared cssSolitaire inline atlas position drifted");
 }
 
 function cryptoRandomUint32() {

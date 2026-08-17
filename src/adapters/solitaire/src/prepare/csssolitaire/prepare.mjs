@@ -383,7 +383,6 @@ function cardLeaf({ cardFace, foundationIndex, horizontalDirection, left, top })
     return portrait ? cardLayout(portrait) : null;
   });
   return Object.freeze({
-    faceIndex: cardFace - 1,
     foundationIndex,
     matrix: cardMatrix(
       landscapeLayout,
@@ -499,25 +498,18 @@ function buildPreparedPattern(seed, index) {
 }
 
 function buildSnapshot(leaves, cardAssetUrl) {
-  const faceClass = (index) => `f${index.toString(36)}`;
   const cardNodes = leaves.map((leaf, index) => {
-    const classes = [
-      index < FOUNDATION_COUNT ? "v" : null,
-      faceClass(leaf.faceIndex),
-    ]
-      .filter(Boolean).join(" ");
-    return `<b class="${classes}" style="transform:${leaf.matrix}"></b>`;
-  }).join("");
-  const faceRules = Array.from({ length: 52 }, (_, faceIndex) => {
-    const atlas = atlasPosition(faceIndex + 1);
-    return `.polycss-scene>b.${faceClass(faceIndex)}{background-position:${-atlas.x}px ${-atlas.y}px}`;
+    const declarations = [
+      `transform:${leaf.matrix}`,
+      `background-position:${-leaf.atlas.x}px ${-leaf.atlas.y}px`,
+    ];
+    if (index < FOUNDATION_COUNT) declarations.push("visibility:visible");
+    return `<b style="${declarations.join(";")}"></b>`;
   }).join("");
   const css = [
     ".polycss-camera{position:relative;display:block;width:100%;height:100%;overflow:hidden}",
     ".polycss-scene{position:absolute;inset:0}",
     `.polycss-scene>b{position:absolute;display:block;width:${CARD_SOURCE_WIDTH}px;height:${CARD_SOURCE_HEIGHT}px;margin:0;padding:0;overflow:hidden;border:0;border-radius:14px;background-image:url('${cardAssetUrl}');background-repeat:no-repeat;background-size:${CARD_ATLAS_WIDTH}px ${CARD_ATLAS_HEIGHT}px;transform-origin:0 0;visibility:hidden;pointer-events:none;text-decoration:none;font:normal normal normal 0/0 serif;image-rendering:auto}`,
-    ".polycss-scene>b.v{visibility:visible}",
-    faceRules,
     `@media (orientation:portrait) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[0] - 1}px){.polycss-scene>b:nth-child(2),.polycss-scene>b:nth-child(3),.polycss-scene>b:nth-child(4){display:none}}`,
     `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[0]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[1] - 1}px){.polycss-scene>b:nth-child(3),.polycss-scene>b:nth-child(4){display:none}}`,
     `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[1]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[2] - 1}px){.polycss-scene>b:nth-child(4){display:none}}`,

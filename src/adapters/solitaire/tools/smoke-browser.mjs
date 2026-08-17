@@ -140,13 +140,9 @@ try {
             count + [...element.attributes].filter(({ name }) => name.startsWith("data-")).length, 0),
           inlineStyleDeclarationCount: [...scene.querySelectorAll("*")].reduce((count, element) =>
             count + element.style.length, 0),
-          invalidLeafClassCount: leaves.filter((leaf) => {
-            const classes = [...leaf.classList];
-            return classes.length < 1 || classes.length > 2 ||
-              classes.filter((className) => className === "v").length > 1 ||
-              classes.filter((className) => /^f[0-9a-z]+$/u.test(className)).length !== 1 ||
-              classes.some((className) => className !== "v" && !/^f[0-9a-z]+$/u.test(className));
-          }).length,
+          invalidLeafClassCount: leaves.filter((leaf) => leaf.classList.length > 0).length,
+          inlineBackgroundPositionCount: leaves.filter((leaf) => leaf.style.backgroundPosition).length,
+          inlineVisibilityCount: leaves.filter((leaf) => leaf.style.visibility === "visible").length,
         },
         radius: getComputedStyle(first).borderRadius,
         cardEdge: getComputedStyle(first).boxShadow,
@@ -197,7 +193,10 @@ try {
         evidence.structure.cameraClassName !== "polycss-camera" ||
         evidence.structure.preparedSceneClassName !== "polycss-scene" ||
         evidence.structure.unexpectedSceneElementCount !== 0 || evidence.structure.dataAttributeCount !== 0 ||
-        evidence.structure.inlineStyleDeclarationCount !== 1952 || evidence.structure.invalidLeafClassCount !== 0 ||
+        evidence.structure.inlineStyleDeclarationCount !== 5860 ||
+        evidence.structure.invalidLeafClassCount !== 0 ||
+        evidence.structure.inlineBackgroundPositionCount !== 1952 ||
+        evidence.structure.inlineVisibilityCount !== 4 ||
         evidence.radius !== "14px" ||
         evidence.cardEdge !== "none" ||
         evidence.imageRendering !== "auto" ||
@@ -213,7 +212,7 @@ try {
         !evidence.shell.sceneBackground.startsWith("linear-gradient(rgb(0, 128, 0)") ||
         evidence.composition.sceneTransformStyle !== "flat" ||
         evidence.composition.matrix2dLeafCount !== 1952 || evidence.composition.matrix3dLeafCount !== 0 ||
-        evidence.composition.leafInlineStyleDeclarationCount !== 1952 ||
+        evidence.composition.leafInlineStyleDeclarationCount !== 5860 ||
         evidence.stats.runtimeAnimationFrameCallbackCount !== 0 ||
         evidence.stats.runtimeTimerCallbackCount < 1 || evidence.stats.loopCount < 1 ||
         evidence.stats.preparedPatternCount !== 24 ||

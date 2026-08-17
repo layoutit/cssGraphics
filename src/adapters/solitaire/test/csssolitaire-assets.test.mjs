@@ -126,17 +126,18 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.match(snapshot, /class="polycss-scene"/u);
   assert.doesNotMatch(snapshot, /solitaire-prepared-(?:camera|scene)/u);
   assert.doesNotMatch(snapshot, /csssolitaire-board/u);
-  assert.equal((snapshot.match(/<b class="[^"]+" style="transform:matrix\([^)]+\)"><\/b>/gu) ?? []).length,
-    1952);
+  assert.equal((snapshot.match(
+    /<b style="transform:matrix\([^)]+\);background-position:-?\d+px -?\d+px(?:;visibility:visible)?"><\/b>/gu,
+  ) ?? []).length, 1952);
   assert.doesNotMatch(snapshot, /<s\b/u);
   assert.doesNotMatch(snapshot, /--csssolitaire-(?:landscape|portrait)-/u);
   assert.equal((snapshot.match(/\sstyle="transform:/gu) ?? []).length, 1952);
-  assert.doesNotMatch(snapshot, /class="[^"]*\bl[0-9a-z]+\b/u);
+  assert.doesNotMatch(snapshot, /<b\s+class=/u);
   assert.doesNotMatch(snapshot, /\.polycss-scene>b\.[^{]+\{transform:/u);
   assert.equal((snapshot.match(/\{transform:none\}/gu) ?? []).length, 0);
-  assert.equal((snapshot.match(/\.polycss-scene>b\.f[0-9a-z]+\{background-position:/gu) ?? []).length,
-    52);
-  assert.equal((snapshot.match(/<b class="v f[0-9a-z]+" style="transform:[^"]+"><\/b>/gu) ?? []).length, 4);
+  assert.equal((snapshot.match(/;background-position:-?\d+px -?\d+px/gu) ?? []).length, 1952);
+  assert.equal((snapshot.match(/;visibility:visible/gu) ?? []).length, 4);
+  assert.doesNotMatch(snapshot, /\.polycss-scene>b\.(?:v|f[0-9a-z]+)/u);
   assert.doesNotMatch(snapshot, /\bfoundation\b|\blane-[0-3]\b/u);
   assert.match(snapshot, /\.polycss-scene\{position:absolute;inset:0\}/u);
   assert.match(snapshot, /\.polycss-scene>b\{position:absolute/u);

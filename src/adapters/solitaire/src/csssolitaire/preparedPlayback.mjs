@@ -31,6 +31,7 @@ export function createCsssolitairePreparedPlayer({
   target.assertStableDomIdentity();
 
   const patterns = playback.patterns;
+  const selectedInitialPatternIndex = selectInitialPatternIndex(patterns.length, randomUint32);
   const foundationLeafCount = playback.foundationLeafCount;
   const foundationLeaves = leaves.slice(0, foundationLeafCount);
   const trailLeaves = leaves.slice(foundationLeafCount);
@@ -42,7 +43,7 @@ export function createCsssolitairePreparedPlayer({
   const trailVisibility = new Uint8Array(trailLeaves.length);
   const visibleTrailIndices = new Set();
   const trailFaceIndices = trailLeaves.map((leaf) => readFaceIndex(leaf, atlasFaceIndices));
-  let activePatternIndex = playback.initialPatternIndex;
+  let activePatternIndex = selectedInitialPatternIndex;
   let pattern = patterns[activePatternIndex];
   let activeProfileIndex = 0;
   let shuffleBag = [];
@@ -69,7 +70,7 @@ export function createCsssolitairePreparedPlayer({
   let responsiveMatrixResolutionCount = 0;
   let presentationUpdateCount = 0;
   let patternSwitchCount = 0;
-  let randomSelectionCount = 0;
+  let randomSelectionCount = patterns.length > 1 ? 1 : 0;
   let timerCallbackCount = 0;
   let loopCount = 0;
   let resetCount = 0;
@@ -295,10 +296,7 @@ export function createCsssolitairePreparedPlayer({
     if (shuffleBag.length === 0) {
       shuffleBag = patterns.map((_, index) => index).filter((index) => index !== activePatternIndex);
       for (let index = shuffleBag.length - 1; index > 0; index -= 1) {
-        const value = randomUint32();
-        if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff) {
-          throw new RangeError("cssSolitaire shuffled-bank random value must be uint32");
-        }
+        const value = validatedRandomUint32(randomUint32);
         const swapIndex = value % (index + 1);
         [shuffleBag[index], shuffleBag[swapIndex]] = [shuffleBag[swapIndex], shuffleBag[index]];
         randomSelectionCount += 1;
@@ -421,6 +419,8 @@ export function createCsssolitairePreparedPlayer({
     });
   }
 
+  if (activePatternIndex !== playback.initialPatternIndex) applyPatternLayout(pattern);
+
   const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(syncPresentation) : null;
   resizeObserver?.observe(host);
   globalThis.addEventListener?.("resize", syncPresentation);
@@ -506,7 +506,7 @@ export function createCsssolitairePreparedPlayer({
         runtimePreparedPatternSwitchCount: patternSwitchCount,
         runtimeRandomSelectionCount: randomSelectionCount,
         runtimeRandomSelectionPurpose:
-          "prepared-pattern-shuffled-bag-alternating-phone-direction-unique-angle",
+          "prepared-pattern-random-initial-and-shuffled-bag-alternating-phone-direction-unique-angle",
         runtimeTimerCallbackCount: timerCallbackCount,
         runtimeAnimationFrameCallbackCount: 0,
         runtimeSchedulerTransport: "deadline-setTimeout-prepared-visibility-publication",
@@ -586,4 +586,17 @@ function cryptoRandomUint32() {
   const value = new Uint32Array(1);
   crypto.getRandomValues(value);
   return value[0];
+}
+
+function selectInitialPatternIndex(patternCount, randomUint32) {
+  if (patternCount <= 1) return 0;
+  return validatedRandomUint32(randomUint32) % patternCount;
+}
+
+function validatedRandomUint32(randomUint32) {
+  const value = randomUint32();
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff) {
+    throw new RangeError("cssSolitaire prepared-bank random value must be uint32");
+  }
+  return value;
 }

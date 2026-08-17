@@ -175,7 +175,7 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.equal(Math.min(...topAnchoredPixels), 8);
   assert.ok(Math.max(...topAnchoredPixels) <= 80);
   assert.equal(playback.selection,
-    "crypto-random-shuffled-bag-alternating-phone-direction-unique-angle");
+    "crypto-random-initial-and-shuffled-bag-alternating-phone-direction-unique-angle");
   assert.equal(playback.patternCount, 24);
   assert.equal(playback.patterns.length, 24);
   assert.equal(playback.retainedTrailLeafCount, 1948);

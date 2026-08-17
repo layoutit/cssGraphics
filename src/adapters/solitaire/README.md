@@ -34,7 +34,8 @@ the trail tight without changing its physics; wider layouts progressively expose
 proper foundation slots.
 The phone bank has 24 distinct effective launch angles from the recovered integer
 horizontal and vertical step ranges. It balances direction 12/12, never reuses a
-prepared path in one shuffled pass, and alternates starting direction at handoff.
+prepared path in one shuffled pass, starts each page load from a cryptographically
+selected prepared pattern, and alternates starting direction at handoff.
 The wider multi-card profiles and landscape map their prepared exit boundary
 fully beyond the real viewport. The first two foundation lanes occasionally
 exit right while the remaining lanes keep their leftward exit. Every card

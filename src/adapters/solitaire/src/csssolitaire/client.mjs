@@ -4,7 +4,15 @@ import { createCsssolitairePreparedPlayer } from "./preparedPlayback.mjs";
 
 export function mountCsssolitaireClient() {
   const host = document.body;
-  const state = { ready: false, manifest: null, mount: null, player: null, errors: [] };
+  const state = {
+    ready: false,
+    manifest: null,
+    bank: null,
+    mount: null,
+    player: null,
+    resizeObserver: null,
+    errors: [],
+  };
   installDebugApi(state);
   window.addEventListener("error", (event) => recordError(event.message || String(event.error || "error")));
   window.addEventListener("unhandledrejection", (event) =>
@@ -13,11 +21,14 @@ export function mountCsssolitaireClient() {
 
   async function main() {
     setBodyState("loading");
-    const prepared = await loadPreparedSolitaire();
+    const width = host.clientWidth || innerWidth;
+    const height = host.clientHeight || innerHeight;
+    const prepared = await loadPreparedSolitaire({ width, height });
     state.manifest = prepared.manifest;
+    state.bank = prepared.bank;
     state.mount = mountPreparedSolitaireSnapshot({
       host,
-      manifest: prepared.manifest,
+      retainedLeafCount: prepared.playback.retainedLeafCount,
       snapshotHtml: prepared.snapshotHtml,
     });
     state.player = createCsssolitairePreparedPlayer({
@@ -26,11 +37,22 @@ export function mountCsssolitaireClient() {
       renderer: prepared.manifest.renderer,
       scene: state.mount.scene,
       leaves: state.mount.leaves,
-      portraitBreakpoints: prepared.manifest.renderer.portraitCardBreakpoints,
+      width,
+      height,
     });
     state.ready = true;
     setBodyState("ready");
     state.player.resume();
+    state.resizeObserver = typeof ResizeObserver === "function"
+      ? new ResizeObserver(syncPresentation)
+      : null;
+    state.resizeObserver?.observe(host);
+    window.addEventListener("resize", syncPresentation);
+  }
+
+  function syncPresentation() {
+    if (!state.ready) return;
+    state.player.resize(host.clientWidth || innerWidth, host.clientHeight || innerHeight);
   }
 
   function recordError(message) {
@@ -60,7 +82,13 @@ function installDebugApi(state) {
     snapshot() { return state.player?.snapshot() ?? null; },
     stats() {
       return state.player && state.mount
-        ? Object.freeze({ ...state.mount.stats(), ...state.player.stats() })
+        ? Object.freeze({
+          ...state.mount.stats(),
+          ...state.player.stats(),
+          selectedPreparedBank: state.bank.id,
+          preparedBankLoadCount: 1,
+          runtimePreparedBankSwitchCount: 0,
+        })
         : null;
     },
     assertStableDomIdentity() {

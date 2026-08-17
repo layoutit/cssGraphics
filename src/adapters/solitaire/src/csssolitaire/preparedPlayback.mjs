@@ -6,15 +6,21 @@ export function createCsssolitairePreparedPlayer({
   renderer,
   scene,
   leaves,
-  portraitBreakpoints,
+  width = host?.clientWidth,
+  height = host?.clientHeight,
+  initialPatternIndex,
   randomUint32 = cryptoRandomUint32,
 }) {
-  if (playback?.schema !== "csssolitaire-prepared-playback@2" ||
+  if (playback?.schema !== "csssolitaire-prepared-profile@1" ||
       !(host instanceof HTMLElement) || !validRenderer(renderer) ||
       !(scene instanceof HTMLElement) || !Array.isArray(leaves) ||
-      leaves.length !== playback.retainedLeafCount ||
-      playback.phoneProfileIndex !== 1 ||
-      JSON.stringify(portraitBreakpoints) !== "[520,720,920]") {
+      leaves.length !== playback.retainedLeafCount || playback.phoneProfileIndex !== 1 ||
+      !["mobile", "small-desktop", "large-desktop"].includes(playback.bankId) ||
+      !Number.isSafeInteger(playback.profileIndex) || playback.profileIndex < 0 ||
+      playback.profileIndex > 4 || !Number.isFinite(width) || width <= 0 ||
+      !Number.isFinite(height) || height <= 0 ||
+      !Array.isArray(playback.snapshotPlayfield) || playback.snapshotPlayfield.length !== 2 ||
+      !Number.isFinite(playback.snapshotPresentationScale)) {
     throw new Error("Prepared cssSolitaire player input drifted");
   }
   const target = createPolyMorphPreparedDomTarget({
@@ -31,7 +37,9 @@ export function createCsssolitairePreparedPlayer({
   target.assertStableDomIdentity();
 
   const patterns = playback.patterns;
-  const selectedInitialPatternIndex = selectInitialPatternIndex(patterns.length, randomUint32);
+  const selectedInitialPatternIndex = initialPatternIndex === undefined
+    ? selectInitialPatternIndex(patterns.length, randomUint32)
+    : validatedPatternIndex(initialPatternIndex, patterns.length);
   const foundationLeafCount = playback.foundationLeafCount;
   const foundationLeaves = leaves.slice(0, foundationLeafCount);
   const trailLeaves = leaves.slice(foundationLeafCount);
@@ -45,7 +53,6 @@ export function createCsssolitairePreparedPlayer({
   const trailFaceIndices = trailLeaves.map((leaf) => readFaceIndex(leaf, atlasFaceIndices));
   let activePatternIndex = selectedInitialPatternIndex;
   let pattern = patterns[activePatternIndex];
-  let activeProfileIndex = 0;
   let shuffleBag = [];
   let paused = true;
   let timer = null;
@@ -61,24 +68,20 @@ export function createCsssolitairePreparedPlayer({
   let patternLayoutWrites = 0;
   let patternLayoutLeavesVisited = 0;
   let patternLayoutLeavesRequired = 0;
-  let responsiveFaceLeavesVisited = 0;
-  let responsiveFaceLeavesRequired = 0;
   let resetTrailLeavesVisited = 0;
   let resetTrailLeavesRequired = 0;
   let responsiveTransformWrites = 0;
-  let responsiveProfileSwitchCount = 0;
   let responsiveMatrixResolutionCount = 0;
   let presentationUpdateCount = 0;
   let patternSwitchCount = 0;
-  let randomSelectionCount = patterns.length > 1 ? 1 : 0;
+  let randomSelectionCount = initialPatternIndex === undefined && patterns.length > 1 ? 1 : 0;
   let timerCallbackCount = 0;
   let loopCount = 0;
   let resetCount = 0;
-  let presentationWidth = renderer.landscapePresentationBase[0];
-  let presentationHeight = renderer.landscapePresentationBase[1];
-  let presentationScale = renderer.landscapePresentationBaseScale;
-  let patternFaceInitializedLeafCount = pattern.trailLeafCount;
-  let patternFacesUsePhoneCard = false;
+  let presentationWidth = width;
+  let presentationHeight = height;
+  let presentationScale = resolvePresentationScale(renderer, width, height, playback.profileIndex);
+  let patternFaceInitializedLeafCount = 0;
   let lastApply = Object.freeze({
     visibilityWrites: 0,
     foundationWrites: 0,
@@ -86,94 +89,100 @@ export function createCsssolitairePreparedPlayer({
     dirtyLeavesVisited: 0,
   });
 
-  function timelineFor(nextPattern = pattern, profileIndex = activeProfileIndex) {
-    return profileIndex === playback.phoneProfileIndex ? nextPattern.phoneTimeline : nextPattern;
-  }
-
-  function layoutForPattern(nextPattern, index, profileIndex = activeProfileIndex) {
-    return profileIndex === 0
-      ? nextPattern.leafLayouts[index]
-      : nextPattern.leafPortraitLayoutsByCardCount[profileIndex - 1][index];
-  }
-
-  function trailLeafCountFor(nextPattern = pattern, profileIndex = activeProfileIndex) {
-    return timelineFor(nextPattern, profileIndex).trailLeafCount;
-  }
-
-  function faceIndexForPattern(nextPattern, index, profileIndex = activeProfileIndex) {
-    return profileIndex === playback.phoneProfileIndex
-      ? nextPattern.leafAtlasIndices[0]
+  function faceIndexForPattern(nextPattern, index) {
+    return Number.isSafeInteger(nextPattern.atlasIndex)
+      ? nextPattern.atlasIndex
       : nextPattern.leafAtlasIndices[index];
   }
 
-  function matrixForLayout(layout, width = presentationWidth, height = presentationHeight,
+  function matrixForLayout(layout, nextWidth = presentationWidth, nextHeight = presentationHeight,
     scale = presentationScale) {
     responsiveMatrixResolutionCount += 1;
-    return preparedMatrix(layout, width, height, scale, renderer);
+    return preparedMatrix(layout, nextWidth, nextHeight, scale, renderer);
   }
 
-  function applyPresentation(nextProfileIndex, width, height, scale) {
-    const timelineChanged = (activeProfileIndex === playback.phoneProfileIndex) !==
-      (nextProfileIndex === playback.phoneProfileIndex);
+  function applyFoundationLayouts(nextWidth, nextHeight, scale) {
     let writes = 0;
     for (let index = 0; index < foundationLeafCount; index += 1) {
-      const layout = nextProfileIndex === 0
-        ? playback.foundationLayouts[index]
-        : playback.foundationPortraitLayoutsByCardCount[nextProfileIndex - 1][index];
-      const transform = matrixForLayout(layout, width, height, scale);
+      const transform = matrixForLayout(playback.foundationLayouts[index], nextWidth, nextHeight, scale);
       if (foundationLeaves[index].style.transform === transform) continue;
       foundationLeaves[index].style.transform = transform;
       writes += 1;
     }
-    const nextTrailLeafCount = trailLeafCountFor(pattern, nextProfileIndex);
-    for (let index = 0; index < nextTrailLeafCount; index += 1) {
-      const transform = matrixForLayout(layoutForPattern(pattern, index, nextProfileIndex), width, height, scale);
+    return writes;
+  }
+
+  function applyPatternLayout(nextPattern, nextWidth = presentationWidth,
+    nextHeight = presentationHeight, scale = presentationScale) {
+    let writes = 0;
+    patternLayoutLeavesRequired += nextPattern.trailLeafCount;
+    for (let index = 0; index < nextPattern.trailLeafCount; index += 1) {
+      const leaf = trailLeaves[index];
+      const transform = matrixForLayout(nextPattern.layouts[index], nextWidth, nextHeight, scale);
+      const faceIndex = faceIndexForPattern(nextPattern, index);
+      patternLayoutLeavesVisited += 1;
+      if (leaf.style.transform !== transform) {
+        leaf.style.transform = transform;
+        writes += 1;
+      }
+      if (trailFaceIndices[index] !== faceIndex) {
+        leaf.style.backgroundPosition = playback.atlasPositions[faceIndex];
+        trailFaceIndices[index] = faceIndex;
+        writes += 1;
+      }
+    }
+    patternFaceInitializedLeafCount = nextPattern.trailLeafCount;
+    patternLayoutWrites += writes;
+    return writes;
+  }
+
+  function applyInitialPresentation() {
+    const snapshotMatches = playback.snapshotProfileIndex === playback.profileIndex &&
+      activePatternIndex === playback.initialPatternIndex &&
+      width === playback.snapshotPlayfield[0] && height === playback.snapshotPlayfield[1] &&
+      presentationScale === playback.snapshotPresentationScale;
+    if (snapshotMatches) {
+      patternFaceInitializedLeafCount = pattern.trailLeafCount;
+      return;
+    }
+    const snapshotFoundationMatches = playback.snapshotProfileIndex === playback.profileIndex &&
+      width === playback.snapshotPlayfield[0] && height === playback.snapshotPlayfield[1] &&
+      presentationScale === playback.snapshotPresentationScale;
+    const foundationWrites = snapshotFoundationMatches
+      ? 0
+      : applyFoundationLayouts(width, height, presentationScale);
+    const layoutWrites = applyPatternLayout(pattern, width, height, presentationScale);
+    responsiveTransformWrites += foundationWrites + layoutWrites;
+    presentationUpdateCount += 1;
+    lastApply = Object.freeze({
+      visibilityWrites: 0,
+      foundationWrites,
+      layoutWrites,
+      dirtyLeavesVisited: pattern.trailLeafCount + (snapshotFoundationMatches ? 0 : foundationLeafCount),
+    });
+  }
+
+  function resize(nextWidth, nextHeight) {
+    if (!Number.isFinite(nextWidth) || nextWidth <= 0 ||
+        !Number.isFinite(nextHeight) || nextHeight <= 0) {
+      throw new TypeError("Prepared cssSolitaire resize drifted");
+    }
+    const scale = resolvePresentationScale(renderer, nextWidth, nextHeight, playback.profileIndex);
+    if (nextWidth === presentationWidth && nextHeight === presentationHeight &&
+        scale === presentationScale) return snapshot();
+    let writes = applyFoundationLayouts(nextWidth, nextHeight, scale);
+    for (let index = 0; index < pattern.trailLeafCount; index += 1) {
+      const transform = matrixForLayout(pattern.layouts[index], nextWidth, nextHeight, scale);
       if (trailLeaves[index].style.transform === transform) continue;
       trailLeaves[index].style.transform = transform;
       writes += 1;
     }
-    const nextFacesUsePhoneCard = nextProfileIndex === playback.phoneProfileIndex;
-    const faceStartIndex = patternFacesUsePhoneCard === nextFacesUsePhoneCard
-      ? Math.min(patternFaceInitializedLeafCount, nextTrailLeafCount)
-      : 0;
-    if (faceStartIndex < nextTrailLeafCount) {
-      const required = nextTrailLeafCount - faceStartIndex;
-      responsiveFaceLeavesRequired += required;
-      for (let index = faceStartIndex; index < nextTrailLeafCount; index += 1) {
-        const faceIndex = faceIndexForPattern(pattern, index, nextProfileIndex);
-        responsiveFaceLeavesVisited += 1;
-        if (trailFaceIndices[index] === faceIndex) continue;
-        trailLeaves[index].style.backgroundPosition = playback.atlasPositions[faceIndex];
-        trailFaceIndices[index] = faceIndex;
-        patternLayoutWrites += 1;
-      }
-      patternFaceInitializedLeafCount = nextTrailLeafCount;
-      patternFacesUsePhoneCard = nextFacesUsePhoneCard;
-    }
-    if (nextProfileIndex !== activeProfileIndex) responsiveProfileSwitchCount += 1;
-    activeProfileIndex = nextProfileIndex;
-    presentationWidth = width;
-    presentationHeight = height;
+    presentationWidth = nextWidth;
+    presentationHeight = nextHeight;
     presentationScale = scale;
     responsiveTransformWrites += writes;
     presentationUpdateCount += 1;
-    if (timelineChanged) {
-      resetInitial();
-      cycleStartedAt = performance.now();
-      if (timer !== null) clearTimeout(timer);
-      timer = null;
-      schedule();
-    }
-  }
-
-  function syncPresentation() {
-    const width = host.clientWidth || renderer.landscapePresentationBase[0];
-    const height = host.clientHeight || renderer.landscapePresentationBase[1];
-    const nextProfileIndex = resolveResponsiveProfileIndex(portraitBreakpoints, width, height);
-    const scale = resolvePresentationScale(renderer, width, height);
-    if (nextProfileIndex === activeProfileIndex && width === presentationWidth &&
-        height === presentationHeight && scale === presentationScale) return;
-    applyPresentation(nextProfileIndex, width, height, scale);
+    return snapshot();
   }
 
   function applyRow(row) {
@@ -224,31 +233,6 @@ export function createCsssolitairePreparedPlayer({
       }
     }
     foundationStyleWrites += writes;
-    return writes;
-  }
-
-  function applyPatternLayout(nextPattern) {
-    let writes = 0;
-    const requiredLeafCount = trailLeafCountFor(nextPattern);
-    patternLayoutLeavesRequired += requiredLeafCount;
-    for (let index = 0; index < requiredLeafCount; index += 1) {
-      const leaf = trailLeaves[index];
-      const transform = matrixForLayout(layoutForPattern(nextPattern, index));
-      const faceIndex = faceIndexForPattern(nextPattern, index);
-      patternLayoutLeavesVisited += 1;
-      if (leaf.style.transform !== transform) {
-        leaf.style.transform = transform;
-        writes += 1;
-      }
-      if (trailFaceIndices[index] !== faceIndex) {
-        leaf.style.backgroundPosition = playback.atlasPositions[faceIndex];
-        trailFaceIndices[index] = faceIndex;
-        writes += 1;
-      }
-    }
-    patternFaceInitializedLeafCount = requiredLeafCount;
-    patternFacesUsePhoneCard = activeProfileIndex === playback.phoneProfileIndex;
-    patternLayoutWrites += writes;
     return writes;
   }
 
@@ -314,7 +298,6 @@ export function createCsssolitairePreparedPlayer({
       throw new RangeError("Prepared cssSolitaire pattern handoff is invalid");
     }
     const layoutWrites = applyPatternLayout(nextPattern);
-    const dirtyLeavesVisited = trailLeafCountFor(nextPattern);
     activePatternIndex = nextIndex;
     pattern = nextPattern;
     patternSwitchCount += 1;
@@ -322,28 +305,27 @@ export function createCsssolitairePreparedPlayer({
       visibilityWrites: 0,
       foundationWrites: 0,
       layoutWrites,
-      dirtyLeavesVisited,
+      dirtyLeavesVisited: nextPattern.trailLeafCount,
     });
   }
 
-  function frameAt(timeMs, timeline) {
+  function frameAt(timeMs) {
     let low = 0;
-    let high = timeline.frameTimesMs.length - 1;
+    let high = pattern.frameTimesMs.length - 1;
     while (low <= high) {
       const middle = Math.floor((low + high) / 2);
-      if (timeline.frameTimesMs[middle] <= timeMs) low = middle + 1;
+      if (pattern.frameTimesMs[middle] <= timeMs) low = middle + 1;
       else high = middle - 1;
     }
     return Math.max(0, high);
   }
 
   function applyCycleTime(timeMs) {
-    const timeline = timelineFor();
-    const targetFrame = frameAt(timeMs, timeline);
+    const targetFrame = frameAt(timeMs);
     if (targetFrame < frameIndex) resetInitial();
     for (let index = frameIndex + 1; index <= targetFrame; index += 1) {
-      const visibilityRow = timeline.visibilityRows[index];
-      const foundationRow = timeline.foundationRows[index];
+      const visibilityRow = pattern.visibilityRows[index];
+      const foundationRow = pattern.foundationRows[index];
       const trailWrites = applyRow(visibilityRow);
       const foundationWrites = applyFoundationRow(foundationRow);
       lastApply = Object.freeze({
@@ -359,13 +341,11 @@ export function createCsssolitairePreparedPlayer({
 
   function publishNow(now = performance.now()) {
     let elapsed = Math.max(0, now - cycleStartedAt);
-    let timeline = timelineFor();
-    while (elapsed >= timeline.durationMs) {
-      cycleStartedAt += timeline.durationMs;
+    while (elapsed >= pattern.durationMs) {
+      cycleStartedAt += pattern.durationMs;
       elapsed = Math.max(0, now - cycleStartedAt);
       resetInitial();
       activatePattern(nextPatternIndex());
-      timeline = timelineFor();
       loopCount += 1;
     }
     applyCycleTime(elapsed);
@@ -374,9 +354,8 @@ export function createCsssolitairePreparedPlayer({
   function schedule() {
     if (paused || timer !== null) return;
     const now = performance.now();
-    const timeline = timelineFor();
-    const nextFrameTime = timeline.frameTimesMs[frameIndex + 1];
-    const deadline = cycleStartedAt + (nextFrameTime ?? timeline.durationMs);
+    const nextFrameTime = pattern.frameTimesMs[frameIndex + 1];
+    const deadline = cycleStartedAt + (nextFrameTime ?? pattern.durationMs);
     timer = setTimeout(tick, Math.max(0, deadline - now));
   }
 
@@ -390,27 +369,24 @@ export function createCsssolitairePreparedPlayer({
 
   function snapshot() {
     target.assertStableDomIdentity();
-    const timeline = timelineFor();
     return Object.freeze({
       ready: true,
       playing: !paused,
       patternIndex: activePatternIndex,
       patternId: pattern.id,
       patternCount: patterns.length,
-      responsiveProfileIndex: activeProfileIndex,
+      responsiveProfileIndex: playback.profileIndex,
       playheadMs,
       frameIndex,
-      durationMs: timeline.durationMs,
-      launchCardCount: timeline.launchCardCount,
-      timelineTrailLeafCount: timeline.trailLeafCount,
-      rewinding: playheadMs >= timeline.rewindStartMilliseconds && playheadMs <= timeline.rewindEndMilliseconds,
-      sourceStep: Math.min(
-        timeline.sourceStepCount,
-        Math.max(0, Math.floor(
-          (playheadMs - playback.initialHoldMilliseconds) / timeline.sourceStepMilliseconds,
-        )),
-      ),
-      frameCount: timeline.frameTimesMs.length,
+      durationMs: pattern.durationMs,
+      launchCardCount: pattern.launchCardCount,
+      timelineTrailLeafCount: pattern.trailLeafCount,
+      rewinding: playheadMs >= pattern.rewindStartMilliseconds &&
+        playheadMs <= pattern.rewindEndMilliseconds,
+      sourceStep: Math.min(pattern.sourceStepCount, Math.max(0, Math.floor(
+        (playheadMs - playback.initialHoldMilliseconds) / pattern.sourceStepMilliseconds,
+      ))),
+      frameCount: pattern.frameTimesMs.length,
       visibleTrailCards,
       visibleFoundationCards,
       retainedLeafCount: leaves.length,
@@ -419,16 +395,11 @@ export function createCsssolitairePreparedPlayer({
     });
   }
 
-  if (activePatternIndex !== playback.initialPatternIndex) applyPatternLayout(pattern);
-
-  const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(syncPresentation) : null;
-  resizeObserver?.observe(host);
-  globalThis.addEventListener?.("resize", syncPresentation);
-  syncPresentation();
+  applyInitialPresentation();
 
   return Object.freeze({
     get ready() { return true; },
-    get durationMs() { return timelineFor().durationMs; },
+    get durationMs() { return pattern.durationMs; },
     get loop() { return true; },
     pause() {
       if (!paused) publishNow();
@@ -450,9 +421,10 @@ export function createCsssolitairePreparedPlayer({
       }
       this.pause();
       resetInitial();
-      applyCycleTime(timeMs % timelineFor().durationMs);
+      applyCycleTime(timeMs % pattern.durationMs);
       return snapshot();
     },
+    resize,
     assertStableDomIdentity() {
       target.assertStableDomIdentity();
       return true;
@@ -461,21 +433,23 @@ export function createCsssolitairePreparedPlayer({
     stats() {
       target.assertStableDomIdentity();
       return Object.freeze({
-        schema: "csssolitaire-prepared-player-stats@2",
+        schema: "csssolitaire-prepared-player-stats@3",
         morphTarget: "@layoutit/polycss-morph#createPolyMorphPreparedDomTarget",
         morphAdopted: true,
         morphStableDomIdentity: true,
         paused,
         activePatternIndex,
         activePatternId: pattern.id,
+        preparedBankId: playback.bankId,
         preparedPatternCount: patterns.length,
+        preparedProfileIndex: playback.profileIndex,
+        preparedProfileName: playback.profileName,
         playheadMs,
         frameIndex,
         preparedTimelineStateCount: patterns.reduce((sum, entry) => sum + entry.frameTimesMs.length, 0),
-        preparedPhoneTimelineStateCount: patterns.reduce(
-          (sum, entry) => sum + entry.phoneTimeline.frameTimesMs.length,
-          0,
-        ),
+        preparedPhoneTimelineStateCount: playback.profileIndex === playback.phoneProfileIndex
+          ? patterns.reduce((sum, entry) => sum + entry.frameTimesMs.length, 0)
+          : 0,
         preparedVisibilityOperationCount: patterns.reduce((sum, entry) =>
           sum + entry.visibilityRows.reduce((entrySum, row) => entrySum + row.length, 0), 0),
         preparedFoundationOperationCount: patterns.reduce((sum, entry) =>
@@ -489,20 +463,19 @@ export function createCsssolitairePreparedPlayer({
         runtimePatternLayoutLeavesVisited: patternLayoutLeavesVisited,
         runtimePatternLayoutLeavesRequired: patternLayoutLeavesRequired,
         runtimePatternLayoutUnusedLeavesVisited: patternLayoutLeavesVisited - patternLayoutLeavesRequired,
-        runtimeResponsiveFaceLeavesVisited: responsiveFaceLeavesVisited,
-        runtimeResponsiveFaceLeavesRequired: responsiveFaceLeavesRequired,
-        runtimeResponsiveFaceUnusedLeavesVisited: responsiveFaceLeavesVisited - responsiveFaceLeavesRequired,
+        runtimeResponsiveFaceLeavesVisited: 0,
+        runtimeResponsiveFaceLeavesRequired: 0,
+        runtimeResponsiveFaceUnusedLeavesVisited: 0,
         runtimeResetTrailLeavesVisited: resetTrailLeavesVisited,
         runtimeResetTrailLeavesRequired: resetTrailLeavesRequired,
         runtimeResetUnusedLeavesVisited: resetTrailLeavesVisited - resetTrailLeavesRequired,
         activePatternFaceInitializedLeafCount: patternFaceInitializedLeafCount,
         runtimeResponsiveTransformWrites: responsiveTransformWrites,
-        runtimeResponsiveProfileSwitchCount: responsiveProfileSwitchCount,
         runtimeResponsiveMatrixResolutionCount: responsiveMatrixResolutionCount,
         runtimeFitCalculationPurpose: "prepared-layout-inline-matrix-resolution",
         runtimePresentationScale: presentationScale,
         runtimePresentationUpdateCount: presentationUpdateCount,
-        responsiveProfileIndex: activeProfileIndex,
+        responsiveProfileIndex: playback.profileIndex,
         runtimePreparedPatternSwitchCount: patternSwitchCount,
         runtimeRandomSelectionCount: randomSelectionCount,
         runtimeRandomSelectionPurpose:
@@ -520,23 +493,13 @@ export function createCsssolitairePreparedPlayer({
     },
     destroy() {
       this.pause();
-      resizeObserver?.disconnect();
-      globalThis.removeEventListener?.("resize", syncPresentation);
       target.destroy();
     },
   });
 }
 
-function resolveResponsiveProfileIndex(portraitBreakpoints, width, height) {
-  if (height < width) return 0;
-  if (width < portraitBreakpoints[0]) return 1;
-  if (width < portraitBreakpoints[1]) return 2;
-  if (width < portraitBreakpoints[2]) return 3;
-  return 4;
-}
-
-function resolvePresentationScale(renderer, width, height) {
-  if (height >= width) {
+function resolvePresentationScale(renderer, width, height, profileIndex) {
+  if (profileIndex > 0) {
     return Math.min(
       width / renderer.portraitPresentationBase[0],
       height / renderer.portraitPresentationBase[1],
@@ -591,6 +554,13 @@ function cryptoRandomUint32() {
 function selectInitialPatternIndex(patternCount, randomUint32) {
   if (patternCount <= 1) return 0;
   return validatedRandomUint32(randomUint32) % patternCount;
+}
+
+function validatedPatternIndex(index, patternCount) {
+  if (!Number.isSafeInteger(index) || index < 0 || index >= patternCount) {
+    throw new RangeError("cssSolitaire prepared pattern index drifted");
+  }
+  return index;
 }
 
 function validatedRandomUint32(randomUint32) {

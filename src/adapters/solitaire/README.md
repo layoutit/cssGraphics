@@ -7,12 +7,14 @@ accumulate as persistent framebuffer-style ghosts before the scene rewinds.
 Each completed rewind selects from a shuffled bank of 24 prepared trajectory
 patterns without an immediate repeat.
 
-The browser adopts 1,952 prepared card leaves—the largest bank entry plus the
-four launch cards—and applies sparse signed visibility rows. Card geometry,
-trajectories, ordering, atlas coordinates, and the complete DOM snapshot are
-prepared ahead of time. A handoff changes only the prepared bank index and the
-hidden leaf layout. Runtime does not build a model, generate motion, rasterize
-an atlas, create card leaves, or clear the trail at handoff.
+Startup selects one of three complete prepared graphs: 683 leaves for mobile,
+1,952 for ordinary desktop, or 3,888 denser leaves for landscape viewports at
+least 1,600 CSS pixels wide. The selected graph stays mounted for the page
+lifetime; resize never changes banks. Card geometry, trajectories, ordering,
+atlas coordinates, and each bank's complete DOM snapshot are prepared ahead of
+time. A pattern handoff changes only the prepared pattern index and hidden leaf
+layout within that retained graph. Runtime does not build a model, generate
+motion, rasterize an atlas, create card leaves, or clear the trail at handoff.
 `@layoutit/polycss-morph` owns the stable prepared-DOM target.
 
 The source simulation stays bound to the recovered 585×384 playfield. Prepared
@@ -32,6 +34,9 @@ selects a different prepared source-range horizontal step, so one card does not
 repeat the same outgoing angle through the whole path. Two prepared in-between ghosts per recovered motion step keep
 the trail tight without changing its physics; wider layouts progressively expose two, three, then four
 proper foundation slots.
+Large desktop preparation adds one time-ordered in-between ghost on each card's
+own recovered trajectory segment. It does not interpolate between different
+cards or change the source timing, launch sequence, or renderer.
 The phone bank has 24 distinct effective launch angles from the recovered integer
 horizontal and vertical step ranges. It balances direction 12/12, never reuses a
 prepared path in one shuffled pass, starts each page load from a cryptographically
@@ -65,6 +70,7 @@ pnpm test:solitaire
 pnpm test:solitaire:assets
 pnpm build:solitaire
 pnpm test:solitaire:browser
+pnpm test:solitaire:webkit
 ```
 
 `pnpm build:solitaire:deploy && pnpm test:solitaire:deploy` also verifies the

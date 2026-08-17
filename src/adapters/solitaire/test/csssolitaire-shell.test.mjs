@@ -37,6 +37,9 @@ test("product shell is the standard css.graphics route without demo controls", a
   assert.doesNotMatch(css, /clip-path|mask(?:-image)?|filter|box-shadow|text-shadow|mix-blend-mode/iu);
   assert.match(client, /loadPreparedSolitaire/u);
   assert.match(client, /state\.player\.resume\(\)/u);
+  assert.match(client, /new ResizeObserver\(syncPresentation\)/u);
+  assert.match(client, /host\.clientWidth/u);
+  assert.match(client, /host\.clientHeight/u);
   assert.doesNotMatch(client, /aria-busy/u);
   assert.doesNotMatch(client, /getElementById\("scene"\)|querySelector\("#scene"\)/u);
   assert.doesNotMatch(client, /prefers-reduced-motion/u);
@@ -44,9 +47,6 @@ test("product shell is the standard css.graphics route without demo controls", a
   assert.match(player, /deadline-setTimeout-prepared-visibility-publication/u);
   assert.doesNotMatch(player, /Math\.random|requestAnimationFrame\s*\(|createElement|DOMMatrix/u);
   assert.doesNotMatch(player, /lane-/u);
-  assert.match(player, /new ResizeObserver\(syncPresentation\)/u);
-  assert.match(player, /host\.clientWidth/u);
-  assert.match(player, /host\.clientHeight/u);
   assert.match(player, /prepared-layout-inline-matrix-resolution/u);
   assert.match(player, /return `matrix\(0,/u);
   assert.match(snapshotMount, /runtimeGeometryBoundsCalculationCount: 0/u);

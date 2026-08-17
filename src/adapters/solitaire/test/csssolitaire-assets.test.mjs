@@ -8,7 +8,7 @@ import { generatedProductRoot } from "../src/prepare/csssolitaire/paths.mjs";
 
 const generated = generatedProductRoot();
 
-test("generated product is one complete retained snapshot plus sparse prepared playback", async () => {
+test("generated product contains three startup-selected retained banks", async () => {
   const manifest = JSON.parse(await readFile(join(generated, "manifest.json"), "utf8"));
   assert.equal(manifest.schema, "csssolitaire-manifest@1");
   assert.equal(manifest.status, "ready");
@@ -80,6 +80,8 @@ test("generated product is one complete retained snapshot plus sparse prepared p
     "prepared-new-horizontal-step-after-wall-and-nonterminal-floor-impact");
   assert.deepEqual(manifest.renderer.phoneImpactHorizontalSteps, [6, 2, 5, 3, 4]);
   assert.equal(manifest.renderer.phoneTrailSubstepCount, 3);
+  assert.equal(manifest.renderer.largeDesktopTrailSubstepCount, 2);
+  assert.equal(manifest.renderer.largeDesktopMinimumWidthCssPixels, 1600);
   assert.equal(manifest.renderer.phoneProfileIndex, 1);
   assert.equal(manifest.renderer.preparedSlotLayout, "source-seven-slot-presentation-scaled-card-size");
   assert.equal(manifest.renderer.slotCount, 7);
@@ -93,12 +95,33 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.equal(manifest.renderer.runtimeTrajectoryCalculation, false);
   assert.equal(manifest.renderer.runtimeDomGrowth, false);
   assert.equal(manifest.transport.runtimeModelPayload, false);
-  assert.equal(manifest.metrics.retainedLeafCount, 1952);
+  assert.equal(manifest.transport.startupBankSelection,
+    "mobile-capability-then-large-landscape-width");
+  assert.deepEqual(manifest.transport.preparedBanks.map((bank) => ({
+    id: bank.id,
+    retainedLeafCount: bank.retainedLeafCount,
+    profiles: bank.profiles.map(({ index }) => index),
+  })), [
+    { id: "mobile", retainedLeafCount: 683, profiles: [1] },
+    { id: "small-desktop", retainedLeafCount: 1952, profiles: [0, 2, 3, 4] },
+    { id: "large-desktop", retainedLeafCount: 3888, profiles: [0] },
+  ]);
   assert.equal(manifest.metrics.foundationLeafCount, 4);
-  assert.equal(manifest.metrics.retainedTrailLeafCount, 1948);
   assert.equal(manifest.metrics.preparedPatternCount, 24);
   assert.equal(manifest.metrics.preparedFrameCount, 13774);
   assert.equal(manifest.metrics.preparedPhoneFrameCount, 5360);
+  assert.equal(manifest.metrics.preparedLargeDesktopFrameCount, 13774);
+  assert.deepEqual(manifest.metrics.preparedBanks.map(({ id, retainedLeafCount,
+    retainedTrailLeafCount, preparedLeafLayoutCount }) => ({
+    id, retainedLeafCount, retainedTrailLeafCount, preparedLeafLayoutCount,
+  })), [
+    { id: "mobile", retainedLeafCount: 683, retainedTrailLeafCount: 679,
+      preparedLeafLayoutCount: 14634 },
+    { id: "small-desktop", retainedLeafCount: 1952, retainedTrailLeafCount: 1948,
+      preparedLeafLayoutCount: 38014 },
+    { id: "large-desktop", retainedLeafCount: 3888, retainedTrailLeafCount: 3884,
+      preparedLeafLayoutCount: 75740 },
+  ]);
   assert.equal(manifest.metrics.initialPatternDurationMs, 27210);
   assert.equal(manifest.metrics.minimumPatternDurationMs, 20475);
   assert.equal(manifest.metrics.maximumPatternDurationMs, 31228);
@@ -122,8 +145,18 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.deepEqual(files, [
     `assets/card-faces-${manifest.provenance.cardAtlas.sha256}.png`,
     "manifest.json",
-    "solitaire-playback.json",
-    "solitaire.polycss.txt",
+    "solitaire-large-desktop.polycss.txt",
+    "solitaire-layout-landscape.json",
+    "solitaire-layout-large-desktop.json",
+    "solitaire-layout-mobile.json",
+    "solitaire-layout-portrait-2.json",
+    "solitaire-layout-portrait-3.json",
+    "solitaire-layout-portrait-4.json",
+    "solitaire-mobile.polycss.txt",
+    "solitaire-schedule-large-desktop.json",
+    "solitaire-schedule-mobile.json",
+    "solitaire-schedule-small-desktop.json",
+    "solitaire-small-desktop.polycss.txt",
   ]);
   for (const descriptor of Object.values(manifest.assets)) {
     const bytes = await readFile(join(generated, descriptor.path));
@@ -131,38 +164,85 @@ test("generated product is one complete retained snapshot plus sparse prepared p
     assert.equal(createHash("sha256").update(bytes).digest("hex"), descriptor.sha256);
   }
 
-  const snapshot = await readFile(join(generated, "solitaire.polycss.txt"), "utf8");
-  assert.match(snapshot, /class="polycss-camera"/u);
-  assert.match(snapshot, /class="polycss-scene"/u);
-  assert.doesNotMatch(snapshot, /solitaire-prepared-(?:camera|scene)/u);
-  assert.doesNotMatch(snapshot, /csssolitaire-board/u);
-  assert.equal((snapshot.match(
-    /<b style="transform:matrix\([^)]+\);background-position:-?\d+px -?\d+px(?:;visibility:visible)?"><\/b>/gu,
-  ) ?? []).length, 1952);
-  assert.doesNotMatch(snapshot, /<s\b/u);
-  assert.doesNotMatch(snapshot, /--csssolitaire-(?:landscape|portrait)-/u);
-  assert.equal((snapshot.match(/\sstyle="transform:/gu) ?? []).length, 1952);
-  assert.doesNotMatch(snapshot, /<b\s+class=/u);
-  assert.doesNotMatch(snapshot, /\.polycss-scene>b\.[^{]+\{transform:/u);
-  assert.equal((snapshot.match(/\{transform:none\}/gu) ?? []).length, 0);
-  assert.equal((snapshot.match(/;background-position:-?\d+px -?\d+px/gu) ?? []).length, 1952);
-  assert.equal((snapshot.match(/;visibility:visible/gu) ?? []).length, 4);
-  assert.doesNotMatch(snapshot, /\.polycss-scene>b\.(?:v|f[0-9a-z]+)/u);
-  assert.doesNotMatch(snapshot, /\bfoundation\b|\blane-[0-3]\b/u);
-  assert.match(snapshot, /\.polycss-scene\{position:absolute;inset:0\}/u);
-  assert.match(snapshot, /\.polycss-scene>b\{position:absolute/u);
-  assert.doesNotMatch(snapshot, /--csssolitaire-/u);
-  assert.doesNotMatch(snapshot, /--csssolitaire-fit/u);
-  assert.match(snapshot,
-    /max-width:519px\)\{\.polycss-scene>b:nth-child\(2\),\.polycss-scene>b:nth-child\(3\),\.polycss-scene>b:nth-child\(4\)\{display:none\}/u);
-  assert.match(snapshot, /border-radius:14px/u);
-  assert.doesNotMatch(snapshot, /box-shadow/u);
-  assert.match(snapshot, /image-rendering:auto/u);
-  assert.doesNotMatch(snapshot, /matrix3d|translate\(calc|preserve-3d|backface-visibility/u);
-  assert.doesNotMatch(snapshot, /<(?:script|canvas|svg)\b|\sdata-[a-z0-9-]+=/iu);
+  for (const [name, retainedLeafCount] of [
+    ["mobile", 683],
+    ["small-desktop", 1952],
+    ["large-desktop", 3888],
+  ]) {
+    const snapshot = await readFile(join(generated, `solitaire-${name}.polycss.txt`), "utf8");
+    assert.match(snapshot, /class="polycss-camera"/u);
+    assert.match(snapshot, /class="polycss-scene"/u);
+    assert.doesNotMatch(snapshot, /solitaire-prepared-(?:camera|scene)/u);
+    assert.doesNotMatch(snapshot, /csssolitaire-board/u);
+    assert.equal((snapshot.match(
+      /<b style="transform:matrix\([^)]+\);background-position:-?\d+px -?\d+px(?:;visibility:visible)?"><\/b>/gu,
+    ) ?? []).length, retainedLeafCount);
+    assert.doesNotMatch(snapshot, /<s\b/u);
+    assert.doesNotMatch(snapshot, /--csssolitaire-(?:landscape|portrait)-/u);
+    assert.equal((snapshot.match(/\sstyle="transform:/gu) ?? []).length, retainedLeafCount);
+    assert.doesNotMatch(snapshot, /<b\s+class=/u);
+    assert.doesNotMatch(snapshot, /\.polycss-scene>b\.[^{]+\{transform:/u);
+    assert.equal((snapshot.match(/\{transform:none\}/gu) ?? []).length, 0);
+    assert.equal((snapshot.match(/;background-position:-?\d+px -?\d+px/gu) ?? []).length,
+      retainedLeafCount);
+    assert.equal((snapshot.match(/;visibility:visible/gu) ?? []).length, 4);
+    assert.doesNotMatch(snapshot, /\.polycss-scene>b\.(?:v|f[0-9a-z]+)/u);
+    assert.doesNotMatch(snapshot, /\bfoundation\b|\blane-[0-3]\b/u);
+    assert.match(snapshot, /\.polycss-scene\{position:absolute;inset:0\}/u);
+    assert.match(snapshot, /\.polycss-scene>b\{position:absolute/u);
+    assert.doesNotMatch(snapshot, /--csssolitaire-/u);
+    assert.doesNotMatch(snapshot, /--csssolitaire-fit/u);
+    assert.match(snapshot,
+      /max-width:519px\)\{\.polycss-scene>b:nth-child\(2\),\.polycss-scene>b:nth-child\(3\),\.polycss-scene>b:nth-child\(4\)\{display:none\}/u);
+    assert.match(snapshot, /border-radius:14px/u);
+    assert.doesNotMatch(snapshot, /box-shadow/u);
+    assert.match(snapshot, /image-rendering:auto/u);
+    assert.doesNotMatch(snapshot, /matrix3d|translate\(calc|preserve-3d|backface-visibility/u);
+    assert.doesNotMatch(snapshot, /<(?:script|canvas|svg)\b|\sdata-[a-z0-9-]+=/iu);
+  }
 
-  const playback = JSON.parse(await readFile(join(generated, "solitaire-playback.json"), "utf8"));
-  assert.equal(playback.schema, "csssolitaire-prepared-playback@2");
+  const sourceSchedule = JSON.parse(
+    await readFile(join(generated, "solitaire-schedule-small-desktop.json"), "utf8"),
+  );
+  const phoneSchedule = JSON.parse(
+    await readFile(join(generated, "solitaire-schedule-mobile.json"), "utf8"),
+  );
+  const largeDesktopSchedule = JSON.parse(
+    await readFile(join(generated, "solitaire-schedule-large-desktop.json"), "utf8"),
+  );
+  const layouts = await Promise.all([
+    "landscape", "mobile", "portrait-2", "portrait-3", "portrait-4",
+  ].map(async (name) => JSON.parse(
+    await readFile(join(generated, `solitaire-layout-${name}.json`), "utf8"),
+  )));
+  const largeDesktopLayout = JSON.parse(
+    await readFile(join(generated, "solitaire-layout-large-desktop.json"), "utf8"),
+  );
+  const playback = {
+    ...sourceSchedule,
+    foundationLayouts: layouts[0].foundationLayouts,
+    foundationPortraitLayoutsByCardCount: layouts.slice(1).map((layout) => layout.foundationLayouts),
+    patterns: sourceSchedule.patterns.map((pattern, index) => ({
+      ...pattern,
+      phoneTimeline: phoneSchedule.patterns[index],
+      leafLayouts: layouts[0].patterns[index].layouts,
+      leafPortraitLayoutsByCardCount: layouts.slice(1)
+        .map((layout) => layout.patterns[index].layouts),
+    })),
+  };
+  assert.equal(sourceSchedule.schema, "csssolitaire-prepared-schedule@1");
+  assert.equal(sourceSchedule.bankId, "small-desktop");
+  assert.equal(sourceSchedule.profileKind, "source");
+  assert.equal(phoneSchedule.schema, "csssolitaire-prepared-schedule@1");
+  assert.equal(phoneSchedule.bankId, "mobile");
+  assert.equal(phoneSchedule.profileKind, "phone");
+  assert.equal(largeDesktopSchedule.bankId, "large-desktop");
+  assert.equal(largeDesktopSchedule.profileKind, "large-desktop");
+  assert.ok(layouts.every((layout, index) =>
+    layout.schema === "csssolitaire-prepared-layout@1" &&
+    layout.profileIndex === [0, 1, 2, 3, 4][index]));
+  assert.equal(largeDesktopLayout.bankId, "large-desktop");
+  assert.equal(largeDesktopLayout.profileIndex, 0);
   assert.equal(playback.phoneProfileIndex, 1);
   const preparedLayouts = playback.patterns.flatMap((pattern) => [
     ...pattern.leafLayouts,
@@ -212,10 +292,11 @@ test("generated product is one complete retained snapshot plus sparse prepared p
     const velocities = pattern.horizontalVelocities.filter((_, index) => index % 4 === laneIndex);
     return new Set(velocities).size === velocities.length;
   })));
-  assert.ok(playback.patterns.every((pattern) =>
-    pattern.leafPortraitLayoutsByCardCount.length === 4 &&
-    pattern.leafPortraitLayoutsByCardCount.every((profile) =>
-      profile.length === pattern.trailLeafCount && profile.every(Boolean))));
+  assert.ok(playback.patterns.every((pattern, patternIndex) =>
+    layouts[1].patterns[patternIndex].layouts.length === pattern.phoneTimeline.trailLeafCount &&
+    layouts.slice(2).every((layout) =>
+      layout.patterns[patternIndex].layouts.length === pattern.trailLeafCount) &&
+    layouts.slice(1).every((layout) => layout.patterns[patternIndex].layouts.every(Boolean))));
   assert.ok(playback.patterns.every((pattern) => !("leafFoundationIndices" in pattern)));
   assert.ok(playback.patterns.every((pattern) =>
     pattern.phoneTimeline.launchCardCount === 1 &&
@@ -236,7 +317,7 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.deepEqual(maximumPortraitUpdateGaps, [500, 500, 500, 500]);
   const initialPattern = playback.patterns[0];
   const oneCardLayouts = initialPattern.leafPortraitLayoutsByCardCount[0];
-  assert.equal(oneCardLayouts.length, initialPattern.trailLeafCount);
+  assert.equal(oneCardLayouts.length, initialPattern.phoneTimeline.trailLeafCount);
   assert.ok(oneCardLayouts.every((layout) => layout.length === 5 && layout.every(Number.isFinite)));
   assert.ok(new Set(oneCardLayouts.map(JSON.stringify)).size > 100);
   assert.deepEqual({

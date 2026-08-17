@@ -61,6 +61,13 @@ const PORTRAIT_PROFILES = Object.freeze([
 ]);
 const PORTRAIT_CARD_COUNTS = Object.freeze(PORTRAIT_PROFILES.map(({ cardCount }) => cardCount));
 const PORTRAIT_CARD_BREAKPOINTS = Object.freeze([520, 720, 920]);
+const PRESENTATION_PROFILE_NAMES = Object.freeze([
+  "landscape",
+  "phone",
+  "portrait-2",
+  "portrait-3",
+  "portrait-4",
+]);
 const PORTRAIT_HORIZONTAL_DISTANCE_SCALE = 2;
 const PHONE_HORIZONTAL_DISTANCE_SCALE = 2;
 const PHONE_LAUNCH_CARD_COUNT = 1;
@@ -68,6 +75,8 @@ const PHONE_PLAYBACK_TIME_SCALE = 3;
 const PHONE_PROFILE_INDEX = 1;
 const PHONE_FLOOR_BOUNCE_COUNT = 3;
 const PHONE_TRAIL_SUBSTEP_COUNT = 3;
+const LARGE_DESKTOP_TRAIL_SUBSTEP_COUNT = 2;
+const LARGE_DESKTOP_MINIMUM_WIDTH = 1_600;
 const LAUNCH_CYCLE_COUNT = 3;
 const RANK_NAMES = Object.freeze([
   null, "ace", "two", "three", "four", "five", "six", "seven",
@@ -523,24 +532,37 @@ function simulatePhoneCard(sourceCard, impactPhase) {
   });
 }
 
-function densifyPhoneSnapshots(snapshots) {
-  const denseSnapshots = [{ ...snapshots[0], id: snapshotId(0) }];
-  for (let index = 1; index < snapshots.length; index += 1) {
-    const previous = snapshots[index - 1];
-    const current = snapshots[index];
-    for (let substep = 1; substep <= PHONE_TRAIL_SUBSTEP_COUNT; substep += 1) {
-      const progress = substep / PHONE_TRAIL_SUBSTEP_COUNT;
+function densifySnapshots(snapshots, substepCount) {
+  const previousByFace = new Map();
+  const denseSnapshots = [];
+  let sequence = 0;
+  for (const current of snapshots) {
+    const previous = previousByFace.get(current.faceNumber);
+    if (!previous) {
+      denseSnapshots.push({ ...current, sequence });
+      sequence += 1;
+      previousByFace.set(current.faceNumber, current);
+      continue;
+    }
+    for (let substep = 1; substep <= substepCount; substep += 1) {
+      const progress = substep / substepCount;
       denseSnapshots.push({
         ...current,
-        id: snapshotId(denseSnapshots.length),
+        sequence,
         sourceStep: previous.sourceStep + (current.sourceStep - previous.sourceStep) * progress,
         timeMs: previous.timeMs + (current.timeMs - previous.timeMs) * progress,
         x: previous.x + (current.x - previous.x) * progress,
         y: previous.y + (current.y - previous.y) * progress,
       });
+      sequence += 1;
     }
+    previousByFace.set(current.faceNumber, current);
   }
-  return Object.freeze(denseSnapshots.map(Object.freeze));
+  denseSnapshots.sort((left, right) => left.timeMs - right.timeMs || left.sequence - right.sequence);
+  return Object.freeze(denseSnapshots.map(({ sequence: _, ...snapshot }, index) => Object.freeze({
+    ...snapshot,
+    id: snapshotId(index),
+  })));
 }
 
 function cardLeaf({ cardFace, foundationIndex, horizontalDirection, left, top }) {
@@ -638,13 +660,29 @@ function buildPreparedPattern(seed, index) {
     top: snapshot.y,
   }));
   const timeline = buildPatternPlayback(source.snapshots, source.cards, source.sourceSteps);
+  const largeDesktopSnapshots = densifySnapshots(
+    source.snapshots,
+    LARGE_DESKTOP_TRAIL_SUBSTEP_COUNT,
+  );
+  const largeDesktopTrailLeaves = largeDesktopSnapshots.map((snapshot) => cardLeaf({
+    cardFace: snapshot.faceNumber,
+    foundationIndex: snapshot.foundationIndex,
+    horizontalDirection: snapshot.horizontalDirection,
+    left: snapshot.x,
+    top: snapshot.y,
+  }));
+  const largeDesktopTimeline = buildPatternPlayback(
+    largeDesktopSnapshots,
+    source.cards,
+    source.sourceSteps,
+  );
   const phoneLaunch = PHONE_LAUNCH_VECTORS[index];
   const phone = simulatePhoneCard({
     ...source.cards[0],
     velocityX: phoneLaunch.velocityX,
     velocityY: phoneLaunch.velocityY,
   }, index);
-  const phoneSnapshots = densifyPhoneSnapshots(phone.snapshots);
+  const phoneSnapshots = densifySnapshots(phone.snapshots, PHONE_TRAIL_SUBSTEP_COUNT);
   const phoneLeaves = phoneSnapshots.map((snapshot) => cardLeaf({
     cardFace: snapshot.faceNumber,
     foundationIndex: snapshot.foundationIndex,
@@ -667,6 +705,9 @@ function buildPreparedPattern(seed, index) {
     seed,
     source,
     trailLeaves,
+    largeDesktopTrailLeaves,
+    largeDesktopTimeline,
+    phoneLeaves,
     contentBounds,
     timeline,
     playback: Object.freeze({
@@ -690,6 +731,11 @@ function buildPreparedPattern(seed, index) {
       foundationRows: timeline.foundationRows,
       phoneTimeline,
       leafLayouts: trailLeaves.map(({ layout }) => layout),
+      largeDesktopTimeline,
+      largeDesktopLeafLayouts: largeDesktopTrailLeaves.map(({ layout }) => layout),
+      largeDesktopLeafAtlasIndices: largeDesktopSnapshots.map(
+        ({ faceNumber: cardFace }) => cardFace - 1,
+      ),
       leafPortraitLayoutsByCardCount: PORTRAIT_CARD_COUNTS.map((_, profileIndex) =>
         trailLeaves.map(({ portraitLayouts }, leafIndex) => {
           if (profileIndex === PHONE_PROFILE_INDEX - 1 && phoneLeaves[leafIndex]) {
@@ -703,10 +749,30 @@ function buildPreparedPattern(seed, index) {
   });
 }
 
-function buildSnapshot(leaves, cardAssetUrl) {
+function retainedLeaves(initialLeaves, retainedLeafCount) {
+  const leaves = [...initialLeaves];
+  while (leaves.length < retainedLeafCount) {
+    leaves.push(initialLeaves[leaves.length % initialLeaves.length]);
+  }
+  return Object.freeze(leaves);
+}
+
+function leafMatrixForProfile(leaf, profileIndex) {
+  if (profileIndex === 0) return leaf.matrix;
+  const profile = PORTRAIT_PROFILES[profileIndex - 1];
+  const presentationScale = Math.min(profile.playfield[0] / 384, profile.playfield[1] / 720);
+  return cardMatrix(
+    leaf.portraitLayouts[profileIndex - 1],
+    profile.playfield[0],
+    profile.playfield[1],
+    presentationScale,
+  );
+}
+
+function buildSnapshot(leaves, cardAssetUrl, profileIndex) {
   const cardNodes = leaves.map((leaf, index) => {
     const declarations = [
-      `transform:${leaf.matrix}`,
+      `transform:${leafMatrixForProfile(leaf, profileIndex)}`,
       `background-position:${-leaf.atlas.x}px ${-leaf.atlas.y}px`,
     ];
     if (index < FOUNDATION_COUNT) declarations.push("visibility:visible");
@@ -737,7 +803,6 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
   const initialPattern = preparedPatterns[0];
   const source = initialPattern.source;
   const contentBounds = initialPattern.contentBounds;
-  const retainedTrailLeafCount = Math.max(...preparedPatterns.map(({ trailLeaves }) => trailLeaves.length));
   const foundationLeaves = STARTING_CARDS.map((card, foundationIndex) => cardLeaf({
     cardFace: faceNumber(card.rank, card.suit),
     foundationIndex,
@@ -745,48 +810,208 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
     left: card.x,
     top: FOUNDATION_Y,
   }));
-  const trailLeaves = [...initialPattern.trailLeaves];
-  while (trailLeaves.length < retainedTrailLeafCount) {
-    trailLeaves.push(initialPattern.trailLeaves[trailLeaves.length % initialPattern.trailLeaves.length]);
-  }
-  const leaves = Object.freeze([...foundationLeaves, ...trailLeaves]);
-  const playback = Object.freeze({
-    schema: "csssolitaire-prepared-playback@2",
-    loop: true,
-    selection: "crypto-random-initial-and-shuffled-bag-alternating-phone-direction-unique-angle",
+  const retainedCounts = Object.freeze({
+    mobile: Math.max(...preparedPatterns.map(({ phoneLeaves }) => phoneLeaves.length)),
+    smallDesktop: Math.max(...preparedPatterns.map(({ trailLeaves }) => trailLeaves.length)),
+    largeDesktop: Math.max(
+      ...preparedPatterns.map(({ largeDesktopTrailLeaves }) => largeDesktopTrailLeaves.length),
+    ),
+  });
+  const bankLeaves = Object.freeze({
+    mobile: Object.freeze([
+      ...foundationLeaves,
+      ...retainedLeaves(initialPattern.phoneLeaves, retainedCounts.mobile),
+    ]),
+    smallDesktop: Object.freeze([
+      ...foundationLeaves,
+      ...retainedLeaves(initialPattern.trailLeaves, retainedCounts.smallDesktop),
+    ]),
+    largeDesktop: Object.freeze([
+      ...foundationLeaves,
+      ...retainedLeaves(initialPattern.largeDesktopTrailLeaves, retainedCounts.largeDesktop),
+    ]),
+  });
+  const atlasPositions = Array.from({ length: 52 }, (_, index) => {
+    const atlas = atlasPosition(index + 1);
+    return `${-atlas.x}px ${-atlas.y}px`;
+  });
+  const scheduleBase = (bankId, profileKind, retainedTrailLeafCount, snapshotProfileIndex) =>
+    Object.freeze({
+      schema: "csssolitaire-prepared-schedule@1",
+      bankId,
+      profileKind,
+      loop: true,
+      selection: "crypto-random-initial-and-shuffled-bag-alternating-phone-direction-unique-angle",
+      patternCount: preparedPatterns.length,
+      initialPatternIndex: 0,
+      phoneProfileIndex: PHONE_PROFILE_INDEX,
+      sourceStepMilliseconds: SOURCE_STEP_MS,
+      initialHoldMilliseconds: INITIAL_HOLD_MS,
+      foundationLeafCount: FOUNDATION_COUNT,
+      retainedLeafCount: retainedTrailLeafCount + FOUNDATION_COUNT,
+      retainedTrailLeafCount,
+      snapshotProfileIndex,
+      snapshotPlayfield: snapshotProfileIndex === 0
+        ? LANDSCAPE_PLAYFIELD
+        : PORTRAIT_PROFILES[snapshotProfileIndex - 1].playfield,
+      snapshotPresentationScale: snapshotProfileIndex === 0
+        ? LANDSCAPE_PRESENTATION_SCALE
+        : Math.min(
+          PORTRAIT_PROFILES[snapshotProfileIndex - 1].playfield[0] / 384,
+          PORTRAIT_PROFILES[snapshotProfileIndex - 1].playfield[1] / 720,
+        ),
+      layoutComponentOrder: [
+        "xViewportPercent",
+        "xCardWidthFactor",
+        "yViewportPercent",
+        "yPixels",
+        "yCardHeightFactor",
+      ],
+      atlasPositions,
+      runtimeSelectionOnly: true,
+      runtimeGeometryCalculation: false,
+      runtimeTrajectoryCalculation: false,
+      runtimeAtlasRasterization: false,
+      runtimeDomGrowth: false,
+    });
+  const smallDesktopSchedule = Object.freeze({
+    ...scheduleBase("small-desktop", "source", retainedCounts.smallDesktop, 0),
+    patterns: preparedPatterns.map(({ playback: pattern }) => Object.freeze({
+      id: pattern.id,
+      seed: pattern.seed,
+      trailLeafCount: pattern.trailLeafCount,
+      launchCardCount: pattern.launchCardCount,
+      sourceDrawCount: pattern.sourceDrawCount,
+      sourceStepCount: pattern.sourceStepCount,
+      sourceStepMilliseconds: pattern.sourceStepMilliseconds,
+      horizontalVelocities: pattern.horizontalVelocities,
+      phoneHorizontalVelocity: pattern.phoneHorizontalVelocity,
+      phoneVerticalVelocity: pattern.phoneVerticalVelocity,
+      phoneImpactVelocitySteps: pattern.phoneImpactVelocitySteps,
+      durationMs: pattern.durationMs,
+      rewindStartMilliseconds: pattern.rewindStartMilliseconds,
+      rewindEndMilliseconds: pattern.rewindEndMilliseconds,
+      frameTimesMs: pattern.frameTimesMs,
+      visibilityRows: pattern.visibilityRows,
+      foundationRows: pattern.foundationRows,
+      leafAtlasIndices: pattern.leafAtlasIndices,
+    })),
+  });
+  const mobileSchedule = Object.freeze({
+    ...scheduleBase("mobile", "phone", retainedCounts.mobile, PHONE_PROFILE_INDEX),
+    patterns: preparedPatterns.map(({ playback: pattern }) => Object.freeze({
+      id: pattern.id,
+      seed: pattern.seed,
+      phoneHorizontalVelocity: pattern.phoneHorizontalVelocity,
+      phoneVerticalVelocity: pattern.phoneVerticalVelocity,
+      phoneImpactVelocitySteps: pattern.phoneImpactVelocitySteps,
+      durationMs: pattern.phoneTimeline.durationMs,
+      rewindStartMilliseconds: pattern.phoneTimeline.rewindStartMilliseconds,
+      rewindEndMilliseconds: pattern.phoneTimeline.rewindEndMilliseconds,
+      sourceStepCount: pattern.phoneTimeline.sourceStepCount,
+      sourceStepMilliseconds: pattern.phoneTimeline.sourceStepMilliseconds,
+      launchCardCount: pattern.phoneTimeline.launchCardCount,
+      trailLeafCount: pattern.phoneTimeline.trailLeafCount,
+      frameTimesMs: pattern.phoneTimeline.frameTimesMs,
+      visibilityRows: pattern.phoneTimeline.visibilityRows,
+      foundationRows: pattern.phoneTimeline.foundationRows,
+      atlasIndex: pattern.leafAtlasIndices[0],
+    })),
+  });
+  const largeDesktopSchedule = Object.freeze({
+    ...scheduleBase("large-desktop", "large-desktop", retainedCounts.largeDesktop, 0),
+    patterns: preparedPatterns.map(({ playback: pattern }) => Object.freeze({
+      id: pattern.id,
+      seed: pattern.seed,
+      trailLeafCount: pattern.largeDesktopTimeline.trailLeafCount,
+      launchCardCount: pattern.launchCardCount,
+      sourceDrawCount: pattern.sourceDrawCount,
+      sourceStepCount: pattern.sourceStepCount,
+      sourceStepMilliseconds: pattern.sourceStepMilliseconds,
+      horizontalVelocities: pattern.horizontalVelocities,
+      phoneHorizontalVelocity: pattern.phoneHorizontalVelocity,
+      phoneVerticalVelocity: pattern.phoneVerticalVelocity,
+      phoneImpactVelocitySteps: pattern.phoneImpactVelocitySteps,
+      durationMs: pattern.largeDesktopTimeline.durationMs,
+      rewindStartMilliseconds: pattern.largeDesktopTimeline.rewindStartMilliseconds,
+      rewindEndMilliseconds: pattern.largeDesktopTimeline.rewindEndMilliseconds,
+      frameTimesMs: pattern.largeDesktopTimeline.frameTimesMs,
+      visibilityRows: pattern.largeDesktopTimeline.visibilityRows,
+      foundationRows: pattern.largeDesktopTimeline.foundationRows,
+      leafAtlasIndices: pattern.largeDesktopLeafAtlasIndices,
+    })),
+  });
+  const schedules = Object.freeze({
+    mobile: mobileSchedule,
+    smallDesktop: smallDesktopSchedule,
+    largeDesktop: largeDesktopSchedule,
+  });
+  const buildLayoutShard = ({ bankId, profileIndex, profileName }) => Object.freeze({
+    schema: "csssolitaire-prepared-layout@1",
+    bankId,
+    profileIndex,
+    profileName,
     patternCount: preparedPatterns.length,
-    initialPatternIndex: 0,
-    phoneProfileIndex: PHONE_PROFILE_INDEX,
-    sourceStepMilliseconds: SOURCE_STEP_MS,
-    initialHoldMilliseconds: INITIAL_HOLD_MS,
-    foundationLeafCount: FOUNDATION_COUNT,
-    retainedLeafCount: leaves.length,
-    retainedTrailLeafCount,
-    layoutComponentOrder: [
-      "xViewportPercent",
-      "xCardWidthFactor",
-      "yViewportPercent",
-      "yPixels",
-      "yCardHeightFactor",
-    ],
-    foundationLayouts: foundationLeaves.map(({ layout }) => layout),
-    foundationPortraitLayoutsByCardCount: PORTRAIT_CARD_COUNTS.map((_, profileIndex) =>
-      foundationLeaves.map(({ portraitLayouts }) => portraitLayouts[profileIndex])),
-    atlasPositions: Array.from({ length: 52 }, (_, index) => {
-      const atlas = atlasPosition(index + 1);
-      return `${-atlas.x}px ${-atlas.y}px`;
+    foundationLayouts: profileIndex === 0
+      ? foundationLeaves.map(({ layout }) => layout)
+      : foundationLeaves.map(({ portraitLayouts }) => portraitLayouts[profileIndex - 1]),
+    patterns: preparedPatterns.map(({ id, playback: pattern }) => Object.freeze({
+      id,
+      layouts: bankId === "large-desktop"
+        ? pattern.largeDesktopLeafLayouts
+        : profileIndex === 0
+          ? pattern.leafLayouts
+          : pattern.leafPortraitLayoutsByCardCount[profileIndex - 1].slice(
+            0,
+            profileIndex === PHONE_PROFILE_INDEX ? pattern.phoneTimeline.trailLeafCount : undefined,
+          ),
+    })),
+  });
+  const layoutShards = Object.freeze({
+    mobile: buildLayoutShard({
+      bankId: "mobile",
+      profileIndex: PHONE_PROFILE_INDEX,
+      profileName: PRESENTATION_PROFILE_NAMES[PHONE_PROFILE_INDEX],
     }),
-    patterns: preparedPatterns.map(({ playback: patternPlayback }) => patternPlayback),
-    runtimeSelectionOnly: true,
-    runtimeGeometryCalculation: false,
-    runtimeTrajectoryCalculation: false,
-    runtimeAtlasRasterization: false,
-    runtimeDomGrowth: false,
+    landscape: buildLayoutShard({
+      bankId: "small-desktop",
+      profileIndex: 0,
+      profileName: PRESENTATION_PROFILE_NAMES[0],
+    }),
+    portrait2: buildLayoutShard({
+      bankId: "small-desktop",
+      profileIndex: 2,
+      profileName: PRESENTATION_PROFILE_NAMES[2],
+    }),
+    portrait3: buildLayoutShard({
+      bankId: "small-desktop",
+      profileIndex: 3,
+      profileName: PRESENTATION_PROFILE_NAMES[3],
+    }),
+    portrait4: buildLayoutShard({
+      bankId: "small-desktop",
+      profileIndex: 4,
+      profileName: PRESENTATION_PROFILE_NAMES[4],
+    }),
+    largeDesktop: buildLayoutShard({
+      bankId: "large-desktop",
+      profileIndex: 0,
+      profileName: "large-desktop",
+    }),
   });
   const cardAssetName = `card-faces-${cardSha256}.png`;
   const cardAssetUrl = `/csssolitaire/assets/${cardAssetName}`;
-  const snapshotText = buildSnapshot(leaves, cardAssetUrl);
-  const playbackText = `${JSON.stringify(playback)}\n`;
+  const snapshotTexts = Object.freeze({
+    mobile: buildSnapshot(bankLeaves.mobile, cardAssetUrl, PHONE_PROFILE_INDEX),
+    smallDesktop: buildSnapshot(bankLeaves.smallDesktop, cardAssetUrl, 0),
+    largeDesktop: buildSnapshot(bankLeaves.largeDesktop, cardAssetUrl, 0),
+  });
+  const scheduleTexts = Object.freeze(Object.fromEntries(Object.entries(schedules).map(
+    ([name, schedule]) => [name, `${JSON.stringify(schedule)}\n`],
+  )));
+  const layoutTexts = Object.freeze(Object.fromEntries(Object.entries(layoutShards).map(
+    ([name, layout]) => [name, `${JSON.stringify(layout)}\n`],
+  )));
   const manifest = {
     schema: "csssolitaire-manifest@1",
     status: "ready",
@@ -802,7 +1027,7 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       preparedRng: "msvcrt-compatible-24-pattern-bank-horizontal",
       patternSeeds: PREPARED_PATTERN_SEEDS,
       patternCount: preparedPatterns.length,
-      patternSelection: playback.selection,
+      patternSelection: smallDesktopSchedule.selection,
       horizontalVelocityRange: [-65, 65],
       minimumHorizontalSpeed: 20,
       horizontalVelocityDistribution: "mild-slow-bias-first-two-lanes-quarter-right-unique-per-lane-cycle",
@@ -833,6 +1058,12 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
         phoneVerticalVelocity: patternPlayback.phoneVerticalVelocity,
         phoneImpactVelocitySteps: patternPlayback.phoneImpactVelocitySteps,
         phoneSourceSteps: patternPlayback.phoneTimeline.sourceStepCount,
+        phoneTrailLeafCount: patternPlayback.phoneTimeline.trailLeafCount,
+        phonePreparedFrameCount: patternPlayback.phoneTimeline.frameTimesMs.length,
+        phoneDurationMs: patternPlayback.phoneTimeline.durationMs,
+        largeDesktopTrailLeafCount: patternPlayback.largeDesktopTimeline.trailLeafCount,
+        largeDesktopPreparedFrameCount: patternPlayback.largeDesktopTimeline.frameTimesMs.length,
+        largeDesktopDurationMs: patternPlayback.largeDesktopTimeline.durationMs,
         sourceDraws: patternSource.sourceDraws,
         sourceSteps: patternSource.sourceSteps,
         rightwardLaunchCount: patternSource.cards.filter(({ velocityX }) => velocityX > 0).length,
@@ -882,6 +1113,8 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
         "prepared-new-horizontal-step-after-wall-and-nonterminal-floor-impact",
       phoneImpactHorizontalSteps: PHONE_IMPACT_HORIZONTAL_STEPS,
       phoneTrailSubstepCount: PHONE_TRAIL_SUBSTEP_COUNT,
+      largeDesktopTrailSubstepCount: LARGE_DESKTOP_TRAIL_SUBSTEP_COUNT,
+      largeDesktopMinimumWidthCssPixels: LARGE_DESKTOP_MINIMUM_WIDTH,
       phoneProfileIndex: PHONE_PROFILE_INDEX,
       preparedSlotLayout: "source-seven-slot-presentation-scaled-card-size",
       slotCount: SOLITAIRE_SLOT_COUNT,
@@ -898,30 +1131,121 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       runtimeDomGrowth: false,
     },
     transport: {
-      snapshotUrl: "/csssolitaire/solitaire.polycss.txt",
-      playbackUrl: "/csssolitaire/solitaire-playback.json",
       cardAtlasUrl: cardAssetUrl,
+      startupBankSelection: "mobile-capability-then-large-landscape-width",
+      preparedBanks: [
+        {
+          id: "mobile",
+          snapshotUrl: "/csssolitaire/solitaire-mobile.polycss.txt",
+          scheduleUrl: "/csssolitaire/solitaire-schedule-mobile.json",
+          retainedLeafCount: bankLeaves.mobile.length,
+          retainedTrailLeafCount: retainedCounts.mobile,
+          profiles: [{
+            index: PHONE_PROFILE_INDEX,
+            name: PRESENTATION_PROFILE_NAMES[PHONE_PROFILE_INDEX],
+            layoutUrl: "/csssolitaire/solitaire-layout-mobile.json",
+          }],
+        },
+        {
+          id: "small-desktop",
+          snapshotUrl: "/csssolitaire/solitaire-small-desktop.polycss.txt",
+          scheduleUrl: "/csssolitaire/solitaire-schedule-small-desktop.json",
+          retainedLeafCount: bankLeaves.smallDesktop.length,
+          retainedTrailLeafCount: retainedCounts.smallDesktop,
+          profiles: [
+            { index: 0, name: "landscape", layoutUrl: "/csssolitaire/solitaire-layout-landscape.json" },
+            { index: 2, name: "portrait-2", layoutUrl: "/csssolitaire/solitaire-layout-portrait-2.json" },
+            { index: 3, name: "portrait-3", layoutUrl: "/csssolitaire/solitaire-layout-portrait-3.json" },
+            { index: 4, name: "portrait-4", layoutUrl: "/csssolitaire/solitaire-layout-portrait-4.json" },
+          ],
+        },
+        {
+          id: "large-desktop",
+          snapshotUrl: "/csssolitaire/solitaire-large-desktop.polycss.txt",
+          scheduleUrl: "/csssolitaire/solitaire-schedule-large-desktop.json",
+          retainedLeafCount: bankLeaves.largeDesktop.length,
+          retainedTrailLeafCount: retainedCounts.largeDesktop,
+          profiles: [{
+            index: 0,
+            name: "large-desktop",
+            layoutUrl: "/csssolitaire/solitaire-layout-large-desktop.json",
+          }],
+        },
+      ],
       runtimeModelPayload: false,
       runtimeManifestRequired: true,
     },
     metrics: {
-      retainedLeafCount: leaves.length,
       foundationLeafCount: FOUNDATION_COUNT,
-      retainedTrailLeafCount,
       preparedPatternCount: preparedPatterns.length,
-      preparedFrameCount: playback.patterns.reduce((sum, pattern) => sum + pattern.frameTimesMs.length, 0),
-      preparedPhoneFrameCount: playback.patterns.reduce(
-        (sum, pattern) => sum + pattern.phoneTimeline.frameTimesMs.length,
+      preparedFrameCount: smallDesktopSchedule.patterns.reduce(
+        (sum, pattern) => sum + pattern.frameTimesMs.length,
         0,
       ),
-      initialPatternDurationMs: playback.patterns[0].durationMs,
-      minimumPatternDurationMs: Math.min(...playback.patterns.map(({ durationMs }) => durationMs)),
-      maximumPatternDurationMs: Math.max(...playback.patterns.map(({ durationMs }) => durationMs)),
-      preparedVisibilityOperationCount: playback.patterns.reduce((sum, pattern) =>
+      preparedPhoneFrameCount: mobileSchedule.patterns.reduce(
+        (sum, pattern) => sum + pattern.frameTimesMs.length,
+        0,
+      ),
+      preparedLargeDesktopFrameCount: largeDesktopSchedule.patterns.reduce(
+        (sum, pattern) => sum + pattern.frameTimesMs.length,
+        0,
+      ),
+      initialPatternDurationMs: smallDesktopSchedule.patterns[0].durationMs,
+      minimumPatternDurationMs: Math.min(
+        ...smallDesktopSchedule.patterns.map(({ durationMs }) => durationMs),
+      ),
+      maximumPatternDurationMs: Math.max(
+        ...smallDesktopSchedule.patterns.map(({ durationMs }) => durationMs),
+      ),
+      preparedVisibilityOperationCount: smallDesktopSchedule.patterns.reduce((sum, pattern) =>
         sum + pattern.visibilityRows.reduce((patternSum, row) => patternSum + row.length, 0), 0),
-      preparedFoundationOperationCount: playback.patterns.reduce((sum, pattern) =>
+      preparedFoundationOperationCount: smallDesktopSchedule.patterns.reduce((sum, pattern) =>
         sum + pattern.foundationRows.reduce((patternSum, row) => patternSum + row.length, 0), 0),
-      preparedLeafLayoutCount: playback.patterns.reduce((sum, pattern) => sum + pattern.trailLeafCount, 0),
+      preparedLeafLayoutCount: smallDesktopSchedule.patterns.reduce(
+        (sum, pattern) => sum + pattern.trailLeafCount,
+        0,
+      ),
+      preparedBanks: [
+        {
+          id: "mobile",
+          retainedLeafCount: bankLeaves.mobile.length,
+          retainedTrailLeafCount: retainedCounts.mobile,
+          preparedFrameCount: mobileSchedule.patterns.reduce(
+            (sum, pattern) => sum + pattern.frameTimesMs.length,
+            0,
+          ),
+          preparedLeafLayoutCount: mobileSchedule.patterns.reduce(
+            (sum, pattern) => sum + pattern.trailLeafCount,
+            0,
+          ),
+        },
+        {
+          id: "small-desktop",
+          retainedLeafCount: bankLeaves.smallDesktop.length,
+          retainedTrailLeafCount: retainedCounts.smallDesktop,
+          preparedFrameCount: smallDesktopSchedule.patterns.reduce(
+            (sum, pattern) => sum + pattern.frameTimesMs.length,
+            0,
+          ),
+          preparedLeafLayoutCount: smallDesktopSchedule.patterns.reduce(
+            (sum, pattern) => sum + pattern.trailLeafCount,
+            0,
+          ),
+        },
+        {
+          id: "large-desktop",
+          retainedLeafCount: bankLeaves.largeDesktop.length,
+          retainedTrailLeafCount: retainedCounts.largeDesktop,
+          preparedFrameCount: largeDesktopSchedule.patterns.reduce(
+            (sum, pattern) => sum + pattern.frameTimesMs.length,
+            0,
+          ),
+          preparedLeafLayoutCount: largeDesktopSchedule.patterns.reduce(
+            (sum, pattern) => sum + pattern.trailLeafCount,
+            0,
+          ),
+        },
+      ],
     },
     provenance: {
       referenceSha256: sha256(referenceBytes),
@@ -949,12 +1273,74 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
   try {
     await Promise.all([
       writeFile(join(stagingRoot, "assets", cardAssetName), preparedCardAtlas.bytes),
-      writeFile(join(stagingRoot, "solitaire.polycss.txt"), snapshotText),
-      writeFile(join(stagingRoot, "solitaire-playback.json"), playbackText),
+      writeFile(join(stagingRoot, "solitaire-mobile.polycss.txt"), snapshotTexts.mobile),
+      writeFile(join(stagingRoot, "solitaire-small-desktop.polycss.txt"), snapshotTexts.smallDesktop),
+      writeFile(join(stagingRoot, "solitaire-large-desktop.polycss.txt"), snapshotTexts.largeDesktop),
+      writeFile(join(stagingRoot, "solitaire-schedule-mobile.json"), scheduleTexts.mobile),
+      writeFile(
+        join(stagingRoot, "solitaire-schedule-small-desktop.json"),
+        scheduleTexts.smallDesktop,
+      ),
+      writeFile(
+        join(stagingRoot, "solitaire-schedule-large-desktop.json"),
+        scheduleTexts.largeDesktop,
+      ),
+      writeFile(join(stagingRoot, "solitaire-layout-mobile.json"), layoutTexts.mobile),
+      writeFile(join(stagingRoot, "solitaire-layout-landscape.json"), layoutTexts.landscape),
+      writeFile(join(stagingRoot, "solitaire-layout-portrait-2.json"), layoutTexts.portrait2),
+      writeFile(join(stagingRoot, "solitaire-layout-portrait-3.json"), layoutTexts.portrait3),
+      writeFile(join(stagingRoot, "solitaire-layout-portrait-4.json"), layoutTexts.portrait4),
+      writeFile(
+        join(stagingRoot, "solitaire-layout-large-desktop.json"),
+        layoutTexts.largeDesktop,
+      ),
     ]);
     manifest.assets = {
-      snapshot: descriptor("solitaire.polycss.txt", Buffer.from(snapshotText)),
-      playback: descriptor("solitaire-playback.json", Buffer.from(playbackText)),
+      snapshotMobile: descriptor(
+        "solitaire-mobile.polycss.txt",
+        Buffer.from(snapshotTexts.mobile),
+      ),
+      snapshotSmallDesktop: descriptor(
+        "solitaire-small-desktop.polycss.txt",
+        Buffer.from(snapshotTexts.smallDesktop),
+      ),
+      snapshotLargeDesktop: descriptor(
+        "solitaire-large-desktop.polycss.txt",
+        Buffer.from(snapshotTexts.largeDesktop),
+      ),
+      scheduleMobile: descriptor(
+        "solitaire-schedule-mobile.json",
+        Buffer.from(scheduleTexts.mobile),
+      ),
+      scheduleSmallDesktop: descriptor(
+        "solitaire-schedule-small-desktop.json",
+        Buffer.from(scheduleTexts.smallDesktop),
+      ),
+      scheduleLargeDesktop: descriptor(
+        "solitaire-schedule-large-desktop.json",
+        Buffer.from(scheduleTexts.largeDesktop),
+      ),
+      layoutMobile: descriptor("solitaire-layout-mobile.json", Buffer.from(layoutTexts.mobile)),
+      layoutLandscape: descriptor(
+        "solitaire-layout-landscape.json",
+        Buffer.from(layoutTexts.landscape),
+      ),
+      layoutPortrait2: descriptor(
+        "solitaire-layout-portrait-2.json",
+        Buffer.from(layoutTexts.portrait2),
+      ),
+      layoutPortrait3: descriptor(
+        "solitaire-layout-portrait-3.json",
+        Buffer.from(layoutTexts.portrait3),
+      ),
+      layoutPortrait4: descriptor(
+        "solitaire-layout-portrait-4.json",
+        Buffer.from(layoutTexts.portrait4),
+      ),
+      layoutLargeDesktop: descriptor(
+        "solitaire-layout-large-desktop.json",
+        Buffer.from(layoutTexts.largeDesktop),
+      ),
       cardAtlas: descriptor(`assets/${cardAssetName}`, preparedCardAtlas.bytes),
     };
     await writeFile(join(stagingRoot, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);

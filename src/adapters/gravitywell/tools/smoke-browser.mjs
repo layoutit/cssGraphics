@@ -163,10 +163,13 @@ try {
       visibility: leaf.style.visibility,
     }));
     const compare = (left, right) => left.reduce(
-      (count, value, index) => count + Number(
-        value.visibility !== right[index].visibility ||
-        (value.visibility !== "hidden" && value.style !== right[index].style),
-      ),
+      (count, value, index) => {
+        const leftHidden = value.visibility === "hidden";
+        const rightHidden = right[index].visibility === "hidden";
+        return count + Number(
+          leftHidden !== rightHidden || (!leftHidden && value.style !== right[index].style),
+        );
+      },
       0,
     );
     await debug.seek(blockBoundary - 1);

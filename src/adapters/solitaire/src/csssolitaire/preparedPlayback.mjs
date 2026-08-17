@@ -40,6 +40,7 @@ export function createCsssolitairePreparedPlayer({
   const foundationVisibility = new Uint8Array(foundationLeafCount);
   foundationVisibility.fill(1);
   const trailVisibility = new Uint8Array(trailLeaves.length);
+  const visibleTrailIndices = new Set();
   const trailFaceIndices = trailLeaves.map((leaf) => readFaceIndex(leaf, atlasFaceIndices));
   let activePatternIndex = playback.initialPatternIndex;
   let pattern = patterns[activePatternIndex];
@@ -58,6 +59,11 @@ export function createCsssolitairePreparedPlayer({
   let foundationOperationsApplied = 0;
   let patternLayoutWrites = 0;
   let patternLayoutLeavesVisited = 0;
+  let patternLayoutLeavesRequired = 0;
+  let responsiveFaceLeavesVisited = 0;
+  let responsiveFaceLeavesRequired = 0;
+  let resetTrailLeavesVisited = 0;
+  let resetTrailLeavesRequired = 0;
   let responsiveTransformWrites = 0;
   let responsiveProfileSwitchCount = 0;
   let responsiveMatrixResolutionCount = 0;
@@ -70,6 +76,7 @@ export function createCsssolitairePreparedPlayer({
   let presentationWidth = renderer.landscapePresentationBase[0];
   let presentationHeight = renderer.landscapePresentationBase[1];
   let presentationScale = renderer.landscapePresentationBaseScale;
+  let patternFaceInitializedLeafCount = pattern.trailLeafCount;
   let lastApply = Object.freeze({
     visibilityWrites: 0,
     foundationWrites: 0,
@@ -85,6 +92,10 @@ export function createCsssolitairePreparedPlayer({
     return profileIndex === 0
       ? nextPattern.leafLayouts[index]
       : nextPattern.leafPortraitLayoutsByCardCount[profileIndex - 1][index];
+  }
+
+  function trailLeafCountFor(nextPattern = pattern, profileIndex = activeProfileIndex) {
+    return timelineFor(nextPattern, profileIndex).trailLeafCount;
   }
 
   function matrixForLayout(layout, width = presentationWidth, height = presentationHeight,
@@ -106,11 +117,25 @@ export function createCsssolitairePreparedPlayer({
       foundationLeaves[index].style.transform = transform;
       writes += 1;
     }
-    for (let index = 0; index < pattern.trailLeafCount; index += 1) {
+    const nextTrailLeafCount = trailLeafCountFor(pattern, nextProfileIndex);
+    for (let index = 0; index < nextTrailLeafCount; index += 1) {
       const transform = matrixForLayout(layoutForPattern(pattern, index, nextProfileIndex), width, height, scale);
       if (trailLeaves[index].style.transform === transform) continue;
       trailLeaves[index].style.transform = transform;
       writes += 1;
+    }
+    if (patternFaceInitializedLeafCount < nextTrailLeafCount) {
+      const required = nextTrailLeafCount - patternFaceInitializedLeafCount;
+      responsiveFaceLeavesRequired += required;
+      for (let index = patternFaceInitializedLeafCount; index < nextTrailLeafCount; index += 1) {
+        const faceIndex = pattern.leafAtlasIndices[index];
+        responsiveFaceLeavesVisited += 1;
+        if (trailFaceIndices[index] === faceIndex) continue;
+        trailLeaves[index].style.backgroundPosition = playback.atlasPositions[faceIndex];
+        trailFaceIndices[index] = faceIndex;
+        patternLayoutWrites += 1;
+      }
+      patternFaceInitializedLeafCount = nextTrailLeafCount;
     }
     if (nextProfileIndex !== activeProfileIndex) responsiveProfileSwitchCount += 1;
     activeProfileIndex = nextProfileIndex;
@@ -148,6 +173,8 @@ export function createCsssolitairePreparedPlayer({
       if (Boolean(trailVisibility[trailIndex]) === visible) continue;
       trailVisibility[trailIndex] = Number(visible);
       leaves[leafIndex].style.visibility = visible ? "visible" : "";
+      if (visible) visibleTrailIndices.add(trailIndex);
+      else visibleTrailIndices.delete(trailIndex);
       visibleTrailCards += visible ? 1 : -1;
       visibilityWrites += 1;
       writes += 1;
@@ -189,7 +216,9 @@ export function createCsssolitairePreparedPlayer({
 
   function applyPatternLayout(nextPattern) {
     let writes = 0;
-    for (let index = 0; index < nextPattern.trailLeafCount; index += 1) {
+    const requiredLeafCount = trailLeafCountFor(nextPattern);
+    patternLayoutLeavesRequired += requiredLeafCount;
+    for (let index = 0; index < requiredLeafCount; index += 1) {
       const leaf = trailLeaves[index];
       const transform = matrixForLayout(layoutForPattern(nextPattern, index));
       const faceIndex = nextPattern.leafAtlasIndices[index];
@@ -204,18 +233,20 @@ export function createCsssolitairePreparedPlayer({
         writes += 1;
       }
     }
+    patternFaceInitializedLeafCount = requiredLeafCount;
     patternLayoutWrites += writes;
     return writes;
   }
 
   function resetInitial() {
-    let writes = 0;
-    for (let index = 0; index < trailVisibility.length; index += 1) {
-      if (trailVisibility[index] === 0) continue;
+    const writes = visibleTrailIndices.size;
+    resetTrailLeavesRequired += writes;
+    for (const index of visibleTrailIndices) {
+      resetTrailLeavesVisited += 1;
       trailVisibility[index] = 0;
       trailLeaves[index].style.visibility = "";
-      writes += 1;
     }
+    visibleTrailIndices.clear();
     let foundationWrites = 0;
     for (let index = 0; index < foundationLeafCount; index += 1) {
       const leaf = foundationLeaves[index];
@@ -269,6 +300,7 @@ export function createCsssolitairePreparedPlayer({
       throw new RangeError("Prepared cssSolitaire pattern handoff is invalid");
     }
     const layoutWrites = applyPatternLayout(nextPattern);
+    const dirtyLeavesVisited = trailLeafCountFor(nextPattern);
     activePatternIndex = nextIndex;
     pattern = nextPattern;
     patternSwitchCount += 1;
@@ -276,7 +308,7 @@ export function createCsssolitairePreparedPlayer({
       visibilityWrites: 0,
       foundationWrites: 0,
       layoutWrites,
-      dirtyLeavesVisited: nextPattern.trailLeafCount,
+      dirtyLeavesVisited,
     });
   }
 
@@ -439,6 +471,15 @@ export function createCsssolitairePreparedPlayer({
         runtimeFoundationStyleWrites: foundationStyleWrites,
         runtimePatternLayoutWrites: patternLayoutWrites,
         runtimePatternLayoutLeavesVisited: patternLayoutLeavesVisited,
+        runtimePatternLayoutLeavesRequired: patternLayoutLeavesRequired,
+        runtimePatternLayoutUnusedLeavesVisited: patternLayoutLeavesVisited - patternLayoutLeavesRequired,
+        runtimeResponsiveFaceLeavesVisited: responsiveFaceLeavesVisited,
+        runtimeResponsiveFaceLeavesRequired: responsiveFaceLeavesRequired,
+        runtimeResponsiveFaceUnusedLeavesVisited: responsiveFaceLeavesVisited - responsiveFaceLeavesRequired,
+        runtimeResetTrailLeavesVisited: resetTrailLeavesVisited,
+        runtimeResetTrailLeavesRequired: resetTrailLeavesRequired,
+        runtimeResetUnusedLeavesVisited: resetTrailLeavesVisited - resetTrailLeavesRequired,
+        activePatternFaceInitializedLeafCount: patternFaceInitializedLeafCount,
         runtimeResponsiveTransformWrites: responsiveTransformWrites,
         runtimeResponsiveProfileSwitchCount: responsiveProfileSwitchCount,
         runtimeResponsiveMatrixResolutionCount: responsiveMatrixResolutionCount,

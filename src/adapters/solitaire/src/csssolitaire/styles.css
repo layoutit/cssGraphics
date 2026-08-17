@@ -10,15 +10,16 @@
 }
 
 html,
-body,
-#scene {
+body {
   width: 100%;
   height: 100%;
   margin: 0;
 }
 
 body {
+  position: relative;
   overflow: hidden;
+  background: linear-gradient(180deg, #008000 0%, #003d00 100%);
 }
 
 body.loading::after {
@@ -133,12 +134,11 @@ body.loading::after {
   outline-offset: -5px;
 }
 
-#scene {
+body > .polycss-camera {
   position: absolute;
   inset: 0;
   overflow: hidden;
   contain: layout paint size style;
-  background: linear-gradient(180deg, #008000 0%, #003d00 100%);
 }
 
 .csssolitaire-error-message {

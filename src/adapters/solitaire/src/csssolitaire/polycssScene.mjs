@@ -25,7 +25,8 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
   mountedStyle = document.importNode(style, true);
   document.head.append(mountedStyle);
   const mountedCamera = document.importNode(camera, true);
-  host.replaceChildren(mountedCamera);
+  for (const existing of host.querySelectorAll(":scope > .polycss-camera")) existing.remove();
+  host.append(mountedCamera);
   const mountedScene = mountedCamera.querySelector(":scope > .polycss-scene");
   const mountedLeaves = [...(mountedScene?.querySelectorAll(":scope > b") ?? [])];
   if (!(mountedScene instanceof HTMLElement) ||
@@ -77,7 +78,7 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
       });
     },
     destroy() {
-      host.replaceChildren();
+      mountedCamera.remove();
       mountedStyle?.remove();
       mountedStyle = null;
     },

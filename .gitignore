@@ -20,6 +20,9 @@ build/generated/
 build/package-inputs/
 build/release/
 build/reports/
+build/native/
+build/oracle/
+build/perf/
 dist/
 coverage/
 

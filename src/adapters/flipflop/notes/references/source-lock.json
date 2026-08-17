@@ -1,0 +1,15 @@
+{
+  "schema": "cssflipflop-source-lock@1",
+  "project": "XScreenSaver Flip Flop",
+  "repository": "https://github.com/Zygo/xscreensaver",
+  "revision": "906693799e4fb7581436590cf84ecb2d3c9186ba",
+  "primary": {
+    "path": "hacks/glx/flipflop.c",
+    "sha256": "099d290a75e52d6ccc5de7ea1344ef8ee0889293acef034e9ed85f2bdf2e41fb"
+  },
+  "config": {
+    "path": "hacks/config/flipflop.xml",
+    "sha256": "5ff07de86859a971e1c4ecb38b2cace189dfc9336aaec4d45b5bdd8ec33de810"
+  },
+  "license": "Permission to use, copy, modify, distribute, and sell with preservation of the copyright and permission notices"
+}

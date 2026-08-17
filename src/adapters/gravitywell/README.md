@@ -33,19 +33,19 @@ zero also carries the selected bank's sparse write indices. The shared prepared
 palette is stored once in the catalog: 412 hash-bound
 closure files, or 413 on disk including the self-describing product descriptor,
 with one-time block expansion and no decoding, transform formatting, or block
-reconstruction inside frame publication. The initial current-plus-lookahead
-pair expands beneath the loader. During endless playback, later blocks expand
-incrementally in request-idle slices with a two-millisecond target budget; the
-next slice is delayed by one source frame so lookahead formatting cannot bunch
-inside one idle window. The player retains only the current and one lookahead
-block, so activation does not wait for expansion. A block expands to at most
-2,675,324 bytes of final CSS strings, and every prepared current-plus-lookahead
-pair stays below 4,894,248 bytes. Each bank also embeds one small viewport-visibility
-schedule with 25 conservative portrait, landscape, and square profiles. Playback
-selects the smallest-area rectangle that covers the CSS viewport, consumes its
-sparse assignments, publishes transforms and colors only to selected leaves,
-and catches a leaf up from its exact prepared state before making it visible
-again. Coarse-pointer devices use a square profile whose prepared row and column
+reconstruction inside frame publication. All sixteen blocks of the selected
+bank expand beneath the loading cover before playback starts, then passed blocks
+are released. Across the locked bank, that initial prepared CSS string residency
+ranges from 22,143,898 to 31,076,733 bytes; the package descriptor's 4,894,248-byte
+metric is only the largest adjacent block pair and is not the runtime residency
+bound. The next shuffled bank begins expanding at the first block's midpoint in
+two-millisecond timer slices separated by one source frame and is complete before
+the exact-flat handoff. Each bank also embeds one viewport-visibility schedule
+with 25 conservative portrait, landscape, and square profiles. Playback selects
+the smallest-area rectangle that covers the CSS viewport, consumes its sparse
+assignments, publishes transforms and colors only to selected leaves, and
+catches a leaf up from its exact prepared state before making it visible again.
+Coarse-pointer devices use a square profile whose prepared row and column
 selections cannot contain an interior hole; whole offscreen tails remain culled
 and non-square desktop profiles remain unchanged. Projection, topology closure,
 and leaf visibility scans remain prepare-time work.

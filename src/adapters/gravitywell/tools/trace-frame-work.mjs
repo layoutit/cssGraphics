@@ -3,7 +3,23 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { chromium } from "playwright";
 import { analyzeTrace, loadTrace, renderMarkdown } from "../../../../scripts/frame-sleuth.mjs";
-import { traceCategories } from "../../../../scripts/frame-sleuth-trace.mjs";
+
+const CONTINUOUS_TRACE_CATEGORIES = Object.freeze([
+  "toplevel",
+  "benchmark",
+  "blink",
+  "blink.user_timing",
+  "cc",
+  "gpu",
+  "viz",
+  "renderer.scheduler",
+  "devtools.timeline",
+  "disabled-by-default-devtools.timeline",
+  "disabled-by-default-devtools.timeline.frame",
+  "rail",
+  "v8",
+  "disabled-by-default-v8.gc",
+]);
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..", "..");
 const generatedRoot = resolve(repositoryRoot, "build/generated/public/cssgravitywell");
@@ -47,8 +63,7 @@ try {
     (resolveComplete) => cdp.once("Tracing.tracingComplete", resolveComplete),
   );
   await cdp.send("Tracing.start", {
-    categories: traceCategories().join(","),
-    options: "sampling-frequency=10000",
+    categories: CONTINUOUS_TRACE_CATEGORIES.join(","),
     transferMode: "ReportEvents",
   });
   const continuousStart = await page.evaluate(() => {
@@ -113,9 +128,13 @@ try {
   const frameSleuthAnalysis = analyzeTrace(await loadTrace(tracePath), {
     question: "why does untouched continuous playback freeze?",
     top: 10,
-    url: "/gravitywell/",
     startMs: 500,
   });
+  const measurementRoute = new URL(route);
+  measurementRoute.searchParams.set("cycle", "0");
+  await page.goto(measurementRoute.href, { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => globalThis.__cssGravityWellDebug?.ready === true, null, { timeout: 30_000 });
+  await page.evaluate(() => globalThis.__cssGravityWellDebug.pause());
   const steadyStatePublication = await page.evaluate(async () => {
     const debug = globalThis.__cssGravityWellDebug;
     debug.pause();
@@ -260,6 +279,9 @@ try {
     };
   });
   const afterMetrics = metricMap(await cdp.send("Performance.getMetrics"));
+  await page.goto(measurementRoute.href, { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => globalThis.__cssGravityWellDebug?.ready === true, null, { timeout: 30_000 });
+  await page.evaluate(() => globalThis.__cssGravityWellDebug.pause());
   await page.waitForTimeout(100);
   const schedulerBefore = await page.evaluate(() => {
     const debug = globalThis.__cssGravityWellDebug;
@@ -375,6 +397,7 @@ try {
       noUntouchedPlaybackActivationWait: continuousPlayback.activationWaits === 0,
       noUntouchedPlaybackLongTask: continuousPlayback.longTasks.length === 0,
       noUntouchedPlaybackFreezeGap: continuousPlayback.frameIntervals.over50Milliseconds === 0,
+      frameSleuthDrawFrameEvidence: frameSleuthAnalysis.cadence.drawFrame.count > 0,
       noFrameSleuthFreezeGap: frameSleuthAnalysis.cadence.drawGapsAboveMs["50"] === 0,
       exactPreparedSelectedTransformPublication:
         worstTransitionPublication.actualTransformChanges === worstTransitionPublication.samples[0].transformWrites,

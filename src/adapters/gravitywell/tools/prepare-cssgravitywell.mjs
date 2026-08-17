@@ -316,7 +316,8 @@ async function prepareBank({ bankIndex, seed, fixedViewQuaternion }) {
     colorChangeOffsets[frameIndex] = changedColorLeafIndices.length;
     for (let leafIndex = 0; leafIndex < preparedLeafCount; leafIndex += 1) {
       if (currentTransforms[leafIndex] !== previousTransforms[leafIndex]) changedTransformLeafIndices.push(leafIndex);
-      if (colorRows[currentColorOffset + leafIndex] !== colorRows[previousColorOffset + leafIndex]) {
+      if (palette[colorRows[currentColorOffset + leafIndex]] !==
+          palette[colorRows[previousColorOffset + leafIndex]]) {
         changedColorLeafIndices.push(leafIndex);
       }
     }

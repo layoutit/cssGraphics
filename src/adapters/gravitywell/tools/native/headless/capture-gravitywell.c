@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 char *progname = "cssgravitywell-headless-native-oracle";
 
@@ -37,6 +38,7 @@ main(int argc, char **argv)
   int capture_index = 0;
   FILE *states;
   char path[4096];
+  char states_temporary[4096];
 
   if (argc < 7) {
     fprintf(stderr, "usage: %s frames-directory states.jsonl seed width height tick [tick ...]\n", argv[0]);
@@ -59,7 +61,12 @@ main(int argc, char **argv)
     perror("mkdir frames");
     return 3;
   }
-  states = fopen(argv[2], "wb");
+  if (snprintf(states_temporary, sizeof(states_temporary), "%s.tmp.%ld", argv[2], (long)getpid()) >=
+      (int)sizeof(states_temporary)) {
+    fprintf(stderr, "states path is too long\n");
+    return 3;
+  }
+  states = fopen(states_temporary, "wb");
   if (!states) {
     perror("open states");
     return 3;
@@ -86,18 +93,30 @@ main(int argc, char **argv)
   init_gw(&mi);
   gw = &bps[0];
 
-  if (!write_renderer(argv[1], width, height)) return 4;
+  if (!write_renderer(argv[1], width, height)) {
+    fclose(states);
+    remove(states_temporary);
+    return 4;
+  }
   for (tick = 0; tick <= ticks[capture_count - 1]; tick++) {
     draw_gw(&mi);
     if (tick == ticks[capture_index]) {
       snprintf(path, sizeof(path), "%s/frame_%04d.ppm", argv[1], capture_index);
-      if (!write_ppm(path, width, height)) return 5;
+      if (!write_ppm(path, width, height)) {
+        fclose(states);
+        remove(states_temporary);
+        return 5;
+      }
       write_tick(states, tick, &mi, gw);
       capture_index++;
       if (capture_index == capture_count) break;
     }
   }
-  fclose(states);
+  if (fclose(states) != 0 || rename(states_temporary, argv[2]) != 0) {
+    perror("write states");
+    remove(states_temporary);
+    return 6;
+  }
   free_gw(&mi);
   free(bps);
   bps = NULL;
@@ -131,12 +150,17 @@ static int
 write_renderer(const char *directory, int width, int height)
 {
   char path[4096];
+  char temporary[4096];
   FILE *stream;
   const unsigned char *vendor = glGetString(GL_VENDOR);
   const unsigned char *renderer = glGetString(GL_RENDERER);
   const unsigned char *version = glGetString(GL_VERSION);
   snprintf(path, sizeof(path), "%s/native-renderer.json", directory);
-  stream = fopen(path, "wb");
+  if (snprintf(temporary, sizeof(temporary), "%s.tmp.%ld", path, (long)getpid()) >=
+      (int)sizeof(temporary)) {
+    return 0;
+  }
+  stream = fopen(temporary, "wb");
   if (!stream) return 0;
   fprintf(stream,
     "{\n  \"schema\": \"cssgravitywell-native-gl-renderer@1\",\n"
@@ -146,7 +170,11 @@ write_renderer(const char *directory, int width, int height)
     renderer ? renderer : (const unsigned char *)"unknown",
     version ? version : (const unsigned char *)"unknown",
     width, height);
-  return fclose(stream) == 0;
+  if (fclose(stream) != 0 || rename(temporary, path) != 0) {
+    remove(temporary);
+    return 0;
+  }
+  return 1;
 }
 
 static int
@@ -154,15 +182,26 @@ write_ppm(const char *path, int width, int height)
 {
   unsigned char *rgba = malloc((size_t)width * (size_t)height * 4);
   unsigned char *row = malloc((size_t)width * 3);
+  char temporary[4096];
   FILE *stream;
   if (!rgba || !row) abort();
   glFinish();
   glPixelStorei(GL_PACK_ALIGNMENT, 1);
   glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
   glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
-  if (glGetError() != GL_NO_ERROR) return 0;
-  stream = fopen(path, "wb");
-  if (!stream) return 0;
+  if (glGetError() != GL_NO_ERROR) {
+    free(row);
+    free(rgba);
+    return 0;
+  }
+  if (snprintf(temporary, sizeof(temporary), "%s.tmp.%ld", path, (long)getpid()) >=
+      (int)sizeof(temporary)) return 0;
+  stream = fopen(temporary, "wb");
+  if (!stream) {
+    free(row);
+    free(rgba);
+    return 0;
+  }
   fprintf(stream, "P6\n%d %d\n255\n", width, height);
   for (int y = height - 1; y >= 0; y--) {
     const unsigned char *source = rgba + (size_t)y * (size_t)width * 4;
@@ -171,11 +210,21 @@ write_ppm(const char *path, int width, int height)
       row[x * 3 + 1] = source[x * 4 + 1];
       row[x * 3 + 2] = source[x * 4 + 2];
     }
-    if (fwrite(row, 1, (size_t)width * 3, stream) != (size_t)width * 3) return 0;
+    if (fwrite(row, 1, (size_t)width * 3, stream) != (size_t)width * 3) {
+      fclose(stream);
+      remove(temporary);
+      free(row);
+      free(rgba);
+      return 0;
+    }
   }
   free(row);
   free(rgba);
-  return fclose(stream) == 0;
+  if (fclose(stream) != 0 || rename(temporary, path) != 0) {
+    remove(temporary);
+    return 0;
+  }
+  return 1;
 }
 
 static void

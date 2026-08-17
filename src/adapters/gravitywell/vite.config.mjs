@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { cp, mkdir } from "node:fs/promises";
+import { cp, mkdir, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
@@ -31,10 +31,12 @@ export default defineConfig({
   plugins: deployBuild ? [{
     name: "cssgravitywell-netlify-assets",
     async closeBundle() {
+      const deployAssets = resolve(repositoryRoot, "dist/site/cssgravitywell");
       await mkdir(resolve(repositoryRoot, "dist/site"), { recursive: true });
+      await rm(deployAssets, { recursive: true, force: true });
       await cp(
         resolve(generatedPublicDir, "cssgravitywell"),
-        resolve(repositoryRoot, "dist/site/cssgravitywell"),
+        deployAssets,
         { recursive: true, force: true },
       );
     },

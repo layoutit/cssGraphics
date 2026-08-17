@@ -7,6 +7,8 @@ test("native oracle harness remains bound to XScreenSaver yarandom and source co
   const source = await readFile(resolve(import.meta.dirname, "../tools/native/capture-gravitywell-state.c"), "utf8");
   assert.match(source, /#include "yarandom\.h"/u);
   assert.match(source, /#define COUNT 15/u);
+  assert.match(source, /#define ACTIVE_COUNT 2/u);
+  assert.match(source, /isolate_prepared_well/u);
   assert.match(source, /#define GRID_SEGMENT 16/u);
   assert.match(source, /#define MASS_EPSILON 0\.03f/u);
   assert.match(source, /#define SLOPE_EPSILON 0\.06f/u);

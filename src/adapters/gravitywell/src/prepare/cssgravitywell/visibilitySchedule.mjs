@@ -25,6 +25,8 @@ export const CSSGRAVITYWELL_VISIBILITY_SELECTION =
 const MAGIC = "CGWV";
 const HEADER_BYTES = 8;
 const PROFILE_HEADER_BYTES = 18;
+const UINT16_MAX = 0xffff;
+const MAX_ASSIGNMENT_LEAF_COUNT = 0x8000;
 const PERSPECTIVE = 600 / (2 * Math.tan(20 * Math.PI / 180));
 
 export function prepareGravityWellViewportVisibility(quadsByFrame, {
@@ -35,14 +37,16 @@ export function prepareGravityWellViewportVisibility(quadsByFrame, {
 } = {}) {
   const frameCount = quadsByFrame?.length ?? 0;
   const leafCount = quadsByFrame?.[0]?.length ?? 0;
-  if (!Array.isArray(quadsByFrame) || frameCount < 2 || leafCount < 1 ||
+  if (!Array.isArray(quadsByFrame) || frameCount < 2 || frameCount > UINT16_MAX ||
+      leafCount < 1 || leafCount > MAX_ASSIGNMENT_LEAF_COUNT ||
       quadsByFrame.some((quads) => !Array.isArray(quads) || quads.length !== leafCount) ||
       !Array.isArray(profileDimensions) || profileDimensions.length < 1 ||
       profileDimensions.some((profile) => !Number.isSafeInteger(profile?.width) || profile.width < 1 ||
-        !Number.isSafeInteger(profile?.height) || profile.height < 1) ||
+        profile.width > UINT16_MAX || !Number.isSafeInteger(profile?.height) || profile.height < 1 ||
+        profile.height > UINT16_MAX) ||
       new Set(profileDimensions.map((profile) => `${profile.width}x${profile.height}`)).size !== profileDimensions.length ||
       !Number.isSafeInteger(gridWidth) || gridWidth < 2 || leafCount !== 2 * gridWidth * (gridWidth - 1) ||
-      !Number.isSafeInteger(marginPixels) || marginPixels < 0 ||
+      !Number.isSafeInteger(marginPixels) || marginPixels < 0 || marginPixels > UINT16_MAX ||
       !Number.isSafeInteger(dilationFrames) || dilationFrames < 0 || dilationFrames > 4) {
     throw new TypeError("Complete prepared Gravity Well viewport visibility inputs are required");
   }
@@ -147,9 +151,23 @@ function inferClosedGridWidth(leafCount) {
 }
 
 export function encodeGravityWellViewportVisibility(schedule) {
+  const isUint16 = (value) => Number.isSafeInteger(value) && value >= 0 && value <= UINT16_MAX;
   if (schedule?.schema !== CSSGRAVITYWELL_VISIBILITY_SCHEMA ||
       schedule.encoding !== CSSGRAVITYWELL_VISIBILITY_ENCODING ||
-      !Array.isArray(schedule.profiles) || schedule.profiles.length < 1 || schedule.profiles.length > 255) {
+      !isUint16(schedule.marginPixels) ||
+      !Number.isSafeInteger(schedule.dilationFrames) || schedule.dilationFrames < 0 ||
+      schedule.dilationFrames > 4 ||
+      !Array.isArray(schedule.profiles) || schedule.profiles.length < 1 || schedule.profiles.length > 255 ||
+      schedule.profiles.some((profile) => !profile || !isUint16(profile.width) || profile.width < 1 ||
+        !isUint16(profile.height) || profile.height < 1 ||
+        !isUint16(profile.frameCount) || profile.frameCount < 2 ||
+        !Number.isSafeInteger(profile.leafCount) || profile.leafCount < 1 ||
+        profile.leafCount > MAX_ASSIGNMENT_LEAF_COUNT ||
+        !(profile.initialVisibleIndices instanceof Uint16Array) ||
+        profile.initialVisibleIndices.length > UINT16_MAX ||
+        !(profile.changeOffsets instanceof Uint32Array) ||
+        profile.changeOffsets.length !== profile.frameCount + 1 ||
+        !(profile.assignments instanceof Uint16Array) || profile.assignments.length > 0xffffffff)) {
     throw new TypeError("Prepared Gravity Well viewport visibility schedule is incomplete");
   }
   const byteLength = HEADER_BYTES + schedule.profiles.reduce((sum, profile) => sum +

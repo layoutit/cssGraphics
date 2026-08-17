@@ -50,20 +50,18 @@ export function selectInitialGravityWellBank(catalog, {
   previousBankIndex = null,
   randomUint32 = cryptoRandomUint32,
 } = {}) {
-  if (previousBankIndex !== null &&
-      (!Number.isSafeInteger(previousBankIndex) || previousBankIndex < 0 ||
-        previousBankIndex >= catalog.bankCount)) {
-    throw new RangeError("Gravity Well previous bank is invalid");
-  }
   const requested = new URLSearchParams(search).get("bank");
   if (requested !== null) {
     const bankIndex = Number(requested);
     if (!Number.isSafeInteger(bankIndex) || bankIndex < 0 || bankIndex >= catalog.bankCount) {
       throw new RangeError("Gravity Well requested bank is invalid");
     }
-    if (bankIndex !== previousBankIndex || catalog.bankCount === 1) {
-      return Object.freeze({ bankIndex, mode: "explicit" });
-    }
+    return Object.freeze({ bankIndex, mode: "explicit" });
+  }
+  if (previousBankIndex !== null &&
+      (!Number.isSafeInteger(previousBankIndex) || previousBankIndex < 0 ||
+        previousBankIndex >= catalog.bankCount)) {
+    throw new RangeError("Gravity Well previous bank is invalid");
   }
   const value = randomUint32();
   if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff) {

@@ -1,7 +1,10 @@
 let mountedStyle = null;
 
-export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml }) {
+export function mountPreparedSolitaireSnapshot({ host, retainedLeafCount, snapshotHtml }) {
   if (!(host instanceof HTMLElement)) throw new Error("Missing cssSolitaire host");
+  if (!Number.isSafeInteger(retainedLeafCount) || retainedLeafCount <= 4) {
+    throw new Error("Prepared cssSolitaire retained leaf count is required");
+  }
   if (typeof snapshotHtml !== "string") throw new Error("Prepared cssSolitaire snapshot is required");
   const snapshot = new DOMParser().parseFromString(snapshotHtml, "text/html");
   if (snapshot.querySelector("script,canvas,svg") ||
@@ -13,8 +16,8 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
   const scene = camera?.querySelector(":scope > .polycss-scene");
   const leaves = [...(scene?.querySelectorAll(":scope > b") ?? [])];
   if (!(style instanceof HTMLStyleElement) || !(camera instanceof HTMLElement) ||
-      !(scene instanceof HTMLElement) || scene.childElementCount !== manifest.metrics.retainedLeafCount ||
-      leaves.length !== manifest.metrics.retainedLeafCount ||
+      !(scene instanceof HTMLElement) || scene.childElementCount !== retainedLeafCount ||
+      leaves.length !== retainedLeafCount ||
       snapshot.querySelectorAll("[style]").length !== leaves.length ||
       leaves.some((leaf) => !(leaf instanceof HTMLElement) || leaf.localName !== "b" ||
         !hasInlinePreparedStyle(leaf))) {
@@ -30,8 +33,8 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
   const mountedScene = mountedCamera.querySelector(":scope > .polycss-scene");
   const mountedLeaves = [...(mountedScene?.querySelectorAll(":scope > b") ?? [])];
   if (!(mountedScene instanceof HTMLElement) ||
-      mountedScene.childElementCount !== manifest.metrics.retainedLeafCount ||
-      mountedLeaves.length !== manifest.metrics.retainedLeafCount ||
+      mountedScene.childElementCount !== retainedLeafCount ||
+      mountedLeaves.length !== retainedLeafCount ||
       mountedLeaves.some((leaf) => !hasInlinePreparedStyle(leaf))) {
     throw new Error("Mounted cssSolitaire retained DOM census drifted");
   }

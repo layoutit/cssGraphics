@@ -11,10 +11,8 @@ import { adapterRoot, repositoryRoot } from "../src/prepare/csssolitaire/paths.m
 const deploy = process.argv.includes("--deploy");
 const port = await freePort();
 const route = deploy ? "/solitaire/" : "/";
-const screenshotPath = process.env.CSSSOLITAIRE_SMOKE_SCREENSHOT ??
-  join(repositoryRoot, "bench", "results", "csssolitaire", "browser-smoke.png");
-const mobileScreenshotPath = process.env.CSSSOLITAIRE_SMOKE_MOBILE_SCREENSHOT ??
-  join(dirname(screenshotPath), "browser-smoke-mobile.png");
+const screenshotRoot = dirname(process.env.CSSSOLITAIRE_SMOKE_SCREENSHOT ??
+  join(repositoryRoot, "bench", "results", "csssolitaire", "browser-smoke.png"));
 let output = "";
 const server = spawn("pnpm", deploy ? [
   "exec", "vite", "preview", "--host", "127.0.0.1", "--port", String(port),
@@ -32,460 +30,43 @@ try {
   });
   const browser = await chromium.launch({ channel: "chrome", headless: true });
   try {
-    const page = await newPageWithRandomValue(
-      browser,
-      { viewport: { width: 960, height: 540 }, deviceScaleFactor: 1 },
-    );
-    const errors = [];
-    page.on("pageerror", (error) => errors.push(error.message));
-    page.on("console", (message) => {
-      if (message.type() === "error" && !message.text().startsWith("Failed to load resource:")) {
-        errors.push(message.text());
-      }
-    });
-    await page.emulateMedia({ reducedMotion: "no-preference" });
-    const startedAt = performance.now();
-    await page.goto(`http://127.0.0.1:${port}${route}`, { waitUntil: "networkidle" });
-    await page.waitForFunction(() => window.__cssSolitaireDebug?.ready === true ||
-      window.__cssSolitaireDebug?.errors().length > 0, null, { timeout: 30_000 });
-    const readyMs = performance.now() - startedAt;
-    const productErrors = await page.evaluate(() => window.__cssSolitaireDebug.errors());
-    if (errors.length || productErrors.length) {
-      throw new Error(`cssSolitaire browser errors:\n${[...errors, ...productErrors].join("\n")}`);
-    }
-    await page.evaluate(() => {
-      window.__cssSolitaireDebug.pause();
-      const mutations = { added: 0, removed: 0 };
-      const observer = new MutationObserver((records) => {
-        for (const record of records) {
-          mutations.added += record.addedNodes.length;
-          mutations.removed += record.removedNodes.length;
-        }
-      });
-      observer.observe(document.querySelector(".polycss-scene"), { childList: true, subtree: true });
-      window.__cssSolitaireSmoke = { mutations, observer };
-    });
-
-    const sampled = await page.evaluate(() => [0, 1250, 3500, 6500, 10000, 13584, 13585, 14585, 26210, 27210]
-      .map((timeMs) => window.__cssSolitaireDebug.seek(timeMs)));
-    const [initial, firstArc, secondArc, middle, thirdArc, nearEnd, rewindStart, rewinding, rewound, wrapped] = sampled;
-    const visibleBounds = await page.evaluate(() => {
-      const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[0].durationMs;
-      window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
-      const rects = [...document.querySelectorAll(".polycss-scene > b")]
-        .filter((leaf) => getComputedStyle(leaf).visibility === "visible")
-        .map((leaf) => leaf.getBoundingClientRect());
-      window.__cssSolitaireDebug.seek(0);
-      return {
-        left: Math.min(...rects.map((rect) => rect.left)),
-        top: Math.min(...rects.map((rect) => rect.top)),
-        right: Math.max(...rects.map((rect) => rect.right)),
-        bottom: Math.max(...rects.map((rect) => rect.bottom)),
-      };
-    });
-    const autoplayLoop = await page.evaluate(async () => {
-      window.__cssSolitaireDebug.seek(26787);
-      window.__cssSolitaireDebug.resume();
-      await new Promise((resolveWait) => setTimeout(resolveWait, 650));
-      return window.__cssSolitaireDebug.pause();
-    });
-    const bank = await page.evaluate(async (firstPatternId) => {
-      const patternIds = [firstPatternId, window.__cssSolitaireDebug.snapshot().patternId];
-      for (let index = 0; index < 22; index += 1) {
-        const state = window.__cssSolitaireDebug.snapshot();
-        const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[state.patternIndex].durationMs;
-        window.__cssSolitaireDebug.seek(durationMs - 40);
-        window.__cssSolitaireDebug.resume();
-        await new Promise((resolveWait) => setTimeout(resolveWait, 100));
-        patternIds.push(window.__cssSolitaireDebug.pause().patternId);
-      }
-      const sourcePatterns = window.__cssSolitaireDebug.manifest.sourceProfile.patterns;
-      const selectedPatterns = patternIds.map((patternId) =>
-        sourcePatterns.find(({ id }) => id === patternId));
-      return {
-        patternIds,
-        directions: selectedPatterns.map(({ phoneHorizontalVelocity }) =>
-          Math.sign(phoneHorizontalVelocity)),
-        angles: selectedPatterns.map(({ phoneHorizontalVelocity, phoneVerticalVelocity }) => {
-          let horizontalStep = Math.abs(Math.trunc(phoneHorizontalVelocity / 10));
-          let verticalStep = Math.abs(Math.trunc(phoneVerticalVelocity / 10));
-          let left = horizontalStep;
-          let right = verticalStep;
-          while (right !== 0) [left, right] = [right, left % right];
-          horizontalStep /= left;
-          verticalStep /= left;
-          return `${horizontalStep}:${verticalStep}`;
-        }),
-      };
-    }, initial.patternId);
-    const bankSequence = bank.patternIds;
-    const bankDirections = bank.directions;
-    const bankAngles = bank.angles;
-    const evidence = await page.evaluate(() => {
-      const leaves = [...document.querySelectorAll(".polycss-scene > b")];
-      const first = leaves[0];
-      const rect = first.getBoundingClientRect();
-      const foundationRects = leaves.slice(0, 4).map((leaf) => {
-        const foundationRect = leaf.getBoundingClientRect();
-        return {
-          left: foundationRect.left,
-          top: foundationRect.top,
-          width: foundationRect.width,
-          height: foundationRect.height,
-        };
-      });
-      const computedTransforms = leaves.map((leaf) => getComputedStyle(leaf).transform);
-      const host = document.body;
-      const camera = host.querySelector(":scope > .polycss-camera");
-      const preparedScene = camera?.querySelector(":scope > .polycss-scene");
-      const resources = performance.getEntriesByType("resource")
-        .map((entry) => new URL(entry.name).pathname)
-        .filter((path) => path.includes("csssolitaire"));
-      return {
-        stable: window.__cssSolitaireDebug.assertStableDomIdentity(),
-        stats: window.__cssSolitaireDebug.stats(),
-        mutations: { ...window.__cssSolitaireSmoke.mutations },
-        retainedLeaves: leaves.length,
-        visibleLeaves: leaves.filter((leaf) => getComputedStyle(leaf).visibility === "visible").length,
-        forbiddenSceneElements: camera?.querySelectorAll("canvas, svg").length,
-        structure: {
-          bodyChildren: [...host.children].map((element) =>
-            `${element.tagName}${element.className ? `.${element.className}` : ""}`),
-          mainCount: host.querySelectorAll(":scope > main").length,
-          sceneHostCount: host.querySelectorAll(":scope > #scene").length,
-          cameraChildCount: camera?.childElementCount,
-          preparedSceneChildCount: preparedScene?.childElementCount,
-          cameraClassName: camera?.className,
-          preparedSceneClassName: preparedScene?.className,
-          cameraDescendantCount: camera?.querySelectorAll("*").length,
-          unexpectedSceneElementCount: camera?.querySelectorAll(
-            "button,canvas,nav,output,section,svg,style,[contenteditable]",
-          ).length,
-          dataAttributeCount: [...camera.querySelectorAll("*")].reduce((count, element) =>
-            count + [...element.attributes].filter(({ name }) => name.startsWith("data-")).length, 0),
-          inlineStyleDeclarationCount: [...camera.querySelectorAll("*")].reduce((count, element) =>
-            count + element.style.length, 0),
-          invalidLeafClassCount: leaves.filter((leaf) => leaf.classList.length > 0).length,
-          inlineBackgroundPositionCount: leaves.filter((leaf) => leaf.style.backgroundPosition).length,
-          inlineVisibilityCount: leaves.filter((leaf) => leaf.style.visibility === "visible").length,
-        },
-        radius: getComputedStyle(first).borderRadius,
-        cardEdge: getComputedStyle(first).boxShadow,
-        imageRendering: getComputedStyle(first).imageRendering,
-        cardRect: { width: rect.width, height: rect.height },
-        foundationRects,
-        resources,
-        shell: {
-          path: document.querySelector(".site-wordmark-path")?.textContent,
-          buttons: document.querySelectorAll("button, nav, section, output").length,
-          ariaLabels: [...document.querySelectorAll("[aria-label]")]
-            .map((element) => element.getAttribute("aria-label")),
-          ariaBusyCount: document.querySelectorAll("[aria-busy]").length,
-          sceneBackground: getComputedStyle(host).backgroundImage,
-        },
-        composition: {
-          sceneTransformStyle: getComputedStyle(document.querySelector(".polycss-scene")).transformStyle,
-          matrix2dLeafCount: computedTransforms.filter((transform) => transform.startsWith("matrix(")).length,
-          matrix3dLeafCount: computedTransforms.filter((transform) => transform.startsWith("matrix3d(")).length,
-          leafInlineStyleDeclarationCount: leaves.reduce((count, leaf) => count + leaf.style.length, 0),
-        },
-      };
-    });
-    if (readyMs >= 5_000 || initial.frameIndex !== 0 || initial.visibleTrailCards !== 0 ||
-        initial.visibleFoundationCards !== 4 ||
-        firstArc.sourceStep !== 100 || firstArc.visibleTrailCards !== 101 ||
-        secondArc.sourceStep !== 400 || secondArc.visibleTrailCards !== 401 ||
-        middle.sourceStep !== 800 || middle.visibleTrailCards !== 801 ||
-        thirdArc.sourceStep !== 1266 || thirdArc.visibleTrailCards !== 1267 ||
-        thirdArc.visibleFoundationCards !== 3 ||
-        nearEnd.sourceStep !== 1679 || nearEnd.visibleTrailCards !== 1679 ||
-        nearEnd.visibleFoundationCards !== 0 ||
-        rewindStart.visibleTrailCards !== 1678 || rewindStart.visibleFoundationCards !== 0 ||
-        rewinding.visibleTrailCards <= 0 || rewinding.visibleTrailCards >= nearEnd.visibleTrailCards ||
-        rewinding.visibleFoundationCards !== 1 ||
-        rewound.frameIndex !== 608 || rewound.visibleTrailCards !== 0 || rewound.visibleFoundationCards !== 4 ||
-        wrapped.frameIndex !== 0 || wrapped.visibleTrailCards !== 0 || wrapped.visibleFoundationCards !== 4 ||
-        autoplayLoop.playheadMs >= 500 || autoplayLoop.visibleTrailCards !== 0 ||
-        autoplayLoop.patternId === initial.patternId || autoplayLoop.patternCount !== 24 ||
-        bankSequence.length !== 24 || new Set(bankSequence).size !== 24 ||
-        bankSequence.some((patternId, index) => index > 0 && patternId === bankSequence[index - 1]) ||
-        bankDirections.some((direction, index) => index > 0 && direction === bankDirections[index - 1]) ||
-        new Set(bankAngles).size !== 24 ||
-        bankAngles.some((angle, index) => index > 0 && angle === bankAngles[index - 1]) ||
-        !evidence.stable || evidence.retainedLeaves !== 1952 || evidence.visibleLeaves !== 4 ||
-        evidence.forbiddenSceneElements !== 0 || evidence.mutations.added !== 0 || evidence.mutations.removed !== 0 ||
-        JSON.stringify(evidence.structure.bodyChildren) !==
-          JSON.stringify(deploy
-            ? ["HEADER.site-header", "DIV.polycss-camera"]
-            : ["HEADER.site-header", "SCRIPT", "DIV.polycss-camera"]) ||
-        evidence.structure.mainCount !== 0 || evidence.structure.sceneHostCount !== 0 ||
-        evidence.structure.cameraChildCount !== 1 || evidence.structure.preparedSceneChildCount !== 1952 ||
-        evidence.structure.cameraDescendantCount !== 1953 ||
-        evidence.structure.cameraClassName !== "polycss-camera" ||
-        evidence.structure.preparedSceneClassName !== "polycss-scene" ||
-        evidence.structure.unexpectedSceneElementCount !== 0 || evidence.structure.dataAttributeCount !== 0 ||
-        evidence.structure.inlineStyleDeclarationCount !== 5860 ||
-        evidence.structure.invalidLeafClassCount !== 0 ||
-        evidence.structure.inlineBackgroundPositionCount !== 1952 ||
-        evidence.structure.inlineVisibilityCount !== 4 ||
-        evidence.radius !== "14px" ||
-        evidence.cardEdge !== "none" ||
-        evidence.imageRendering !== "auto" ||
-        Math.abs(evidence.cardRect.width - 99.84375) > 0.1 || Math.abs(evidence.cardRect.height - 135) > 0.1 ||
-        evidence.foundationRects.some((rect, index) =>
-          Math.abs(rect.left - [430.078125, 562.55859375, 695.0390625, 827.51953125][index]) > 0.1 ||
-          Math.abs(rect.top - 80) > 0.1 || Math.abs(rect.width - 99.84375) > 0.1 ||
-          Math.abs(rect.height - 135) > 0.1) ||
-        evidence.shell.path !== "/solitaire" ||
-        evidence.shell.buttons !== 0 ||
-        JSON.stringify(evidence.shell.ariaLabels) !== JSON.stringify(["View cssGraphics on GitHub"]) ||
-        evidence.shell.ariaBusyCount !== 0 ||
-        !evidence.shell.sceneBackground.startsWith("linear-gradient(rgb(0, 128, 0)") ||
-        evidence.composition.sceneTransformStyle !== "flat" ||
-        evidence.composition.matrix2dLeafCount !== 1952 || evidence.composition.matrix3dLeafCount !== 0 ||
-        evidence.composition.leafInlineStyleDeclarationCount !== 5860 ||
-        evidence.stats.runtimeAnimationFrameCallbackCount !== 0 ||
-        evidence.stats.runtimeTimerCallbackCount < 1 || evidence.stats.loopCount < 1 ||
-        evidence.stats.preparedPatternCount !== 24 ||
-        evidence.stats.runtimePreparedPatternSwitchCount !== 23 ||
-        evidence.stats.runtimePatternLayoutWrites < 1 ||
-        evidence.stats.runtimePatternLayoutLeavesVisited !==
-          evidence.stats.runtimePatternLayoutLeavesRequired ||
-        evidence.stats.runtimePatternLayoutUnusedLeavesVisited !== 0 ||
-        evidence.stats.runtimeResponsiveFaceLeavesVisited !==
-          evidence.stats.runtimeResponsiveFaceLeavesRequired ||
-        evidence.stats.runtimeResponsiveFaceUnusedLeavesVisited !== 0 ||
-        evidence.stats.runtimeResetTrailLeavesVisited !== evidence.stats.runtimeResetTrailLeavesRequired ||
-        evidence.stats.runtimeResetUnusedLeavesVisited !== 0 ||
-        evidence.stats.runtimeRandomSelectionCount < 1 ||
-        evidence.stats.runtimeRandomSelectionPurpose !==
-          "prepared-pattern-random-initial-and-shuffled-bag-alternating-phone-direction-unique-angle" ||
-        evidence.stats.runtimeGeometryCalculationCount !== 0 ||
-        evidence.stats.runtimeGeometryBoundsCalculationCount !== 0 ||
-        evidence.stats.runtimeFitCalculationPurpose !== "prepared-layout-inline-matrix-resolution" ||
-        Math.abs(evidence.stats.runtimePresentationScale - 1.40625) > 0.000001 ||
-        evidence.stats.runtimePresentationUpdateCount !== 0 ||
-        evidence.stats.runtimeResponsiveMatrixResolutionCount < 1 ||
-        evidence.stats.runtimeTrajectoryCalculationCount !== 0 ||
-        evidence.stats.runtimeAtlasRasterizationCount !== 0 ||
-        evidence.stats.runtimeDomMutationCount !== 0 ||
-        !evidence.resources.includes("/csssolitaire/manifest.json") ||
-        !evidence.resources.includes("/csssolitaire/solitaire.polycss.txt") ||
-        !evidence.resources.includes("/csssolitaire/solitaire-playback.json") ||
-        evidence.resources.some((path) => path.endsWith("model.json"))) {
-      throw new Error(`cssSolitaire smoke contract failed: ${JSON.stringify({ readyMs, sampled, evidence })}`);
-    }
-    if (visibleBounds.left > -0.9 * evidence.cardRect.width ||
-        visibleBounds.right < 960 + 0.9 * evidence.cardRect.width ||
-        visibleBounds.top < 7.9 || visibleBounds.top > 80 ||
-        Math.abs(visibleBounds.bottom - 540) > 0.2) {
-      throw new Error(`cssSolitaire cards no longer exit the fixed playfield: ${JSON.stringify(visibleBounds)}`);
-    }
-    await page.evaluate(() => {
-      const state = window.__cssSolitaireDebug.snapshot();
-      const durationMs = state.durationMs;
-      window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
-    });
-    await mkdir(dirname(screenshotPath), { recursive: true });
-    const screenshot = await page.screenshot({ path: screenshotPath });
-    const png = PNG.sync.read(screenshot);
-    let cardPixels = 0;
-    for (let offset = 0; offset < png.data.length; offset += 4) {
-      const [red, green, blue] = png.data.subarray(offset, offset + 3);
-      if (red > 220 && green > 220 && blue > 220) cardPixels += 1;
-    }
-    const cardPixelRatio = cardPixels / (png.width * png.height);
-    if (cardPixelRatio < 0.12) throw new Error(`cssSolitaire screenshot is visually empty: ${cardPixelRatio}`);
-
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.waitForTimeout(100);
-    const mobileInitial = await page.evaluate(() => {
-      window.__cssSolitaireDebug.seek(0);
-      const displayedFoundations = [...document.querySelectorAll(".polycss-scene > b")].slice(0, 4)
-        .filter((foundation) => getComputedStyle(foundation).display !== "none");
-      const leaf = displayedFoundations[0];
-      const rect = leaf.getBoundingClientRect();
-      const foundationRects = displayedFoundations
-        .map((foundation) => {
-          const foundationRect = foundation.getBoundingClientRect();
-          return { left: foundationRect.left, right: foundationRect.right };
-        });
-      return {
-        portraitMedia: matchMedia("(orientation: portrait)").matches,
-        stable: window.__cssSolitaireDebug.assertStableDomIdentity(),
-        retainedLeaves: document.querySelectorAll(".polycss-scene > b").length,
-        displayedFoundationCount: displayedFoundations.length,
-        cardRect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
-        foundationRects,
-        sceneTransform: getComputedStyle(document.querySelector(".polycss-scene")).transform,
-        mutations: { ...window.__cssSolitaireSmoke.mutations },
-      };
-    });
-    await page.evaluate(() => {
-      const state = window.__cssSolitaireDebug.snapshot();
-      const durationMs = state.durationMs;
-      window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
-    });
-    const mobileEvidence = await page.evaluate(() => {
-      const visibleLeaves = [...document.querySelectorAll(".polycss-scene > b")]
-        .filter((leaf) => {
-          const style = getComputedStyle(leaf);
-          return style.display !== "none" && style.visibility === "visible";
-        });
-      const rects = visibleLeaves.map((leaf) => leaf.getBoundingClientRect());
-      return {
-        stable: window.__cssSolitaireDebug.assertStableDomIdentity(),
-        visibleLeaves: visibleLeaves.length,
-        intersectingVisibleLeaves: rects.filter((rect) =>
-          rect.right > 0 && rect.bottom > 0 && rect.left < innerWidth && rect.top < innerHeight).length,
-        visibleBounds: {
-          left: Math.min(...rects.map((rect) => rect.left)),
-          top: Math.min(...rects.map((rect) => rect.top)),
-          right: Math.max(...rects.map((rect) => rect.right)),
-          bottom: Math.max(...rects.map((rect) => rect.bottom)),
-        },
-        mutations: { ...window.__cssSolitaireSmoke.mutations },
-      };
-    });
-    if (!mobileInitial.portraitMedia || !mobileInitial.stable || mobileInitial.retainedLeaves !== 1952 ||
-        mobileInitial.displayedFoundationCount !== 1 ||
-        Math.abs(mobileInitial.cardRect.width - 72.109375) > 0.1 ||
-        Math.abs(mobileInitial.cardRect.height - 97.5) > 0.1 ||
-        mobileInitial.cardRect.height <= mobileInitial.cardRect.width ||
-        Math.abs(mobileInitial.cardRect.left - 158.9453125) > 0.1 ||
-        Math.abs(mobileInitial.cardRect.top - 80) > 0.1 ||
-        mobileInitial.sceneTransform !== "none" ||
-        mobileInitial.mutations.added !== 0 || mobileInitial.mutations.removed !== 0 ||
-        !mobileEvidence.stable || mobileEvidence.visibleLeaves <= 1 ||
-        mobileEvidence.intersectingVisibleLeaves <= 4 ||
-        mobileEvidence.visibleBounds.left > 8 || mobileEvidence.visibleBounds.right < 382 ||
-        mobileEvidence.visibleBounds.top < 7.9 ||
-        mobileEvidence.visibleBounds.top >= 0.2 * 844 ||
-        Math.abs(mobileEvidence.visibleBounds.bottom - 844) > 0.2 ||
-        mobileEvidence.visibleBounds.bottom <= 0.72 * 844 ||
-        mobileEvidence.visibleBounds.bottom - mobileEvidence.visibleBounds.top <= 0.65 * 844 ||
-        mobileEvidence.mutations.added !== 0 || mobileEvidence.mutations.removed !== 0) {
-      throw new Error(`cssSolitaire mobile contract failed: ${JSON.stringify({ mobileInitial, mobileEvidence })}`);
-    }
-    const mobileScreenshot = await page.screenshot({ path: mobileScreenshotPath });
-    const mobilePng = PNG.sync.read(mobileScreenshot);
-    let mobileCardPixels = 0;
-    for (let offset = 0; offset < mobilePng.data.length; offset += 4) {
-      const [red, green, blue] = mobilePng.data.subarray(offset, offset + 3);
-      if (red > 220 && green > 220 && blue > 220) mobileCardPixels += 1;
-    }
-    const mobileCardPixelRatio = mobileCardPixels / (mobilePng.width * mobilePng.height);
-    if (mobileCardPixelRatio < 0.08) {
-      throw new Error(`cssSolitaire mobile screenshot is visually empty: ${mobileCardPixelRatio}`);
-    }
-    const responsiveCardCounts = [];
-    for (const viewport of [
-      { width: 390, height: 844, expected: 1, expectedProfile: 1, expectedSize: [72.109375, 97.5], expectedLefts: [158.9453125] },
-      { width: 600, height: 900, expected: 2, expectedProfile: 2, expectedSize: [88.75, 120], expectedLefts: [322.25, 425] },
-      { width: 800, height: 1_000, expected: 3, expectedProfile: 3, expectedSize: [98.611111, 133.333333], expectedLefts: [355.833333, 469.444444, 583.055556] },
-      { width: 960, height: 1_200, expected: 4, expectedProfile: 4, expectedSize: [118.333333, 160], expectedLefts: [423, 558.333333, 693.666667, 829] },
+    await mkdir(screenshotRoot, { recursive: true });
+    const viewportEvidence = [];
+    for (const config of [
+      { name: "mobile", width: 390, height: 844, mobile: true, bankId: "mobile",
+        profileIndex: 1, displayedFoundations: 1, retainedLeaves: 683 },
+      { name: "portrait-2", width: 600, height: 900, bankId: "small-desktop",
+        profileIndex: 2, displayedFoundations: 2, retainedLeaves: 1952 },
+      { name: "portrait-3", width: 800, height: 1_000, bankId: "small-desktop",
+        profileIndex: 3, displayedFoundations: 3, retainedLeaves: 1952 },
+      { name: "portrait-4", width: 960, height: 1_200, bankId: "small-desktop",
+        profileIndex: 4, displayedFoundations: 4, retainedLeaves: 1952 },
+      { name: "small-desktop", width: 1_440, height: 900, bankId: "small-desktop",
+        profileIndex: 0, displayedFoundations: 4, retainedLeaves: 1952 },
+      { name: "large-desktop", width: 2_560, height: 1_440, bankId: "large-desktop",
+        profileIndex: 0, displayedFoundations: 4, retainedLeaves: 3888 },
     ]) {
-      await page.setViewportSize(viewport);
-      await page.waitForTimeout(50);
-      const layout = await page.evaluate(() => {
-        window.__cssSolitaireDebug.seek(0);
-        const cards = [...document.querySelectorAll(".polycss-scene > b")].slice(0, 4)
-          .filter((foundation) => getComputedStyle(foundation).display !== "none")
-          .map((foundation) => {
-            const rect = foundation.getBoundingClientRect();
-            return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
-          });
-        const state = window.__cssSolitaireDebug.snapshot();
-        const durationMs = state.durationMs;
-        window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
-        const visibleRects = [...document.querySelectorAll(".polycss-scene > b")]
-          .filter((leaf) => {
-            const style = getComputedStyle(leaf);
-            return style.display !== "none" && style.visibility === "visible";
-          })
-          .map((leaf) => leaf.getBoundingClientRect());
-        return {
-          cards,
-          profileIndex: state.responsiveProfileIndex,
-          visibleLeft: Math.min(...visibleRects.map((rect) => rect.left)),
-          visibleRight: Math.max(...visibleRects.map((rect) => rect.right)),
-        };
-      });
-      responsiveCardCounts.push({
-        ...viewport,
-        expectedTop: 80,
-        displayed: layout.cards.length,
-        ...layout,
-      });
+      viewportEvidence.push(await captureViewport(browser, port, route, screenshotRoot, config));
     }
-    if (responsiveCardCounts.some(({
-      width, expected, expectedProfile, expectedTop, expectedSize, displayed, expectedLefts, cards,
-      profileIndex, visibleLeft, visibleRight,
-    }) =>
-      expected !== displayed || profileIndex !== expectedProfile || cards.some((card, index) =>
-        Math.abs(card.left - expectedLefts[index]) > 0.1 ||
-        Math.abs(card.top - expectedTop) > 0.1 ||
-        Math.abs(card.width - expectedSize[0]) > 0.1 || Math.abs(card.height - expectedSize[1]) > 0.1) ||
-      (expected === 1
-        ? visibleLeft < -0.1 || visibleRight > width + 0.1
-        : visibleLeft > -0.9 * expectedSize[0] && visibleRight < width + 0.9 * expectedSize[0]))) {
-      throw new Error(`cssSolitaire responsive slot layout drifted: ${JSON.stringify(responsiveCardCounts)}`);
-    }
-    const landscapeViewports = [];
-    for (const viewport of [
-      { width: 960, height: 540, expectedSize: [99.84375, 135], expectedLefts: [430.078125, 562.558594, 695.039063, 827.519531] },
-      { width: 1_280, height: 720, expectedSize: [133.125, 180], expectedLefts: [573.4375, 750.078125, 926.71875, 1_103.359375] },
-      { width: 1_440, height: 900, expectedSize: [149.765625, 202.5], expectedLefts: [645.117188, 843.837891, 1_042.558594, 1_241.279297] },
-      { width: 2_560, height: 1_440, expectedSize: [200, 270.422535], expectedLefts: [1_180, 1_525, 1_870, 2_215] },
-    ]) {
-      await page.setViewportSize(viewport);
-      await page.waitForTimeout(50);
-      const layout = await page.evaluate(() => {
-        window.__cssSolitaireDebug.seek(0);
-        const cards = [...document.querySelectorAll(".polycss-scene > b")].slice(0, 4)
-          .map((foundation) => {
-            const rect = foundation.getBoundingClientRect();
-            return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
-          });
-        const state = window.__cssSolitaireDebug.snapshot();
-        const durationMs = window.__cssSolitaireDebug.manifest.sourceProfile.patterns[state.patternIndex].durationMs;
-        window.__cssSolitaireDebug.seek(durationMs / 2 - 100);
-        const visible = [...document.querySelectorAll(".polycss-scene > b")]
-          .filter((leaf) => getComputedStyle(leaf).visibility === "visible")
-          .map((leaf) => leaf.getBoundingClientRect());
-        return {
-          cards,
-          profileIndex: state.responsiveProfileIndex,
-          visibleLeft: Math.min(...visible.map((rect) => rect.left)),
-          visibleTop: Math.min(...visible.map((rect) => rect.top)),
-          visibleBottom: Math.max(...visible.map((rect) => rect.bottom)),
-        };
-      });
-      landscapeViewports.push({ ...viewport, expectedTop: 80, ...layout });
-    }
-    if (landscapeViewports.some(({
-      height, expectedTop, expectedSize, expectedLefts, cards, profileIndex, visibleLeft, visibleTop, visibleBottom,
-    }) =>
-      profileIndex !== 0 || cards.some((card, index) => Math.abs(card.left - expectedLefts[index]) > 0.1 ||
-        Math.abs(card.top - expectedTop) > 0.1 || Math.abs(card.width - expectedSize[0]) > 0.1 ||
-        Math.abs(card.height - expectedSize[1]) > 0.1) ||
-      visibleLeft > -0.9 * expectedSize[0] ||
-      visibleTop < 7.9 || visibleTop > 80 || Math.abs(visibleBottom - height) > 0.2)) {
-      throw new Error(`cssSolitaire viewport fill drifted: ${JSON.stringify(landscapeViewports)}`);
-    }
-    const reducedMotionMobileAutoplay = await captureReducedMotionMobileAutoplay(browser, port, route);
+    const sourcePhysics = await captureSourcePhysics(browser, port, route);
+    const patternSequence = await capturePatternSequence(browser, port, route);
+    const startupSelections = await captureStartupSelections(browser, port, route);
     const mobileContinuity = await captureMobileContinuity(browser, port, route);
-    const mobileHandoffWork = await captureMobileHandoffWork(browser, port, route);
-    const startupPatternSelections = await captureStartupPatternSelections(browser, port, route);
-    await page.evaluate(() => window.__cssSolitaireSmoke.observer.disconnect());
+    const reducedMotion = await captureReducedMotion(browser, port, route);
+    const retainedBankResize = await captureRetainedBankResize(browser, port, route);
     process.stdout.write(`${JSON.stringify({
-      status: "passed", headless: true, browser: browser.version(), deploy, route,
-      readyMs, sampled, autoplayLoop, bankSequence, bankDirections, bankAngles, evidence, visibleBounds,
-      cardPixelRatio,
-      screenshotPath,
-      mobileInitial, mobileEvidence, mobileCardPixelRatio, mobileScreenshotPath,
-      responsiveCardCounts, landscapeViewports, reducedMotionMobileAutoplay, mobileContinuity,
-      mobileHandoffWork, startupPatternSelections,
+      status: "passed",
+      headless: true,
+      browser: browser.version(),
+      deploy,
+      route,
+      viewportEvidence,
+      sourcePhysics,
+      patternSequence,
+      startupSelections,
+      mobileContinuity,
+      reducedMotion,
+      retainedBankResize,
     }, null, 2)}\n`);
   } finally {
     await browser.close();
@@ -494,241 +75,199 @@ try {
   server.kill("SIGTERM");
 }
 
-async function captureReducedMotionMobileAutoplay(browser, port, route) {
-  const page = await newPageWithRandomValue(browser, {
-    viewport: { width: 390, height: 844 },
-    screen: { width: 390, height: 844 },
-    deviceScaleFactor: 3,
-    isMobile: true,
-    hasTouch: true,
-    userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 " +
-      "(KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1",
-  });
+async function captureViewport(browser, port, route, screenshotRoot, config) {
+  const { page, browserErrors } = await openPreparedPage(browser, port, route, config, 0);
   try {
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.goto(`http://127.0.0.1:${port}${route}`, { waitUntil: "networkidle" });
-    await page.waitForFunction(() => window.__cssSolitaireDebug?.ready === true ||
-      window.__cssSolitaireDebug?.errors().length > 0, null, { timeout: 30_000 });
-    const result = await page.evaluate(async () => {
-      const initialState = window.__cssSolitaireDebug.snapshot();
-      await new Promise((resolveWait) => setTimeout(resolveWait, 3_500));
-      const advancedState = window.__cssSolitaireDebug.snapshot();
-      const stats = window.__cssSolitaireDebug.stats();
-      return {
-        reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
-        initial: {
-          playing: initialState.playing,
-          playheadMs: initialState.playheadMs,
-          frameIndex: initialState.frameIndex,
-        },
-        advanced: {
-          playing: advancedState.playing,
-          playheadMs: advancedState.playheadMs,
-          frameIndex: advancedState.frameIndex,
-        },
-        timerCallbacks: stats.runtimeTimerCallbackCount,
-        visibilityWrites: stats.runtimeLeafVisibilityWrites,
-        errors: window.__cssSolitaireDebug.errors(),
-      };
-    });
-    if (!result.reducedMotion || result.errors.length || !result.initial.playing ||
-        !result.advanced.playing || result.advanced.playheadMs < 3_000 ||
-        result.advanced.frameIndex <= result.initial.frameIndex ||
-        result.timerCallbacks === 0 || result.visibilityWrites === 0) {
-      throw new Error(`cssSolitaire reduced-motion mobile autoplay failed: ${JSON.stringify(result)}`);
-    }
-    return result;
-  } finally {
-    await page.close();
-  }
-}
-
-async function captureMobileContinuity(browser, port, route) {
-  const page = await newPageWithRandomValue(browser, {
-    viewport: { width: 390, height: 844 },
-    screen: { width: 390, height: 844 },
-    deviceScaleFactor: 3,
-    isMobile: true,
-    hasTouch: true,
-  });
-  try {
-    await page.goto(`http://127.0.0.1:${port}${route}`, { waitUntil: "networkidle" });
-    await page.waitForFunction(() => window.__cssSolitaireDebug?.ready === true ||
-      window.__cssSolitaireDebug?.errors().length > 0, null, { timeout: 30_000 });
-    const result = await page.evaluate(() => {
-      window.__cssSolitaireDebug.pause();
-      const initial = window.__cssSolitaireDebug.seek(0);
-      const motionSamples = [];
-      for (let timeMs = 500; timeMs < initial.durationMs; timeMs += 50) {
-        const state = window.__cssSolitaireDebug.seek(timeMs);
-        if (state.rewinding) break;
-        const leaves = [...document.querySelectorAll(".polycss-scene > b")];
-        let leafIndex = leaves.length - 1;
-        while (leafIndex >= 4 && leaves[leafIndex].style.visibility !== "visible") leafIndex -= 1;
-        if (leafIndex < 4) continue;
-        const leaf = leaves[leafIndex];
-        motionSamples.push({
-          face: leaf.style.backgroundPosition,
-          x: leaf.getBoundingClientRect().x,
-        });
-      }
-      const faceGroups = [];
-      for (const sample of motionSamples) {
-        let group = faceGroups.at(-1);
-        if (!group || group.face !== sample.face) {
-          group = { face: sample.face, positions: [] };
-          faceGroups.push(group);
-        }
-        group.positions.push(sample.x);
-      }
-      const directionChanges = faceGroups.map(({ positions }) => {
-        let previousDirection = 0;
-        let changes = 0;
-        for (let index = 1; index < positions.length; index += 1) {
-          const direction = Math.sign(positions[index] - positions[index - 1]);
-          if (direction !== 0 && previousDirection !== 0 && direction !== previousDirection) changes += 1;
-          if (direction !== 0) previousDirection = direction;
-        }
-        return changes;
-      });
-      let lastForwardTimeMs = 0;
-      let firstRewindTimeMs = initial.durationMs;
-      while (firstRewindTimeMs - lastForwardTimeMs > 1) {
-        const middleTimeMs = Math.floor((lastForwardTimeMs + firstRewindTimeMs) / 2);
-        if (window.__cssSolitaireDebug.seek(middleTimeMs).rewinding) {
-          firstRewindTimeMs = middleTimeMs;
-        } else {
-          lastForwardTimeMs = middleTimeMs;
-        }
-      }
-      window.__cssSolitaireDebug.seek(lastForwardTimeMs);
-      const endLeaves = [...document.querySelectorAll(".polycss-scene > b")];
-      let endLeafIndex = endLeaves.length - 1;
-      while (endLeafIndex >= 4 && endLeaves[endLeafIndex].style.visibility !== "visible") {
-        endLeafIndex -= 1;
-      }
-      const endRect = endLeaves[endLeafIndex].getBoundingClientRect();
-      return {
-        timeline: {
-          durationMs: initial.durationMs,
-          launchCardCount: initial.launchCardCount,
-          trailLeafCount: initial.timelineTrailLeafCount,
-          faceCount: faceGroups.length,
-          directionChanges,
-          floorGapCssPixels: innerHeight - endRect.bottom,
-        },
-        samples: [1_000, 2_000, 3_000, 4_000].map((timeMs) => {
-          window.__cssSolitaireDebug.seek(timeMs);
-          const visiblePaintedLeaves = [...document.querySelectorAll(".polycss-scene > b")]
-            .filter((leaf) => {
-              const style = getComputedStyle(leaf);
-              return style.display !== "none" && style.visibility === "visible";
-            }).length;
-          return { timeMs, visiblePaintedLeaves };
-        }),
-        errors: window.__cssSolitaireDebug.errors(),
-      };
-    });
-    if (result.errors.length || result.timeline.durationMs !== 12210 ||
-        result.timeline.launchCardCount !== 1 || result.timeline.trailLeafCount !== 679 ||
-        result.timeline.faceCount !== 1 || Math.abs(result.timeline.floorGapCssPixels) > 0.1 ||
-        result.timeline.directionChanges.some((changes) => changes < 3) ||
-        result.samples.some((sample, index) =>
-      index > 0 && sample.visiblePaintedLeaves <= result.samples[index - 1].visiblePaintedLeaves)) {
-      throw new Error(`cssSolitaire mobile continuity failed: ${JSON.stringify(result)}`);
-    }
-    return result;
-  } finally {
-    await page.close();
-  }
-}
-
-async function captureMobileHandoffWork(browser, port, route) {
-  const page = await newPageWithRandomValue(browser, {
-    viewport: { width: 390, height: 844 },
-    screen: { width: 390, height: 844 },
-    deviceScaleFactor: 3,
-    isMobile: true,
-    hasTouch: true,
-  });
-  try {
-    await page.goto(`http://127.0.0.1:${port}${route}`, { waitUntil: "networkidle" });
-    await page.waitForFunction(() => window.__cssSolitaireDebug?.ready === true ||
-      window.__cssSolitaireDebug?.errors().length > 0, null, { timeout: 30_000 });
-    const reset = await page.evaluate(() => {
-      window.__cssSolitaireDebug.pause();
-      const visible = window.__cssSolitaireDebug.seek(5_000).visibleTrailCards;
-      const before = window.__cssSolitaireDebug.stats();
-      window.__cssSolitaireDebug.seek(0);
-      const after = window.__cssSolitaireDebug.stats();
-      return {
-        visible,
-        visited: after.runtimeResetTrailLeavesVisited - before.runtimeResetTrailLeavesVisited,
-        required: after.runtimeResetTrailLeavesRequired - before.runtimeResetTrailLeavesRequired,
-        unused: after.runtimeResetUnusedLeavesVisited - before.runtimeResetUnusedLeavesVisited,
-      };
-    });
-    const handoffStart = await page.evaluate(() => {
-      const state = window.__cssSolitaireDebug.snapshot();
-      window.__cssSolitaireDebug.seek(state.durationMs - 40);
-      const before = window.__cssSolitaireDebug.stats();
-      const patternIndex = window.__cssSolitaireDebug.snapshot().patternIndex;
-      window.__cssSolitaireDebug.resume();
-      return { before, patternIndex };
-    });
-    await page.waitForFunction((patternIndex) =>
-      window.__cssSolitaireDebug.snapshot().patternIndex !== patternIndex,
-    handoffStart.patternIndex, { timeout: 2_000 });
-    const handoff = await page.evaluate((before) => {
+    const initial = await page.evaluate(() => {
       const state = window.__cssSolitaireDebug.pause();
-      const after = window.__cssSolitaireDebug.stats();
-      const fullTrailLeafCount = window.__cssSolitaireDebug.manifest.sourceProfile
-        .patterns[state.patternIndex].trailLeafCount;
+      const stats = window.__cssSolitaireDebug.stats();
+      const leaves = [...document.querySelectorAll(".polycss-scene > b")];
+      const foundations = leaves.slice(0, 4)
+        .filter((leaf) => getComputedStyle(leaf).display !== "none");
+      const firstRect = foundations[0].getBoundingClientRect();
+      const resources = performance.getEntriesByType("resource")
+        .map((entry) => new URL(entry.name).pathname)
+        .filter((path) => path.includes("csssolitaire"));
+      const host = document.body;
+      const camera = host.querySelector(":scope > .polycss-camera");
       return {
-        patternIndex: state.patternIndex,
-        profileIndex: state.responsiveProfileIndex,
-        activeTrailLeafCount: state.timelineTrailLeafCount,
-        fullTrailLeafCount,
-        initializedFaceLeafCount: after.activePatternFaceInitializedLeafCount,
-        patternSwitches: after.runtimePreparedPatternSwitchCount - before.runtimePreparedPatternSwitchCount,
-        visited: after.runtimePatternLayoutLeavesVisited - before.runtimePatternLayoutLeavesVisited,
-        required: after.runtimePatternLayoutLeavesRequired - before.runtimePatternLayoutLeavesRequired,
-        unused: after.runtimePatternLayoutUnusedLeavesVisited - before.runtimePatternLayoutUnusedLeavesVisited,
+        state,
+        stats,
+        retainedLeaves: leaves.length,
+        displayedFoundations: foundations.length,
+        firstCard: {
+          left: firstRect.left,
+          top: firstRect.top,
+          width: firstRect.width,
+          height: firstRect.height,
+          radius: getComputedStyle(foundations[0]).borderRadius,
+          edge: getComputedStyle(foundations[0]).boxShadow,
+          imageRendering: getComputedStyle(foundations[0]).imageRendering,
+        },
+        resources,
+        stable: window.__cssSolitaireDebug.assertStableDomIdentity(),
+        errors: window.__cssSolitaireDebug.errors(),
+        forbiddenSceneElements: camera.querySelectorAll("canvas,svg").length,
+        mainCount: host.querySelectorAll(":scope > main").length,
+        dataAttributeCount: [...camera.querySelectorAll("*")].reduce((count, element) =>
+          count + [...element.attributes].filter(({ name }) => name.startsWith("data-")).length, 0),
+        invalidLeafClassCount: leaves.filter((leaf) => leaf.classList.length > 0).length,
+        matrix2dLeafCount: leaves.filter((leaf) =>
+          getComputedStyle(leaf).transform.startsWith("matrix(")).length,
       };
-    }, handoffStart.before);
-    const beforeExpansion = await page.evaluate(() => window.__cssSolitaireDebug.stats());
-    await page.setViewportSize({ width: 600, height: 900 });
-    await page.waitForFunction(() => window.__cssSolitaireDebug.snapshot().responsiveProfileIndex === 2);
-    const expansion = await page.evaluate((before) => {
+    });
+    const expectedFiles = selectedBankFiles(config);
+    const preparedResources = initial.resources.filter((path) =>
+      /solitaire-(?:(?:mobile|small-desktop|large-desktop)\.polycss\.txt|schedule-(?:mobile|small-desktop|large-desktop)\.json|layout-[a-z0-9-]+\.json)$/u
+        .test(path));
+    if (browserErrors.length || initial.errors.length || !initial.stable ||
+        initial.stats.selectedPreparedBank !== config.bankId ||
+        initial.stats.preparedBankId !== config.bankId ||
+        initial.stats.preparedBankLoadCount !== 1 ||
+        initial.stats.runtimePreparedBankSwitchCount !== 0 ||
+        initial.state.responsiveProfileIndex !== config.profileIndex ||
+        initial.retainedLeaves !== config.retainedLeaves ||
+        initial.displayedFoundations !== config.displayedFoundations ||
+        initial.stats.runtimePatternLayoutLeavesVisited !== initial.state.timelineTrailLeafCount ||
+        initial.stats.runtimePatternLayoutLeavesRequired !== initial.state.timelineTrailLeafCount ||
+        initial.stats.runtimePatternLayoutUnusedLeavesVisited !== 0 ||
+        initial.stats.runtimeResponsiveMatrixResolutionCount !== initial.state.timelineTrailLeafCount + 4 ||
+        initial.stats.runtimeAnimationFrameCallbackCount !== 0 ||
+        initial.stats.runtimeGeometryCalculationCount !== 0 ||
+        initial.stats.runtimeTrajectoryCalculationCount !== 0 ||
+        initial.stats.runtimeAtlasRasterizationCount !== 0 || initial.stats.runtimeDomGrowth !== false ||
+        initial.forbiddenSceneElements !== 0 || initial.mainCount !== 0 ||
+        initial.dataAttributeCount !== 0 || initial.invalidLeafClassCount !== 0 ||
+        initial.matrix2dLeafCount !== config.retainedLeaves - (4 - config.displayedFoundations) ||
+        initial.firstCard.radius !== "14px" ||
+        initial.firstCard.edge !== "none" || initial.firstCard.imageRendering !== "auto" ||
+        Math.abs(initial.firstCard.top - 80) > 0.1 ||
+        JSON.stringify(preparedResources.sort()) !== JSON.stringify(expectedFiles.sort())) {
+      throw new Error(`cssSolitaire ${config.name} bank failed: ${JSON.stringify({ browserErrors, initial })}`);
+    }
+    const visual = await page.evaluate(() => {
       const state = window.__cssSolitaireDebug.snapshot();
-      const after = window.__cssSolitaireDebug.stats();
+      window.__cssSolitaireDebug.seek(state.durationMs / 2 - 100);
+      const rects = [...document.querySelectorAll(".polycss-scene > b")]
+        .filter((leaf) => {
+          const style = getComputedStyle(leaf);
+          return style.display !== "none" && style.visibility === "visible";
+        })
+        .map((leaf) => leaf.getBoundingClientRect());
       return {
-        profileIndex: state.responsiveProfileIndex,
-        activeTrailLeafCount: state.timelineTrailLeafCount,
-        initializedFaceLeafCount: after.activePatternFaceInitializedLeafCount,
-        visited: after.runtimeResponsiveFaceLeavesVisited - before.runtimeResponsiveFaceLeavesVisited,
-        required: after.runtimeResponsiveFaceLeavesRequired - before.runtimeResponsiveFaceLeavesRequired,
-        unused: after.runtimeResponsiveFaceUnusedLeavesVisited - before.runtimeResponsiveFaceUnusedLeavesVisited,
+        visibleLeaves: rects.length,
+        bounds: {
+          left: Math.min(...rects.map(({ left }) => left)),
+          top: Math.min(...rects.map(({ top }) => top)),
+          right: Math.max(...rects.map(({ right }) => right)),
+          bottom: Math.max(...rects.map(({ bottom }) => bottom)),
+        },
       };
-    }, beforeExpansion);
-    const result = {
-      reset,
-      handoff,
-      expansion,
-      errors: await page.evaluate(() => window.__cssSolitaireDebug.errors()),
+    });
+    if (visual.visibleLeaves < 100 || visual.bounds.top < 7.8 || visual.bounds.top > 80.1 ||
+        Math.abs(visual.bounds.bottom - config.height) > 0.2 ||
+        (config.bankId === "mobile" &&
+          (visual.bounds.left < -0.1 || visual.bounds.right > config.width + 0.1))) {
+      throw new Error(`cssSolitaire ${config.name} visual bounds failed: ${JSON.stringify(visual)}`);
+    }
+    const screenshotPath = join(screenshotRoot, `browser-smoke-${config.name}.png`);
+    const screenshot = await page.screenshot({ path: screenshotPath });
+    const cardPixelRatio = whitePixelRatio(screenshot);
+    if (cardPixelRatio < 0.08) {
+      throw new Error(`cssSolitaire ${config.name} screenshot is visually empty: ${cardPixelRatio}`);
+    }
+    return {
+      name: config.name,
+      selectedBank: initial.stats.selectedPreparedBank,
+      profileIndex: initial.state.responsiveProfileIndex,
+      retainedLeaves: initial.retainedLeaves,
+      activeTrailLeaves: initial.state.timelineTrailLeafCount,
+      cardSize: [initial.firstCard.width, initial.firstCard.height],
+      resources: preparedResources,
+      visual,
+      cardPixelRatio,
+      screenshotPath,
     };
-    const expansionLeafCount = handoff.fullTrailLeafCount;
-    if (result.errors.length || reset.visible <= 0 || reset.visited !== reset.visible ||
-        reset.required !== reset.visible || reset.unused !== 0 || handoff.patternSwitches !== 1 ||
-        handoff.profileIndex !== 1 || handoff.activeTrailLeafCount >= handoff.fullTrailLeafCount ||
-        handoff.initializedFaceLeafCount !== handoff.activeTrailLeafCount ||
-        handoff.visited !== handoff.activeTrailLeafCount ||
-        handoff.required !== handoff.activeTrailLeafCount || handoff.unused !== 0 ||
-        expansion.profileIndex !== 2 || expansion.activeTrailLeafCount !== handoff.fullTrailLeafCount ||
-        expansion.initializedFaceLeafCount !== handoff.fullTrailLeafCount ||
-        expansion.visited !== expansionLeafCount || expansion.required !== expansionLeafCount ||
-        expansion.unused !== 0) {
-      throw new Error(`cssSolitaire mobile handoff work failed: ${JSON.stringify(result)}`);
+  } finally {
+    await page.close();
+  }
+}
+
+function selectedBankFiles({ bankId, profileIndex }) {
+  if (bankId === "mobile") return [
+    "/csssolitaire/solitaire-mobile.polycss.txt",
+    "/csssolitaire/solitaire-schedule-mobile.json",
+    "/csssolitaire/solitaire-layout-mobile.json",
+  ];
+  if (bankId === "large-desktop") return [
+    "/csssolitaire/solitaire-large-desktop.polycss.txt",
+    "/csssolitaire/solitaire-schedule-large-desktop.json",
+    "/csssolitaire/solitaire-layout-large-desktop.json",
+  ];
+  const profileName = ["landscape", "phone", "portrait-2", "portrait-3", "portrait-4"][profileIndex];
+  return [
+    "/csssolitaire/solitaire-small-desktop.polycss.txt",
+    "/csssolitaire/solitaire-schedule-small-desktop.json",
+    `/csssolitaire/solitaire-layout-${profileName}.json`,
+  ];
+}
+
+async function captureSourcePhysics(browser, port, route) {
+  const { page, browserErrors } = await openPreparedPage(browser, port, route, {
+    width: 960, height: 540,
+  }, 0);
+  try {
+    const sampled = await page.evaluate(() => {
+      window.__cssSolitaireDebug.pause();
+      return [0, 1250, 3500, 6500, 10000, 13584, 13585, 14585, 26210, 27210]
+        .map((timeMs) => window.__cssSolitaireDebug.seek(timeMs));
+    });
+    const [initial, firstArc, secondArc, middle, thirdArc, nearEnd, rewindStart,
+      rewinding, rewound, wrapped] = sampled;
+    if (browserErrors.length || initial.patternIndex !== 0 || initial.frameIndex !== 0 ||
+        initial.launchCardCount !== 12 || firstArc.sourceStep !== 100 ||
+        firstArc.visibleTrailCards !== 101 || secondArc.sourceStep !== 400 ||
+        secondArc.visibleTrailCards !== 401 || middle.sourceStep !== 800 ||
+        middle.visibleTrailCards !== 801 || thirdArc.sourceStep !== 1266 ||
+        thirdArc.visibleTrailCards !== 1267 || thirdArc.visibleFoundationCards !== 3 ||
+        nearEnd.sourceStep !== 1679 || nearEnd.visibleTrailCards !== 1679 ||
+        nearEnd.visibleFoundationCards !== 0 || rewindStart.visibleTrailCards !== 1678 ||
+        rewinding.visibleTrailCards <= 0 || rewinding.visibleTrailCards >= nearEnd.visibleTrailCards ||
+        rewinding.visibleFoundationCards !== 1 || rewound.frameIndex !== 608 ||
+        rewound.visibleTrailCards !== 0 || rewound.visibleFoundationCards !== 4 ||
+        wrapped.frameIndex !== 0 || wrapped.visibleTrailCards !== 0 ||
+        wrapped.visibleFoundationCards !== 4) {
+      throw new Error(`cssSolitaire source physics failed: ${JSON.stringify({ browserErrors, sampled })}`);
+    }
+    return sampled;
+  } finally {
+    await page.close();
+  }
+}
+
+async function capturePatternSequence(browser, port, route) {
+  const { page } = await openPreparedPage(browser, port, route, { width: 960, height: 540 }, 0);
+  try {
+    const result = await page.evaluate(async () => {
+      window.__cssSolitaireDebug.pause();
+      const patternIds = [window.__cssSolitaireDebug.snapshot().patternId];
+      for (let index = 0; index < 23; index += 1) {
+        const state = window.__cssSolitaireDebug.snapshot();
+        window.__cssSolitaireDebug.seek(state.durationMs - 40);
+        window.__cssSolitaireDebug.resume();
+        await new Promise((resolveWait) => setTimeout(resolveWait, 100));
+        patternIds.push(window.__cssSolitaireDebug.pause().patternId);
+      }
+      const sourcePatterns = window.__cssSolitaireDebug.manifest.sourceProfile.patterns;
+      const directions = patternIds.map((id) => Math.sign(
+        sourcePatterns.find((pattern) => pattern.id === id).phoneHorizontalVelocity,
+      ));
+      return { patternIds, directions, stable: window.__cssSolitaireDebug.assertStableDomIdentity() };
+    });
+    if (!result.stable || result.patternIds.length !== 24 || new Set(result.patternIds).size !== 24 ||
+        result.directions.some((direction, index) =>
+          index > 0 && direction === result.directions[index - 1])) {
+      throw new Error(`cssSolitaire prepared pattern sequence failed: ${JSON.stringify(result)}`);
     }
     return result;
   } finally {
@@ -736,44 +275,181 @@ async function captureMobileHandoffWork(browser, port, route) {
   }
 }
 
-async function captureStartupPatternSelections(browser, port, route) {
+async function captureStartupSelections(browser, port, route) {
   const selections = [];
-  for (const randomValue of [0, 1, 23]) {
-    const page = await newPageWithRandomValue(browser, {
-      viewport: { width: 390, height: 844 },
-      screen: { width: 390, height: 844 },
-      deviceScaleFactor: 3,
-      isMobile: true,
-      hasTouch: true,
+  for (const randomValue of [0, 7, 23]) {
+    const { page, browserErrors } = await openPreparedPage(browser, port, route, {
+      width: 390, height: 844, mobile: true,
     }, randomValue);
     try {
-      await page.goto(`http://127.0.0.1:${port}${route}`, { waitUntil: "networkidle" });
-      await page.waitForFunction(() => window.__cssSolitaireDebug?.ready === true ||
-        window.__cssSolitaireDebug?.errors().length > 0, null, { timeout: 30_000 });
-      selections.push(await page.evaluate((value) => {
-        const state = window.__cssSolitaireDebug.pause();
-        return {
-          randomValue: value,
-          patternIndex: state.patternIndex,
-          patternId: state.patternId,
-          stable: window.__cssSolitaireDebug.assertStableDomIdentity(),
-          errors: window.__cssSolitaireDebug.errors(),
-        };
-      }, randomValue));
+      const result = await page.evaluate(() => ({
+        state: window.__cssSolitaireDebug.pause(),
+        stats: window.__cssSolitaireDebug.stats(),
+        resources: performance.getEntriesByType("resource")
+          .map((entry) => new URL(entry.name).pathname)
+          .filter((path) => path.includes("csssolitaire")),
+        errors: window.__cssSolitaireDebug.errors(),
+      }));
+      if (browserErrors.length || result.errors.length || result.state.patternIndex !== randomValue ||
+          result.stats.selectedPreparedBank !== "mobile" || result.state.retainedLeafCount !== 683 ||
+          result.stats.runtimePatternLayoutLeavesVisited !== result.state.timelineTrailLeafCount ||
+          !result.resources.includes("/csssolitaire/solitaire-mobile.polycss.txt") ||
+          !result.resources.includes("/csssolitaire/solitaire-schedule-mobile.json") ||
+          result.resources.some((path) => path.includes("small-desktop") || path.includes("large-desktop"))) {
+        throw new Error(`cssSolitaire startup selection failed: ${JSON.stringify({ browserErrors, result })}`);
+      }
+      selections.push({
+        randomValue,
+        patternIndex: result.state.patternIndex,
+        trailLeafCount: result.state.timelineTrailLeafCount,
+      });
     } finally {
       await page.close();
     }
   }
-  if (selections.some(({ randomValue, patternIndex, patternId, stable, errors }) =>
-    patternIndex !== randomValue || patternId !== `pattern-${String(randomValue + 1).padStart(2, "0")}` ||
-    !stable || errors.length)) {
-    throw new Error(`cssSolitaire initial pattern selection failed: ${JSON.stringify(selections)}`);
-  }
   return selections;
 }
 
-async function newPageWithRandomValue(browser, options, randomValue = 0) {
-  const page = await browser.newPage(options);
+async function captureMobileContinuity(browser, port, route) {
+  const { page, browserErrors } = await openPreparedPage(browser, port, route, {
+    width: 390, height: 844, mobile: true,
+  }, 0);
+  try {
+    const result = await page.evaluate(() => {
+      window.__cssSolitaireDebug.pause();
+      const initial = window.__cssSolitaireDebug.seek(0);
+      const positions = [];
+      for (let timeMs = 500; timeMs < initial.durationMs; timeMs += 50) {
+        const state = window.__cssSolitaireDebug.seek(timeMs);
+        if (state.rewinding) break;
+        const leaves = [...document.querySelectorAll(".polycss-scene > b")];
+        let index = leaves.length - 1;
+        while (index >= 4 && leaves[index].style.visibility !== "visible") index -= 1;
+        if (index >= 4) positions.push(leaves[index].getBoundingClientRect().x);
+      }
+      let previousDirection = 0;
+      let directionChanges = 0;
+      for (let index = 1; index < positions.length; index += 1) {
+        const direction = Math.sign(positions[index] - positions[index - 1]);
+        if (direction && previousDirection && direction !== previousDirection) directionChanges += 1;
+        if (direction) previousDirection = direction;
+      }
+      let forward = 0;
+      let rewind = initial.durationMs;
+      while (rewind - forward > 1) {
+        const middle = Math.floor((forward + rewind) / 2);
+        if (window.__cssSolitaireDebug.seek(middle).rewinding) rewind = middle;
+        else forward = middle;
+      }
+      window.__cssSolitaireDebug.seek(forward);
+      const leaves = [...document.querySelectorAll(".polycss-scene > b")];
+      let endIndex = leaves.length - 1;
+      while (endIndex >= 4 && leaves[endIndex].style.visibility !== "visible") endIndex -= 1;
+      return {
+        durationMs: initial.durationMs,
+        launchCardCount: initial.launchCardCount,
+        trailLeafCount: initial.timelineTrailLeafCount,
+        directionChanges,
+        floorGapCssPixels: innerHeight - leaves[endIndex].getBoundingClientRect().bottom,
+        errors: window.__cssSolitaireDebug.errors(),
+      };
+    });
+    if (browserErrors.length || result.errors.length || result.durationMs !== 12210 ||
+        result.launchCardCount !== 1 || result.trailLeafCount !== 679 ||
+        result.directionChanges < 3 || Math.abs(result.floorGapCssPixels) > 0.1) {
+      throw new Error(`cssSolitaire mobile continuity failed: ${JSON.stringify({ browserErrors, result })}`);
+    }
+    return result;
+  } finally {
+    await page.close();
+  }
+}
+
+async function captureReducedMotion(browser, port, route) {
+  const { page, browserErrors } = await openPreparedPage(browser, port, route, {
+    width: 390, height: 844, mobile: true, reducedMotion: "reduce",
+  }, 0);
+  try {
+    const result = await page.evaluate(async () => {
+      const before = window.__cssSolitaireDebug.snapshot();
+      await new Promise((resolveWait) => setTimeout(resolveWait, 3_200));
+      const after = window.__cssSolitaireDebug.snapshot();
+      return {
+        reduced: matchMedia("(prefers-reduced-motion: reduce)").matches,
+        before,
+        after,
+        timerCallbacks: window.__cssSolitaireDebug.stats().runtimeTimerCallbackCount,
+        errors: window.__cssSolitaireDebug.errors(),
+      };
+    });
+    if (browserErrors.length || result.errors.length || !result.reduced || !result.before.playing ||
+        !result.after.playing || result.after.playheadMs < 2_800 ||
+        result.after.frameIndex <= result.before.frameIndex || result.timerCallbacks === 0) {
+      throw new Error(`cssSolitaire reduced-motion autoplay failed: ${JSON.stringify(result)}`);
+    }
+    return {
+      beforeFrame: result.before.frameIndex,
+      afterFrame: result.after.frameIndex,
+      timerCallbacks: result.timerCallbacks,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+async function captureRetainedBankResize(browser, port, route) {
+  const results = [];
+  for (const config of [
+    { width: 390, height: 844, mobile: true, resize: [1_200, 800], bank: "mobile", leaves: 683 },
+    { width: 2_560, height: 1_440, resize: [1_200, 800], bank: "large-desktop", leaves: 3888 },
+  ]) {
+    const { page } = await openPreparedPage(browser, port, route, config, 0);
+    try {
+      const before = await page.evaluate(() => ({
+        stats: window.__cssSolitaireDebug.stats(),
+      }));
+      await page.setViewportSize({ width: config.resize[0], height: config.resize[1] });
+      await page.waitForFunction(() => window.__cssSolitaireDebug.stats().runtimePresentationUpdateCount > 1);
+      const after = await page.evaluate(() => ({
+        stats: window.__cssSolitaireDebug.stats(),
+        leaves: document.querySelectorAll(".polycss-scene > b").length,
+        stable: window.__cssSolitaireDebug.assertStableDomIdentity(),
+        errors: window.__cssSolitaireDebug.errors(),
+      }));
+      if (after.errors.length || !after.stable || after.leaves !== config.leaves ||
+          after.stats.selectedPreparedBank !== config.bank || after.stats.preparedBankLoadCount !== 1 ||
+          after.stats.runtimePreparedBankSwitchCount !== 0 ||
+          before.stats.selectedPreparedBank !== after.stats.selectedPreparedBank) {
+        throw new Error(`cssSolitaire retained bank resize failed: ${JSON.stringify({ config, before, after })}`);
+      }
+      results.push({ bank: config.bank, retainedLeaves: after.leaves, switchCount: 0 });
+    } finally {
+      await page.close();
+    }
+  }
+  return results;
+}
+
+async function openPreparedPage(browser, port, route, config, randomValue) {
+  const mobile = config.mobile === true;
+  const page = await browser.newPage({
+    viewport: { width: config.width, height: config.height },
+    screen: { width: config.width, height: config.height },
+    deviceScaleFactor: mobile ? 3 : 1,
+    isMobile: mobile,
+    hasTouch: mobile,
+    userAgent: mobile
+      ? "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 " +
+        "(KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1"
+      : undefined,
+  });
+  const browserErrors = [];
+  page.on("pageerror", (error) => browserErrors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error" && !message.text().startsWith("Failed to load resource:")) {
+      browserErrors.push(message.text());
+    }
+  });
   await page.addInitScript((value) => {
     Object.defineProperty(Crypto.prototype, "getRandomValues", {
       configurable: true,
@@ -784,7 +460,21 @@ async function newPageWithRandomValue(browser, options, randomValue = 0) {
       },
     });
   }, randomValue);
-  return page;
+  await page.emulateMedia({ reducedMotion: config.reducedMotion ?? "no-preference" });
+  await page.goto(`http://127.0.0.1:${port}${route}`, { waitUntil: "networkidle" });
+  await page.waitForFunction(() => window.__cssSolitaireDebug?.ready === true ||
+    window.__cssSolitaireDebug?.errors().length > 0, null, { timeout: 30_000 });
+  return { page, browserErrors };
+}
+
+function whitePixelRatio(bytes) {
+  const png = PNG.sync.read(bytes);
+  let whitePixels = 0;
+  for (let offset = 0; offset < png.data.length; offset += 4) {
+    const [red, green, blue] = png.data.subarray(offset, offset + 3);
+    if (red > 220 && green > 220 && blue > 220) whitePixels += 1;
+  }
+  return whitePixels / (png.width * png.height);
 }
 
 async function freePort() {

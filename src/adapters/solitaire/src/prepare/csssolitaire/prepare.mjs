@@ -62,6 +62,10 @@ const PORTRAIT_PROFILES = Object.freeze([
 const PORTRAIT_CARD_COUNTS = Object.freeze(PORTRAIT_PROFILES.map(({ cardCount }) => cardCount));
 const PORTRAIT_CARD_BREAKPOINTS = Object.freeze([520, 720, 920]);
 const PORTRAIT_HORIZONTAL_DISTANCE_SCALE = 2;
+const PHONE_HORIZONTAL_DISTANCE_SCALE = 8;
+const PHONE_LAUNCH_CARD_COUNT = 3;
+const PHONE_PLAYBACK_TIME_SCALE = 3;
+const PHONE_PROFILE_INDEX = 1;
 const LAUNCH_CYCLE_COUNT = 3;
 const RANK_NAMES = Object.freeze([
   null, "ace", "two", "three", "four", "five", "six", "seven",
@@ -175,8 +179,11 @@ function portraitCardPosition(left, top, foundationIndex, horizontalDirection, p
     ? (width - cardWidth) / 2
     : solitaireSlotLeft(width, STARTING_CARDS[displayFoundationIndex].slot, cardWidth);
   const sourceStartLeft = STARTING_CARDS[foundationIndex].x;
+  const horizontalDistanceScale = profile.cardCount === 1
+    ? PHONE_HORIZONTAL_DISTANCE_SCALE
+    : PORTRAIT_HORIZONTAL_DISTANCE_SCALE;
   const unboundedLeft = startLeft +
-    (left - sourceStartLeft) * PORTRAIT_HORIZONTAL_DISTANCE_SCALE * presentationScale;
+    (left - sourceStartLeft) * horizontalDistanceScale * presentationScale;
   const vertical = verticalCardPosition(top);
   if (profile.cardCount > 1) {
     const startProgress = startLeft / (width - cardWidth);
@@ -383,7 +390,6 @@ function cardLeaf({ cardFace, foundationIndex, horizontalDirection, left, top })
     return portrait ? cardLayout(portrait) : null;
   });
   return Object.freeze({
-    faceIndex: cardFace - 1,
     foundationIndex,
     matrix: cardMatrix(
       landscapeLayout,
@@ -397,14 +403,15 @@ function cardLeaf({ cardFace, foundationIndex, horizontalDirection, left, top })
   });
 }
 
-function buildPatternPlayback(snapshots, cards, sourceStepCount) {
+function buildPatternPlayback(snapshots, cards, sourceStepCount, timeScale = 1) {
   const frameTimesMs = [0];
   const visibilityRows = [snapshots.map((_, index) => -(index + FOUNDATION_COUNT + 1))];
   const foundationRows = [[]];
   const reverseFoundationRows = [[]];
   let snapshotIndex = 0;
   let cardIndex = 0;
-  const lastRevealTimeMs = snapshots.at(-1)?.timeMs ?? INITIAL_HOLD_MS;
+  const playbackTime = (timeMs) => INITIAL_HOLD_MS + (timeMs - INITIAL_HOLD_MS) * timeScale;
+  const lastRevealTimeMs = playbackTime(snapshots.at(-1)?.timeMs ?? INITIAL_HOLD_MS);
   const frameInterval = 1_000 / PLAYBACK_FPS;
   const revealFrameCount = Math.ceil(lastRevealTimeMs / frameInterval);
   for (let frameIndex = 1; frameIndex <= revealFrameCount; frameIndex += 1) {
@@ -412,11 +419,11 @@ function buildPatternPlayback(snapshots, cards, sourceStepCount) {
     const row = [];
     const foundationRow = [];
     const reverseFoundationRow = [];
-    while (snapshotIndex < snapshots.length && snapshots[snapshotIndex].timeMs <= timeMs) {
+    while (snapshotIndex < snapshots.length && playbackTime(snapshots[snapshotIndex].timeMs) <= timeMs) {
       row.push(snapshotIndex + FOUNDATION_COUNT + 1);
       snapshotIndex += 1;
     }
-    while (cardIndex < cards.length && cards[cardIndex].timeMs <= timeMs) {
+    while (cardIndex < cards.length && playbackTime(cards[cardIndex].timeMs) <= timeMs) {
       const card = cards[cardIndex];
       const nextCard = LAUNCH_CARDS[(card.cycleIndex + 1) * FOUNDATION_COUNT + card.foundationIndex];
       const currentAtlas = atlasPosition(faceNumber(card.rank, card.suit));
@@ -447,7 +454,10 @@ function buildPatternPlayback(snapshots, cards, sourceStepCount) {
   const rewindEndTimeMs = frameTimesMs.at(-1);
   return Object.freeze({
     durationMs: rewindEndTimeMs + CLEAR_HOLD_MS,
+    sourceStepMilliseconds: SOURCE_STEP_MS * timeScale,
     sourceStepCount,
+    launchCardCount: cards.length,
+    trailLeafCount: snapshots.length,
     rewindStartMilliseconds: rewindStartTimeMs,
     rewindEndMilliseconds: rewindEndTimeMs,
     frameTimesMs,
@@ -466,6 +476,16 @@ function buildPreparedPattern(seed, index) {
     top: snapshot.y,
   }));
   const timeline = buildPatternPlayback(source.snapshots, source.cards, source.sourceSteps);
+  const phoneCards = source.cards.slice(0, PHONE_LAUNCH_CARD_COUNT);
+  const phoneTrailLeafCount = phoneCards.reduce((sum, card) => sum + card.retainedSnapshots, 0);
+  const phoneSnapshots = source.snapshots.slice(0, phoneTrailLeafCount);
+  const phoneSourceStepCount = phoneSnapshots.at(-1).sourceStep + 1;
+  const phoneTimeline = buildPatternPlayback(
+    phoneSnapshots,
+    phoneCards,
+    phoneSourceStepCount,
+    PHONE_PLAYBACK_TIME_SCALE,
+  );
   const contentBounds = buildContentBounds(source.snapshots);
   return Object.freeze({
     id: `pattern-${String(index + 1).padStart(2, "0")}`,
@@ -478,8 +498,10 @@ function buildPreparedPattern(seed, index) {
       id: `pattern-${String(index + 1).padStart(2, "0")}`,
       seed,
       trailLeafCount: trailLeaves.length,
+      launchCardCount: source.cards.length,
       sourceDrawCount: source.sourceDraws,
       sourceStepCount: source.sourceSteps,
+      sourceStepMilliseconds: SOURCE_STEP_MS,
       horizontalVelocities: source.cards.map(({ velocityX }) => velocityX),
       durationMs: timeline.durationMs,
       rewindStartMilliseconds: timeline.rewindStartMilliseconds,
@@ -487,6 +509,7 @@ function buildPreparedPattern(seed, index) {
       frameTimesMs: timeline.frameTimesMs,
       visibilityRows: timeline.visibilityRows,
       foundationRows: timeline.foundationRows,
+      phoneTimeline,
       leafLayouts: trailLeaves.map(({ layout }) => layout),
       leafPortraitLayoutsByCardCount: PORTRAIT_CARD_COUNTS.map((_, profileIndex) =>
         trailLeaves.map(({ portraitLayouts }) => {
@@ -499,25 +522,18 @@ function buildPreparedPattern(seed, index) {
 }
 
 function buildSnapshot(leaves, cardAssetUrl) {
-  const faceClass = (index) => `f${index.toString(36)}`;
   const cardNodes = leaves.map((leaf, index) => {
-    const classes = [
-      index < FOUNDATION_COUNT ? "v" : null,
-      faceClass(leaf.faceIndex),
-    ]
-      .filter(Boolean).join(" ");
-    return `<b class="${classes}" style="transform:${leaf.matrix}"></b>`;
-  }).join("");
-  const faceRules = Array.from({ length: 52 }, (_, faceIndex) => {
-    const atlas = atlasPosition(faceIndex + 1);
-    return `.polycss-scene>b.${faceClass(faceIndex)}{background-position:${-atlas.x}px ${-atlas.y}px}`;
+    const declarations = [
+      `transform:${leaf.matrix}`,
+      `background-position:${-leaf.atlas.x}px ${-leaf.atlas.y}px`,
+    ];
+    if (index < FOUNDATION_COUNT) declarations.push("visibility:visible");
+    return `<b style="${declarations.join(";")}"></b>`;
   }).join("");
   const css = [
     ".polycss-camera{position:relative;display:block;width:100%;height:100%;overflow:hidden}",
     ".polycss-scene{position:absolute;inset:0}",
     `.polycss-scene>b{position:absolute;display:block;width:${CARD_SOURCE_WIDTH}px;height:${CARD_SOURCE_HEIGHT}px;margin:0;padding:0;overflow:hidden;border:0;border-radius:14px;background-image:url('${cardAssetUrl}');background-repeat:no-repeat;background-size:${CARD_ATLAS_WIDTH}px ${CARD_ATLAS_HEIGHT}px;transform-origin:0 0;visibility:hidden;pointer-events:none;text-decoration:none;font:normal normal normal 0/0 serif;image-rendering:auto}`,
-    ".polycss-scene>b.v{visibility:visible}",
-    faceRules,
     `@media (orientation:portrait) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[0] - 1}px){.polycss-scene>b:nth-child(2),.polycss-scene>b:nth-child(3),.polycss-scene>b:nth-child(4){display:none}}`,
     `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[0]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[1] - 1}px){.polycss-scene>b:nth-child(3),.polycss-scene>b:nth-child(4){display:none}}`,
     `@media (orientation:portrait) and (min-width:${PORTRAIT_CARD_BREAKPOINTS[1]}px) and (max-width:${PORTRAIT_CARD_BREAKPOINTS[2] - 1}px){.polycss-scene>b:nth-child(4){display:none}}`,
@@ -558,6 +574,7 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
     selection: "crypto-random-shuffled-bag-no-immediate-repeat",
     patternCount: preparedPatterns.length,
     initialPatternIndex: 0,
+    phoneProfileIndex: PHONE_PROFILE_INDEX,
     sourceStepMilliseconds: SOURCE_STEP_MS,
     initialHoldMilliseconds: INITIAL_HOLD_MS,
     foundationLeafCount: FOUNDATION_COUNT,
@@ -662,8 +679,12 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       portraitReflectionReferenceWidths: PORTRAIT_PROFILES.map(({ playfield }) => playfield[0]),
       portraitCardCounts: PORTRAIT_CARD_COUNTS,
       portraitCardBreakpoints: PORTRAIT_CARD_BREAKPOINTS,
-      portraitHorizontalMotion: "mobile-reflected-wall-bounce-multi-card-full-exit",
+      portraitHorizontalMotion: "phone-reflected-three-card-cycle-wider-multi-card-exit",
       portraitWallBounceCardCounts: [1],
+      phoneLaunchCardCount: PHONE_LAUNCH_CARD_COUNT,
+      phonePlaybackTimeScale: PHONE_PLAYBACK_TIME_SCALE,
+      phoneHorizontalDistanceScale: PHONE_HORIZONTAL_DISTANCE_SCALE,
+      phoneProfileIndex: PHONE_PROFILE_INDEX,
       preparedSlotLayout: "source-seven-slot-presentation-scaled-card-size",
       slotCount: SOLITAIRE_SLOT_COUNT,
       minimumSlotGap: MINIMUM_SLOT_GAP,
@@ -691,6 +712,10 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       retainedTrailLeafCount,
       preparedPatternCount: preparedPatterns.length,
       preparedFrameCount: playback.patterns.reduce((sum, pattern) => sum + pattern.frameTimesMs.length, 0),
+      preparedPhoneFrameCount: playback.patterns.reduce(
+        (sum, pattern) => sum + pattern.phoneTimeline.frameTimesMs.length,
+        0,
+      ),
       initialPatternDurationMs: playback.patterns[0].durationMs,
       minimumPatternDurationMs: Math.min(...playback.patterns.map(({ durationMs }) => durationMs)),
       maximumPatternDurationMs: Math.max(...playback.patterns.map(({ durationMs }) => durationMs)),

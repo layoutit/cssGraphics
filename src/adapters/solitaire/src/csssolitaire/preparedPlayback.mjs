@@ -13,6 +13,7 @@ export function createCsssolitairePreparedPlayer({
       !(host instanceof HTMLElement) || !validRenderer(renderer) ||
       !(scene instanceof HTMLElement) || !Array.isArray(leaves) ||
       leaves.length !== playback.retainedLeafCount ||
+      playback.phoneProfileIndex !== 1 ||
       JSON.stringify(portraitBreakpoints) !== "[520,720,920]") {
     throw new Error("Prepared cssSolitaire player input drifted");
   }
@@ -33,13 +34,13 @@ export function createCsssolitairePreparedPlayer({
   const foundationLeafCount = playback.foundationLeafCount;
   const foundationLeaves = leaves.slice(0, foundationLeafCount);
   const trailLeaves = leaves.slice(foundationLeafCount);
-  const initialFoundationFaceIndices = foundationLeaves.map(readFaceIndex);
+  const atlasFaceIndices = new Map(playback.atlasPositions.map((position, index) => [position, index]));
+  const initialFoundationFaceIndices = foundationLeaves.map((leaf) => readFaceIndex(leaf, atlasFaceIndices));
   const foundationFaceIndices = [...initialFoundationFaceIndices];
   const foundationVisibility = new Uint8Array(foundationLeafCount);
   foundationVisibility.fill(1);
   const trailVisibility = new Uint8Array(trailLeaves.length);
-  const trailFaceIndices = trailLeaves.map(readFaceIndex);
-  const atlasFaceIndices = new Map(playback.atlasPositions.map((position, index) => [position, index]));
+  const trailFaceIndices = trailLeaves.map((leaf) => readFaceIndex(leaf, atlasFaceIndices));
   let activePatternIndex = playback.initialPatternIndex;
   let pattern = patterns[activePatternIndex];
   let activeProfileIndex = 0;
@@ -53,7 +54,7 @@ export function createCsssolitairePreparedPlayer({
   let visibleFoundationCards = foundationLeafCount;
   let visibilityWrites = 0;
   let visibilityOperationsApplied = 0;
-  let foundationClassWrites = 0;
+  let foundationStyleWrites = 0;
   let foundationOperationsApplied = 0;
   let patternLayoutWrites = 0;
   let patternLayoutLeavesVisited = 0;
@@ -76,6 +77,10 @@ export function createCsssolitairePreparedPlayer({
     dirtyLeavesVisited: 0,
   });
 
+  function timelineFor(nextPattern = pattern, profileIndex = activeProfileIndex) {
+    return profileIndex === playback.phoneProfileIndex ? nextPattern.phoneTimeline : nextPattern;
+  }
+
   function layoutForPattern(nextPattern, index, profileIndex = activeProfileIndex) {
     return profileIndex === 0
       ? nextPattern.leafLayouts[index]
@@ -89,6 +94,8 @@ export function createCsssolitairePreparedPlayer({
   }
 
   function applyPresentation(nextProfileIndex, width, height, scale) {
+    const timelineChanged = (activeProfileIndex === playback.phoneProfileIndex) !==
+      (nextProfileIndex === playback.phoneProfileIndex);
     let writes = 0;
     for (let index = 0; index < foundationLeafCount; index += 1) {
       const layout = nextProfileIndex === 0
@@ -112,6 +119,13 @@ export function createCsssolitairePreparedPlayer({
     presentationScale = scale;
     responsiveTransformWrites += writes;
     presentationUpdateCount += 1;
+    if (timelineChanged) {
+      resetInitial();
+      cycleStartedAt = performance.now();
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      schedule();
+    }
   }
 
   function syncPresentation() {
@@ -133,7 +147,7 @@ export function createCsssolitairePreparedPlayer({
       visibilityOperationsApplied += 1;
       if (Boolean(trailVisibility[trailIndex]) === visible) continue;
       trailVisibility[trailIndex] = Number(visible);
-      leaves[leafIndex].classList.toggle("v", visible);
+      leaves[leafIndex].style.visibility = visible ? "visible" : "";
       visibleTrailCards += visible ? 1 : -1;
       visibilityWrites += 1;
       writes += 1;
@@ -149,7 +163,7 @@ export function createCsssolitairePreparedPlayer({
       if (atlasX < 0) {
         if (foundationVisibility[foundationIndex] === 0) continue;
         foundationVisibility[foundationIndex] = 0;
-        leaf.classList.remove("v");
+        leaf.style.visibility = "";
         visibleFoundationCards -= 1;
         writes += 1;
         continue;
@@ -158,18 +172,18 @@ export function createCsssolitairePreparedPlayer({
       const faceIndex = atlasFaceIndices.get(position);
       if (!Number.isInteger(faceIndex)) throw new Error("Prepared cssSolitaire atlas position drifted");
       if (foundationFaceIndices[foundationIndex] !== faceIndex) {
-        setFaceClass(leaf, foundationFaceIndices[foundationIndex], faceIndex);
+        leaf.style.backgroundPosition = position;
         foundationFaceIndices[foundationIndex] = faceIndex;
         writes += 1;
       }
       if (foundationVisibility[foundationIndex] === 0) {
         foundationVisibility[foundationIndex] = 1;
-        leaf.classList.add("v");
+        leaf.style.visibility = "visible";
         visibleFoundationCards += 1;
         writes += 1;
       }
     }
-    foundationClassWrites += writes;
+    foundationStyleWrites += writes;
     return writes;
   }
 
@@ -185,7 +199,7 @@ export function createCsssolitairePreparedPlayer({
         writes += 1;
       }
       if (trailFaceIndices[index] !== faceIndex) {
-        setFaceClass(leaf, trailFaceIndices[index], faceIndex);
+        leaf.style.backgroundPosition = playback.atlasPositions[faceIndex];
         trailFaceIndices[index] = faceIndex;
         writes += 1;
       }
@@ -199,7 +213,7 @@ export function createCsssolitairePreparedPlayer({
     for (let index = 0; index < trailVisibility.length; index += 1) {
       if (trailVisibility[index] === 0) continue;
       trailVisibility[index] = 0;
-      trailLeaves[index].classList.remove("v");
+      trailLeaves[index].style.visibility = "";
       writes += 1;
     }
     let foundationWrites = 0;
@@ -207,13 +221,13 @@ export function createCsssolitairePreparedPlayer({
       const leaf = foundationLeaves[index];
       const initialFaceIndex = initialFoundationFaceIndices[index];
       if (foundationFaceIndices[index] !== initialFaceIndex) {
-        setFaceClass(leaf, foundationFaceIndices[index], initialFaceIndex);
+        leaf.style.backgroundPosition = playback.atlasPositions[initialFaceIndex];
         foundationFaceIndices[index] = initialFaceIndex;
         foundationWrites += 1;
       }
       if (foundationVisibility[index] === 0) {
         foundationVisibility[index] = 1;
-        leaf.classList.add("v");
+        leaf.style.visibility = "visible";
         foundationWrites += 1;
       }
     }
@@ -222,7 +236,7 @@ export function createCsssolitairePreparedPlayer({
     frameIndex = 0;
     playheadMs = 0;
     visibilityWrites += writes;
-    foundationClassWrites += foundationWrites;
+    foundationStyleWrites += foundationWrites;
     resetCount += 1;
     lastApply = Object.freeze({
       visibilityWrites: writes,
@@ -266,23 +280,24 @@ export function createCsssolitairePreparedPlayer({
     });
   }
 
-  function frameAt(timeMs) {
+  function frameAt(timeMs, timeline) {
     let low = 0;
-    let high = pattern.frameTimesMs.length - 1;
+    let high = timeline.frameTimesMs.length - 1;
     while (low <= high) {
       const middle = Math.floor((low + high) / 2);
-      if (pattern.frameTimesMs[middle] <= timeMs) low = middle + 1;
+      if (timeline.frameTimesMs[middle] <= timeMs) low = middle + 1;
       else high = middle - 1;
     }
     return Math.max(0, high);
   }
 
   function applyCycleTime(timeMs) {
-    const targetFrame = frameAt(timeMs);
+    const timeline = timelineFor();
+    const targetFrame = frameAt(timeMs, timeline);
     if (targetFrame < frameIndex) resetInitial();
     for (let index = frameIndex + 1; index <= targetFrame; index += 1) {
-      const visibilityRow = pattern.visibilityRows[index];
-      const foundationRow = pattern.foundationRows[index];
+      const visibilityRow = timeline.visibilityRows[index];
+      const foundationRow = timeline.foundationRows[index];
       const trailWrites = applyRow(visibilityRow);
       const foundationWrites = applyFoundationRow(foundationRow);
       lastApply = Object.freeze({
@@ -298,11 +313,13 @@ export function createCsssolitairePreparedPlayer({
 
   function publishNow(now = performance.now()) {
     let elapsed = Math.max(0, now - cycleStartedAt);
-    while (elapsed >= pattern.durationMs) {
-      cycleStartedAt += pattern.durationMs;
+    let timeline = timelineFor();
+    while (elapsed >= timeline.durationMs) {
+      cycleStartedAt += timeline.durationMs;
       elapsed = Math.max(0, now - cycleStartedAt);
       resetInitial();
       activatePattern(nextPatternIndex());
+      timeline = timelineFor();
       loopCount += 1;
     }
     applyCycleTime(elapsed);
@@ -311,8 +328,9 @@ export function createCsssolitairePreparedPlayer({
   function schedule() {
     if (paused || timer !== null) return;
     const now = performance.now();
-    const nextFrameTime = pattern.frameTimesMs[frameIndex + 1];
-    const deadline = cycleStartedAt + (nextFrameTime ?? pattern.durationMs);
+    const timeline = timelineFor();
+    const nextFrameTime = timeline.frameTimesMs[frameIndex + 1];
+    const deadline = cycleStartedAt + (nextFrameTime ?? timeline.durationMs);
     timer = setTimeout(tick, Math.max(0, deadline - now));
   }
 
@@ -326,6 +344,7 @@ export function createCsssolitairePreparedPlayer({
 
   function snapshot() {
     target.assertStableDomIdentity();
+    const timeline = timelineFor();
     return Object.freeze({
       ready: true,
       playing: !paused,
@@ -335,12 +354,17 @@ export function createCsssolitairePreparedPlayer({
       responsiveProfileIndex: activeProfileIndex,
       playheadMs,
       frameIndex,
-      rewinding: playheadMs >= pattern.rewindStartMilliseconds && playheadMs <= pattern.rewindEndMilliseconds,
+      durationMs: timeline.durationMs,
+      launchCardCount: timeline.launchCardCount,
+      timelineTrailLeafCount: timeline.trailLeafCount,
+      rewinding: playheadMs >= timeline.rewindStartMilliseconds && playheadMs <= timeline.rewindEndMilliseconds,
       sourceStep: Math.min(
-        pattern.sourceStepCount,
-        Math.max(0, Math.floor((playheadMs - playback.initialHoldMilliseconds) / playback.sourceStepMilliseconds)),
+        timeline.sourceStepCount,
+        Math.max(0, Math.floor(
+          (playheadMs - playback.initialHoldMilliseconds) / timeline.sourceStepMilliseconds,
+        )),
       ),
-      frameCount: pattern.frameTimesMs.length,
+      frameCount: timeline.frameTimesMs.length,
       visibleTrailCards,
       visibleFoundationCards,
       retainedLeafCount: leaves.length,
@@ -356,7 +380,7 @@ export function createCsssolitairePreparedPlayer({
 
   return Object.freeze({
     get ready() { return true; },
-    get durationMs() { return pattern.durationMs; },
+    get durationMs() { return timelineFor().durationMs; },
     get loop() { return true; },
     pause() {
       if (!paused) publishNow();
@@ -378,7 +402,7 @@ export function createCsssolitairePreparedPlayer({
       }
       this.pause();
       resetInitial();
-      applyCycleTime(timeMs % pattern.durationMs);
+      applyCycleTime(timeMs % timelineFor().durationMs);
       return snapshot();
     },
     assertStableDomIdentity() {
@@ -400,6 +424,10 @@ export function createCsssolitairePreparedPlayer({
         playheadMs,
         frameIndex,
         preparedTimelineStateCount: patterns.reduce((sum, entry) => sum + entry.frameTimesMs.length, 0),
+        preparedPhoneTimelineStateCount: patterns.reduce(
+          (sum, entry) => sum + entry.phoneTimeline.frameTimesMs.length,
+          0,
+        ),
         preparedVisibilityOperationCount: patterns.reduce((sum, entry) =>
           sum + entry.visibilityRows.reduce((entrySum, row) => entrySum + row.length, 0), 0),
         preparedFoundationOperationCount: patterns.reduce((sum, entry) =>
@@ -408,7 +436,7 @@ export function createCsssolitairePreparedPlayer({
         runtimeVisibilityOperationsApplied: visibilityOperationsApplied,
         runtimeFoundationOperationsApplied: foundationOperationsApplied,
         runtimeLeafVisibilityWrites: visibilityWrites,
-        runtimeFoundationClassWrites: foundationClassWrites,
+        runtimeFoundationStyleWrites: foundationStyleWrites,
         runtimePatternLayoutWrites: patternLayoutWrites,
         runtimePatternLayoutLeavesVisited: patternLayoutLeavesVisited,
         runtimeResponsiveTransformWrites: responsiveTransformWrites,
@@ -490,18 +518,10 @@ function validRenderer(renderer) {
     Number.isFinite(renderer.landscapeCardMaximumWidthCssPixels);
 }
 
-function readFaceIndex(leaf) {
-  for (const className of leaf.classList) {
-    if (!/^f[0-9a-z]+$/u.test(className)) continue;
-    const index = Number.parseInt(className.slice(1), 36);
-    if (Number.isSafeInteger(index) && index >= 0 && index < 52) return index;
-  }
-  throw new Error("Prepared cssSolitaire face class drifted");
-}
-
-function setFaceClass(leaf, previousIndex, nextIndex) {
-  leaf.classList.remove(`f${previousIndex.toString(36)}`);
-  leaf.classList.add(`f${nextIndex.toString(36)}`);
+function readFaceIndex(leaf, atlasFaceIndices) {
+  const index = atlasFaceIndices.get(leaf.style.backgroundPosition);
+  if (Number.isSafeInteger(index)) return index;
+  throw new Error("Prepared cssSolitaire inline atlas position drifted");
 }
 
 function cryptoRandomUint32() {

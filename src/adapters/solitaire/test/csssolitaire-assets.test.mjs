@@ -70,8 +70,12 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.deepEqual(manifest.renderer.portraitCardCounts, [1, 2, 3, 4]);
   assert.deepEqual(manifest.renderer.portraitCardBreakpoints, [520, 720, 920]);
   assert.equal(manifest.renderer.portraitHorizontalMotion,
-    "mobile-reflected-wall-bounce-multi-card-full-exit");
+    "phone-reflected-three-card-cycle-wider-multi-card-exit");
   assert.deepEqual(manifest.renderer.portraitWallBounceCardCounts, [1]);
+  assert.equal(manifest.renderer.phoneLaunchCardCount, 3);
+  assert.equal(manifest.renderer.phonePlaybackTimeScale, 3);
+  assert.equal(manifest.renderer.phoneHorizontalDistanceScale, 8);
+  assert.equal(manifest.renderer.phoneProfileIndex, 1);
   assert.equal(manifest.renderer.preparedSlotLayout, "source-seven-slot-presentation-scaled-card-size");
   assert.equal(manifest.renderer.slotCount, 7);
   assert.equal(manifest.renderer.minimumSlotGap, 11);
@@ -89,6 +93,7 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.equal(manifest.metrics.retainedTrailLeafCount, 1948);
   assert.equal(manifest.metrics.preparedPatternCount, 24);
   assert.equal(manifest.metrics.preparedFrameCount, 13774);
+  assert.equal(manifest.metrics.preparedPhoneFrameCount, 9498);
   assert.equal(manifest.metrics.initialPatternDurationMs, 27210);
   assert.equal(manifest.metrics.minimumPatternDurationMs, 20475);
   assert.equal(manifest.metrics.maximumPatternDurationMs, 31228);
@@ -126,17 +131,18 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.match(snapshot, /class="polycss-scene"/u);
   assert.doesNotMatch(snapshot, /solitaire-prepared-(?:camera|scene)/u);
   assert.doesNotMatch(snapshot, /csssolitaire-board/u);
-  assert.equal((snapshot.match(/<b class="[^"]+" style="transform:matrix\([^)]+\)"><\/b>/gu) ?? []).length,
-    1952);
+  assert.equal((snapshot.match(
+    /<b style="transform:matrix\([^)]+\);background-position:-?\d+px -?\d+px(?:;visibility:visible)?"><\/b>/gu,
+  ) ?? []).length, 1952);
   assert.doesNotMatch(snapshot, /<s\b/u);
   assert.doesNotMatch(snapshot, /--csssolitaire-(?:landscape|portrait)-/u);
   assert.equal((snapshot.match(/\sstyle="transform:/gu) ?? []).length, 1952);
-  assert.doesNotMatch(snapshot, /class="[^"]*\bl[0-9a-z]+\b/u);
+  assert.doesNotMatch(snapshot, /<b\s+class=/u);
   assert.doesNotMatch(snapshot, /\.polycss-scene>b\.[^{]+\{transform:/u);
   assert.equal((snapshot.match(/\{transform:none\}/gu) ?? []).length, 0);
-  assert.equal((snapshot.match(/\.polycss-scene>b\.f[0-9a-z]+\{background-position:/gu) ?? []).length,
-    52);
-  assert.equal((snapshot.match(/<b class="v f[0-9a-z]+" style="transform:[^"]+"><\/b>/gu) ?? []).length, 4);
+  assert.equal((snapshot.match(/;background-position:-?\d+px -?\d+px/gu) ?? []).length, 1952);
+  assert.equal((snapshot.match(/;visibility:visible/gu) ?? []).length, 4);
+  assert.doesNotMatch(snapshot, /\.polycss-scene>b\.(?:v|f[0-9a-z]+)/u);
   assert.doesNotMatch(snapshot, /\bfoundation\b|\blane-[0-3]\b/u);
   assert.match(snapshot, /\.polycss-scene\{position:absolute;inset:0\}/u);
   assert.match(snapshot, /\.polycss-scene>b\{position:absolute/u);
@@ -152,6 +158,7 @@ test("generated product is one complete retained snapshot plus sparse prepared p
 
   const playback = JSON.parse(await readFile(join(generated, "solitaire-playback.json"), "utf8"));
   assert.equal(playback.schema, "csssolitaire-prepared-playback@2");
+  assert.equal(playback.phoneProfileIndex, 1);
   const preparedLayouts = playback.patterns.flatMap((pattern) => [
     ...pattern.leafLayouts,
     ...pattern.leafPortraitLayoutsByCardCount.flat().filter(Boolean),
@@ -188,6 +195,14 @@ test("generated product is one complete retained snapshot plus sparse prepared p
     pattern.leafPortraitLayoutsByCardCount.every((profile) =>
       profile.length === pattern.trailLeafCount && profile.every(Boolean))));
   assert.ok(playback.patterns.every((pattern) => !("leafFoundationIndices" in pattern)));
+  assert.ok(playback.patterns.every((pattern) =>
+    pattern.phoneTimeline.launchCardCount === 3 &&
+    pattern.phoneTimeline.sourceStepMilliseconds === 22.5 &&
+    pattern.phoneTimeline.trailLeafCount < pattern.trailLeafCount));
+  assert.equal(playback.patterns.reduce(
+    (sum, pattern) => sum + pattern.phoneTimeline.frameTimesMs.length,
+    0,
+  ), 9498);
   const maximumPortraitUpdateGaps = [1, 2, 3, 4].map((cardCount) => Math.max(
     ...playback.patterns.map((pattern) => {
       const updateTimes = pattern.frameTimesMs.filter((_, frameIndex) =>
@@ -202,6 +217,22 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.equal(oneCardLayouts.length, initialPattern.trailLeafCount);
   assert.ok(oneCardLayouts.every((layout) => layout.length === 5 && layout.every(Number.isFinite)));
   assert.ok(new Set(oneCardLayouts.map(JSON.stringify)).size > 100);
+  assert.deepEqual({
+    launchCardCount: initialPattern.phoneTimeline.launchCardCount,
+    trailLeafCount: initialPattern.phoneTimeline.trailLeafCount,
+    sourceStepCount: initialPattern.phoneTimeline.sourceStepCount,
+    sourceStepMilliseconds: initialPattern.phoneTimeline.sourceStepMilliseconds,
+    frameCount: initialPattern.phoneTimeline.frameTimesMs.length,
+    durationMs: initialPattern.phoneTimeline.durationMs,
+  }, {
+    launchCardCount: 3,
+    trailLeafCount: 291,
+    sourceStepCount: 291,
+    sourceStepMilliseconds: 22.5,
+    frameCount: 317,
+    durationMs: 15067,
+  });
+  assert.ok(minimumPhoneDirectionChanges(playback.patterns) >= 6);
   assert.equal(initialPattern.sourceStepCount, 1679);
   assert.equal(initialPattern.frameTimesMs.length, 609);
   assert.equal(initialPattern.visibilityRows.length, 609);
@@ -218,3 +249,29 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.equal(playback.runtimeTrajectoryCalculation, false);
   assert.equal(playback.runtimeDomGrowth, false);
 });
+
+function minimumPhoneDirectionChanges(patterns) {
+  const counts = patterns.flatMap((pattern) => {
+    const layouts = pattern.leafPortraitLayoutsByCardCount[0];
+    const values = [];
+    let start = 0;
+    for (let cardIndex = 0; cardIndex < pattern.phoneTimeline.launchCardCount; cardIndex += 1) {
+      const atlasIndex = pattern.leafAtlasIndices[start];
+      let end = start + 1;
+      while (end < pattern.phoneTimeline.trailLeafCount &&
+          pattern.leafAtlasIndices[end] === atlasIndex) end += 1;
+      const positions = layouts.slice(start, end).map((layout) => layout[0] / 100 * 384 + layout[1] * 71);
+      let previousDirection = 0;
+      let changes = 0;
+      for (let index = 1; index < positions.length; index += 1) {
+        const direction = Math.sign(positions[index] - positions[index - 1]);
+        if (direction !== 0 && previousDirection !== 0 && direction !== previousDirection) changes += 1;
+        if (direction !== 0) previousDirection = direction;
+      }
+      values.push(changes);
+      start = end;
+    }
+    return values;
+  });
+  return Math.min(...counts);
+}

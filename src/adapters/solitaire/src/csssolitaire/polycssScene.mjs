@@ -17,7 +17,7 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
       leaves.length !== manifest.metrics.retainedLeafCount ||
       snapshot.querySelectorAll("[style]").length !== leaves.length ||
       leaves.some((leaf) => !(leaf instanceof HTMLElement) || leaf.localName !== "b" ||
-        !hasInlineTransformOnly(leaf))) {
+        !hasInlinePreparedStyle(leaf))) {
     throw new Error("Prepared cssSolitaire retained DOM census drifted");
   }
 
@@ -31,7 +31,7 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
   if (!(mountedScene instanceof HTMLElement) ||
       mountedScene.childElementCount !== manifest.metrics.retainedLeafCount ||
       mountedLeaves.length !== manifest.metrics.retainedLeafCount ||
-      mountedLeaves.some((leaf) => !hasInlineTransformOnly(leaf))) {
+      mountedLeaves.some((leaf) => !hasInlinePreparedStyle(leaf))) {
     throw new Error("Mounted cssSolitaire retained DOM census drifted");
   }
   const stableNodes = Object.freeze([mountedCamera, mountedScene, ...mountedLeaves]);
@@ -43,7 +43,7 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
       ...host.querySelectorAll(":scope > .polycss-camera > .polycss-scene > b"),
     ];
     if (current.length !== stableNodes.length || current.some((node, index) => node !== stableNodes[index]) ||
-        mountedLeaves.some((leaf) => !hasInlineTransformOnly(leaf))) {
+        mountedLeaves.some((leaf) => !hasInlinePreparedStyle(leaf))) {
       throw new Error("Prepared cssSolitaire retained DOM identity changed");
     }
     return true;
@@ -63,7 +63,10 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
         retainedBoardRootCount: 0,
         retainedRenderWrapperCount: 2,
         retainedPolygonLeafCount: mountedLeaves.length,
-        retainedLeafInlineStyleDeclarationCount: mountedLeaves.length,
+        retainedLeafInlineStyleDeclarationCount: mountedLeaves.reduce(
+          (count, leaf) => count + leaf.style.length,
+          0,
+        ),
         retainedDataAttributeCount: 0,
         runtimeDomCreationCount: 0,
         runtimeDomRemovalCount: 0,
@@ -81,8 +84,17 @@ export function mountPreparedSolitaireSnapshot({ host, manifest, snapshotHtml })
   });
 }
 
-function hasInlineTransformOnly(leaf) {
-  return leaf.style.length === 1 && leaf.style[0] === "transform" && leaf.style.transform.length > 0;
+function hasInlinePreparedStyle(leaf) {
+  const properties = [...leaf.style];
+  return leaf.className === "" && properties.length >= 3 && properties.length <= 4 &&
+    properties.includes("transform") && properties.includes("background-position-x") &&
+    properties.includes("background-position-y") &&
+    properties.every((property) =>
+      property === "transform" || property === "background-position-x" ||
+      property === "background-position-y" || property === "visibility") &&
+    leaf.style.transform.startsWith("matrix(") &&
+    /^-?\d+px -?\d+px$/u.test(leaf.style.backgroundPosition) &&
+    (leaf.style.visibility === "" || leaf.style.visibility === "visible");
 }
 
 function hasPreparedMetadata(doc) {

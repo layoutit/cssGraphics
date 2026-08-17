@@ -69,7 +69,7 @@ try {
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.stack || error.message));
   page.on("console", (message) => { if (message.type() === "error") pageErrors.push(message.text()); });
-  await page.goto(route, { waitUntil: "networkidle" });
+  await page.goto(route, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => document.body.classList.contains("ready") ||
     document.body.classList.contains("error"), null, { timeout: 30_000 });
   const initialCompleteBankEvidence = await page.evaluate(() => {
@@ -163,10 +163,13 @@ try {
       visibility: leaf.style.visibility,
     }));
     const compare = (left, right) => left.reduce(
-      (count, value, index) => count + Number(
-        value.visibility !== right[index].visibility ||
-        (value.visibility !== "hidden" && value.style !== right[index].style),
-      ),
+      (count, value, index) => {
+        const leftHidden = value.visibility === "hidden";
+        const rightHidden = right[index].visibility === "hidden";
+        return count + Number(
+          leftHidden !== rightHidden || (!leftHidden && value.style !== right[index].style),
+        );
+      },
       0,
     );
     await debug.seek(blockBoundary - 1);
@@ -265,9 +268,17 @@ try {
   mobilePage.on("pageerror", (error) => mobileErrors.push(error.stack || error.message));
   mobilePage.on("console", (message) => { if (message.type() === "error") mobileErrors.push(message.text()); });
   await mobilePage.route("**/favicon.ico", (faviconRoute) => faviconRoute.fulfill({ status: 204 }));
-  await mobilePage.goto(`${route}?bank=0&cycle=0`, { waitUntil: "networkidle" });
+  const explicitRoute = new URL(route);
+  explicitRoute.searchParams.set("bank", "0");
+  explicitRoute.searchParams.set("cycle", "0");
+  await mobilePage.goto(explicitRoute.href, { waitUntil: "domcontentloaded" });
   await mobilePage.waitForFunction(() => document.body.classList.contains("ready") ||
     document.body.classList.contains("error"), null, { timeout: 30_000 });
+  const firstExplicitSelection = await mobilePage.evaluate(() => globalThis.__cssGravityWellDebug.selection());
+  await mobilePage.goto(explicitRoute.href, { waitUntil: "domcontentloaded" });
+  await mobilePage.waitForFunction(() => document.body.classList.contains("ready") ||
+    document.body.classList.contains("error"), null, { timeout: 30_000 });
+  const repeatedExplicitSelection = await mobilePage.evaluate(() => globalThis.__cssGravityWellDebug.selection());
   await mobilePage.setViewportSize({ width: 4_000, height: 4_000 });
   await mobilePage.evaluate(async () => globalThis.__cssGravityWellDebug.seekSourceTick(120));
   await mobilePage.setViewportSize({ width: 390, height: 844 });
@@ -293,6 +304,8 @@ try {
   });
   if (mobileErrors.length || mobileEvidence.errors.length || mobileEvidence.status !== "ready" ||
       !mobileEvidence.stable || !mobileEvidence.coarsePrimaryPointer ||
+      firstExplicitSelection.bankIndex !== 0 || firstExplicitSelection.mode !== "explicit" ||
+      repeatedExplicitSelection.bankIndex !== 0 || repeatedExplicitSelection.mode !== "explicit" ||
       mobileEvidence.state.sourceFrameIndex !== 120 || !mobileEvidence.state.paused ||
       mobileEvidence.stats.selectedViewportProfilePolicy !== "conservative-mobile-square" ||
       mobileEvidence.stats.selectedViewportWidth !== 390 ||
@@ -318,6 +331,8 @@ try {
     evidence,
     sparseBlockEvidence,
     cycleEvidence,
+    firstExplicitSelection,
+    repeatedExplicitSelection,
     mobileEvidence,
     mobileErrors,
     pageErrors,

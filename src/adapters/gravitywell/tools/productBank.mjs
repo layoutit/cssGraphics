@@ -126,6 +126,9 @@ export async function inspectCssgravitywellProductBank(root, { verifyDescriptor 
         descriptor.index === blockIndex && descriptor.startFrameIndex === expectedStart &&
         descriptor.frameCount === expectedFrameCount &&
         descriptor.keyframeTransformCount === RETAINED_LEAF_COUNT &&
+        descriptor.transformChangeStart === scene.playback.changeAsset.transformOffsets[expectedStart] &&
+        descriptor.transformChangeEnd ===
+          scene.playback.changeAsset.transformOffsets[expectedStart + expectedFrameCount] &&
         descriptor.deltaTransformCount === descriptor.transformChangeEnd - descriptor.transformChangeStart &&
         descriptor.transformCount === descriptor.keyframeTransformCount + descriptor.deltaTransformCount &&
         descriptor.colorChangeStart === scene.playback.changeAsset.colorOffsets[expectedStart] &&

@@ -21,21 +21,36 @@ await run("cc", [
   "-I", join(resolve(sourceRoot), "utils"),
   "-lm", "-o", executable,
 ]);
-const { stdout } = await run(executable, []);
+const { stdout } = await run(executable, [], { maxBuffer: 8 * 1024 * 1024 });
 const nativeRows = stdout.trim().split("\n").map((line) => {
-  const [frameIndex, vertexIndex, depth] = line.split(",").map(Number);
+  const fields = line.split(",");
+  if (fields.length !== 3 || fields.some((field) => field.trim() === "")) {
+    throw new Error(`Malformed native Gravity Well row: ${line}`);
+  }
+  const [frameIndex, vertexIndex, depth] = fields.map(Number);
+  if (!Number.isSafeInteger(frameIndex) || frameIndex < 0 ||
+      !Number.isSafeInteger(vertexIndex) || vertexIndex < 0 || !Number.isFinite(depth)) {
+    throw new Error(`Invalid native Gravity Well row: ${line}`);
+  }
   return Object.freeze({ frameIndex, vertexIndex, depth });
 });
 const prepared = buildPreparedGravityWellStates();
 const comparisons = nativeRows.map((row) => {
-  const browserDepth = prepared.frames[row.frameIndex].depths[row.vertexIndex];
+  const frame = prepared.frames[row.frameIndex];
+  if (!frame || row.vertexIndex >= frame.depths.length) {
+    throw new RangeError(`Native Gravity Well sample is out of range: ${row.frameIndex},${row.vertexIndex}`);
+  }
+  const browserDepth = frame.depths[row.vertexIndex];
   return Object.freeze({
     ...row,
     browserDepth,
     absoluteDifference: Math.abs(row.depth - browserDepth),
   });
 });
-const maximumAbsoluteDifference = Math.max(...comparisons.map((row) => row.absoluteDifference));
+const maximumAbsoluteDifference = comparisons.reduce(
+  (maximum, row) => Math.max(maximum, row.absoluteDifference),
+  0,
+);
 const tolerance = 0.002;
 const result = Object.freeze({
   schema: "cssgravitywell-native-state-oracle@1",

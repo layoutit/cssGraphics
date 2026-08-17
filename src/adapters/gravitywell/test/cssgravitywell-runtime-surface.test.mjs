@@ -84,18 +84,17 @@ test("product frame loop publishes only separately prepared writes", async () =>
   const playback = await readFile(resolve(adapterRoot, "src/cssgravitywell/preparedPlayback.mjs"), "utf8");
   const assets = await readFile(resolve(adapterRoot, "src/cssgravitywell/preparedAssets.mjs"), "utf8");
   const preparer = await readFile(resolve(adapterRoot, "tools/prepare-cssgravitywell.mjs"), "utf8");
-  const publishFrame = playback.slice(
-    playback.indexOf("function publishFrame"),
-    playback.indexOf("function schedule"),
-  );
-  const schedule = playback.slice(
-    playback.indexOf("function requestPaintAlignedPublication"),
-    playback.indexOf("function pause"),
-  );
-  const activate = assets.slice(
-    assets.indexOf("activate(frameIndex)"),
-    assets.indexOf("selectFrame(frameIndex)"),
-  );
+  const publishFrameStart = playback.indexOf("function publishFrame");
+  const scheduleStart = playback.indexOf("function requestPaintAlignedPublication");
+  const pauseStart = playback.indexOf("function pause");
+  const activateStart = assets.indexOf("activate(frameIndex)");
+  const selectFrameStart = assets.indexOf("selectFrame(frameIndex,");
+  for (const marker of [publishFrameStart, scheduleStart, pauseStart, activateStart, selectFrameStart]) {
+    assert.notEqual(marker, -1);
+  }
+  const publishFrame = playback.slice(publishFrameStart, scheduleStart);
+  const schedule = playback.slice(scheduleStart, pauseStart);
+  const activate = assets.slice(activateStart, selectFrameStart);
   assert.doesNotMatch(publishFrame, /assertStableDomIdentity/u);
   assert.doesNotMatch(publishFrame, /selectedColorRows/u);
   assert.match(schedule, /requestPaintAlignedPublication/u);

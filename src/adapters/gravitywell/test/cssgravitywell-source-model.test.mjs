@@ -151,7 +151,8 @@ test("source color ramp remains available while the product palette stays green"
   assert.equal(PREPARED_LINE_COVERAGE, 0.6);
   assert.equal(PREPARED_MAXIMUM_DEPTH_OPACITY_REDUCTION, 0.75);
   assert.equal(fogged[31], "rgb(0 255 0 / 0.6)");
-  assert.equal(fogged.at(-1), "rgb(0 255 0 / 0.15)");
+  assert.equal(fogged.at(-1), "rgb(0 255 0 / 0.14902)");
+  assert.equal(new Set(fogged).size, 135);
   assert.equal(preparedFoggedColorIndex(0, 0, 0), 31);
   assert.equal(preparedFoggedColorIndex(SOURCE.maximumMassColor, 1, 0), 511);
 });

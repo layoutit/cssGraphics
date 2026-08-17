@@ -15,14 +15,25 @@ test("Gravity Well honors a fresh explicit bank selection", () => {
   );
 });
 
-test("Gravity Well does not repeat an explicit bank after refresh", () => {
+test("Gravity Well always honors an explicit bank selection", () => {
   assert.deepEqual(
     selectInitialGravityWellBank(catalog, {
       search: "?bank=7",
       previousBankIndex: 7,
       randomUint32: () => 7,
     }),
-    { bankIndex: 8, mode: "crypto-random-no-repeat" },
+    { bankIndex: 7, mode: "explicit" },
+  );
+});
+
+test("Gravity Well explicit selection ignores stale remembered bank state", () => {
+  assert.deepEqual(
+    selectInitialGravityWellBank(catalog, {
+      search: "?bank=7",
+      previousBankIndex: 24,
+      randomUint32: () => 7,
+    }),
+    { bankIndex: 7, mode: "explicit" },
   );
 });
 

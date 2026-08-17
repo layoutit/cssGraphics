@@ -6,6 +6,11 @@ import {
   GRAVITYWELL_VIEWPORT_PROFILE_POLICY,
   selectGravityWellVisibilityProfile,
 } from "../src/cssgravitywell/preparedPlayback.mjs";
+import {
+  CSSGRAVITYWELL_VISIBILITY_ENCODING,
+  CSSGRAVITYWELL_VISIBILITY_SCHEMA,
+  encodeGravityWellViewportVisibility,
+} from "../src/prepare/cssgravitywell/visibilitySchedule.mjs";
 
 const profiles = [
   { width: 430, height: 960 },
@@ -87,4 +92,48 @@ test("fractional coarse-pointer DPR compensates 1px carrier coverage without cha
   assert.equal(defaultGravityWellCarrierCoverageScale(coarse, 2.625), 1);
   assert.equal(defaultGravityWellCarrierCoverageScale(precise, 2.25), 1);
   assert.equal(defaultGravityWellCarrierCoverageScale(coarse, undefined), 1);
+});
+
+test("visibility encoding rejects values that cannot fit its uint16 fields", () => {
+  const profile = {
+    width: 430,
+    height: 960,
+    frameCount: 2,
+    leafCount: 4,
+    initialVisibleIndices: new Uint16Array([0]),
+    changeOffsets: new Uint32Array([0, 0, 0]),
+    assignments: new Uint16Array(),
+  };
+  const schedule = {
+    schema: CSSGRAVITYWELL_VISIBILITY_SCHEMA,
+    encoding: CSSGRAVITYWELL_VISIBILITY_ENCODING,
+    marginPixels: 8,
+    dilationFrames: 1,
+    profiles: [profile],
+  };
+  assert.throws(
+    () => encodeGravityWellViewportVisibility({
+      ...schedule,
+      profiles: [{ ...profile, width: 65_536 }],
+    }),
+    /visibility schedule is incomplete/,
+  );
+  assert.throws(
+    () => encodeGravityWellViewportVisibility({
+      ...schedule,
+      profiles: [{ ...profile, leafCount: 32_769 }],
+    }),
+    /visibility schedule is incomplete/,
+  );
+  for (const invalidSchedule of [
+    { ...schedule, marginPixels: -1 },
+    { ...schedule, dilationFrames: 1.5 },
+    { ...schedule, profiles: [{ ...profile, width: 0 }] },
+    { ...schedule, profiles: [{ ...profile, frameCount: 1 }] },
+  ]) {
+    assert.throws(
+      () => encodeGravityWellViewportVisibility(invalidSchedule),
+      /visibility schedule is incomplete/,
+    );
+  }
 });

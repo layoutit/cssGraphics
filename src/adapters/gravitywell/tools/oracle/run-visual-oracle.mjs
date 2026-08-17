@@ -218,14 +218,16 @@ async function captureBrowserRun(browser, url, runRoot) {
   await mkdir(framesDir, { recursive: true });
   const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
   const errors = [];
+  await page.route("**/favicon.ico", (faviconRoute) => faviconRoute.fulfill({ status: 204 }));
   page.on("pageerror", (error) => errors.push(error.stack || error.message));
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
   try {
     const captureUrl = new URL(url);
     captureUrl.searchParams.set("bank", "0");
     captureUrl.searchParams.set("cycle", "0");
-    await page.goto(captureUrl.href, { waitUntil: "networkidle" });
-    await page.waitForFunction(() => ["ready", "error"].includes(document.body.dataset.portStatus), null, { timeout: 30_000 });
+    await page.goto(captureUrl.href, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => document.body.classList.contains("ready") ||
+      document.body.classList.contains("error"), null, { timeout: 30_000 });
     await page.evaluate(() => window.__cssGravityWellDebug.pause());
     await page.addStyleTag({ content: `
       :root, html, body, .polycss-camera { background: #000 !important; }
@@ -233,13 +235,14 @@ async function captureBrowserRun(browser, url, runRoot) {
     ` });
     const initial = await page.evaluate(() => ({
       ready: Boolean(window.__cssGravityWellDebug?.ready),
-      status: document.body.dataset.portStatus,
+      bodyReady: document.body.classList.contains("ready"),
+      status: document.body.className,
       scene: window.__cssGravityWellDebug?.scene?.() ?? null,
       state: window.__cssGravityWellDebug?.state?.() ?? null,
       forbiddenRendererElements: document.querySelectorAll(".polycss-camera canvas, .polycss-camera svg").length,
       clipPathCount: [...document.querySelectorAll(".polycss-camera *")].filter((element) => getComputedStyle(element).clipPath !== "none").length,
     }));
-    if (errors.length || !initial.ready || initial.status !== "ready" || initial.forbiddenRendererElements || initial.clipPathCount) {
+    if (errors.length || !initial.ready || !initial.bodyReady || initial.forbiddenRendererElements || initial.clipPathCount) {
       throw new Error(`Gravity Well browser oracle did not become valid: ${JSON.stringify({ initial, errors })}`);
     }
     const states = [];
@@ -319,14 +322,16 @@ async function writeTriptych({ nativeA, browserA, nativeBrowser, tick }) {
   const nativeFrame = join(nativeA.framesDir, `frame_${String(index).padStart(4, "0")}.ppm`);
   const browserFrame = join(browserA.framesDir, frameName(index));
   const diffRow = nativeBrowser.diffs.find((entry) => entry.frame === index);
-  if (!diffRow?.png) throw new Error(`Missing absolute-diff frame for tick ${tick}`);
+  if (!diffRow) throw new Error(`Missing absolute-diff frame for tick ${tick}`);
   const conversion = spawnSync("sips", ["-s", "format", "png", nativeFrame, "--out", nativePath], {
     encoding: "utf8",
     maxBuffer: 8 * 1024 * 1024,
   });
   if (conversion.status !== 0) throw new Error(conversion.stderr || "Unable to convert native PPM preview to PNG");
   await copyFile(browserFrame, browserPath);
-  await copyFile(diffRow.png, diffPath);
+  if (diffRow.png) await copyFile(diffRow.png, diffPath);
+  else if (diffRow.ppm) await sharp(diffRow.ppm).png().toFile(diffPath);
+  else throw new Error(`Missing absolute-diff image for tick ${tick}`);
   const labels = ["NATIVE gravitywell.c", "BROWSER retained DOM", "ABSOLUTE DIFF"];
   const panelBuffers = await Promise.all([nativePath, browserPath, diffPath].map((path) => sharp(path).png().toBuffer()));
   const labelSvg = Buffer.from(`<svg width="${width * 3}" height="40" xmlns="http://www.w3.org/2000/svg">

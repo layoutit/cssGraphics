@@ -370,7 +370,8 @@ export function preparedFoggedColorPalette() {
       const normalizedDepth = opacityDepthLevel / (PREPARED_OPACITY_DEPTH_LEVELS - 1);
       const depthOpacity = 1 - smoothstep(normalizedDepth) * PREPARED_MAXIMUM_DEPTH_OPACITY_REDUCTION;
       const factor = (fogLevel / (PREPARED_FOG_LEVELS - 1)) * PREPARED_LINE_COVERAGE * depthOpacity;
-      return `rgb(${rgb.join(" ")} / ${cssNumber(factor)})`;
+      const alpha = Math.round(factor * 255) / 255;
+      return `rgb(${rgb.join(" ")} / ${cssNumber(alpha)})`;
     }),
   ).flat());
 }

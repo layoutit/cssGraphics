@@ -6,6 +6,7 @@
 #undef ya_rand_init
 
 #define COUNT 15
+#define ACTIVE_COUNT 2
 #define GRID_WIDTH 32
 #define GRID_SEGMENT 16
 #define RESOLUTION 1.0f
@@ -43,10 +44,19 @@ static void new_star(star *stars, int index) {
   value->surface_gravity = value->mass / value->ri2;
 }
 
+static void isolate_prepared_well(star *value, int index) {
+  const int width = GRID_WIDTH * GRID_SEGMENT;
+  const float normalized_source_speed = (value->dy * RESOLUTION - 0.1f) / 0.6f;
+  const float prepared_frame_speed = 1.0f + normalized_source_speed * 0.6f;
+  value->x = width * (index == 0 ? 0.32f : 0.68f);
+  value->dx = (index == 0 ? -1.0f : 1.0f) * fabsf(value->dx);
+  value->dy = prepared_frame_speed / (SPEED * SPEED_BASE * RESOLUTION);
+}
+
 static void move_stars(star *stars) {
   const int width = GRID_WIDTH * GRID_SEGMENT;
   const int height = width;
-  for (int index = 0; index < COUNT; index++) {
+  for (int index = 0; index < ACTIVE_COUNT; index++) {
     star *value = &stars[index];
     const float offset = SPEED * SPEED_BASE * RESOLUTION;
     value->x += value->dx * offset;
@@ -54,6 +64,7 @@ static void move_stars(star *stars) {
     if (value->x < -value->ro || value->y < -value->ro ||
         value->x >= width + value->ro || value->y >= height + value->ro) {
       new_star(stars, index);
+      isolate_prepared_well(value, index);
       value->y = -value->ro;
     }
   }
@@ -61,7 +72,7 @@ static void move_stars(star *stars) {
 
 static float gravity_at(const star *stars, float x, float y) {
   float total = 0;
-  for (int index = 0; index < COUNT; index++) {
+  for (int index = 0; index < ACTIVE_COUNT; index++) {
     const star *value = &stars[index];
     const float dx = value->x - x;
     const float dy = value->y - y;
@@ -85,6 +96,10 @@ int main(void) {
   for (int index = 0; index < COUNT; index++) {
     new_star(stars, index);
     stars[index].y = f_random(stars[index].ro * 2 + GRID_WIDTH * GRID_SEGMENT) - stars[index].ro;
+  }
+  for (int index = 0; index < ACTIVE_COUNT; index++) {
+    isolate_prepared_well(&stars[index], index);
+    stars[index].y = GRID_WIDTH * GRID_SEGMENT * (index == 0 ? 0.3f : 0.65f);
   }
   f_random(0.8);
   f_random(0.2);

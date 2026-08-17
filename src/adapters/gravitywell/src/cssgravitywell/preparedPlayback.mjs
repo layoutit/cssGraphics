@@ -47,6 +47,7 @@ export async function createGravityWellPreparedPlayer({
   const leafTargets = target.leaves;
   const cachedTransforms = new Array(leaves.length);
   const cachedColorValues = new Uint16Array(leaves.length);
+  const publishedColors = new Array(leaves.length);
   const selectedVisibilityByLeaf = new Uint8Array(leaves.length);
   const newlyVisibleFlags = new Uint8Array(leaves.length);
   const newlyVisibleLeaves = [];
@@ -191,11 +192,15 @@ export async function createGravityWellPreparedPlayer({
       const transform = cachedTransforms[leafIndex];
       if (typeof transform !== "string") throw new Error(`Prepared visible transform ${leafIndex} is missing`);
       leafStyles[leafIndex].transform = transform;
-      leafStyles[leafIndex].color = playback.colorAsset.palette[cachedColorValues[leafIndex]];
+      const color = playback.colorAsset.palette[cachedColorValues[leafIndex]];
+      if (publishedColors[leafIndex] !== color) {
+        leafStyles[leafIndex].color = color;
+        publishedColors[leafIndex] = color;
+        leafColorWrites += 1;
+        visibilityCatchupColorWrites += 1;
+      }
       leafTransformWrites += 1;
-      leafColorWrites += 1;
       visibilityCatchupTransformWrites += 1;
-      visibilityCatchupColorWrites += 1;
       setLeafVisibility(leafIndex, true);
       newlyVisibleFlags[leafIndex] = 0;
     }
@@ -227,7 +232,10 @@ export async function createGravityWellPreparedPlayer({
         cachedColorValues[leafIndex] = colorValue;
         preparedColorValueReads += 1;
         if (selectedVisibilityByLeaf[leafIndex] === 0 || newlyVisibleFlags[leafIndex] === 1) continue;
-        leafStyles[leafIndex].color = playback.colorAsset.palette[colorValue];
+        const color = playback.colorAsset.palette[colorValue];
+        if (publishedColors[leafIndex] === color) continue;
+        leafStyles[leafIndex].color = color;
+        publishedColors[leafIndex] = color;
         colorWriteCount += 1;
       }
     } else {
@@ -240,9 +248,13 @@ export async function createGravityWellPreparedPlayer({
         preparedColorValueReads += 1;
         if (selectedVisibilityByLeaf[leafIndex] === 0 || newlyVisibleFlags[leafIndex] === 1) continue;
         leafStyles[leafIndex].transform = transform;
-        leafStyles[leafIndex].color = playback.colorAsset.palette[colorValue];
+        const color = playback.colorAsset.palette[colorValue];
+        if (publishedColors[leafIndex] !== color) {
+          leafStyles[leafIndex].color = color;
+          publishedColors[leafIndex] = color;
+          colorWriteCount += 1;
+        }
         transformWriteCount += 1;
-        colorWriteCount += 1;
       }
     }
     leafTransformWrites += transformWriteCount;
@@ -279,19 +291,28 @@ export async function createGravityWellPreparedPlayer({
   }
 
   function queueNextBank() {
-    if (!cycleBanks || bankCount === 1 || pendingBankPromise || pendingBank) return pendingBankPromise;
+    if (destroyed || !cycleBanks || bankCount === 1 || pendingBankPromise || pendingBank) {
+      return pendingBankPromise;
+    }
     pendingBankIndex = nextBankIndex();
     pendingBankPromise = Promise.resolve(loadBank(pendingBankIndex, {
       lookahead: true,
       incremental: true,
       complete: true,
     })).then((loaded) => {
+      if (destroyed) {
+        loaded.transformBlocks.destroy();
+        pendingBankPromise = null;
+        pendingBankIndex = null;
+        return null;
+      }
       pendingBank = validateBank(loaded, pendingBankIndex, leaves.length);
       pendingBankPromise = null;
       return pendingBank;
     }).catch((error) => {
       pendingBankPromise = null;
-      onError(error);
+      pendingBankIndex = null;
+      if (!destroyed) onError(error);
       return null;
     });
     return pendingBankPromise;
@@ -343,6 +364,11 @@ export async function createGravityWellPreparedPlayer({
 
   function schedule() {
     if (paused || frameRequest !== null || delayRequest !== null) return;
+    if (!cycleBanks && frameIndex >= activeBank.scene.timeline.terminalFlatFrameIndex) {
+      paused = true;
+      nextFrameAt = null;
+      return;
+    }
     const delay = Math.max(0, nextFrameAt - readNow() - schedulerLeadMilliseconds);
     if (delay <= 1) {
       requestPaintAlignedPublication();

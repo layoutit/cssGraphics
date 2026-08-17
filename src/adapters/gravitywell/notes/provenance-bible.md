@@ -64,16 +64,19 @@ The browser loads the verified static Morph package and bank catalog, chooses
 the initial bank with `crypto.getRandomValues`, adopts its 1,984 retained
 solid-quad line leaves with `createPolyMorphPreparedDomTarget`, and fetches,
 verifies, decompresses, decodes, and formats all sixteen blocks of the selected
-bank beneath the loading cover before exposing the scene. The largest selected
-bank transfers 1,733,655 encoded block bytes and expands to 42,212,693 bytes of
-prepared CSS strings. Playback releases only blocks it has already passed.
+bank beneath the loading cover before exposing the scene. In the locked product,
+the sixteen transform blocks transfer 564,846 through 789,141 encoded bytes per
+bank and expand to 22,143,898 through 31,076,733 bytes of prepared CSS strings.
+Playback releases only blocks it has already passed.
 The next complete shuffled bank starts preparing at the first block's midpoint,
 well ahead of handoff. Its fixed-two-decimal `matrix3d` formatting runs in
 bounded two-millisecond timer slices outside frame publication, with successive
 slices separated by one source frame so they cannot bunch inside one task.
 Unlike the previous idle-callback request, timer slices are not starved by
 continuous style and compositor work. The shuffle visits the other 23 banks
-without replacement.
+without replacement. Explicit `bank` and `cycle` route controls are consumed
+after initial selection, so ordinary reloads avoid repeating the prior random
+bank while deterministic oracle URLs always honor their requested bank.
 Sequential frames visit only their independently prepared transform and color
 write indices. Twenty-five conservative rectangular viewport profiles prepare
 visible-leaf membership for every bank frame, including one-frame temporal
@@ -95,14 +98,20 @@ evaluation, color generation, DOM growth, Canvas, SVG scene geometry, WebGL,
 WebGPU, masks, and clip paths are forbidden. Randomness selects only prepared
 bank indices.
 
+Preparation quantizes fog alpha to the browser's 8-bit paint precision and
+compares the resulting CSS colors, rather than their 512 source lookup indices,
+when it builds sparse color transitions. The palette retains the source lookup
+topology while playback reads and writes only paint-distinct changes; a
+published color string is never assigned twice to the same leaf.
+
 At 960 by 600 CSS pixels and DPR 1, the closed-grid prepared worst transition
-contains 1,763 transform and 489 color changes. The selected 1,024 by 640
-profile publishes 916 transforms and 328 colors. The final Chrome trace
-measures a `1.0 ms` worst-transition publication p95, `0.6 ms` steady-state
-publication p95 outside block activation, and `9.3 ms` sampled display-interval
-p95, with a `17.4 ms` maximum, no intervals over 25 ms, no long tasks, no
-continuous-playback transform-block loads or activation waits, and no DOM
-growth across 234 prepared frames and eleven block boundaries.
+contains 1,984 transform and 79 paint-distinct color changes. The selected
+1,024 by 640 profile publishes 1,147 transforms and 34 colors. The final Chrome
+trace measures a `0.7 ms` worst-transition publication p95, `0.6 ms`
+steady-state publication p95 outside block activation, and `10.1 ms` sampled
+display-interval p95, with a `16.7 ms` maximum, no intervals over 25 ms, no long
+tasks, no continuous-playback transform-block loads or activation waits, and no
+DOM growth across 233 prepared frames and eleven block boundaries.
 
 In the locally generated rectangular-profile candidate, a 390 by 844 viewport
 uses the 430 by 960 profile instead of the legacy 1,024-pixel square. Across
@@ -186,9 +195,9 @@ spacing, but fully prepares the selected bank beneath the loader and schedules
 future-bank slices with the source-frame timer instead of waiting for browser
 idle time. The release gate now begins with the real endless route in an
 untouched seven-second playback window before any pause, seek, or step. At 960
-by 600 it crosses 11 block boundaries and 234 prepared frames with zero runtime
+by 600 it crosses 11 block boundaries and 233 prepared frames with zero runtime
 block loads, zero activation waits, zero long tasks, a 16.7 ms maximum rAF
-sample, and a 41.031 ms maximum FrameSleuth DrawFrame interval after excluding
+sample, and a 36.986 ms maximum FrameSleuth DrawFrame interval after excluding
 only the first 500 ms tracing-start seam. A separate 12.5-second run crosses an
 endless bank handoff with both banks completely prepared, no bank wait, no
 activation wait, stable DOM identity, and a 25 ms maximum sampled gap.
@@ -197,15 +206,17 @@ activation wait, stable DOM identity, and a 25 ms maximum sampled gap.
 
 The numeric native state oracle compares 20 C/JS depth samples at ticks 0, 1,
 60, 120, and 239 with a `0.002` float tolerance; its observed maximum is
-`0.0007518813406939273`.
+`0.000029572374444120086`. The C harness consumes the original 15-well RNG
+sequence, then applies the product's documented two-well isolation and speed
+profile before sampling.
 
 The rendered oracle compiles and includes the pinned `gravitywell.c` with the
 original XScreenSaver RNG, color, HSV, trackball, and quaternion sources in a
 no-window macOS CGL framebuffer. It captures native and browser ticks 0, 60,
 120, and 239 at 960 by 600. Native A/A and browser A/A are pixel-exact. The
 native/browser comparison is deliberately an exact-zero gate and currently
-fails: mean absolute delta is `3.300204` through `4.875751`; the four-frame mean
-is `4.228078`. Evidence lives in
+fails: mean absolute delta is `6.132173` through `6.404561`; the four-frame mean
+is `6.241375`. Evidence lives in
 the ignored `bench/results/cssgravitywell/native-browser-visual/` tree.
 
 The remaining visual boundary is explicit: the product retains one quad per

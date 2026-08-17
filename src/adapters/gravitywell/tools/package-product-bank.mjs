@@ -3,8 +3,8 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { cp, mkdir, readdir, rm, rename, stat, utimes } from "node:fs/promises";
-import { basename, dirname, resolve } from "node:path";
+import { cp, mkdir, readdir, rm, rename, stat, utimes, writeFile } from "node:fs/promises";
+import { basename, dirname, relative, resolve } from "node:path";
 import {
   inspectCssgravitywellProductBank,
   writeCssgravitywellProductBankDescriptor,
@@ -43,19 +43,27 @@ async function writePortableArchive(productRoot, requestedArchivePath) {
   const archivePath = resolve(requestedArchivePath);
   const temporaryTar = `${archivePath}.staging-${process.pid}.tar`;
   const temporaryArchive = `${temporaryTar}.gz`;
+  const temporaryFileList = `${temporaryTar}.files`;
   await mkdir(dirname(archivePath), { recursive: true });
   await rm(temporaryTar, { force: true });
   await rm(temporaryArchive, { force: true });
+  await rm(temporaryFileList, { force: true });
   try {
     await normalizeArchiveTree(productRoot);
+    const archiveMembers = await archiveEntries(productRoot);
+    await writeFile(temporaryFileList, `${archiveMembers.join("\n")}\n`);
+    const tarVersion = runArchiveTool("tar", ["--version"]);
+    const ownerArguments = /GNU tar/u.test(tarVersion)
+      ? ["--owner=0", "--group=0", "--numeric-owner"]
+      : ["--uid", "0", "--gid", "0", "--uname", "root", "--gname", "root"];
     runArchiveTool("tar", [
-      "--no-xattrs", "--uid", "0", "--gid", "0", "--uname", "root", "--gname", "wheel",
-      "-cf", temporaryTar, "-C", dirname(productRoot), "cssgravitywell",
+      "--no-xattrs", "--no-recursion", "--format", "ustar", ...ownerArguments,
+      "-cf", temporaryTar, "-C", dirname(productRoot), "-T", temporaryFileList,
     ], { COPYFILE_DISABLE: "1" });
     runArchiveTool("gzip", ["-n", "-6", "-f", temporaryTar]);
     const listing = runArchiveTool("tar", ["-tzf", temporaryArchive]);
-    const entries = listing.trim().split("\n").filter(Boolean);
-    if (entries.length === 0 || entries.some(isUnsafeArchiveEntry)) {
+    const listedEntries = listing.trim().split("\n").filter(Boolean);
+    if (listedEntries.length === 0 || listedEntries.some(isUnsafeArchiveEntry)) {
       throw new Error("Portable cssGravityWell archive contains an unsafe or metadata entry");
     }
     await rm(archivePath, { force: true });
@@ -65,7 +73,19 @@ async function writePortableArchive(productRoot, requestedArchivePath) {
   } finally {
     await rm(temporaryTar, { force: true });
     await rm(temporaryArchive, { force: true });
+    await rm(temporaryFileList, { force: true });
   }
+}
+
+async function archiveEntries(root, directory = root) {
+  const rows = directory === root ? [basename(root)] : [];
+  const entries = await readdir(directory, { withFileTypes: true });
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    const path = resolve(directory, entry.name);
+    rows.push(`${basename(root)}/${relative(root, path)}`);
+    if (entry.isDirectory()) rows.push(...await archiveEntries(root, path));
+  }
+  return rows;
 }
 
 async function normalizeArchiveTree(root) {

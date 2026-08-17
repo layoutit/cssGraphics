@@ -70,11 +70,16 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.deepEqual(manifest.renderer.portraitCardCounts, [1, 2, 3, 4]);
   assert.deepEqual(manifest.renderer.portraitCardBreakpoints, [520, 720, 920]);
   assert.equal(manifest.renderer.portraitHorizontalMotion,
-    "phone-reflected-three-card-cycle-wider-multi-card-exit");
+    "phone-source-gravity-prepared-wall-and-floor-impact-response-one-card");
   assert.deepEqual(manifest.renderer.portraitWallBounceCardCounts, [1]);
-  assert.equal(manifest.renderer.phoneLaunchCardCount, 3);
+  assert.equal(manifest.renderer.phoneLaunchCardCount, 1);
   assert.equal(manifest.renderer.phonePlaybackTimeScale, 3);
-  assert.equal(manifest.renderer.phoneHorizontalDistanceScale, 8);
+  assert.equal(manifest.renderer.phoneHorizontalDistanceScale, 2);
+  assert.equal(manifest.renderer.phoneFloorBounceCount, 3);
+  assert.equal(manifest.renderer.phoneImpactResponse,
+    "prepared-new-horizontal-step-after-wall-and-nonterminal-floor-impact");
+  assert.deepEqual(manifest.renderer.phoneImpactHorizontalSteps, [6, 2, 5, 3, 4]);
+  assert.equal(manifest.renderer.phoneTrailSubstepCount, 3);
   assert.equal(manifest.renderer.phoneProfileIndex, 1);
   assert.equal(manifest.renderer.preparedSlotLayout, "source-seven-slot-presentation-scaled-card-size");
   assert.equal(manifest.renderer.slotCount, 7);
@@ -93,7 +98,7 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.equal(manifest.metrics.retainedTrailLeafCount, 1948);
   assert.equal(manifest.metrics.preparedPatternCount, 24);
   assert.equal(manifest.metrics.preparedFrameCount, 13774);
-  assert.equal(manifest.metrics.preparedPhoneFrameCount, 9498);
+  assert.equal(manifest.metrics.preparedPhoneFrameCount, 5360);
   assert.equal(manifest.metrics.initialPatternDurationMs, 27210);
   assert.equal(manifest.metrics.minimumPatternDurationMs, 20475);
   assert.equal(manifest.metrics.maximumPatternDurationMs, 31228);
@@ -169,12 +174,29 @@ test("generated product is one complete retained snapshot plus sparse prepared p
   assert.ok(topAnchoredPixels.length > 0);
   assert.equal(Math.min(...topAnchoredPixels), 8);
   assert.ok(Math.max(...topAnchoredPixels) <= 80);
-  assert.equal(playback.selection, "crypto-random-shuffled-bag-no-immediate-repeat");
+  assert.equal(playback.selection,
+    "crypto-random-shuffled-bag-alternating-phone-direction-unique-angle");
   assert.equal(playback.patternCount, 24);
   assert.equal(playback.patterns.length, 24);
   assert.equal(playback.retainedTrailLeafCount, 1948);
   assert.equal(new Set(playback.patterns.map(({ seed }) => seed)).size, 24);
   assert.equal(new Set(playback.patterns.map(({ horizontalVelocities }) => horizontalVelocities.join(","))).size, 24);
+  const phoneHorizontalVelocities = playback.patterns.map(({ phoneHorizontalVelocity }) =>
+    phoneHorizontalVelocity);
+  assert.equal(phoneHorizontalVelocities.filter((velocity) => velocity > 0).length, 12);
+  assert.ok(phoneHorizontalVelocities.every((velocity) =>
+    Number.isSafeInteger(velocity) && Math.abs(velocity) >= 20 && Math.abs(velocity) <= 60 &&
+    velocity % 10 === 0));
+  assert.ok(playback.patterns.every((pattern) =>
+    pattern.phoneImpactVelocitySteps.filter(([kind]) => kind === "floor").length === 2 &&
+    pattern.phoneImpactVelocitySteps.some(([kind]) => kind === "wall") &&
+    pattern.phoneImpactVelocitySteps.every(([, step], index, steps) =>
+      Number.isSafeInteger(step) && Math.abs(step) >= 2 && Math.abs(step) <= 6 &&
+      (index === 0 || Math.abs(step) !== Math.abs(steps[index - 1][1])))));
+  assert.equal(new Set(playback.patterns.map(phoneLaunchAngleKey)).size, 24);
+  assert.equal(new Set(playback.patterns.map((pattern) => JSON.stringify(
+    pattern.leafPortraitLayoutsByCardCount[0].slice(0, pattern.phoneTimeline.trailLeafCount),
+  ))).size, 24);
   assert.equal(playback.patterns.reduce((sum, pattern) => sum + pattern.trailLeafCount, 0), 38014);
   const rightwardVelocities = playback.patterns.flatMap((pattern) =>
     pattern.horizontalVelocities
@@ -196,13 +218,13 @@ test("generated product is one complete retained snapshot plus sparse prepared p
       profile.length === pattern.trailLeafCount && profile.every(Boolean))));
   assert.ok(playback.patterns.every((pattern) => !("leafFoundationIndices" in pattern)));
   assert.ok(playback.patterns.every((pattern) =>
-    pattern.phoneTimeline.launchCardCount === 3 &&
+    pattern.phoneTimeline.launchCardCount === 1 &&
     pattern.phoneTimeline.sourceStepMilliseconds === 22.5 &&
     pattern.phoneTimeline.trailLeafCount < pattern.trailLeafCount));
   assert.equal(playback.patterns.reduce(
     (sum, pattern) => sum + pattern.phoneTimeline.frameTimesMs.length,
     0,
-  ), 9498);
+  ), 5360);
   const maximumPortraitUpdateGaps = [1, 2, 3, 4].map((cardCount) => Math.max(
     ...playback.patterns.map((pattern) => {
       const updateTimes = pattern.frameTimesMs.filter((_, frameIndex) =>
@@ -225,14 +247,23 @@ test("generated product is one complete retained snapshot plus sparse prepared p
     frameCount: initialPattern.phoneTimeline.frameTimesMs.length,
     durationMs: initialPattern.phoneTimeline.durationMs,
   }, {
-    launchCardCount: 3,
-    trailLeafCount: 291,
-    sourceStepCount: 291,
+    launchCardCount: 1,
+    trailLeafCount: 679,
+    sourceStepCount: 226,
     sourceStepMilliseconds: 22.5,
-    frameCount: 317,
-    durationMs: 15067,
+    frameCount: 249,
+    durationMs: 12210,
   });
-  assert.ok(minimumPhoneDirectionChanges(playback.patterns) >= 6);
+  assert.equal(minimumPhoneDirectionChanges(playback.patterns), 3);
+  assert.ok(playback.patterns.every((pattern) => {
+    const verticalPositions = phoneVerticalPositions(pattern);
+    return verticalPositions[0] === 80 && Math.min(...verticalPositions) >= 8 &&
+      Math.max(...verticalPositions) === 624 && verticalPositions.at(-1) === 624;
+  }));
+  assert.equal(Math.min(...phoneVerticalPositions(initialPattern)), 8);
+  assert.ok(new Set(playback.patterns.map((pattern) =>
+    Math.min(...phoneVerticalPositions(pattern)))).size > 1);
+  assert.ok(playback.patterns.every((pattern) => phoneVerticalDirectionChanges(pattern) === 5));
   assert.equal(initialPattern.sourceStepCount, 1679);
   assert.equal(initialPattern.frameTimesMs.length, 609);
   assert.equal(initialPattern.visibilityRows.length, 609);
@@ -251,27 +282,48 @@ test("generated product is one complete retained snapshot plus sparse prepared p
 });
 
 function minimumPhoneDirectionChanges(patterns) {
-  const counts = patterns.flatMap((pattern) => {
-    const layouts = pattern.leafPortraitLayoutsByCardCount[0];
-    const values = [];
-    let start = 0;
-    for (let cardIndex = 0; cardIndex < pattern.phoneTimeline.launchCardCount; cardIndex += 1) {
-      const atlasIndex = pattern.leafAtlasIndices[start];
-      let end = start + 1;
-      while (end < pattern.phoneTimeline.trailLeafCount &&
-          pattern.leafAtlasIndices[end] === atlasIndex) end += 1;
-      const positions = layouts.slice(start, end).map((layout) => layout[0] / 100 * 384 + layout[1] * 71);
-      let previousDirection = 0;
-      let changes = 0;
-      for (let index = 1; index < positions.length; index += 1) {
-        const direction = Math.sign(positions[index] - positions[index - 1]);
-        if (direction !== 0 && previousDirection !== 0 && direction !== previousDirection) changes += 1;
-        if (direction !== 0) previousDirection = direction;
-      }
-      values.push(changes);
-      start = end;
+  const counts = patterns.map((pattern) => {
+    const positions = pattern.leafPortraitLayoutsByCardCount[0]
+      .slice(0, pattern.phoneTimeline.trailLeafCount)
+      .map((layout) => layout[0] / 100 * 384 + layout[1] * 71);
+    let previousDirection = 0;
+    let changes = 0;
+    for (let index = 1; index < positions.length; index += 1) {
+      const direction = Math.sign(positions[index] - positions[index - 1]);
+      if (direction !== 0 && previousDirection !== 0 && direction !== previousDirection) changes += 1;
+      if (direction !== 0) previousDirection = direction;
     }
-    return values;
+    return changes;
   });
   return Math.min(...counts);
+}
+
+function phoneVerticalPositions(pattern) {
+  return pattern.leafPortraitLayoutsByCardCount[0]
+    .slice(0, pattern.phoneTimeline.trailLeafCount)
+    .map(([,, yViewport, yPixels, yCardHeightFactor]) =>
+      yViewport / 100 * 720 + yPixels + yCardHeightFactor * 96);
+}
+
+function phoneVerticalDirectionChanges(pattern) {
+  const positions = phoneVerticalPositions(pattern);
+  let previousDirection = 0;
+  let changes = 0;
+  for (let index = 1; index < positions.length; index += 1) {
+    const direction = Math.sign(positions[index] - positions[index - 1]);
+    if (direction !== 0 && previousDirection !== 0 && direction !== previousDirection) changes += 1;
+    if (direction !== 0) previousDirection = direction;
+  }
+  return changes;
+}
+
+function phoneLaunchAngleKey({ phoneHorizontalVelocity, phoneVerticalVelocity }) {
+  let horizontalStep = Math.abs(Math.trunc(phoneHorizontalVelocity / 10));
+  let verticalStep = Math.abs(Math.trunc(phoneVerticalVelocity / 10));
+  let left = horizontalStep;
+  let right = verticalStep;
+  while (right !== 0) [left, right] = [right, left % right];
+  horizontalStep /= left;
+  verticalStep /= left;
+  return `${horizontalStep}:${verticalStep}`;
 }

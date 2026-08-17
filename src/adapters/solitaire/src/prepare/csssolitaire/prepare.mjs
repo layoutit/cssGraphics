@@ -62,10 +62,12 @@ const PORTRAIT_PROFILES = Object.freeze([
 const PORTRAIT_CARD_COUNTS = Object.freeze(PORTRAIT_PROFILES.map(({ cardCount }) => cardCount));
 const PORTRAIT_CARD_BREAKPOINTS = Object.freeze([520, 720, 920]);
 const PORTRAIT_HORIZONTAL_DISTANCE_SCALE = 2;
-const PHONE_HORIZONTAL_DISTANCE_SCALE = 8;
-const PHONE_LAUNCH_CARD_COUNT = 3;
+const PHONE_HORIZONTAL_DISTANCE_SCALE = 2;
+const PHONE_LAUNCH_CARD_COUNT = 1;
 const PHONE_PLAYBACK_TIME_SCALE = 3;
 const PHONE_PROFILE_INDEX = 1;
+const PHONE_FLOOR_BOUNCE_COUNT = 3;
+const PHONE_TRAIL_SUBSTEP_COUNT = 3;
 const LAUNCH_CYCLE_COUNT = 3;
 const RANK_NAMES = Object.freeze([
   null, "ace", "two", "three", "four", "five", "six", "seven",
@@ -94,6 +96,8 @@ const PREPARED_PATTERN_SEEDS = Object.freeze(Array.from(
   { length: PREPARED_PATTERN_COUNT },
   (_, index) => 1 + index * 9_973,
 ));
+const PHONE_LAUNCH_VECTORS = buildPhoneLaunchVectors();
+const PHONE_IMPACT_HORIZONTAL_STEPS = buildPhoneImpactHorizontalSteps();
 const CARD_SOURCE_FILE = "card-faces-english-pattern-cc0.png";
 const EXPECTED_CARD_SHA256 = "e782179fb60932722548e3e6b46038a2df16d15001d3ea8cbdd22cc005f2841d";
 
@@ -326,6 +330,60 @@ function nearestUnusedVelocity(velocity, usedVelocities) {
   throw new Error("Unable to prepare a unique same-lane Solitaire trajectory");
 }
 
+function greatestCommonDivisor(left, right) {
+  let a = Math.abs(left);
+  let b = Math.abs(right);
+  while (b !== 0) [a, b] = [b, a % b];
+  return a;
+}
+
+function launchAngleKey(horizontalStep, verticalStep) {
+  const divisor = greatestCommonDivisor(horizontalStep, verticalStep);
+  return `${horizontalStep / divisor}:${verticalStep / divisor}`;
+}
+
+function buildPhoneLaunchVectors() {
+  const candidates = [];
+  const angleKeys = new Set();
+  for (let verticalStep = 1; verticalStep <= 7; verticalStep += 1) {
+    for (let horizontalStep = 2; horizontalStep <= 6; horizontalStep += 1) {
+      const angleKey = launchAngleKey(horizontalStep, verticalStep);
+      if (angleKeys.has(angleKey)) continue;
+      angleKeys.add(angleKey);
+      candidates.push({ horizontalStep, verticalStep, angleKey });
+    }
+  }
+  const initialIndex = candidates.findIndex(({ horizontalStep, verticalStep }) =>
+    horizontalStep === 6 && verticalStep === 7);
+  const initial = candidates.splice(initialIndex, 1)[0];
+  const random = msvcRandom(PREPARED_PATTERN_SEEDS[0]);
+  for (let index = candidates.length - 1; index > 0; index -= 1) {
+    const swapIndex = random() % (index + 1);
+    [candidates[index], candidates[swapIndex]] = [candidates[swapIndex], candidates[index]];
+  }
+  return Object.freeze([initial, ...candidates.slice(0, PREPARED_PATTERN_COUNT - 1)]
+    .map(({ horizontalStep, verticalStep, angleKey }, index) => Object.freeze({
+      velocityX: (index % 2 === 0 ? -1 : 1) * horizontalStep * 10,
+      velocityY: -verticalStep * 10,
+      angleKey,
+    })));
+}
+
+function buildPhoneImpactHorizontalSteps() {
+  const steps = [];
+  let slowStep = 2;
+  let fastStep = 6;
+  while (slowStep <= fastStep) {
+    steps.push(fastStep);
+    fastStep -= 1;
+    if (slowStep <= fastStep) {
+      steps.push(slowStep);
+      slowStep += 1;
+    }
+  }
+  return Object.freeze(steps);
+}
+
 function simulateSource(seed) {
   const random = msvcRandom(seed);
   const snapshots = [];
@@ -379,6 +437,110 @@ function simulateSource(seed) {
     });
   }
   return Object.freeze({ cards, snapshots, sourceDraws, sourceSteps: sourceStep });
+}
+
+function simulatePhoneCard(sourceCard, impactPhase) {
+  const snapshots = [];
+  const impacts = [];
+  const [profileWidth, profileHeight] = PORTRAIT_PROFILES[0].playfield;
+  const presentationScale = Math.min(profileWidth / 384, profileHeight / 720);
+  const displayCardWidth = CARD_WIDTH * presentationScale;
+  const displayStartLeft = (profileWidth - displayCardWidth) / 2;
+  const sourceDistanceScale = PHONE_HORIZONTAL_DISTANCE_SCALE * presentationScale;
+  const minimumX = sourceCard.x - displayStartLeft / sourceDistanceScale;
+  const maximumX = sourceCard.x +
+    (profileWidth - displayCardWidth - displayStartLeft) / sourceDistanceScale;
+  let velocityY = sourceCard.velocityY;
+  let velocityX = sourceCard.velocityX;
+  let x = sourceCard.x;
+  let y = FOUNDATION_Y;
+  let lastKeptX = Number.NEGATIVE_INFINITY;
+  let lastKeptY = Number.NEGATIVE_INFINITY;
+  let sourceStep = 0;
+  let floorBounceCount = 0;
+  let impactIndex = impactPhase;
+  const changeHorizontalVelocity = (direction, kind) => {
+    const currentStep = Math.abs(Math.trunc(velocityX / 10));
+    let nextStep;
+    do {
+      nextStep = PHONE_IMPACT_HORIZONTAL_STEPS[impactIndex % PHONE_IMPACT_HORIZONTAL_STEPS.length];
+      impactIndex += 1;
+    } while (nextStep === currentStep);
+    velocityX = direction * nextStep * 10;
+    impacts.push(Object.freeze({ kind, sourceStep, velocityX }));
+  };
+  const retainSnapshot = (snapshotY = y, force = false) => {
+    if (snapshots.length > 0 && x === lastKeptX && snapshotY === lastKeptY) return;
+    if (!force && snapshots.length > 0 &&
+        Math.hypot(x - lastKeptX, y - lastKeptY) < TRAIL_SAMPLE_DISTANCE) return;
+    snapshots.push({
+      id: snapshotId(snapshots.length),
+      faceNumber: faceNumber(sourceCard.rank, sourceCard.suit),
+      foundationIndex: sourceCard.foundationIndex,
+      horizontalDirection: Math.sign(velocityX),
+      sourceStep,
+      timeMs: INITIAL_HOLD_MS + sourceStep * SOURCE_STEP_MS,
+      x,
+      y: snapshotY,
+    });
+    lastKeptX = x;
+    lastKeptY = y;
+  };
+  while (floorBounceCount < PHONE_FLOOR_BOUNCE_COUNT) {
+    retainSnapshot();
+    x += Math.trunc(velocityX / 10);
+    y += Math.trunc(velocityY / 10);
+    velocityY += 3;
+    sourceStep += 1;
+    if (x < minimumX) {
+      x = minimumX;
+      changeHorizontalVelocity(1, "wall");
+      retainSnapshot(y, true);
+    } else if (x > maximumX) {
+      x = maximumX;
+      changeHorizontalVelocity(-1, "wall");
+      retainSnapshot(y, true);
+    }
+    if (y > FLOOR_Y && velocityY > 0) {
+      velocityY = Math.trunc(-8 * velocityY / 10);
+      floorBounceCount += 1;
+      retainSnapshot(SOURCE_BOUNCE_BOTTOM, true);
+      if (floorBounceCount < PHONE_FLOOR_BOUNCE_COUNT) {
+        changeHorizontalVelocity(Math.sign(velocityX), "floor");
+      }
+    }
+  }
+  return Object.freeze({
+    card: Object.freeze({
+      ...sourceCard,
+      retainedSnapshots: snapshots.length,
+      startStep: 0,
+      timeMs: INITIAL_HOLD_MS,
+    }),
+    snapshots: Object.freeze(snapshots),
+    impacts: Object.freeze(impacts),
+    sourceSteps: sourceStep,
+  });
+}
+
+function densifyPhoneSnapshots(snapshots) {
+  const denseSnapshots = [{ ...snapshots[0], id: snapshotId(0) }];
+  for (let index = 1; index < snapshots.length; index += 1) {
+    const previous = snapshots[index - 1];
+    const current = snapshots[index];
+    for (let substep = 1; substep <= PHONE_TRAIL_SUBSTEP_COUNT; substep += 1) {
+      const progress = substep / PHONE_TRAIL_SUBSTEP_COUNT;
+      denseSnapshots.push({
+        ...current,
+        id: snapshotId(denseSnapshots.length),
+        sourceStep: previous.sourceStep + (current.sourceStep - previous.sourceStep) * progress,
+        timeMs: previous.timeMs + (current.timeMs - previous.timeMs) * progress,
+        x: previous.x + (current.x - previous.x) * progress,
+        y: previous.y + (current.y - previous.y) * progress,
+      });
+    }
+  }
+  return Object.freeze(denseSnapshots.map(Object.freeze));
 }
 
 function cardLeaf({ cardFace, foundationIndex, horizontalDirection, left, top }) {
@@ -476,14 +638,27 @@ function buildPreparedPattern(seed, index) {
     top: snapshot.y,
   }));
   const timeline = buildPatternPlayback(source.snapshots, source.cards, source.sourceSteps);
-  const phoneCards = source.cards.slice(0, PHONE_LAUNCH_CARD_COUNT);
-  const phoneTrailLeafCount = phoneCards.reduce((sum, card) => sum + card.retainedSnapshots, 0);
-  const phoneSnapshots = source.snapshots.slice(0, phoneTrailLeafCount);
-  const phoneSourceStepCount = phoneSnapshots.at(-1).sourceStep + 1;
+  const phoneLaunch = PHONE_LAUNCH_VECTORS[index];
+  const phone = simulatePhoneCard({
+    ...source.cards[0],
+    velocityX: phoneLaunch.velocityX,
+    velocityY: phoneLaunch.velocityY,
+  }, index);
+  const phoneSnapshots = densifyPhoneSnapshots(phone.snapshots);
+  const phoneLeaves = phoneSnapshots.map((snapshot) => cardLeaf({
+    cardFace: snapshot.faceNumber,
+    foundationIndex: snapshot.foundationIndex,
+    horizontalDirection: snapshot.horizontalDirection,
+    left: snapshot.x,
+    top: snapshot.y,
+  }));
+  if (phoneLeaves.length > trailLeaves.length) {
+    throw new Error("Prepared phone Solitaire trajectory exceeds the retained leaf pool");
+  }
   const phoneTimeline = buildPatternPlayback(
     phoneSnapshots,
-    phoneCards,
-    phoneSourceStepCount,
+    [{ ...phone.card, retainedSnapshots: phoneSnapshots.length }],
+    phone.sourceSteps,
     PHONE_PLAYBACK_TIME_SCALE,
   );
   const contentBounds = buildContentBounds(source.snapshots);
@@ -503,6 +678,10 @@ function buildPreparedPattern(seed, index) {
       sourceStepCount: source.sourceSteps,
       sourceStepMilliseconds: SOURCE_STEP_MS,
       horizontalVelocities: source.cards.map(({ velocityX }) => velocityX),
+      phoneHorizontalVelocity: phoneLaunch.velocityX,
+      phoneVerticalVelocity: phoneLaunch.velocityY,
+      phoneImpactVelocitySteps: phone.impacts.map(({ kind, velocityX }) =>
+        Object.freeze([kind, Math.trunc(velocityX / 10)])),
       durationMs: timeline.durationMs,
       rewindStartMilliseconds: timeline.rewindStartMilliseconds,
       rewindEndMilliseconds: timeline.rewindEndMilliseconds,
@@ -512,7 +691,10 @@ function buildPreparedPattern(seed, index) {
       phoneTimeline,
       leafLayouts: trailLeaves.map(({ layout }) => layout),
       leafPortraitLayoutsByCardCount: PORTRAIT_CARD_COUNTS.map((_, profileIndex) =>
-        trailLeaves.map(({ portraitLayouts }) => {
+        trailLeaves.map(({ portraitLayouts }, leafIndex) => {
+          if (profileIndex === PHONE_PROFILE_INDEX - 1 && phoneLeaves[leafIndex]) {
+            return phoneLeaves[leafIndex].portraitLayouts[profileIndex];
+          }
           const portraitLayout = portraitLayouts[profileIndex];
           return portraitLayout;
         })),
@@ -551,7 +733,7 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
   const preparedCardAtlas = await prepareCardAtlas(cardBytes);
   const cardSha256 = sha256(preparedCardAtlas.bytes);
 
-  const preparedPatterns = PREPARED_PATTERN_SEEDS.map((seed, index) => buildPreparedPattern(seed, index));
+  const preparedPatterns = PREPARED_PATTERN_SEEDS.map(buildPreparedPattern);
   const initialPattern = preparedPatterns[0];
   const source = initialPattern.source;
   const contentBounds = initialPattern.contentBounds;
@@ -571,7 +753,7 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
   const playback = Object.freeze({
     schema: "csssolitaire-prepared-playback@2",
     loop: true,
-    selection: "crypto-random-shuffled-bag-no-immediate-repeat",
+    selection: "crypto-random-shuffled-bag-alternating-phone-direction-unique-angle",
     patternCount: preparedPatterns.length,
     initialPatternIndex: 0,
     phoneProfileIndex: PHONE_PROFILE_INDEX,
@@ -625,6 +807,10 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       minimumHorizontalSpeed: 20,
       horizontalVelocityDistribution: "mild-slow-bias-first-two-lanes-quarter-right-unique-per-lane-cycle",
       horizontalVelocityBiasExponent: HORIZONTAL_VELOCITY_BIAS_EXPONENT,
+      phoneLaunchVelocityDistribution: "source-effective-steps-balanced-direction-unique-angle",
+      phoneRightwardPatternCount: PREPARED_PATTERN_COUNT / 2,
+      phoneEffectiveLaunchAngleCount: PREPARED_PATTERN_COUNT,
+      phoneExactTrajectoryRepeats: false,
       rightwardFoundationIndices: [0, 1],
       rightwardSelection: "random-value-modulo-4-zero",
       exactSameLaneTrajectoryRepeats: false,
@@ -638,9 +824,15 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       sourceDraws: source.sourceDraws,
       sourceSteps: source.sourceSteps,
       sourceStepMilliseconds: SOURCE_STEP_MS,
-      patterns: preparedPatterns.map(({ id, seed, source: patternSource, trailLeaves: patternLeaves, timeline }) => ({
+      patterns: preparedPatterns.map(({
+        id, seed, source: patternSource, trailLeaves: patternLeaves, timeline, playback: patternPlayback,
+      }) => ({
         id,
         seed,
+        phoneHorizontalVelocity: patternPlayback.phoneHorizontalVelocity,
+        phoneVerticalVelocity: patternPlayback.phoneVerticalVelocity,
+        phoneImpactVelocitySteps: patternPlayback.phoneImpactVelocitySteps,
+        phoneSourceSteps: patternPlayback.phoneTimeline.sourceStepCount,
         sourceDraws: patternSource.sourceDraws,
         sourceSteps: patternSource.sourceSteps,
         rightwardLaunchCount: patternSource.cards.filter(({ velocityX }) => velocityX > 0).length,
@@ -679,11 +871,17 @@ export async function prepareCsssolitaire({ outputRoot = generatedProductRoot() 
       portraitReflectionReferenceWidths: PORTRAIT_PROFILES.map(({ playfield }) => playfield[0]),
       portraitCardCounts: PORTRAIT_CARD_COUNTS,
       portraitCardBreakpoints: PORTRAIT_CARD_BREAKPOINTS,
-      portraitHorizontalMotion: "phone-reflected-three-card-cycle-wider-multi-card-exit",
+      portraitHorizontalMotion:
+        "phone-source-gravity-prepared-wall-and-floor-impact-response-one-card",
       portraitWallBounceCardCounts: [1],
       phoneLaunchCardCount: PHONE_LAUNCH_CARD_COUNT,
       phonePlaybackTimeScale: PHONE_PLAYBACK_TIME_SCALE,
       phoneHorizontalDistanceScale: PHONE_HORIZONTAL_DISTANCE_SCALE,
+      phoneFloorBounceCount: PHONE_FLOOR_BOUNCE_COUNT,
+      phoneImpactResponse:
+        "prepared-new-horizontal-step-after-wall-and-nonterminal-floor-impact",
+      phoneImpactHorizontalSteps: PHONE_IMPACT_HORIZONTAL_STEPS,
+      phoneTrailSubstepCount: PHONE_TRAIL_SUBSTEP_COUNT,
       phoneProfileIndex: PHONE_PROFILE_INDEX,
       preparedSlotLayout: "source-seven-slot-presentation-scaled-card-size",
       slotCount: SOLITAIRE_SLOT_COUNT,

@@ -2,12 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { formatMatrix3dValues } from "@layoutit/polycss";
 import { validatePolyMorphModel } from "@layoutit/polycss-morph";
+import { PNG } from "pngjs";
 import {
+  CSSPLATONIC_MATRIX_DECIMALS,
   buildPlatonicPreparedModel,
   buildPlatonicPreparedPlayback,
 } from "../src/prepare/cssplatonicfolding/modelBuilder.mjs";
+import { buildPlatonicRasterAtlas } from "../src/prepare/cssplatonicfolding/rasterAtlas.mjs";
 import {
   CSSPLATONIC_FRAME_MILLISECONDS,
+  CSSPLATONIC_RASTER_LEAF_SIZE,
   buildPlatonicSourceSequence,
   platonicSolids,
 } from "../src/prepare/cssplatonicfolding/sourceModel.mjs";
@@ -62,6 +66,30 @@ test("static Morph package retains one raster leaf per source face", () => {
   assert.equal(prepared.metrics.maximumVisibleLeaves, 20);
   assert.equal(prepared.metrics.runtimeGeometryConstructionCount, 0);
   assert.equal(prepared.metrics.runtimeDomGrowth, false);
+});
+
+test("prepared raster coverage feathers source face edges", () => {
+  const source = buildPlatonicSourceSequence();
+  const face = source.faceDefinitions[0];
+  const atlas = PNG.sync.read(Buffer.from(buildPlatonicRasterAtlas([face])));
+  const polygon = face.vertices.map(([x, y]) => [
+    (x - face.bounds.minX) / face.bounds.width,
+    (y - face.bounds.minY) / face.bounds.height,
+  ]);
+  let strengthenedEdgePixelCount = 0;
+  for (let y = 0; y < CSSPLATONIC_RASTER_LEAF_SIZE; y += 1) {
+    for (let x = 0; x < CSSPLATONIC_RASTER_LEAF_SIZE; x += 1) {
+      const exactCoverage = [0.25, 0.75].reduce((total, offsetY) =>
+        total + [0.25, 0.75].reduce((rowTotal, offsetX) =>
+          rowTotal + Number(pointInPolygon([
+            (x + offsetX) / CSSPLATONIC_RASTER_LEAF_SIZE,
+            (y + offsetY) / CSSPLATONIC_RASTER_LEAF_SIZE,
+          ], polygon)), 0), 0);
+      const alpha = atlas.data[(y * atlas.width + x + 1) * 4 + 3];
+      if (alpha > Math.round(exactCoverage / 4 * 255)) strengthenedEdgePixelCount += 1;
+    }
+  }
+  assert.ok(strengthenedEdgePixelCount > 0);
 });
 
 test("prepared DOM playback contains sparse source-ordered operations only", () => {
@@ -128,5 +156,15 @@ test("mobile changes travel direction without changing prepared topology", () =>
 });
 
 function matrixText(matrix) {
-  return `matrix3d(${formatMatrix3dValues(matrix)})`;
+  return `matrix3d(${formatMatrix3dValues(matrix, CSSPLATONIC_MATRIX_DECIMALS)})`;
+}
+
+function pointInPolygon([x, y], polygon) {
+  let inside = false;
+  for (let current = 0, previous = polygon.length - 1; current < polygon.length; previous = current++) {
+    const [x1, y1] = polygon[current];
+    const [x2, y2] = polygon[previous];
+    if ((y1 > y) !== (y2 > y) && x < (x2 - x1) * (y - y1) / (y2 - y1) + x1) inside = !inside;
+  }
+  return inside;
 }

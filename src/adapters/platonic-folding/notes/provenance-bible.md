@@ -17,8 +17,9 @@ which each solid uses joint folding.
 All five solids share one `static-prepared` Morph graph: 50 face roots and 50
 raster leaves. Only the active solid's 4, 6, 8, 12, or 20 leaves are visible.
 Preparation owns the unfolding trees, complete 2,710-frame sequence,
-source-ordered sparse operation rows, preformatted face matrices, source-style
-face colors, quantized baked lighting rows, and atlas. Runtime binds the shared
+source-ordered sparse operation rows, six-decimal preformatted face matrices,
+source-style face colors, quantized baked lighting rows, and the atlas with
+quarter-pixel prepared edge coverage. Runtime binds the shared
 graph with `createPolyMorphPreparedDomTarget` and owns only the clock, direct
 prepared operation selection, and responsive perspective. Full prepared-state
 materialization, full-state diffs, matrix formatting, id lookup, and normal-path

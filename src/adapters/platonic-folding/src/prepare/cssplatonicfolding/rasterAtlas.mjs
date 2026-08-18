@@ -8,6 +8,7 @@ export const CSSPLATONIC_RASTER_ATLAS_PATH = "assets/face-colors.png";
 
 const GUTTER = 1;
 const STRIDE = CSSPLATONIC_RASTER_LEAF_SIZE + GUTTER * 2;
+const EDGE_FEATHER_PIXELS = 0.25;
 
 export function platonicRasterSlice(faceColumn, faceCount) {
   return Object.freeze({
@@ -61,17 +62,24 @@ function paintFace(png, face, lightRow) {
 }
 
 function pixelCoverage(polygon, x, y) {
-  let hits = 0;
+  let coverage = 0;
   for (const offsetY of [0.25, 0.75]) {
     for (const offsetX of [0.25, 0.75]) {
       const point = [
         (x + offsetX) / CSSPLATONIC_RASTER_LEAF_SIZE,
         (y + offsetY) / CSSPLATONIC_RASTER_LEAF_SIZE,
       ];
-      if (pointInPolygon(point, polygon)) hits += 1;
+      coverage += pointCoverage(point, polygon);
     }
   }
-  return hits / 4;
+  return coverage / 4;
+}
+
+function pointCoverage(point, polygon) {
+  if (pointInPolygon(point, polygon)) return 1;
+  const distance = pointPolygonEdgeDistance(point, polygon) * CSSPLATONIC_RASTER_LEAF_SIZE;
+  if (distance >= EDGE_FEATHER_PIXELS) return 0;
+  return 0.5 * (1 - distance / EDGE_FEATHER_PIXELS);
 }
 
 function pointInPolygon([x, y], polygon) {
@@ -82,4 +90,21 @@ function pointInPolygon([x, y], polygon) {
     if ((y1 > y) !== (y2 > y) && x < (x2 - x1) * (y - y1) / (y2 - y1) + x1) inside = !inside;
   }
   return inside;
+}
+
+function pointPolygonEdgeDistance(point, polygon) {
+  let minimum = Infinity;
+  for (let current = 0, previous = polygon.length - 1; current < polygon.length; previous = current++) {
+    minimum = Math.min(minimum, pointSegmentDistance(point, polygon[previous], polygon[current]));
+  }
+  return minimum;
+}
+
+function pointSegmentDistance([x, y], [x1, y1], [x2, y2]) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) return Math.hypot(x - x1, y - y1);
+  const t = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / lengthSquared));
+  return Math.hypot(x - (x1 + t * dx), y - (y1 + t * dy));
 }

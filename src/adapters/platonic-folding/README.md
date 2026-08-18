@@ -3,7 +3,8 @@
 Source-backed XScreenSaver Platonic Folding rendered as 50 retained PolyCSS
 Morph face roots. Preparation bakes one shared `static-prepared` Morph package,
 both responsive sparse playback banks, every hinge pose, source-style face
-colors, and quantized lighting into one raster atlas.
+colors, six-decimal transforms, and quantized lighting with quarter-pixel edge
+coverage into one raster atlas.
 
 ```sh
 export CSSPLATONICFOLDING_SOURCE_ROOT=/path/to/xscreensaver

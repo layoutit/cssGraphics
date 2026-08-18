@@ -7,6 +7,7 @@ import {
 import { platonicRasterSlice } from "./rasterAtlas.mjs";
 
 export const CSSPLATONIC_MODEL_ID = "platonic-folding";
+export const CSSPLATONIC_MATRIX_DECIMALS = 6;
 
 const IDENTITY = Object.freeze([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 
@@ -120,7 +121,7 @@ export function buildPlatonicPreparedPlayback({ bankId = "desktop" } = {}) {
   const transforms = [];
   const transformIndices = new Map();
   const internTransform = (matrix) => {
-    const transform = `matrix3d(${formatMatrix3dValues(matrix)})`;
+    const transform = `matrix3d(${formatMatrix3dValues(matrix, CSSPLATONIC_MATRIX_DECIMALS)})`;
     const existing = transformIndices.get(transform);
     if (existing !== undefined) return existing;
     const index = transforms.length;

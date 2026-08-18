@@ -68,14 +68,14 @@ for = "/csssolitaire/assets/*"
     Cache-Control = "public, max-age=0, must-revalidate"
 
 [[headers]]
-  for = "/cssplatonicfolding/model/*/assets/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
-
-[[headers]]
   for = "/cssplatonicfolding/*"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/cssplatonicfolding/model/*/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
 
 [[headers]]
   for = "/cssselectropaint/variants/*/chunks/*.gz"

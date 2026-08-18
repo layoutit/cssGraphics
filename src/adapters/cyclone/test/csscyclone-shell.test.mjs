@@ -26,6 +26,7 @@ test("uses the cssGraphics shell without product UI or alternate renderers", asy
   assert.match(styles, /body > \.polycss-camera\s*\{[^}]*background:\s*transparent;/su);
   assert.match(styles, /background-image:\s*var\(--cyclone-lighting-atlas\)/u);
   assert.doesNotMatch(styles, /color-mix|--cyclone-tone/u);
-  assert.doesNotMatch(`${client}\n${playback}`, /requestAnimationFrame|WebGL|CanvasRenderingContext/u);
+  assert.match(playback, /deadline-setTimeout-requestAnimationFrame-prepared-publication/u);
+  assert.doesNotMatch(`${client}\n${playback}`, /WebGL|CanvasRenderingContext/u);
   assert.doesNotMatch(styles, /filter:\s*(?:blur|drop-shadow)|box-shadow|clip-path/u);
 });

@@ -29,8 +29,10 @@ export function createCyclonePreparedPlayer({
   onBlockWindow = () => undefined,
   onError = () => undefined,
   readNow = () => performance.now(),
+  requestFrame = (callback) => requestAnimationFrame(callback),
+  cancelFrame = (frame) => cancelAnimationFrame(frame),
   requestDelay = (callback, delay) => setTimeout(callback, delay),
-  cancelDelay = (timer) => clearTimeout(timer),
+  cancelDelay = (delay) => clearTimeout(delay),
 }) {
   validateBinding(mounted, catalog, initialBlock, initialFrameIndex, lighting, lightingAsset, loadBlock);
   const shapeElements = mounted.model.render.shapes.map((shape) => mounted.shapeElements.get(shape.id));
@@ -68,11 +70,18 @@ export function createCyclonePreparedPlayer({
   let pendingBlockError = null;
   let paused = true;
   let destroyed = false;
-  let timer = null;
+  let frameRequest = null;
+  let delayRequest = null;
   let clockOrigin = readNow() - initialFrameIndex * playback.frameMilliseconds;
   let pausedAt = initialFrameIndex * playback.frameMilliseconds;
   let frameIndex = initialFrameIndex;
-  let timerCallbackCount = 0;
+  const schedulerLeadMilliseconds = Math.min(4, playback.frameMilliseconds / 4);
+  let schedulerFrameRequestCount = 0;
+  let schedulerFrameCallbackCount = 0;
+  let schedulerFrameCancelCount = 0;
+  let schedulerDelayRequestCount = 0;
+  let schedulerDelayCallbackCount = 0;
+  let schedulerDelayCancelCount = 0;
   let collapsedFrameCount = 0;
   let applyCount = 0;
   let shapeTransformWrites = 0;
@@ -178,29 +187,42 @@ export function createCyclonePreparedPlayer({
     return waited;
   }
 
+  function requestPaintAlignedWake() {
+    frameRequest = requestFrame(wake);
+    schedulerFrameRequestCount += 1;
+  }
+
   function schedule() {
-    if (paused || destroyed || timer !== null) return;
+    if (paused || destroyed || frameRequest !== null || delayRequest !== null) return;
     const elapsed = Math.max(0, readNow() - clockOrigin);
-    const nextFrameTime = Math.min(
-      playback.durationMilliseconds,
-      (Math.floor(elapsed / playback.frameMilliseconds) + 1) * playback.frameMilliseconds,
-    );
-    timer = requestDelay(wake, Math.max(1, Math.ceil(nextFrameTime - elapsed)));
+    const nextFrameTime = Math.min(playback.durationMilliseconds, (frameIndex + 1) * playback.frameMilliseconds);
+    const waitMilliseconds = Math.max(0, nextFrameTime - elapsed - schedulerLeadMilliseconds);
+    if (waitMilliseconds <= 1) {
+      requestPaintAlignedWake();
+      return;
+    }
+    delayRequest = requestDelay(() => {
+      delayRequest = null;
+      schedulerDelayCallbackCount += 1;
+      if (!paused && !destroyed && frameRequest === null) requestPaintAlignedWake();
+    }, waitMilliseconds);
+    schedulerDelayRequestCount += 1;
   }
 
   async function wake() {
-    timer = null;
+    frameRequest = null;
     if (paused || destroyed) return;
-    timerCallbackCount += 1;
+    schedulerFrameCallbackCount += 1;
     try {
       const elapsed = Math.max(0, readNow() - clockOrigin);
-      if (elapsed >= playback.durationMilliseconds) {
+      const paintAlignedElapsed = elapsed + schedulerLeadMilliseconds;
+      if (paintAlignedElapsed >= playback.durationMilliseconds) {
         const boundaryTime = clockOrigin + playback.durationMilliseconds;
         const waited = await activatePendingBlock();
         clockOrigin = waited ? readNow() : boundaryTime;
         pausedAt = 0;
       } else {
-        advanceTo(Math.floor(elapsed / playback.frameMilliseconds));
+        advanceTo(Math.floor(paintAlignedElapsed / playback.frameMilliseconds));
       }
     } catch (error) {
       paused = true;
@@ -217,8 +239,16 @@ export function createCyclonePreparedPlayer({
       Math.max(0, readNow() - clockOrigin),
     );
     paused = true;
-    if (timer !== null) cancelDelay(timer);
-    timer = null;
+    if (frameRequest !== null) {
+      cancelFrame(frameRequest);
+      schedulerFrameCancelCount += 1;
+    }
+    frameRequest = null;
+    if (delayRequest !== null) {
+      cancelDelay(delayRequest);
+      schedulerDelayCancelCount += 1;
+    }
+    delayRequest = null;
     return snapshot();
   }
 
@@ -268,7 +298,14 @@ export function createCyclonePreparedPlayer({
       activeChunkIndex: activeBlock.chunkIndex,
       pendingBlockIndex,
       pendingBlockReady: pendingBlock !== null,
-      timerCallbackCount,
+      schedulerLeadMilliseconds,
+      schedulerFrameRequestCount,
+      schedulerFrameCallbackCount,
+      schedulerFrameCancelCount,
+      schedulerDelayRequestCount,
+      schedulerDelayCallbackCount,
+      schedulerDelayCancelCount,
+      runtimeSchedulerTransport: "deadline-setTimeout-requestAnimationFrame-prepared-publication",
       collapsedFrameCount,
       applyCount,
       shapeTransformWrites,
@@ -306,8 +343,10 @@ export function createCyclonePreparedPlayer({
       if (destroyed) return;
       destroyed = true;
       paused = true;
-      if (timer !== null) cancelDelay(timer);
-      timer = null;
+      if (frameRequest !== null) cancelFrame(frameRequest);
+      frameRequest = null;
+      if (delayRequest !== null) cancelDelay(delayRequest);
+      delayRequest = null;
       removeEventListener("resize", resize);
       target.destroy();
       mounted.destroy();

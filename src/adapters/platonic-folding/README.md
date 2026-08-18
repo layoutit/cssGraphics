@@ -16,6 +16,11 @@ pnpm build:platonic-folding
 pnpm oracle:platonic-folding
 ```
 
+Local preparation verifies the exact checkout when
+`CSSPLATONICFOLDING_SOURCE_ROOT` is set. Release builds fetch the same two files
+from the pinned GitHub revision and verify their locked SHA-256 identities
+before producing anything.
+
 Runtime owns only the prepared playback clock, source-ordered sparse DOM
 publication through `createPolyMorphPreparedDomTarget`, and responsive
 perspective. Normal playback consumes preformatted transform and atlas-row

@@ -20,7 +20,7 @@ const adapterRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(adapterRoot, "..", "..", "..");
 const outputRoot = join(repositoryRoot, "build/generated/public/cssplatonicfolding");
 const stagingRoot = join(repositoryRoot, `build/generated/.cssplatonicfolding-${process.pid}`);
-const sourceRoot = resolveRequiredSourceRoot();
+const sourceRoot = resolveSourceRoot();
 const sourceLock = JSON.parse(await readFile(join(adapterRoot, "notes/references/source-lock.json"), "utf8"));
 
 await assertSourceIdentity();
@@ -96,23 +96,44 @@ await mkdir(dirname(outputRoot), { recursive: true });
 await rename(stagingRoot, outputRoot);
 console.log(JSON.stringify({ outputRoot, atlasBytes: atlasBytes.byteLength, preparedBanks }, null, 2));
 
-function resolveRequiredSourceRoot() {
+function resolveSourceRoot() {
   const value = process.env.CSSPLATONICFOLDING_SOURCE_ROOT;
-  if (!value) throw new Error("Set CSSPLATONICFOLDING_SOURCE_ROOT to the pinned XScreenSaver checkout");
-  return resolve(value);
+  return value ? resolve(value) : null;
 }
 
 async function assertSourceIdentity() {
-  const head = spawnSync("git", ["-C", sourceRoot, "rev-parse", "HEAD"], { encoding: "utf8" });
-  if (head.error) throw head.error;
-  if (head.status !== 0) throw new Error(`Unable to resolve Platonic Folding source revision:\n${head.stderr || head.stdout}`);
-  const revision = head.stdout.trim();
-  if (revision !== sourceLock.revision || revision !== PLATONIC_SOURCE.commit) {
-    throw new Error(`Platonic Folding source revision drifted: ${revision}`);
+  if (sourceLock.revision !== PLATONIC_SOURCE.commit) {
+    throw new Error("Platonic Folding source lock revision drifted");
+  }
+  if (sourceRoot) {
+    const head = spawnSync("git", ["-C", sourceRoot, "rev-parse", "HEAD"], { encoding: "utf8" });
+    if (head.error) throw head.error;
+    if (head.status !== 0) throw new Error(`Unable to resolve Platonic Folding source revision:\n${head.stderr || head.stdout}`);
+    const revision = head.stdout.trim();
+    if (revision !== sourceLock.revision) {
+      throw new Error(`Platonic Folding source revision drifted: ${revision}`);
+    }
   }
   for (const input of [sourceLock.primary, sourceLock.config]) {
-    const actual = createHash("sha256").update(await readFile(join(sourceRoot, input.path))).digest("hex");
+    const bytes = sourceRoot
+      ? await readFile(join(sourceRoot, input.path))
+      : await fetchPinnedSource(input.path);
+    const actual = createHash("sha256").update(bytes).digest("hex");
     if (actual !== input.sha256) throw new Error(`Platonic Folding source bytes drifted: ${input.path}`);
+  }
+}
+
+async function fetchPinnedSource(path) {
+  const repositoryPath = new URL(sourceLock.repository).pathname.replace(/^\//u, "").replace(/\/$/u, "");
+  const url = `https://raw.githubusercontent.com/${repositoryPath}/${sourceLock.revision}/${path}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) throw new Error(`Platonic Folding pinned source download failed: ${response.status} ${path}`);
+    return Buffer.from(await response.arrayBuffer());
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

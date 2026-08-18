@@ -67,17 +67,38 @@ async function capture({ profile, width, height, bankId }) {
   });
   const visibleLeaves = await page.evaluate(() => [...document.querySelectorAll(".polycss-scene s")]
     .filter((leaf) => getComputedStyle(leaf).visibility !== "hidden").length);
+  const loop = await page.evaluate(() => {
+    window.__cssPlatonicFoldingDebug.seekFrame(2709);
+    window.__cssPlatonicFoldingDebug.seekFrame(0);
+    return {
+      stats: window.__cssPlatonicFoldingDebug.stats(),
+      visibleLeaves: [...document.querySelectorAll(".polycss-scene s")]
+        .filter((leaf) => getComputedStyle(leaf).visibility !== "hidden").length,
+    };
+  });
   if (errors.length || before.errors.length || before.status !== "ready" || !before.ready ||
       before.stats?.selectedPreparedBank !== bankId || before.stats?.retainedFaceRootCount !== 50 ||
       before.leafCount !== 50 || visibleLeaves !== 20 || before.canvasCount !== 0 ||
       before.svgSceneCount !== 0 || before.stats?.runtimeGeometryConstructionCount !== 0 ||
       before.stats?.runtimeAtlasRasterizationCount !== 0 || before.stats?.runtimeDomGrowth !== false ||
+      before.stats?.preparedStateMaterializationCount !== 0 ||
+      before.stats?.runtimeFullStateDiffCount !== 0 ||
+      before.stats?.runtimeMatrixFormattingCount !== 0 ||
+      before.stats?.runtimeIdLookupCount !== 0 ||
+      before.stats?.runtimeNormalFullStateScanCount !== 0 ||
+      before.stats?.runtimeHiddenShapeTransformWrites !== 0 ||
+      before.stats?.runtimeHiddenAtlasRowWrites !== 0 ||
       before.stats?.retainedDomStable !== true ||
+      loop.visibleLeaves !== 20 || loop.stats?.frameIndex !== 0 ||
+      loop.stats?.runtimeNormalFullStateScanCount !== 0 ||
+      loop.stats?.runtimeHiddenShapeTransformWrites !== 0 ||
+      loop.stats?.runtimeHiddenAtlasRowWrites !== 0 ||
       after.stats?.timerCallbackCount <= before.stats?.timerCallbackCount ||
       after.stats?.applyCount <= before.stats?.applyCount ||
       before.modelTransform === after.modelTransform) {
-    throw new Error(`Platonic Folding ${profile} browser smoke failed: ${JSON.stringify({ before, after, visibleLeaves, errors })}`);
+    throw new Error(`Platonic Folding ${profile} browser smoke failed: ${JSON.stringify({ before, after, loop, visibleLeaves, errors })}`);
   }
+  await page.evaluate(() => window.__cssPlatonicFoldingDebug.seekFrame(270));
   const screenshotPath = resolve(outputRoot, `${profile}.png`);
   await page.screenshot({ path: screenshotPath });
   await page.close();

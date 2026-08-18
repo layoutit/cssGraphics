@@ -1,8 +1,9 @@
 # css.graphics/platonic-folding
 
 Source-backed XScreenSaver Platonic Folding rendered as 50 retained PolyCSS
-Morph face roots. Preparation bakes both responsive banks, every hinge pose,
-source-style face colors, and quantized lighting into one raster atlas.
+Morph face roots. Preparation bakes one shared `static-prepared` Morph package,
+both responsive sparse playback banks, every hinge pose, source-style face
+colors, and quantized lighting into one raster atlas.
 
 ```sh
 export CSSPLATONICFOLDING_SOURCE_ROOT=/path/to/xscreensaver
@@ -15,9 +16,12 @@ pnpm build:platonic-folding
 pnpm oracle:platonic-folding
 ```
 
-Runtime owns only the prepared playback clock, sparse Morph publication, and
-responsive perspective. It performs no geometry construction, atlas
-rasterization, topology rebuilding, or DOM growth.
+Runtime owns only the prepared playback clock, source-ordered sparse DOM
+publication through `createPolyMorphPreparedDomTarget`, and responsive
+perspective. Normal playback consumes preformatted transform and atlas-row
+selections directly. It performs no prepared-state materialization, full-state
+diff, matrix formatting, id lookup, geometry construction, atlas rasterization,
+topology rebuilding, DOM growth, or full retained-graph scan.
 
 The oracle compiles the pinned XScreenSaver source into a headless CGL capture,
 captures the same deterministic frame schedule from the browser, proves exact

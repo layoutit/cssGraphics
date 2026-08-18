@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { formatMatrix3dValues } from "@layoutit/polycss";
 import { validatePolyMorphModel } from "@layoutit/polycss-morph";
-import { buildPlatonicPreparedModel } from "../src/prepare/cssplatonicfolding/modelBuilder.mjs";
+import {
+  buildPlatonicPreparedModel,
+  buildPlatonicPreparedPlayback,
+} from "../src/prepare/cssplatonicfolding/modelBuilder.mjs";
 import {
   CSSPLATONIC_FRAME_MILLISECONDS,
   buildPlatonicSourceSequence,
@@ -46,23 +50,83 @@ test("prepared lighting preserves source specular and perspective-facing back si
   }
 });
 
-test("Morph package retains one raster leaf per source face", () => {
+test("static Morph package retains one raster leaf per source face", () => {
   const prepared = buildPlatonicPreparedModel();
   const model = validatePolyMorphModel(prepared.model);
+  assert.equal(model.profile, "static-prepared");
   assert.equal(model.render.shapes.length, 50);
   assert.equal(model.render.leaves.length, 50);
   assert.ok(model.render.leaves.every((leaf) => leaf.strategy === "atlas-slice"));
   assert.ok(model.render.leaves.every((leaf) => leaf.atlas?.resourcePath === "assets/face-colors.png"));
-  assert.equal(model.playback.frames.length, 2_710);
-  assert.equal(model.playback.frames[0].leaves.length, 50);
+  assert.equal(model.playback, null);
   assert.equal(prepared.metrics.maximumVisibleLeaves, 20);
   assert.equal(prepared.metrics.runtimeGeometryConstructionCount, 0);
   assert.equal(prepared.metrics.runtimeDomGrowth, false);
 });
 
-test("mobile changes travel direction without changing topology", () => {
-  const desktop = buildPlatonicPreparedModel({ bankId: "desktop" });
-  const mobile = buildPlatonicPreparedModel({ bankId: "mobile" });
-  assert.equal(desktop.model.render.leaves.length, mobile.model.render.leaves.length);
-  assert.notDeepEqual(desktop.model.playback.frames[0].modelMatrix, mobile.model.playback.frames[0].modelMatrix);
+test("prepared DOM playback contains sparse source-ordered operations only", () => {
+  const { playback, metrics } = buildPlatonicPreparedPlayback();
+  assert.equal(playback.frames.length, 2_710);
+  assert.equal(playback.frames[0][3].length, 30);
+  assert.equal(playback.shapeCount, 50);
+  assert.equal(playback.leafCount, 50);
+  assert.equal(metrics.loopHiddenShapeTransformSelections, 0);
+  assert.equal(metrics.loopHiddenAtlasRowSelections, 0);
+  assert.ok(playback.frames.every((row) => row.length === 5));
+  assert.ok(playback.frames.every((row) => row[1].length % 2 === 0 && row[2].length % 2 === 0));
+  assert.ok(playback.transforms.every((transform) => /^matrix3d\([^)]+\)$/u.test(transform)));
 });
+
+test("sparse playback reconstructs every visible source frame and the loop boundary", () => {
+  const { source, playback } = buildPlatonicPreparedPlayback();
+  let modelTransformIndex = playback.mounted.modelTransformIndex;
+  const shapeTransformIndices = [...playback.mounted.shapeTransformIndices];
+  const atlasRows = [...playback.mounted.atlasRows];
+  const visibility = [...playback.mounted.visibility];
+  for (let frameIndex = 0; frameIndex < playback.frameCount; frameIndex += 1) {
+    applyRow(playback.frames[frameIndex]);
+    assertFrame(source.frames[frameIndex]);
+  }
+  applyRow(playback.wrap);
+  assertFrame(source.frames[0]);
+
+  function applyRow(row) {
+    for (const leafIndex of row[3]) visibility[leafIndex] = 0;
+    if (row[0] >= 0) modelTransformIndex = row[0];
+    for (let index = 0; index < row[1].length; index += 2) {
+      shapeTransformIndices[row[1][index]] = row[1][index + 1];
+    }
+    for (let index = 0; index < row[2].length; index += 2) {
+      atlasRows[row[2][index]] = row[2][index + 1];
+    }
+    for (const leafIndex of row[4]) visibility[leafIndex] = 1;
+  }
+
+  function assertFrame(frame) {
+    assert.equal(playback.transforms[modelTransformIndex], matrixText(frame.modelMatrix));
+    for (let faceIndex = 0; faceIndex < source.faceDefinitions.length; faceIndex += 1) {
+      const face = source.faceDefinitions[faceIndex];
+      const active = face.solidId === frame.solidId;
+      assert.equal(visibility[faceIndex], Number(active));
+      if (!active) continue;
+      const sample = frame.faces[face.faceIndex];
+      assert.equal(playback.transforms[shapeTransformIndices[faceIndex]], matrixText(sample.matrix));
+      assert.equal(atlasRows[faceIndex], sample.lightRow);
+    }
+  }
+});
+
+test("mobile changes travel direction without changing prepared topology", () => {
+  const desktop = buildPlatonicPreparedPlayback({ bankId: "desktop" }).playback;
+  const mobile = buildPlatonicPreparedPlayback({ bankId: "mobile" }).playback;
+  assert.equal(desktop.shapeCount, mobile.shapeCount);
+  assert.equal(desktop.leafCount, mobile.leafCount);
+  assert.notEqual(
+    desktop.transforms[desktop.frames[0][0]],
+    mobile.transforms[mobile.frames[0][0]],
+  );
+});
+
+function matrixText(matrix) {
+  return `matrix3d(${formatMatrix3dValues(matrix)})`;
+}

@@ -5,7 +5,11 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildPolyMorphCatalog, buildPolyMorphPackage } from "@layoutit/polycss-morph";
-import { buildPlatonicPreparedModel } from "../src/prepare/cssplatonicfolding/modelBuilder.mjs";
+import {
+  CSSPLATONIC_MODEL_ID,
+  buildPlatonicPreparedModel,
+  buildPlatonicPreparedPlayback,
+} from "../src/prepare/cssplatonicfolding/modelBuilder.mjs";
 import {
   buildPlatonicRasterAtlas,
   CSSPLATONIC_RASTER_ATLAS_PATH,
@@ -23,47 +27,57 @@ await assertSourceIdentity();
 await rm(stagingRoot, { recursive: true, force: true });
 await mkdir(stagingRoot, { recursive: true });
 
-const firstPrepared = buildPlatonicPreparedModel({ bankId: "desktop" });
-const atlasBytes = buildPlatonicRasterAtlas(firstPrepared.source.faceDefinitions);
-const catalogEntries = [];
+const preparedModel = buildPlatonicPreparedModel();
+const atlasBytes = buildPlatonicRasterAtlas(preparedModel.source.faceDefinitions);
+const built = await buildPolyMorphPackage(preparedModel.model, [{
+  path: CSSPLATONIC_RASTER_ATLAS_PATH,
+  role: "image",
+  mediaType: "image/png",
+  bytes: atlasBytes,
+}]);
+const packageRoot = join(stagingRoot, "model", CSSPLATONIC_MODEL_ID);
+await mkdir(packageRoot, { recursive: true });
+for (const [path, bytes] of built.files) await writeBytes(join(packageRoot, path), bytes);
+await writeBytes(join(packageRoot, "manifest.json"), built.manifestBytes);
+const catalog = await buildPolyMorphCatalog(CSSPLATONIC_MODEL_ID, [{
+  manifest: built.manifest,
+  manifestPath: `${CSSPLATONIC_MODEL_ID}/manifest.json`,
+  manifestSha256: built.manifestSha256,
+}]);
+await writeBytes(join(stagingRoot, "model", "catalog.json"), catalog.bytes);
+
 const preparedBanks = [];
 for (const bank of Object.values(PLATONIC_BANKS)) {
-  const prepared = bank.id === "desktop" ? firstPrepared : buildPlatonicPreparedModel({ bankId: bank.id });
-  const built = await buildPolyMorphPackage(prepared.model, [{
-    path: CSSPLATONIC_RASTER_ATLAS_PATH,
-    role: "image",
-    mediaType: "image/png",
-    bytes: atlasBytes,
-  }]);
-  const packageRoot = join(stagingRoot, "model", bank.modelId);
-  await mkdir(packageRoot, { recursive: true });
-  for (const [path, bytes] of built.files) await writeBytes(join(packageRoot, path), bytes);
-  await writeBytes(join(packageRoot, "manifest.json"), built.manifestBytes);
-  catalogEntries.push({
-    manifest: built.manifest,
-    manifestPath: `${bank.modelId}/manifest.json`,
-    manifestSha256: built.manifestSha256,
-  });
+  const prepared = buildPlatonicPreparedPlayback({ bankId: bank.id });
+  const playbackPath = `banks/${bank.id}/playback.json`;
+  const playbackBytes = Buffer.from(`${JSON.stringify(prepared.playback)}\n`);
+  await writeBytes(join(stagingRoot, playbackPath), playbackBytes);
   preparedBanks.push({
     id: bank.id,
-    modelId: bank.modelId,
+    modelId: CSSPLATONIC_MODEL_ID,
     ...prepared.metrics,
     manifestSha256: built.manifestSha256,
+    playbackPath: `/cssplatonicfolding/${playbackPath}`,
+    playbackSha256: createHash("sha256").update(playbackBytes).digest("hex"),
+    playbackBytes: playbackBytes.byteLength,
   });
 }
-const catalog = await buildPolyMorphCatalog(PLATONIC_BANKS.desktop.modelId, catalogEntries);
-await writeBytes(join(stagingRoot, "model", "catalog.json"), catalog.bytes);
 await writeJson(join(stagingRoot, "prepared.json"), {
   schema: "cssplatonicfolding-prepared-scene@1",
   status: "ready",
   source: sourceLock,
   renderer: {
     package: "@layoutit/polycss-morph",
-    profile: "prepared-playback",
-    representation: "retained-source-face-roots-with-prepared-raster-lighting",
+    profile: "static-prepared",
+    representation: "retained-source-face-roots-with-sparse-prepared-dom-playback",
+    morphTarget: "createPolyMorphPreparedDomTarget",
     runtimeGeometryConstruction: false,
     runtimeAtlasRasterization: false,
     runtimeDomGrowth: false,
+    runtimePreparedStateMaterialization: false,
+    runtimeFullStateDiff: false,
+    runtimeMatrixFormatting: false,
+    runtimeIdLookup: false,
   },
   presentation: {
     frameMilliseconds: PLATONIC_SOURCE.delayMicroseconds / 1_000,

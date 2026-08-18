@@ -14,11 +14,15 @@ The product
 chooses the source-supported one-folding mode and a deterministic valid run in
 which each solid uses joint folding.
 
-All five solids share one retained graph: 50 face roots and 50 raster leaves.
-Only the active solid's 4, 6, 8, 12, or 20 leaves are visible. Preparation owns
-the unfolding trees, complete 2,710-frame sequence, face matrices, source-style
-face colors, quantized baked lighting rows, and atlas. Runtime owns the clock,
-prepared sparse publication, and responsive perspective only.
+All five solids share one `static-prepared` Morph graph: 50 face roots and 50
+raster leaves. Only the active solid's 4, 6, 8, 12, or 20 leaves are visible.
+Preparation owns the unfolding trees, complete 2,710-frame sequence,
+source-ordered sparse operation rows, preformatted face matrices, source-style
+face colors, quantized baked lighting rows, and atlas. Runtime binds the shared
+graph with `createPolyMorphPreparedDomTarget` and owns only the clock, direct
+prepared operation selection, and responsive perspective. Full prepared-state
+materialization, full-state diffs, matrix formatting, id lookup, and normal-path
+full-graph scans remain outside playback.
 
 The independent oracle includes the pinned source file directly in a headless
 CGL harness and exercises its GLSL folding draw path. Native and browser A/A

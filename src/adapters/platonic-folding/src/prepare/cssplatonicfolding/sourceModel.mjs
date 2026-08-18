@@ -52,7 +52,6 @@ export const PLATONIC_BANKS = Object.freeze({
   desktop: Object.freeze({
     ...PLATONIC_SOURCE,
     id: "desktop",
-    modelId: "platonic-folding-desktop",
     name: "Platonic Folding",
     entryAxis: "vertical",
     eyeDistanceScale: 1,
@@ -60,7 +59,6 @@ export const PLATONIC_BANKS = Object.freeze({
   mobile: Object.freeze({
     ...PLATONIC_SOURCE,
     id: "mobile",
-    modelId: "platonic-folding-mobile",
     name: "Platonic Folding",
     entryAxis: "horizontal",
     eyeDistanceScale: 1.55,

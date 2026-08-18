@@ -1,0 +1,14 @@
+{
+  "title": "XScreenSaver Platonic Folding",
+  "revision": "906693799e4fb7581436590cf84ecb2d3c9186ba",
+  "repository": "https://github.com/Zygo/xscreensaver",
+  "primary": {
+    "path": "hacks/glx/platonicfolding.c",
+    "sha256": "2c2c31987b09941814000f2c1dbbfee8f92f7fa1a82fca120c2c57c03e03057d"
+  },
+  "config": {
+    "path": "hacks/config/platonicfolding.xml",
+    "sha256": "2fb097c5365aba8b3510c355b3b81695177275ef3d4a0d4c3fd1c0bd38df759f"
+  },
+  "license": "Per-file permissive notice by Carsten Steger, 2025-2026"
+}

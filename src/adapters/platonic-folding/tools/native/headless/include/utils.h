@@ -1,0 +1,6 @@
+#ifndef CSSPLATONICFOLDING_HEADLESS_UTILS_H
+#define CSSPLATONICFOLDING_HEADLESS_UTILS_H
+
+#include "xlockmore.h"
+
+#endif

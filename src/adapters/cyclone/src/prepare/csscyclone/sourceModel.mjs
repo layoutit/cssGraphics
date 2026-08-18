@@ -1,0 +1,488 @@
+const PI = Math.PI;
+const CONTROL_POINT_COUNT = 6;
+
+export const CSSCYCLONE_SOURCE = Object.freeze({
+  repository: "https://github.com/reallyslickscreensavers/reallyslickscreensavers",
+  revision: "5f0a788bf0cc47f66a233ed528919295cd1e7500",
+  path: "src/cyclone/cyclone.cpp",
+  sha256: "1b6268aaf4fe25a43a14a0dcea4c4c58f18c1d2472e1366af2287efd938ea286",
+  rslibsRevision: "42d251b1a751956f54c8aad263e78af527ef2b82",
+  rslibsMathSha256: "8d81f07b7ec4a0abc2788161fd600a260b648f0747387aff5abfea2b2510da93",
+  rgbhslSha256: "1866954fedbb83f5076cf078b35501882307285a88874c4e29658da76130e05b",
+  license: "GPL-2.0-or-later",
+  fieldOfViewDegrees: 80,
+  viewDistance: 400,
+  wide: 200,
+  high: 200,
+  particleSize: 7,
+  complexity: 3,
+  speed: 10,
+  stretch: true,
+});
+
+export const CSSCYCLONE_BANK = Object.freeze({
+  id: "desktop-stream",
+  name: "Cyclone",
+  seed: 1,
+  particleCount: 400,
+  frameMilliseconds: 20,
+  warmupFrames: 600,
+  frameCount: 450,
+  chunkCount: 24,
+});
+
+export const CSSCYCLONE_PRESENTATION = Object.freeze({
+  saturationSampling: "sqrt-uniform",
+});
+
+const FACTORIALS = Object.freeze([1, 1, 2, 6, 24, 120, 720]);
+
+export function buildCycloneSourceSequence({ bank = CSSCYCLONE_BANK } = {}) {
+  return buildCycloneSourceChunks({ bank }).next().value;
+}
+
+export function* buildCycloneSourceChunks({ bank = CSSCYCLONE_BANK } = {}) {
+  validateBank(bank);
+  const rng = createMt19937(bank.seed);
+  const cyclone = createCyclone(rng);
+  const particles = Array.from({ length: bank.particleCount }, () => createParticle(cyclone, rng));
+  const deltaSeconds = bank.frameMilliseconds / 1_000;
+  for (let frame = 0; frame < bank.warmupFrames; frame += 1) {
+    stepSource(cyclone, particles, rng, deltaSeconds);
+  }
+  for (let chunkIndex = 0; chunkIndex < bank.chunkCount; chunkIndex += 1) {
+    const frames = [];
+    const startFrameIndex = chunkIndex * bank.frameCount;
+    for (let frame = 0; frame < bank.frameCount; frame += 1) {
+      stepSource(cyclone, particles, rng, deltaSeconds);
+      frames.push(Object.freeze({
+        timeMs: (startFrameIndex + frame) * bank.frameMilliseconds,
+        particles: Object.freeze(particles.map((particle) => Object.freeze({
+          matrix: particle.matrix,
+          color: particle.color,
+          colorRgb: particle.colorRgb,
+        }))),
+      }));
+    }
+    yield deepFreeze({
+      schema: "csscyclone-source-sequence@2",
+      source: CSSCYCLONE_SOURCE,
+      bank: Object.freeze({
+        ...bank,
+        id: `chunk-${String(chunkIndex).padStart(2, "0")}`,
+        streamId: bank.id,
+        chunkIndex,
+        startFrameIndex,
+      }),
+      modelMatrix: flattenCss(multiply4(scale4([1, -1, 1]), translation([0, 0, -CSSCYCLONE_SOURCE.viewDistance]))),
+      frames,
+      durationMilliseconds: bank.frameCount * bank.frameMilliseconds,
+      streamDurationMilliseconds: bank.chunkCount * bank.frameCount * bank.frameMilliseconds,
+    });
+  }
+}
+
+function validateBank(bank) {
+  for (const [name, value] of Object.entries({
+    seed: bank?.seed,
+    particleCount: bank?.particleCount,
+    frameMilliseconds: bank?.frameMilliseconds,
+    warmupFrames: bank?.warmupFrames,
+    frameCount: bank?.frameCount,
+    chunkCount: bank?.chunkCount,
+  })) {
+    if (!Number.isSafeInteger(value) || value < (name === "warmupFrames" ? 0 : 1)) {
+      throw new RangeError(`Cyclone ${name} must be a positive safe integer`);
+    }
+  }
+}
+
+function createCyclone(rng) {
+  const xyz = Array.from({ length: CONTROL_POINT_COUNT }, () => [0, 0, 0]);
+  const targetxyz = Array.from({ length: CONTROL_POINT_COUNT }, () => [0, 0, 0]);
+  const oldxyz = Array.from({ length: CONTROL_POINT_COUNT }, () => [0, 0, 0]);
+  const last = CONTROL_POINT_COUNT - 1;
+  xyz[last] = [randf(rng, 400) - 200, 200, randf(rng, 400) - 200];
+  xyz[last - 1] = [xyz[last][0], randf(rng, 66) + 50, xyz[last][2]];
+  for (let index = CSSCYCLONE_SOURCE.complexity; index > 1; index -= 1) {
+    xyz[index] = [
+      xyz[index + 1][0] + randf(rng, 200) - 100,
+      randf(rng, 400) - 200,
+      xyz[index + 1][2] + randf(rng, 200) - 100,
+    ];
+  }
+  xyz[1] = [
+    xyz[2][0] + randf(rng, 100) - 50,
+    -randf(rng, 100) - 50,
+    xyz[2][2] + randf(rng, 100) - 50,
+  ];
+  xyz[0] = [
+    xyz[1][0] + randf(rng, 25) - 12,
+    -200,
+    xyz[1][2] + randf(rng, 25) - 12,
+  ];
+  for (let index = 0; index < CONTROL_POINT_COUNT; index += 1) {
+    targetxyz[index] = [...xyz[index]];
+    oldxyz[index] = [...xyz[index]];
+  }
+  const width = Array(CONTROL_POINT_COUNT).fill(0);
+  width[last] = randf(rng, 175) + 75;
+  width[last - 1] = randf(rng, 60) + 15;
+  for (let index = CSSCYCLONE_SOURCE.complexity; index > 1; index -= 1) width[index] = randf(rng, 25) + 15;
+  width[1] = randf(rng, 25) + 5;
+  width[0] = randf(rng, 15) + 5;
+  const hue = randf(rng, 1);
+  const saturation = randomSaturation(rng);
+  return {
+    xyz,
+    targetxyz,
+    oldxyz,
+    xyzChange: Array.from({ length: CONTROL_POINT_COUNT }, () => [0, 0]),
+    width,
+    targetWidth: [...width],
+    oldWidth: [...width],
+    widthChange: Array.from({ length: CONTROL_POINT_COUNT }, () => [0, 0]),
+    hsl: [hue, saturation, 0],
+    oldhsl: [hue, saturation, 0],
+    targethsl: [randf(rng, 1), randomSaturation(rng), 1],
+    hslChange: [0, 10],
+  };
+}
+
+function createParticle(cyclone, rng) {
+  const particle = {
+    cyclone,
+    width: 0,
+    step: 0,
+    spinAngle: 0,
+    color: "#000000",
+    colorRgb: Object.freeze([0, 0, 0]),
+    matrix: identity4Flat(),
+  };
+  resetParticle(particle, rng);
+  return particle;
+}
+
+function resetParticle(particle, rng) {
+  particle.width = randf(rng, 0.8) + 0.2;
+  particle.step = 0;
+  particle.spinAngle = randf(rng, 360);
+  particle.colorRgb = Object.freeze(hsl2rgb(...particle.cyclone.hsl));
+  particle.color = rgbHex(particle.colorRgb);
+}
+
+function stepSource(cyclone, particles, rng, deltaSeconds) {
+  updateCyclone(cyclone, rng, deltaSeconds);
+  for (const particle of particles) updateParticle(particle, rng, deltaSeconds);
+}
+
+function updateCyclone(cyclone, rng, deltaSeconds) {
+  const speed = CSSCYCLONE_SOURCE.speed;
+  const last = CONTROL_POINT_COUNT - 1;
+  retargetPoint(cyclone, last, rng, () => [randf(rng, 400) - 200, 200, randf(rng, 400) - 200], 75 / speed, 150 / speed);
+  retargetPoint(cyclone, last - 1, rng, () => [
+    cyclone.xyz[last][0],
+    randf(rng, 66) + 50,
+    cyclone.xyz[last][2],
+  ], 75 / speed, 100 / speed);
+  for (let index = CSSCYCLONE_SOURCE.complexity; index > 1; index -= 1) {
+    retargetPoint(cyclone, index, rng, () => [
+      cyclone.targetxyz[index + 1][0] +
+        (cyclone.targetxyz[index + 1][0] - cyclone.targetxyz[index + 2][0]) / 2 + randf(rng, 100) - 50,
+      clamp((cyclone.targetxyz[index + 1][1] + cyclone.targetxyz[index - 1][1]) / 2 + randf(rng, 25) - 12, -200, 200),
+      cyclone.targetxyz[index + 1][2] +
+        (cyclone.targetxyz[index + 1][2] - cyclone.targetxyz[index + 2][2]) / 2 + randf(rng, 100) - 50,
+    ], 50 / speed, 75 / speed);
+  }
+  retargetPoint(cyclone, 1, rng, () => [
+    cyclone.targetxyz[2][0] + randf(rng, 100) - 50,
+    -randf(rng, 100) - 50,
+    cyclone.targetxyz[2][2] + randf(rng, 100) - 50,
+  ], 30 / speed, 50 / speed);
+  retargetPoint(cyclone, 0, rng, () => [
+    cyclone.xyz[1][0] + randf(rng, 25) - 12,
+    -200,
+    cyclone.xyz[1][2] + randf(rng, 25) - 12,
+  ], 75 / speed, 100 / speed);
+  for (let index = 0; index < CONTROL_POINT_COUNT; index += 1) {
+    const transition = cyclone.xyzChange[index];
+    const phase = transition[1] === 0 ? 0 : transition[0] / transition[1] * Math.PI * 2;
+    const between = (1 - Math.cos(phase)) / 2;
+    cyclone.xyz[index] = mix3(cyclone.oldxyz[index], cyclone.targetxyz[index], between);
+    transition[0] += deltaSeconds;
+  }
+
+  retargetWidth(cyclone, last, rng, 75, 225, 50 / speed, 50 / speed);
+  retargetWidth(cyclone, last - 1, rng, 15, 100, 50 / speed, 50 / speed);
+  for (let index = CSSCYCLONE_SOURCE.complexity; index > 1; index -= 1) {
+    retargetWidth(cyclone, index, rng, 15, 50, 40 / speed, 50 / speed);
+  }
+  retargetWidth(cyclone, 1, rng, 5, 40, 30 / speed, 50 / speed);
+  retargetWidth(cyclone, 0, rng, 5, 30, 20 / speed, 50 / speed);
+  for (let index = 0; index < CONTROL_POINT_COUNT; index += 1) {
+    const transition = cyclone.widthChange[index];
+    const between = transition[1] === 0 ? 0 : transition[0] / transition[1];
+    cyclone.width[index] = mix(cyclone.oldWidth[index], cyclone.targetWidth[index], between);
+    transition[0] += deltaSeconds;
+  }
+
+  if (cyclone.hslChange[0] >= cyclone.hslChange[1]) {
+    cyclone.oldhsl = [...cyclone.hsl];
+    cyclone.targethsl = [randf(rng, 1), randomSaturation(rng), Math.min(1, randf(rng, 1) + 0.5)];
+    cyclone.hslChange = [0, randf(rng, 30) + 2];
+  }
+  const between = cyclone.hslChange[0] / cyclone.hslChange[1];
+  const diff = cyclone.targethsl[0] - cyclone.oldhsl[0];
+  const direction = (diff > 0.5 || diff < -0.5) && diff > 0.5 ? 1 : 0;
+  cyclone.hsl = hslTween(cyclone.oldhsl, cyclone.targethsl, between, direction);
+  cyclone.hslChange[0] += deltaSeconds;
+}
+
+function retargetPoint(cyclone, index, rng, next, minimumDuration, randomDuration) {
+  const transition = cyclone.xyzChange[index];
+  if (transition[0] < transition[1]) return;
+  cyclone.oldxyz[index] = [...cyclone.xyz[index]];
+  cyclone.targetxyz[index] = next();
+  transition[0] = 0;
+  transition[1] = randf(rng, randomDuration) + minimumDuration;
+}
+
+function retargetWidth(cyclone, index, rng, minimum, randomRange, minimumDuration, randomDuration) {
+  const transition = cyclone.widthChange[index];
+  if (transition[0] < transition[1]) return;
+  cyclone.oldWidth[index] = cyclone.width[index];
+  cyclone.targetWidth[index] = randf(rng, randomRange) + minimum;
+  transition[0] = 0;
+  transition[1] = randf(rng, randomDuration) + minimumDuration;
+}
+
+function updateParticle(particle, rng, deltaSeconds) {
+  if (particle.step > 1) resetParticle(particle, rng);
+  const cyclone = particle.cyclone;
+  const position = bezier(cyclone.xyz, particle.step);
+  const previous = bezier(cyclone.xyz, particle.step - 0.01);
+  const direction = normalize(sub3(position, previous));
+  const up = [0, 1, 0];
+  const crossVector = cross3(direction, up);
+  const tiltAngle = -Math.acos(clamp(dot3(direction, up), -1, 1)) * 180 / PI;
+  let widthIndex = Math.floor(particle.step * (CSSCYCLONE_SOURCE.complexity + 2));
+  if (widthIndex >= CSSCYCLONE_SOURCE.complexity + 2) widthIndex = CSSCYCLONE_SOURCE.complexity + 1;
+  const between = (particle.step - widthIndex / (CSSCYCLONE_SOURCE.complexity + 2)) * (CSSCYCLONE_SOURCE.complexity + 2);
+  const cycloneWidth = cyclone.width[widthIndex] * (1 - between) + cyclone.width[widthIndex + 1] * between;
+  const stepDelta = 0.2 * deltaSeconds * CSSCYCLONE_SOURCE.speed /
+    (particle.width * particle.width * cycloneWidth);
+  particle.step += stepDelta;
+  const spinDelta = 1500 * deltaSeconds * CSSCYCLONE_SOURCE.speed /
+    (particle.width * cycloneWidth);
+  particle.spinAngle += spinDelta;
+  let stretch = particle.width * cycloneWidth * spinDelta * 0.02;
+  stretch = Math.min(stretch, cycloneWidth * 2 / CSSCYCLONE_SOURCE.particleSize);
+  stretch = Math.max(stretch, 3);
+  const matrix = multiply4(
+    translation(position),
+    multiply4(
+      rotationAxis(tiltAngle, crossVector),
+      multiply4(
+        rotationY(particle.spinAngle),
+        multiply4(translation([particle.width * cycloneWidth, 0, 0]), scale4([1, 1, stretch])),
+      ),
+    ),
+  );
+  particle.matrix = flattenCss(matrix);
+}
+
+function bezier(points, step) {
+  const output = [0, 0, 0];
+  const degree = CONTROL_POINT_COUNT - 1;
+  for (let index = 0; index < CONTROL_POINT_COUNT; index += 1) {
+    const blend = FACTORIALS[degree] / (FACTORIALS[index] * FACTORIALS[degree - index]) *
+      Math.pow(step, index) * Math.pow(1 - step, degree - index);
+    output[0] += points[index][0] * blend;
+    output[1] += points[index][1] * blend;
+    output[2] += points[index][2] * blend;
+  }
+  return output;
+}
+
+function hsl2rgb(hue, saturation, luminosity) {
+  let h = hue % 1;
+  if (h < 0) h += 1;
+  let red;
+  let green;
+  let blue;
+  if (h < 1 / 6) {
+    red = 1; green = h * 6; blue = 0;
+  } else if (h < 1 / 2) {
+    green = 1;
+    if (h < 1 / 3) {
+      red = 1 - (h - 1 / 6) * 6; blue = 0;
+    } else {
+      blue = (h - 1 / 3) * 6; red = 0;
+    }
+  } else if (h < 5 / 6) {
+    blue = 1;
+    if (h < 2 / 3) {
+      green = 1 - (h - 1 / 2) * 6; red = 0;
+    } else {
+      red = (h - 2 / 3) * 6; green = 0;
+    }
+  } else {
+    red = 1; blue = 1 - (h - 5 / 6) * 6; green = 0;
+  }
+  red = (1 - saturation * (1 - red)) * luminosity;
+  green = (1 - saturation * (1 - green)) * luminosity;
+  blue = (1 - saturation * (1 - blue)) * luminosity;
+  return [red, green, blue];
+}
+
+function hslTween(from, to, tween, direction) {
+  let hue;
+  if (!direction) {
+    hue = to[0] >= from[0]
+      ? from[0] + tween * (to[0] - from[0])
+      : from[0] + tween * (1 - (from[0] - to[0]));
+    if (hue > 1) hue -= 1;
+  } else {
+    hue = from[0] >= to[0]
+      ? from[0] - tween * (from[0] - to[0])
+      : from[0] - tween * (1 - (to[0] - from[0]));
+    if (hue < 0) hue += 1;
+  }
+  return [hue, mix(from[1], to[1], tween), mix(from[2], to[2], tween)];
+}
+
+function createMt19937(seed) {
+  const state = new Uint32Array(624);
+  state[0] = seed >>> 0;
+  for (let index = 1; index < state.length; index += 1) {
+    state[index] = (Math.imul(1812433253, state[index - 1] ^ (state[index - 1] >>> 30)) + index) >>> 0;
+  }
+  let cursor = state.length;
+  return Object.freeze({
+    nextFloat() {
+      if (cursor >= state.length) {
+        for (let index = 0; index < state.length; index += 1) {
+          const value = (state[index] & 0x80000000) | (state[(index + 1) % 624] & 0x7fffffff);
+          state[index] = state[(index + 397) % 624] ^ (value >>> 1) ^ ((value & 1) ? 0x9908b0df : 0);
+        }
+        cursor = 0;
+      }
+      let value = state[cursor++];
+      value ^= value >>> 11;
+      value ^= (value << 7) & 0x9d2c5680;
+      value ^= (value << 15) & 0xefc60000;
+      value ^= value >>> 18;
+      return (value >>> 8) / 0x01000000;
+    },
+  });
+}
+
+function randf(rng, maximum) {
+  return rng.nextFloat() * maximum;
+}
+
+function randomSaturation(rng) {
+  return Math.sqrt(randf(rng, 1));
+}
+
+function identity4() {
+  return [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
+}
+
+function identity4Flat() {
+  return Object.freeze([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+}
+
+function multiply4(left, right) {
+  return left.map((row) => right[0].map((_, column) =>
+    row.reduce((sum, value, index) => sum + value * right[index][column], 0)));
+}
+
+function translation([x, y, z]) {
+  const matrix = identity4();
+  matrix[0][3] = x; matrix[1][3] = y; matrix[2][3] = z;
+  return matrix;
+}
+
+function scale4([x, y, z]) {
+  const matrix = identity4();
+  matrix[0][0] = x; matrix[1][1] = y; matrix[2][2] = z;
+  return matrix;
+}
+
+function rotationY(degrees) {
+  const radians = degrees * PI / 180;
+  const cosine = Math.cos(radians);
+  const sine = Math.sin(radians);
+  return [[cosine, 0, sine, 0], [0, 1, 0, 0], [-sine, 0, cosine, 0], [0, 0, 0, 1]];
+}
+
+function rotationAxis(degrees, axis) {
+  const length = Math.hypot(...axis);
+  if (length < 1e-12 || Math.abs(degrees) < 1e-12) return identity4();
+  const [x, y, z] = axis.map((value) => value / length);
+  const radians = degrees * PI / 180;
+  const cosine = Math.cos(radians);
+  const sine = Math.sin(radians);
+  const one = 1 - cosine;
+  return [
+    [x * x * one + cosine, x * y * one - z * sine, x * z * one + y * sine, 0],
+    [y * x * one + z * sine, y * y * one + cosine, y * z * one - x * sine, 0],
+    [z * x * one - y * sine, z * y * one + x * sine, z * z * one + cosine, 0],
+    [0, 0, 0, 1],
+  ];
+}
+
+function flattenCss(matrix) {
+  return Object.freeze(matrix[0].map((_, column) => matrix.map((row) => rounded(row[column]))).flat());
+}
+
+function rounded(value) {
+  const result = Number(value.toFixed(6));
+  return Object.is(result, -0) ? 0 : result;
+}
+
+function rgbHex(color) {
+  return `#${color.map((value) => Math.round(clamp(value, 0, 1) * 255).toString(16).padStart(2, "0")).join("")}`;
+}
+
+function mix(left, right, amount) {
+  return left + (right - left) * amount;
+}
+
+function mix3(left, right, amount) {
+  return left.map((value, index) => mix(value, right[index], amount));
+}
+
+function sub3(left, right) {
+  return left.map((value, index) => value - right[index]);
+}
+
+function dot3(left, right) {
+  return left.reduce((sum, value, index) => sum + value * right[index], 0);
+}
+
+function cross3(left, right) {
+  return [
+    left[1] * right[2] - right[1] * left[2],
+    left[2] * right[0] - right[2] * left[0],
+    left[0] * right[1] - right[0] * left[1],
+  ];
+}
+
+function normalize(vector) {
+  const length = Math.hypot(...vector);
+  return length === 0 ? [...vector] : vector.map((value) => value / length);
+}
+
+function clamp(value, minimum, maximum) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function deepFreeze(value) {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) deepFreeze(child);
+  }
+  return value;
+}

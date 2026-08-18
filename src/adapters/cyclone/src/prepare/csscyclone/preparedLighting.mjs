@@ -1,0 +1,360 @@
+import { createHash } from "node:crypto";
+import sharp from "sharp";
+import {
+  CSSCYCLONE_FACE_INDICES,
+  CSSCYCLONE_PARTICLE_VERTICES,
+} from "./modelBuilder.mjs";
+
+const CONTENT_SIZE = 2;
+const GUTTER = 1;
+const SLOT_SIZE = CONTENT_SIZE + GUTTER * 2;
+const MAXIMUM_COLUMNS = 1_200;
+const MAXIMUM_TEXTURE_DIMENSION = 8_192;
+const DISPLAY_SCALE = 16;
+const LIGHT_DIRECTION = normalize([400, -200, 400]);
+const HALF_VECTOR = normalize([
+  LIGHT_DIRECTION[0],
+  LIGHT_DIRECTION[1],
+  LIGHT_DIRECTION[2] + 1,
+]);
+
+export function createCyclonePreparedLightingStream() {
+  let particleCount = null;
+  let expectedChunkCount = null;
+  let chunkFrameCount = null;
+  let streamId = null;
+  let nextChunkIndex = 0;
+  let sourceStreamFrameCount = 0;
+  let frozenVertexNormals = null;
+  let currentColorStateIndices = null;
+  let previousColors = null;
+  let colorRestartCount = 0;
+  const colorStates = [];
+
+  function add(source) {
+    validateSourceChunk(source);
+    if (particleCount === null) initialize(source);
+    if (source.bank.streamId !== streamId ||
+        source.bank.chunkIndex !== nextChunkIndex ||
+        source.bank.startFrameIndex !== sourceStreamFrameCount ||
+        source.bank.particleCount !== particleCount ||
+        source.bank.frameCount !== chunkFrameCount ||
+        source.bank.chunkCount !== expectedChunkCount) {
+      throw new Error("Prepared Cyclone lighting chunks are not one continuous source stream");
+    }
+    let chunkColorRestartCount = 0;
+    const frameParticleColorStateIndices = source.frames.map((frame, frameIndex) => Object.freeze(
+      frame.particles.map((particle, particleIndex) => {
+        if (particle.color !== previousColors[particleIndex]) {
+          if (sourceStreamFrameCount + frameIndex > 0) {
+            colorRestartCount += 1;
+            chunkColorRestartCount += 1;
+          }
+          currentColorStateIndices[particleIndex] = colorStates.length;
+          colorStates.push(Object.freeze({
+            particleIndex,
+            baseColor: particle.colorRgb,
+          }));
+          previousColors[particleIndex] = particle.color;
+        }
+        return currentColorStateIndices[particleIndex];
+      }),
+    ));
+    const chunk = deepFreeze({
+      schema: "csscyclone-prepared-lighting-chunk@1",
+      streamId,
+      chunkIndex: source.bank.chunkIndex,
+      startFrameIndex: source.bank.startFrameIndex,
+      frameCount: source.frames.length,
+      particleCount,
+      colorRestartCount: chunkColorRestartCount,
+      frameParticleColorStateIndices,
+    });
+    sourceStreamFrameCount += source.frames.length;
+    nextChunkIndex += 1;
+    return chunk;
+  }
+
+  async function finalize({ allowPartial = false } = {}) {
+    if (particleCount === null || frozenVertexNormals === null || colorStates.length === 0) {
+      throw new Error("Prepared Cyclone lighting stream has no source chunks");
+    }
+    if (!allowPartial && nextChunkIndex !== expectedChunkCount) {
+      throw new Error(`Prepared Cyclone lighting stream has ${nextChunkIndex}/${expectedChunkCount} chunks`);
+    }
+    return buildPreparedLightingAsset({
+      particleCount,
+      chunkCount: nextChunkIndex,
+      chunkFrameCount,
+      streamId,
+      sourceStreamFrameCount,
+      frozenVertexNormals,
+      colorStates,
+      colorRestartCount,
+    });
+  }
+
+  function initialize(source) {
+    particleCount = source.bank.particleCount;
+    expectedChunkCount = source.bank.chunkCount;
+    chunkFrameCount = source.bank.frameCount;
+    streamId = source.bank.streamId;
+    currentColorStateIndices = Array(particleCount).fill(-1);
+    previousColors = Array(particleCount).fill(null);
+    frozenVertexNormals = source.frames[0].particles.map((particle) => {
+      const normalMatrix = inverseTranspose3(particle.matrix);
+      return CSSCYCLONE_PARTICLE_VERTICES.map((vertex) =>
+        transform3(normalMatrix, normalize(vertex)));
+    });
+  }
+
+  return Object.freeze({ add, finalize });
+}
+
+export async function buildCyclonePreparedLighting({ source }) {
+  const stream = createCyclonePreparedLightingStream();
+  const chunk = stream.add(source);
+  const prepared = await stream.finalize({ allowPartial: true });
+  return Object.freeze({ ...prepared, chunk });
+}
+
+async function buildPreparedLightingAsset({
+  particleCount,
+  chunkCount,
+  chunkFrameCount,
+  streamId,
+  sourceStreamFrameCount,
+  frozenVertexNormals,
+  colorStates,
+  colorRestartCount,
+}) {
+  const leafCount = particleCount * CSSCYCLONE_FACE_INDICES.length;
+  const tileCount = colorStates.length * CSSCYCLONE_FACE_INDICES.length;
+  const columns = Math.min(MAXIMUM_COLUMNS, tileCount);
+  const rows = Math.ceil(tileCount / columns);
+  const width = columns * SLOT_SIZE;
+  const height = rows * SLOT_SIZE;
+  if (width > MAXIMUM_TEXTURE_DIMENSION || height > MAXIMUM_TEXTURE_DIMENSION) {
+    throw new Error(`Prepared Cyclone lighting atlas ${width}x${height} exceeds the image contract`);
+  }
+  const rgba = Buffer.alloc(width * height * 4);
+  for (let stateIndex = 0; stateIndex < colorStates.length; stateIndex += 1) {
+    const state = colorStates[stateIndex];
+    const vertexColors = frozenVertexNormals[state.particleIndex].map((normal) => shadeVertex({
+      baseColor: state.baseColor,
+      normal,
+    }));
+    for (let faceIndex = 0; faceIndex < CSSCYCLONE_FACE_INDICES.length; faceIndex += 1) {
+      writeAffineTriangleTile({
+        rgba,
+        width,
+        columns,
+        tileIndex: stateIndex * CSSCYCLONE_FACE_INDICES.length + faceIndex,
+        vertexColors,
+        vertexIndices: CSSCYCLONE_FACE_INDICES[faceIndex],
+      });
+    }
+  }
+  const bytes = await sharp(rgba, {
+    raw: { width, height, channels: 4 },
+    limitInputPixels: false,
+  }).webp({ lossless: true, effort: 6 }).toBuffer();
+  const assetSha256 = createHash("sha256").update(bytes).digest("hex");
+  const tileBackgroundPositions = Object.freeze(Array.from({ length: tileCount }, (_, tileIndex) => {
+    const contentX = tileIndex % columns * SLOT_SIZE + GUTTER;
+    const contentY = Math.floor(tileIndex / columns) * SLOT_SIZE + GUTTER;
+    return `${-contentX * DISPLAY_SCALE}px ${-contentY * DISPLAY_SCALE}px`;
+  }));
+  const contract = deepFreeze({
+    schema: "csscyclone-prepared-smooth-lighting-atlas@4",
+    technique: "prepared-stream-frame-zero-smooth-lighting-with-sparse-source-color-restarts",
+    source: "src/cyclone/cyclone.cpp#particle::update+initSaver",
+    streamId,
+    assetUrl: `/csscyclone/assets/lighting-${assetSha256}.webp`,
+    assetSha256,
+    encoding: "WebP-lossless-RGBA8",
+    mimeType: "image/webp",
+    lossless: true,
+    width,
+    height,
+    decodedBytes: width * height * 4,
+    byteLength: bytes.byteLength,
+    contentSize: CONTENT_SIZE,
+    gutterPixels: GUTTER,
+    slotSize: SLOT_SIZE,
+    columns,
+    rows,
+    tileCount,
+    leafCount,
+    sourceFaceCount: leafCount,
+    sourceFaceCoverageCount: leafCount,
+    sourceFaceCoverageExact: true,
+    sourceStreamFrameCount,
+    chunkCount,
+    chunkFrameCount,
+    colorStateCount: colorStates.length,
+    colorRestartCount,
+    facesPerParticle: CSSCYCLONE_FACE_INDICES.length,
+    lightingReferenceFrameIndex: 0,
+    sourceColorRestartsExact: true,
+    dynamicLightOrientation: false,
+    displayScale: DISPLAY_SCALE,
+    sampling: "two-by-two-affine-field-with-one-extrapolated-sample-gutter",
+    interpolation: "browser-perspective-transformed-stream-frame-zero-smooth-vertex-color-field",
+    backgroundSize: `${width * DISPLAY_SCALE}px ${height * DISPLAY_SCALE}px`,
+    tileBackgroundPositions,
+    material: Object.freeze({
+      ambientAndDiffuse: "source-particle-rgb",
+      specular: Object.freeze([0.7, 0.7, 0.7, 1]),
+      shininess: 20,
+    }),
+    light: Object.freeze({
+      model: "OpenGL-1.x-infinite-viewer-ambient-Lambert-Blinn-Phong",
+      globalAmbient: Object.freeze([0.2, 0.2, 0.2, 1]),
+      ambient: Object.freeze([0.25, 0.25, 0.25, 0]),
+      diffuse: Object.freeze([1, 1, 1, 0]),
+      specular: Object.freeze([1, 1, 1, 0]),
+      position: Object.freeze([400, -200, 400, 0]),
+      normalizeNormals: false,
+    }),
+    runtime: Object.freeze({
+      geometryConstruction: 0,
+      atlasConstruction: 0,
+      lightingCalculations: 0,
+      colorCalculations: 0,
+      rootLightingRowWritesPerSample: 0,
+      maximumSparseLeafWritesPerParticleRestart: CSSCYCLONE_FACE_INDICES.length,
+      topologyMutation: false,
+    }),
+  });
+  return Object.freeze({
+    contract,
+    bytes,
+    metrics: Object.freeze({
+      preparedLightingChunkCount: chunkCount,
+      preparedLightingStreamFrameCount: sourceStreamFrameCount,
+      preparedLightingColorStateCount: colorStates.length,
+      preparedLightingColorRestartCount: colorRestartCount,
+      preparedLightingAtlasBytes: bytes.byteLength,
+      preparedLightingAtlasDecodedBytes: contract.decodedBytes,
+      preparedLightingLeafBindingCount: leafCount,
+      runtimeLightingCalculations: 0,
+      runtimeLightingAtlasConstruction: 0,
+      runtimeLightingWritesPerSample: 0,
+    }),
+  });
+}
+
+function validateSourceChunk(source) {
+  if (source?.schema !== "csscyclone-source-sequence@2" ||
+      !Array.isArray(source.frames) || source.frames.length < 1 ||
+      source.frames.length !== source.bank?.frameCount ||
+      source.frames.some((frame) => frame.particles?.length !== source.bank?.particleCount)) {
+    throw new TypeError("Complete Cyclone source chunk is required for prepared lighting");
+  }
+}
+
+function writeAffineTriangleTile({
+  rgba,
+  width,
+  columns,
+  tileIndex,
+  vertexColors,
+  vertexIndices,
+}) {
+  const originX = tileIndex % columns * SLOT_SIZE;
+  const originY = Math.floor(tileIndex / columns) * SLOT_SIZE;
+  for (let localY = -GUTTER; localY < CONTENT_SIZE + GUTTER; localY += 1) {
+    const v = (localY + 0.5) / CONTENT_SIZE;
+    for (let localX = -GUTTER; localX < CONTENT_SIZE + GUTTER; localX += 1) {
+      const u = (localX + 0.5) / CONTENT_SIZE;
+      const apex = 1 - v;
+      const right = u - 0.5 * apex;
+      const left = 1 - apex - right;
+      const color = [0, 1, 2].map((channel) => clampByte(
+        vertexColors[vertexIndices[0]][channel] * apex +
+        vertexColors[vertexIndices[1]][channel] * left +
+        vertexColors[vertexIndices[2]][channel] * right,
+      ));
+      const x = originX + localX + GUTTER;
+      const y = originY + localY + GUTTER;
+      const offset = (y * width + x) * 4;
+      rgba[offset] = color[0];
+      rgba[offset + 1] = color[1];
+      rgba[offset + 2] = color[2];
+      rgba[offset + 3] = 255;
+    }
+  }
+}
+
+function shadeVertex({ baseColor, normal }) {
+  const diffuse = Math.max(0, dot(normal, LIGHT_DIRECTION));
+  const specular = diffuse > 0
+    ? Math.pow(Math.max(0, dot(normal, HALF_VECTOR)), 20)
+    : 0;
+  return [0, 1, 2].map((channel) => clampByte(
+    (baseColor[channel] * 0.2 +
+      baseColor[channel] * 0.25 +
+      baseColor[channel] * diffuse +
+      0.7 * specular) * 255,
+  ));
+}
+
+function inverseTranspose3(matrix) {
+  const a00 = matrix[0];
+  const a01 = matrix[4];
+  const a02 = matrix[8];
+  const a10 = matrix[1];
+  const a11 = matrix[5];
+  const a12 = matrix[9];
+  const a20 = matrix[2];
+  const a21 = matrix[6];
+  const a22 = matrix[10];
+  const c00 = a11 * a22 - a12 * a21;
+  const c01 = a12 * a20 - a10 * a22;
+  const c02 = a10 * a21 - a11 * a20;
+  const c10 = a02 * a21 - a01 * a22;
+  const c11 = a00 * a22 - a02 * a20;
+  const c12 = a01 * a20 - a00 * a21;
+  const c20 = a01 * a12 - a02 * a11;
+  const c21 = a02 * a10 - a00 * a12;
+  const c22 = a00 * a11 - a01 * a10;
+  const determinant = a00 * c00 + a01 * c01 + a02 * c02;
+  if (Math.abs(determinant) < 1e-12) throw new Error("Cyclone particle normal matrix is singular");
+  const inverseDeterminant = 1 / determinant;
+  return [
+    c00 * inverseDeterminant, c01 * inverseDeterminant, c02 * inverseDeterminant,
+    c10 * inverseDeterminant, c11 * inverseDeterminant, c12 * inverseDeterminant,
+    c20 * inverseDeterminant, c21 * inverseDeterminant, c22 * inverseDeterminant,
+  ];
+}
+
+function transform3(matrix, vector) {
+  return [
+    matrix[0] * vector[0] + matrix[1] * vector[1] + matrix[2] * vector[2],
+    matrix[3] * vector[0] + matrix[4] * vector[1] + matrix[5] * vector[2],
+    matrix[6] * vector[0] + matrix[7] * vector[1] + matrix[8] * vector[2],
+  ];
+}
+
+function normalize(vector) {
+  const length = Math.hypot(...vector);
+  if (!(length > 0)) throw new Error("Cyclone lighting vector has no direction");
+  return vector.map((value) => value / length);
+}
+
+function dot(left, right) {
+  return left[0] * right[0] + left[1] * right[1] + left[2] * right[2];
+}
+
+function clampByte(value) {
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function deepFreeze(value) {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) deepFreeze(child);
+  }
+  return value;
+}

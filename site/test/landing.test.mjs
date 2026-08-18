@@ -168,7 +168,7 @@ test("deployment serves the landing at the root", async () => {
   assert.doesNotMatch(netlify, /to\s*=\s*"\/pipes\/"/u);
   assert.match(
     packageManifest,
-    /CSSMAZE_DEPLOY_BUILD=1 pnpm build:maze && CSSSELECTROPAINT_DEPLOY_BUILD=1 pnpm build:electropaint && CSSSOLITAIRE_DEPLOY_BUILD=1 pnpm build:solitaire && CSSGRAPHICS_DEPLOY_BUILD=1 pnpm build:site/u,
+    /CSSGRAVITYWELL_DEPLOY_BUILD=1 pnpm build:gravitywell && CSSCYCLONE_DEPLOY_BUILD=1 pnpm build:cyclone && CSSMENGER_DEPLOY_BUILD=1 pnpm build:menger/u,
   );
   assert.match(
     packageManifest,

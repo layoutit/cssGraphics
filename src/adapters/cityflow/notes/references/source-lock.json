@@ -1,0 +1,15 @@
+{
+  "schema": "csscityflow-source-lock@1",
+  "project": "XScreenSaver Cityflow",
+  "repository": "https://github.com/Zygo/xscreensaver",
+  "revision": "906693799e4fb7581436590cf84ecb2d3c9186ba",
+  "primary": {
+    "path": "hacks/glx/cityflow.c",
+    "sha256": "9113c9f3214ba6c1f350b3863c306e6015e47a856a17bbe24d597f909dfa027b"
+  },
+  "config": {
+    "path": "hacks/config/cityflow.xml",
+    "sha256": "0453c12e39e4b7d32e66a7780d69979aaaa42d0632a3b6757df9c1cee6c7c919"
+  },
+  "license": "permissive notice embedded in cityflow.c"
+}

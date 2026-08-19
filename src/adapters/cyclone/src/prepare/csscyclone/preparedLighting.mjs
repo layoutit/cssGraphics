@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import sharp from "sharp";
 import {
   CSSCYCLONE_FACE_INDICES,
+  CSSCYCLONE_FACE_TILE_VERTEX_ORDERS,
   CSSCYCLONE_PARTICLE_VERTICES,
 } from "./modelBuilder.mjs";
 import { CSSCYCLONE_PRESENTATION } from "./sourceModel.mjs";
@@ -166,13 +167,15 @@ async function buildPreparedLightingAsset({
         normal,
       }));
       for (let faceIndex = 0; faceIndex < CSSCYCLONE_FACE_INDICES.length; faceIndex += 1) {
+        const faceVertexIndices = CSSCYCLONE_FACE_INDICES[faceIndex];
         writeAffineFaceTile({
           rgba,
           width: unpackedWidth,
           columns: unpackedColumns,
           tileIndex: stateIndex * CSSCYCLONE_FACE_INDICES.length + faceIndex,
           vertexColors,
-          vertexIndices: CSSCYCLONE_FACE_INDICES[faceIndex],
+          vertexIndices: CSSCYCLONE_FACE_TILE_VERTEX_ORDERS[faceIndex]
+            .map((index) => faceVertexIndices[index]),
         });
       }
     }

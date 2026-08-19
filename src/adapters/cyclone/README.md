@@ -39,8 +39,11 @@ claim. Mobile/coarse-pointer devices and viewports below 600px select the
 166-particle prepared profile before mount and use a 90-degree presentation
 field of view instead of the source-default 80 degrees. Prepared motion and each
 particle's prepared five-face topology are unchanged during playback. The
-pyramid apex follows the source tangent axis; replacing the source's symmetric
-six-triangle particle is an intentional presentation and performance deviation.
+pyramid apex follows local -Z, the source transform's stretched orbital travel
+axis. Its unstretched nose-to-cap depth equals its cap width, so the source
+transform alone controls elongation, and the complete primitive uses a uniform
+0.6 presentation scale. Replacing the source's symmetric six-triangle particle
+is an intentional presentation and performance deviation.
 
 The stream discards the source's dark startup by preparing 12 seconds before its
 first published frame. Its 12,960 states cover 216 seconds before repeating.

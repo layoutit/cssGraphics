@@ -15,21 +15,34 @@ export const CSSCYCLONE_MODEL_IDS = Object.freeze({
 });
 export const CSSCYCLONE_MODEL_ID = CSSCYCLONE_MODEL_IDS.desktop;
 const PARTICLE_RADIUS = CSSCYCLONE_SOURCE.particleSize / 4;
-const CAP_HALF_EXTENT = PARTICLE_RADIUS / Math.sqrt(2);
+const PARTICLE_PRESENTATION_SCALE = 0.6;
+const PARTICLE_HALF_EXTENT = PARTICLE_RADIUS * PARTICLE_PRESENTATION_SCALE / Math.sqrt(2);
 export const CSSCYCLONE_PARTICLE_VERTICES = Object.freeze([
-  Object.freeze([0, PARTICLE_RADIUS, 0]),
-  Object.freeze([-CAP_HALF_EXTENT, -PARTICLE_RADIUS, -CAP_HALF_EXTENT]),
-  Object.freeze([CAP_HALF_EXTENT, -PARTICLE_RADIUS, -CAP_HALF_EXTENT]),
-  Object.freeze([CAP_HALF_EXTENT, -PARTICLE_RADIUS, CAP_HALF_EXTENT]),
-  Object.freeze([-CAP_HALF_EXTENT, -PARTICLE_RADIUS, CAP_HALF_EXTENT]),
+  Object.freeze([0, 0, -PARTICLE_HALF_EXTENT]),
+  Object.freeze([-PARTICLE_HALF_EXTENT, -PARTICLE_HALF_EXTENT, PARTICLE_HALF_EXTENT]),
+  Object.freeze([PARTICLE_HALF_EXTENT, -PARTICLE_HALF_EXTENT, PARTICLE_HALF_EXTENT]),
+  Object.freeze([PARTICLE_HALF_EXTENT, PARTICLE_HALF_EXTENT, PARTICLE_HALF_EXTENT]),
+  Object.freeze([-PARTICLE_HALF_EXTENT, PARTICLE_HALF_EXTENT, PARTICLE_HALF_EXTENT]),
 ]);
 export const CSSCYCLONE_FACE_INDICES = Object.freeze([
-  Object.freeze([0, 2, 1]),
-  Object.freeze([0, 3, 2]),
-  Object.freeze([0, 4, 3]),
-  Object.freeze([0, 1, 4]),
+  Object.freeze([0, 1, 2]),
+  Object.freeze([0, 2, 3]),
+  Object.freeze([0, 3, 4]),
+  Object.freeze([0, 4, 1]),
   Object.freeze([1, 2, 3, 4]),
 ]);
+const CSSCYCLONE_FACE_PLANS = Object.freeze(CSSCYCLONE_FACE_INDICES.map((localIndices, faceIndex) => {
+  const vertices = localIndices.map((index) => CSSCYCLONE_PARTICLE_VERTICES[index]);
+  return localIndices.length === 4
+    ? Object.freeze({
+        matrix: quadMatrix(vertices, `particle-face-${faceIndex}`),
+        tileVertexOrder: Object.freeze([0, 1, 2, 3]),
+      })
+    : trianglePlan(vertices, `particle-face-${faceIndex}`);
+}));
+export const CSSCYCLONE_FACE_TILE_VERTEX_ORDERS = Object.freeze(
+  CSSCYCLONE_FACE_PLANS.map(({ tileVertexOrder }) => tileVertexOrder),
+);
 
 export function buildCyclonePreparedModel({
   source = buildCycloneSourceSequence(),
@@ -50,7 +63,6 @@ export function buildCyclonePreparedModel({
     shapes.push(Object.freeze({ id: shapeId, matrix: initial.particles[particleIndex].matrix }));
     for (let faceIndex = 0; faceIndex < CSSCYCLONE_FACE_INDICES.length; faceIndex += 1) {
       const localIndices = CSSCYCLONE_FACE_INDICES[faceIndex];
-      const face = localIndices.map((index) => CSSCYCLONE_PARTICLE_VERTICES[index]);
       const polygonId = `${shapeId}-face-${faceIndex}`;
       polygons.push(Object.freeze({
         id: polygonId,
@@ -66,7 +78,7 @@ export function buildCyclonePreparedModel({
         strategy: quad ? "solid-quad" : "solid-triangle",
         width: SOLID_TRIANGLE_CANONICAL_SIZE,
         height: SOLID_TRIANGLE_CANONICAL_SIZE,
-        matrix: quad ? quadMatrix(face, polygonId) : triangleMatrix(face, polygonId),
+        matrix: CSSCYCLONE_FACE_PLANS[faceIndex].matrix,
         atlas: null,
         fallback: null,
       }));
@@ -163,7 +175,7 @@ export function buildCyclonePreparedPlayback({
   });
 }
 
-function triangleMatrix(vertices, id) {
+function trianglePlan(vertices, id) {
   const plan = computeSolidTrianglePlanFromCssPoints(
     { vertices: vertices.map((vertex) => [...vertex]) },
     0,
@@ -176,7 +188,15 @@ function triangleMatrix(vertices, id) {
   if (!values || values.length !== 16 || values.some((value) => !Number.isFinite(value))) {
     throw new Error(`Cyclone triangle is not renderable: ${id}`);
   }
-  return Object.freeze(values.map((value) => rounded(value)));
+  const { a, b, c } = plan.basis ?? {};
+  if (![a, b, c].every((value) => Number.isSafeInteger(value) && value >= 0 && value < 3) ||
+      new Set([a, b, c]).size !== 3) {
+    throw new Error(`Cyclone triangle basis is invalid: ${id}`);
+  }
+  return Object.freeze({
+    matrix: Object.freeze(values.map((value) => rounded(value))),
+    tileVertexOrder: Object.freeze([c, a, b]),
+  });
 }
 
 function quadMatrix(vertices, id) {

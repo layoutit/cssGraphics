@@ -33,6 +33,8 @@ test("uses the cssGraphics shell without product UI or alternate renderers", asy
   );
   assert.match(styles, /background-image:\s*var\(--cyclone-lighting-atlas\)/u);
   assert.match(styles, /body > \.polycss-camera :is\(u, b\)/u);
+  assert.match(styles, /body > \.polycss-camera u\s*\{[^}]*corner-top-left-shape:\s*bevel;/su);
+  assert.doesNotMatch(styles, /body > \.polycss-camera :is\(u, b\)\s*\{[^}]*corner-top-left-shape:/su);
   assert.doesNotMatch(styles, /color-mix|--cyclone-tone/u);
   assert.match(client, /cameraElement\.style\.removeProperty\("perspective"\)/u);
   assert.match(client, /sceneElement\.style\.removeProperty\("transform"\)/u);

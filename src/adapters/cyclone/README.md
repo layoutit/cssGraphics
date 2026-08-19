@@ -2,16 +2,16 @@
 
 This adapter translates Really Slick Cyclone into one retained PolyCSS Morph
 graph. The source-default 400-particle simulation is prepared into prefixes of
-340 complete particles on desktop and 166 on mobile. Every retained particle
-keeps all six original solid-triangle leaves: 2,040 desktop leaves or 996 mobile
-leaves. The
+320 complete particles on desktop and 166 on mobile. Every retained particle is
+a forward-pointing square pyramid with four solid-triangle sides and one
+solid-quad trailing cap: 1,600 desktop leaves or 830 mobile leaves. The
 selected profile plays 24 source-continuous logical chunks of 540 prepared
 16.667 ms
 transform states. The stream is transported as 216 one-second prepared blocks
 so decompression stays outside long animation frames. Source fixed-function
 smooth-vertex lighting is prepared at the first published frame into a verified
 lossless WebP atlas. Initial leaf addresses are bound once. Later address writes
-are limited to the six leaves of a particle when the source restarts it with a
+are limited to the five leaves of a particle when the source restarts it with a
 new color. The mounted graph is camera, scene, particle roots, and leaves; the
 PolyCSS Morph model wrapper is removed after adoption and its fixed transform is
 composed onto the existing scene node.
@@ -26,7 +26,7 @@ Five lossless lighting-atlas variants provide blue-, yellow-, red-, magenta-,
 and green-centered palettes; each variant spans at most three adjacent hue
 families for the entire playback. The browser selects one prepared atlas and
 performs no color calculation. The same source RNG draws preserve RNG cadence,
-geometry, restart timing, and coherent color bands, but prepared hue values are
+trajectory geometry, restart timing, and coherent color bands, but prepared hue values are
 intentionally quantized and low lightness is intentionally lifted; these are not
 exact source colors.
 Startup is prebaked to ten audited 48-frame source windows. The selector gives
@@ -38,7 +38,9 @@ intentional presentation rather than an exact native-color or random-start
 claim. Mobile/coarse-pointer devices and viewports below 600px select the
 166-particle prepared profile before mount and use a 90-degree presentation
 field of view instead of the source-default 80 degrees. Prepared motion and each
-particle's complete six-face topology are unchanged.
+particle's prepared five-face topology are unchanged during playback. The
+pyramid apex follows the source tangent axis; replacing the source's symmetric
+six-triangle particle is an intentional presentation and performance deviation.
 
 The stream discards the source's dark startup by preparing 12 seconds before its
 first published frame. Its 12,960 states cover 216 seconds before repeating.
@@ -83,7 +85,7 @@ while source color restarts remain exact; this is an intentional performance
 adaptation. The complete dense scene is not claimed to be pixel-identical to
 OpenGL because OpenGL resolves intersecting particles with a per-fragment depth
 buffer while the retained CSS scene uses planar compositor ordering. The
-supported Chrome path renders all six CSS triangle leaves per particle with no
+supported Chrome path renders all five prepared CSS leaves per particle with no
 alternate renderer or geometry fallback.
 
 The adapter is GPL-2.0-or-later; see [NOTICE.md](NOTICE.md).

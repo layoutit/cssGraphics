@@ -165,7 +165,7 @@ body > .polycss-camera > .polycss-scene {
     matrix3d(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, -400, 1);
 }
 
-body > .polycss-camera u {
+body > .polycss-camera :is(u, b) {
   position: absolute;
   width: 32px;
   height: 32px;

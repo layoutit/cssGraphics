@@ -15,22 +15,20 @@ export const CSSCYCLONE_MODEL_IDS = Object.freeze({
 });
 export const CSSCYCLONE_MODEL_ID = CSSCYCLONE_MODEL_IDS.desktop;
 const PARTICLE_RADIUS = CSSCYCLONE_SOURCE.particleSize / 4;
-const EQUATOR = Object.freeze(Array.from({ length: 3 }, (_, index) => {
-  const angle = index * Math.PI * 2 / 3;
-  return Object.freeze([Math.cos(angle) * PARTICLE_RADIUS, Math.sin(angle) * PARTICLE_RADIUS, 0]);
-}));
+const CAP_HALF_EXTENT = PARTICLE_RADIUS / Math.sqrt(2);
 export const CSSCYCLONE_PARTICLE_VERTICES = Object.freeze([
-  Object.freeze([0, 0, PARTICLE_RADIUS]),
-  ...EQUATOR,
-  Object.freeze([0, 0, -PARTICLE_RADIUS]),
+  Object.freeze([0, PARTICLE_RADIUS, 0]),
+  Object.freeze([-CAP_HALF_EXTENT, -PARTICLE_RADIUS, -CAP_HALF_EXTENT]),
+  Object.freeze([CAP_HALF_EXTENT, -PARTICLE_RADIUS, -CAP_HALF_EXTENT]),
+  Object.freeze([CAP_HALF_EXTENT, -PARTICLE_RADIUS, CAP_HALF_EXTENT]),
+  Object.freeze([-CAP_HALF_EXTENT, -PARTICLE_RADIUS, CAP_HALF_EXTENT]),
 ]);
 export const CSSCYCLONE_FACE_INDICES = Object.freeze([
-  Object.freeze([0, 1, 2]),
-  Object.freeze([0, 2, 3]),
-  Object.freeze([0, 3, 1]),
-  Object.freeze([4, 2, 1]),
-  Object.freeze([4, 3, 2]),
-  Object.freeze([4, 1, 3]),
+  Object.freeze([0, 2, 1]),
+  Object.freeze([0, 3, 2]),
+  Object.freeze([0, 4, 3]),
+  Object.freeze([0, 1, 4]),
+  Object.freeze([1, 2, 3, 4]),
 ]);
 
 export function buildCyclonePreparedModel({
@@ -47,29 +45,28 @@ export function buildCyclonePreparedModel({
     const vertexOffset = vertices.length;
     const normalOffset = normals.length;
     vertices.push(...CSSCYCLONE_PARTICLE_VERTICES.map((vertex) => Object.freeze([...vertex])));
-    normals.push(...CSSCYCLONE_PARTICLE_VERTICES.map((vertex) => Object.freeze(
-      vertex.map((value) => rounded(value / PARTICLE_RADIUS)),
-    )));
+    normals.push(...CSSCYCLONE_PARTICLE_VERTICES.map((vertex) => Object.freeze(normalized(vertex))));
     const shapeId = particleId(particleIndex);
     shapes.push(Object.freeze({ id: shapeId, matrix: initial.particles[particleIndex].matrix }));
     for (let faceIndex = 0; faceIndex < CSSCYCLONE_FACE_INDICES.length; faceIndex += 1) {
       const localIndices = CSSCYCLONE_FACE_INDICES[faceIndex];
-      const triangle = localIndices.map((index) => CSSCYCLONE_PARTICLE_VERTICES[index]);
+      const face = localIndices.map((index) => CSSCYCLONE_PARTICLE_VERTICES[index]);
       const polygonId = `${shapeId}-face-${faceIndex}`;
       polygons.push(Object.freeze({
         id: polygonId,
         vertexIndices: Object.freeze(localIndices.map((index) => vertexOffset + index)),
         normalIndices: Object.freeze(localIndices.map((index) => normalOffset + index)),
       }));
+      const quad = localIndices.length === 4;
       leaves.push(Object.freeze({
         id: `leaf-${polygonId}`,
         polygonId,
         shapeId,
         materialId: "particle",
-        strategy: "solid-triangle",
+        strategy: quad ? "solid-quad" : "solid-triangle",
         width: SOLID_TRIANGLE_CANONICAL_SIZE,
         height: SOLID_TRIANGLE_CANONICAL_SIZE,
-        matrix: triangleMatrix(triangle, polygonId),
+        matrix: quad ? quadMatrix(face, polygonId) : triangleMatrix(face, polygonId),
         atlas: null,
         fallback: null,
       }));
@@ -180,6 +177,47 @@ function triangleMatrix(vertices, id) {
     throw new Error(`Cyclone triangle is not renderable: ${id}`);
   }
   return Object.freeze(values.map((value) => rounded(value)));
+}
+
+function quadMatrix(vertices, id) {
+  if (vertices.length !== 4) throw new Error(`Cyclone quad is incomplete: ${id}`);
+  const [origin, along, opposite, across] = vertices;
+  const xVector = subtract(along, origin);
+  const yVector = subtract(across, origin);
+  const normal = normalized(cross(xVector, yVector));
+  const nonPlanarity = Math.abs(dot(normal, subtract(opposite, origin)));
+  if (!Number.isFinite(nonPlanarity) || nonPlanarity > 1e-8) {
+    throw new Error(`Cyclone quad is not planar: ${id}`);
+  }
+  const size = SOLID_TRIANGLE_CANONICAL_SIZE;
+  return Object.freeze([
+    xVector[0] / size, xVector[1] / size, xVector[2] / size, 0,
+    yVector[0] / size, yVector[1] / size, yVector[2] / size, 0,
+    normal[0], normal[1], normal[2], 0,
+    origin[0], origin[1], origin[2], 1,
+  ].map((value) => rounded(value)));
+}
+
+function subtract(left, right) {
+  return left.map((value, index) => value - right[index]);
+}
+
+function cross(left, right) {
+  return [
+    left[1] * right[2] - left[2] * right[1],
+    left[2] * right[0] - left[0] * right[2],
+    left[0] * right[1] - left[1] * right[0],
+  ];
+}
+
+function dot(left, right) {
+  return left.reduce((sum, value, index) => sum + value * right[index], 0);
+}
+
+function normalized(vector) {
+  const length = Math.hypot(...vector);
+  if (length < 1e-12) throw new Error("Cyclone particle normal is degenerate");
+  return vector.map((value) => rounded(value / length));
 }
 
 function particleId(index) {

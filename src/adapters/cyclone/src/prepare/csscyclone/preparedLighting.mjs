@@ -166,7 +166,7 @@ async function buildPreparedLightingAsset({
         normal,
       }));
       for (let faceIndex = 0; faceIndex < CSSCYCLONE_FACE_INDICES.length; faceIndex += 1) {
-        writeAffineTriangleTile({
+        writeAffineFaceTile({
           rgba,
           width: unpackedWidth,
           columns: unpackedColumns,
@@ -472,7 +472,7 @@ function hsvToRgb(hue, saturation, value) {
   ][index];
 }
 
-function writeAffineTriangleTile({
+function writeAffineFaceTile({
   rgba,
   width,
   columns,
@@ -486,14 +486,16 @@ function writeAffineTriangleTile({
     const v = (localY + 0.5) / CONTENT_SIZE;
     for (let localX = -GUTTER; localX < CONTENT_SIZE + GUTTER; localX += 1) {
       const u = (localX + 0.5) / CONTENT_SIZE;
-      const apex = 1 - v;
-      const right = u - 0.5 * apex;
-      const left = 1 - apex - right;
-      const color = [0, 1, 2].map((channel) => clampByte(
-        vertexColors[vertexIndices[0]][channel] * apex +
-        vertexColors[vertexIndices[1]][channel] * left +
-        vertexColors[vertexIndices[2]][channel] * right,
-      ));
+      const weights = vertexIndices.length === 3
+        ? triangleWeights(u, v)
+        : vertexIndices.length === 4
+        ? quadWeights(u, v)
+        : null;
+      if (weights === null) throw new Error("Cyclone lighting face must be a triangle or quad");
+      const color = [0, 1, 2].map((channel) => clampByte(weights.reduce(
+        (sum, weight, index) => sum + vertexColors[vertexIndices[index]][channel] * weight,
+        0,
+      )));
       const x = originX + localX + GUTTER;
       const y = originY + localY + GUTTER;
       const offset = (y * width + x) * 4;
@@ -503,6 +505,16 @@ function writeAffineTriangleTile({
       rgba[offset + 3] = 255;
     }
   }
+}
+
+function triangleWeights(u, v) {
+  const apex = 1 - v;
+  const right = u - 0.5 * apex;
+  return [apex, 1 - apex - right, right];
+}
+
+function quadWeights(u, v) {
+  return [(1 - u) * (1 - v), u * (1 - v), u * v, (1 - u) * v];
 }
 
 function shadeVertex({ baseColor, normal }) {

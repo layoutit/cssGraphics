@@ -15,21 +15,26 @@ export const CSSCYCLONE_MODEL_IDS = Object.freeze({
 });
 export const CSSCYCLONE_MODEL_ID = CSSCYCLONE_MODEL_IDS.desktop;
 const PARTICLE_RADIUS = CSSCYCLONE_SOURCE.particleSize / 4;
-const PARTICLE_PRESENTATION_SCALE = 0.6;
-const PARTICLE_HALF_EXTENT = PARTICLE_RADIUS * PARTICLE_PRESENTATION_SCALE / Math.sqrt(2);
+const EQUATOR = Object.freeze(Array.from({ length: 3 }, (_, index) => {
+  const angle = index * Math.PI * 2 / 3;
+  return Object.freeze([
+    Math.cos(angle) * PARTICLE_RADIUS,
+    Math.sin(angle) * PARTICLE_RADIUS,
+    0,
+  ]);
+}));
 export const CSSCYCLONE_PARTICLE_VERTICES = Object.freeze([
-  Object.freeze([0, 0, -PARTICLE_HALF_EXTENT]),
-  Object.freeze([-PARTICLE_HALF_EXTENT, -PARTICLE_HALF_EXTENT, PARTICLE_HALF_EXTENT]),
-  Object.freeze([PARTICLE_HALF_EXTENT, -PARTICLE_HALF_EXTENT, PARTICLE_HALF_EXTENT]),
-  Object.freeze([PARTICLE_HALF_EXTENT, PARTICLE_HALF_EXTENT, PARTICLE_HALF_EXTENT]),
-  Object.freeze([-PARTICLE_HALF_EXTENT, PARTICLE_HALF_EXTENT, PARTICLE_HALF_EXTENT]),
+  Object.freeze([0, 0, PARTICLE_RADIUS]),
+  ...EQUATOR,
+  Object.freeze([0, 0, -PARTICLE_RADIUS]),
 ]);
 export const CSSCYCLONE_FACE_INDICES = Object.freeze([
   Object.freeze([0, 1, 2]),
   Object.freeze([0, 2, 3]),
-  Object.freeze([0, 3, 4]),
-  Object.freeze([0, 4, 1]),
-  Object.freeze([1, 2, 3, 4]),
+  Object.freeze([0, 3, 1]),
+  Object.freeze([4, 2, 1]),
+  Object.freeze([4, 3, 2]),
+  Object.freeze([4, 1, 3]),
 ]);
 const CSSCYCLONE_FACE_PLANS = Object.freeze(CSSCYCLONE_FACE_INDICES.map((localIndices, faceIndex) => {
   const vertices = localIndices.map((index) => CSSCYCLONE_PARTICLE_VERTICES[index]);
@@ -42,6 +47,9 @@ const CSSCYCLONE_FACE_PLANS = Object.freeze(CSSCYCLONE_FACE_INDICES.map((localIn
 }));
 export const CSSCYCLONE_FACE_TILE_VERTEX_ORDERS = Object.freeze(
   CSSCYCLONE_FACE_PLANS.map(({ tileVertexOrder }) => tileVertexOrder),
+);
+export const CSSCYCLONE_FACE_NORMALS = Object.freeze(
+  CSSCYCLONE_FACE_PLANS.map(({ matrix }) => Object.freeze(matrix.slice(8, 11))),
 );
 
 export function buildCyclonePreparedModel({

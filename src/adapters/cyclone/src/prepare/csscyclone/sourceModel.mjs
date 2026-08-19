@@ -63,6 +63,7 @@ export const CSSCYCLONE_BANKS = Object.freeze({
 export const CSSCYCLONE_BANK = CSSCYCLONE_BANKS.desktop;
 
 export const CSSCYCLONE_PRESENTATION = Object.freeze({
+  radialOrbitScale: 0.85,
   saturationSampling: "floor-0.55-plus-0.45-sqrt-uniform",
   minimumSaturation: 0.55,
   hueSampling: "source-uniform-random-targets",
@@ -390,6 +391,7 @@ function updateParticle(particle, rng, deltaSeconds) {
     speed: CSSCYCLONE_SOURCE.speed,
     complexity: CSSCYCLONE_SOURCE.complexity,
     particleSize: CSSCYCLONE_SOURCE.particleSize,
+    radialOrbitScale: CSSCYCLONE_PRESENTATION.radialOrbitScale,
   });
   particle.width = advanced.state.width;
   particle.step = advanced.state.step;

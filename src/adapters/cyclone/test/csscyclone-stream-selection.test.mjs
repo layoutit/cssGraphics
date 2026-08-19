@@ -34,6 +34,7 @@ const catalog = Object.freeze({
     speed: 10,
     complexity: 3,
     particleSize: 7,
+    radialOrbitScale: 0.85,
   }),
   chunkCount: 24,
   chunkFrameCount: 540,

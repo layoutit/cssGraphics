@@ -7,7 +7,7 @@ import {
 
 const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@3";
 const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@2";
-const LIGHTING_SCHEMA = "csscyclone-prepared-smooth-lighting-atlas@7";
+const LIGHTING_SCHEMA = "csscyclone-prepared-flat-lighting-colors@9";
 const SOURCE_FIELD_OF_VIEW_DEGREES = 80;
 const MOBILE_FIELD_OF_VIEW_DEGREES = 90;
 const MOBILE_MAX_WIDTH = 600;
@@ -30,7 +30,8 @@ export function createCyclonePreparedPlayer({
   initialLookaheadBlocks = [],
   initialFrameIndex,
   lighting,
-  lightingAsset,
+  lightingColors,
+  schedulerMode = "continuous-raf",
   loadBlock,
   onBlockWindow = () => undefined,
   onError = () => undefined,
@@ -48,7 +49,7 @@ export function createCyclonePreparedPlayer({
     initialLookaheadBlocks,
     initialFrameIndex,
     lighting,
-    lightingAsset,
+    lightingColors,
     loadBlock,
   );
   const shapeElements = mounted.model.render.shapes.map((shape) => mounted.shapeElements.get(shape.id));
@@ -69,12 +70,10 @@ export function createCyclonePreparedPlayer({
     shapes: shapeElements.map((element) => ({ element })),
     leaves: leafElements.map((element) => ({ element })),
   });
-  mounted.sceneElement.style.setProperty(
-    "--cyclone-lighting-atlas",
-    `url("${lightingAsset.url.replace(/"/gu, "%22")}")`,
-  );
-  mounted.sceneElement.style.setProperty("--cyclone-lighting-size", lighting.backgroundSize);
-
+  const continuousFrameScheduler = schedulerMode === "continuous-raf";
+  if (!new Set(["deadline-timer-raf", "continuous-raf"]).has(schedulerMode)) {
+    throw new Error("Cyclone prepared scheduler mode is invalid");
+  }
   let activeBlock = initialBlock;
   let playback = activeBlock.playback;
   let lightingFrames = activeBlock.lighting;
@@ -101,7 +100,7 @@ export function createCyclonePreparedPlayer({
   let collapsedFrameCount = 0;
   let applyCount = 0;
   let shapeTransformWrites = 0;
-  let lightingLeafAddressWrites = 0;
+  let lightingLeafColorWrites = 0;
   let preparedChunkSwitchCount = 0;
   let preparedBlockSwitchCount = 0;
   let preparedBlockPrefetchCount = initialLookaheadBlocks.length;
@@ -134,9 +133,10 @@ export function createCyclonePreparedPlayer({
       const leafOffset = particleIndex * lighting.facesPerParticle;
       const tileOffset = nextStateIndex * lighting.facesPerParticle;
       for (let faceIndex = 0; faceIndex < lighting.facesPerParticle; faceIndex += 1) {
-        leafElements[leafOffset + faceIndex].style.backgroundPosition =
-          lighting.tileBackgroundPositions[tileOffset + faceIndex];
-        if (!force) lightingLeafAddressWrites += 1;
+        const colorSlotIndex = lightingColors.colorSlotIndices[tileOffset + faceIndex];
+        leafElements[leafOffset + faceIndex].style.backgroundColor =
+          lightingColors.colors[colorSlotIndex];
+        if (!force) lightingLeafColorWrites += 1;
       }
       currentParticleColorStateIndices[particleIndex] = nextStateIndex;
     }
@@ -229,6 +229,10 @@ export function createCyclonePreparedPlayer({
 
   function schedule() {
     if (paused || destroyed || frameRequest !== null || delayRequest !== null) return;
+    if (continuousFrameScheduler) {
+      requestPaintAlignedWake();
+      return;
+    }
     const waitMilliseconds = Math.max(0, nextFrameAt - readNow() - schedulerLeadMilliseconds);
     if (waitMilliseconds <= 1) {
       requestPaintAlignedWake();
@@ -246,6 +250,12 @@ export function createCyclonePreparedPlayer({
     frameRequest = null;
     if (paused || destroyed) return;
     schedulerFrameCallbackCount += 1;
+    const publicationTime = Math.max(Number(timestamp) || 0, readNow());
+    if (continuousFrameScheduler &&
+        publicationTime + schedulerLeadMilliseconds + 0.75 < nextFrameAt) {
+      schedule();
+      return;
+    }
     try {
       if (frameIndex + 1 >= playback.frameCount) {
         await activatePendingBlock();
@@ -253,7 +263,6 @@ export function createCyclonePreparedPlayer({
         advanceTo(frameIndex + 1);
       }
       nextFrameAt += playback.frameMilliseconds;
-      const publicationTime = Math.max(Number(timestamp) || 0, readNow());
       if (nextFrameAt <= publicationTime) {
         nextFrameAt = publicationTime + playback.frameMilliseconds;
         schedulerLateResetCount += 1;
@@ -344,28 +353,29 @@ export function createCyclonePreparedPlayer({
       schedulerDelayCallbackCount,
       schedulerDelayCancelCount,
       schedulerLateResetCount,
-      runtimeSchedulerTransport: "deadline-setTimeout-requestAnimationFrame-prepared-publication",
+      runtimeSchedulerTransport: continuousFrameScheduler
+        ? "continuous-requestAnimationFrame-prepared-publication"
+        : "deadline-setTimeout-requestAnimationFrame-prepared-publication",
       collapsedFrameCount,
       applyCount,
       shapeTransformWrites,
       lightingRowWrites,
       lightingLeafBindingWrites,
-      lightingLeafAddressWrites,
+      lightingLeafColorWrites,
       preparedChunkSwitchCount,
       preparedBlockSwitchCount,
       preparedBlockPrefetchCount,
       runtimePreparedBlockWaitCount,
       preparedContinuousHandoffCount,
       preparedTerminalWrapCount,
-      preparedLightingAssetBytes: lightingAsset.byteLength,
-      preparedLightingPaletteFamily: lightingAsset.paletteFamily,
+      preparedLightingColorSlotCount: lightingColors.colors.length,
+      preparedLightingPaletteFamily: lightingColors.paletteFamily,
       preparedLightingMaximumColorFamilyCount: lighting.maximumColorFamilyCount,
       preparedLightingColorStateCount: lighting.colorStateCount,
       preparedLightingColorRestartCount: lighting.colorRestartCount,
       runtimeGeometryConstructionCount: 0,
-      runtimeAtlasRasterizationCount: 0,
+      runtimeLightingImageConstructionCount: 0,
       runtimeLightingCalculationCount: 0,
-      runtimeLightingAtlasConstructionCount: 0,
       runtimeFrameMatrixFormattingCount: 0,
       runtimeIdLookupCount: 0,
       runtimeDomGrowth: false,
@@ -391,7 +401,7 @@ export function createCyclonePreparedPlayer({
       removeEventListener("resize", resize);
       target.destroy();
       mounted.destroy();
-      lightingAsset.destroy();
+      lightingColors.destroy();
     },
   });
 }
@@ -404,11 +414,11 @@ function validateBinding(
   initialLookaheadBlocks,
   initialFrameIndex,
   lighting,
-  lightingAsset,
+  lightingColors,
   loadBlock,
 ) {
   const lightingVariant = lighting?.variants?.find((variant) =>
-    variant?.paletteFamily === lightingAsset?.paletteFamily);
+    variant?.paletteFamily === lightingColors?.paletteFamily);
   if (modelTransform !== STYLESHEET_MODEL_TRANSFORM ||
       catalog?.schema !== CATALOG_SCHEMA ||
       catalog.blockCount !== catalog.entries?.length ||
@@ -432,13 +442,15 @@ function validateBinding(
       lighting.chunkFrameCount !== catalog.chunkFrameCount ||
       lighting.leafCount !== mounted.model.render.leaves.length ||
       lighting.facesPerParticle * mounted.model.render.shapes.length !== lighting.leafCount ||
-      lighting.tileBackgroundPositions?.length !== lighting.tileCount ||
+      lighting.colorSlotIndexCount !== lighting.colorEntryCount ||
+      lighting.colorEntryCount !== lighting.colorStateCount * lighting.facesPerParticle ||
       lighting.maximumColorFamilyCount !== 3 ||
       lighting.paletteHueSlotCount !== 3 ||
-      lightingAsset?.hueSlots?.length !== lighting.maximumColorFamilyCount ||
+      lightingColors?.hueSlots?.length !== lighting.maximumColorFamilyCount ||
+      lightingColors?.colors !== lightingVariant?.colors ||
+      lightingColors?.colorSlotIndices?.length !== lighting.colorEntryCount ||
       lighting.runtime?.lightingCalculations !== 0 ||
-      lighting.runtime?.atlasConstruction !== 0 ||
-      lightingAsset?.sha256 !== lightingVariant?.assetSha256 ||
+      lighting.runtime?.imageConstruction !== 0 ||
       typeof loadBlock !== "function" ||
       !Number.isSafeInteger(initialFrameIndex) || initialFrameIndex < 0 ||
       initialFrameIndex >= catalog.blockFrameCount) {

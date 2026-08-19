@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import { createPolyPerspectiveCamera } from "@layoutit/polycss";
 import { loadPolyMorphPackage, mountPolyMorphModel } from "@layoutit/polycss-morph";
-import { loadCyclonePreparedLightingAsset } from "./preparedLightingAsset.mjs";
+import { loadCyclonePreparedLightingColors } from "./preparedLightingColors.mjs";
 import { createCyclonePreparedPlayer } from "./preparedPlayback.mjs";
 import {
   createCyclonePreparedBlockLoader,
@@ -28,7 +28,7 @@ export async function mountCycloneClient(host) {
     mounted: null,
     player: null,
   };
-  let lightingAsset = null;
+  let lightingColors = null;
   installDebugApi(state);
   try {
     const profileId = selectCyclonePreparedProfile({
@@ -78,14 +78,14 @@ export async function mountCycloneClient(host) {
       catalog.startupMaterializedLookaheadBlockCount,
     );
     blockLoader.retain(residentBlockIndices);
-    const [initialBlock, initialLookaheadBlocks, loadedLightingAsset] = await Promise.all([
+    const [initialBlock, initialLookaheadBlocks, loadedLightingColors] = await Promise.all([
       blockLoader.load(initialBlockIndex, { offMainThread: true }),
       Promise.all(startupLookaheadBlockIndices.map((streamBlockIndex) =>
         blockLoader.load(streamBlockIndex, { offMainThread: true }))),
-      loadCyclonePreparedLightingAsset(profile.lighting, selection.paletteFamily),
+      loadCyclonePreparedLightingColors(profile.lighting, selection.paletteFamily),
       blockLoader.prime(residentBlockIndices),
     ]);
-    lightingAsset = loadedLightingAsset;
+    lightingColors = loadedLightingColors;
     const mounted = mountPolyMorphModel(host, loaded.model, {
       resources: loaded.resources,
       camera: createPolyPerspectiveCamera({ perspective: 800, target: [0, 0, 0], rotX: 0, rotY: 0, zoom: 50 }),
@@ -99,7 +99,8 @@ export async function mountCycloneClient(host) {
       initialLookaheadBlocks,
       initialFrameIndex: initialBlockFrameIndex,
       lighting: profile.lighting,
-      lightingAsset,
+      lightingColors,
+      schedulerMode: "continuous-raf",
       loadBlock(streamBlockIndex) {
         return blockLoader.load(streamBlockIndex, { incremental: true, offMainThread: true });
       },
@@ -131,7 +132,7 @@ export async function mountCycloneClient(host) {
     player.resume();
     return state;
   } catch (error) {
-    lightingAsset?.destroy();
+    lightingColors?.destroy();
     state.errors.push(String(error?.stack || error));
     document.body.classList.remove("loading", "priming");
     document.body.classList.add("error");

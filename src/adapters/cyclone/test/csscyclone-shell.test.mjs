@@ -31,7 +31,8 @@ test("uses the cssGraphics shell without product UI or alternate renderers", asy
     styles,
     /body > \.polycss-camera > \.polycss-scene\s*\{[^}]*transform:\s*translateZ\(var\(--cyclone-perspective\)\)\s*matrix3d\(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, -400, 1\);/su,
   );
-  assert.match(styles, /background-image:\s*var\(--cyclone-lighting-atlas\)/u);
+  assert.doesNotMatch(styles, /background-image/u);
+  assert.match(styles, /background-color:\s*transparent/u);
   assert.match(styles, /body > \.polycss-camera :is\(u, b\)/u);
   assert.match(styles, /body > \.polycss-camera u\s*\{[^}]*corner-top-left-shape:\s*bevel;/su);
   assert.doesNotMatch(styles, /body > \.polycss-camera :is\(u, b\)\s*\{[^}]*corner-top-left-shape:/su);
@@ -51,9 +52,13 @@ test("uses the cssGraphics shell without product UI or alternate renderers", asy
   assert.match(stream, /new Worker\(new URL\("\.\/preparedBlockWorker\.mjs"/u);
   assert.match(worker, /decodeCyclonePreparedBlock/u);
   assert.match(worker, /type: "materialized-chunk"/u);
-  assert.match(worker, /TRANSFORM_RESPONSE_CHUNK_BYTES = 128 \* 1_024/u);
+  assert.match(worker, /TRANSFORM_RESPONSE_CHUNK_TRANSFORMS = 960/u);
+  assert.match(worker, /setTimeout\(resolve, catalog\.frameMilliseconds\)/u);
+  assert.doesNotMatch(worker, /new TextDecoder\(\)|new TextEncoder\(\)/u);
   assert.match(stream, /workerMaterializationMaximumResponseChunkBytes/u);
-  assert.match(stream, /requestAnimationFrame\(processResponseChunk\)/u);
+  assert.match(stream, /requestIdle\(processResponseChunk, \{ timeout: 500 \}\)/u);
+  assert.doesNotMatch(stream, /requestAnimationFrame\(processResponseChunk\)/u);
+  assert.match(client, /schedulerMode: "continuous-raf"/u);
   assert.doesNotMatch(`${client}\n${playback}\n${stream}\n${worker}`, /WebGL|CanvasRenderingContext/u);
   assert.doesNotMatch(styles, /filter:\s*(?:blur|drop-shadow)|box-shadow|clip-path/u);
 });

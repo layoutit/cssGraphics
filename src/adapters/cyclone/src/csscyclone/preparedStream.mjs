@@ -116,6 +116,7 @@ export function createCyclonePreparedBlockLoader(catalog) {
   let workerMaterializationCompletedBlockCount = 0;
   let workerMaterializationMaximumBlockMilliseconds = 0;
   let workerMaterializationResponseChunkCount = 0;
+  let workerMaterializationResponseIdleSliceCount = 0;
   let workerMaterializationMaximumResponseChunkBytes = 0;
   let incrementalDecodeTail = Promise.resolve();
   let destroyed = false;
@@ -196,11 +197,13 @@ export function createCyclonePreparedBlockLoader(catalog) {
       }
       let workerDurationMilliseconds = 0;
       let workerResponseChunkCount = 0;
+      let workerResponseIdleSliceCount = 0;
       let workerMaximumResponseChunkBytes = 0;
       const block = offMainThread && workerMaterializer !== null
         ? await workerMaterializer.materialize(decodedRecord.bytes, descriptor).then((result) => {
           workerDurationMilliseconds = result.durationMilliseconds;
           workerResponseChunkCount = result.responseChunkCount;
+          workerResponseIdleSliceCount = result.responseIdleSliceCount;
           workerMaximumResponseChunkBytes = result.maximumResponseChunkBytes;
           return result.block;
         })
@@ -239,6 +242,7 @@ export function createCyclonePreparedBlockLoader(catalog) {
           workerDurationMilliseconds,
         );
         workerMaterializationResponseChunkCount += workerResponseChunkCount;
+        workerMaterializationResponseIdleSliceCount += workerResponseIdleSliceCount;
         workerMaterializationMaximumResponseChunkBytes = Math.max(
           workerMaterializationMaximumResponseChunkBytes,
           workerMaximumResponseChunkBytes,
@@ -333,6 +337,8 @@ export function createCyclonePreparedBlockLoader(catalog) {
         workerMaterializationCompletedBlockCount,
         workerMaterializationMaximumBlockMilliseconds,
         workerMaterializationResponseChunkCount,
+        workerMaterializationResponseIdleSliceCount,
+        workerMaterializationResponseAnimationFrameCallbackCount: 0,
         workerMaterializationMaximumResponseChunkBytes,
         desiredBlockIndices: Object.freeze([...desiredBlockIndices].sort((left, right) => left - right)),
       });
@@ -358,7 +364,10 @@ function createWorkerBlockMaterializer(catalog) {
   }
   const pending = new Map();
   const responseChunkQueue = [];
-  let responseFrameRequest = null;
+  const requestIdle = globalThis.requestIdleCallback?.bind(globalThis) ??
+    ((callback) => setTimeout(() => callback({ didTimeout: true, timeRemaining: () => 0 }), 0));
+  const cancelIdle = globalThis.cancelIdleCallback?.bind(globalThis) ?? clearTimeout;
+  let responseIdleRequest = null;
   let nextRequestId = 0;
   let destroyed = false;
   let resolveInitialization;
@@ -373,17 +382,17 @@ function createWorkerBlockMaterializer(catalog) {
     for (const { reject } of pending.values()) reject(error);
     pending.clear();
     responseChunkQueue.length = 0;
-    if (responseFrameRequest !== null) cancelAnimationFrame(responseFrameRequest);
-    responseFrameRequest = null;
+    if (responseIdleRequest !== null) cancelIdle(responseIdleRequest);
+    responseIdleRequest = null;
   }
 
   function scheduleResponseChunk() {
-    if (responseFrameRequest !== null || responseChunkQueue.length === 0) return;
-    responseFrameRequest = requestAnimationFrame(processResponseChunk);
+    if (responseIdleRequest !== null || responseChunkQueue.length === 0) return;
+    responseIdleRequest = requestIdle(processResponseChunk, { timeout: 500 });
   }
 
   function processResponseChunk() {
-    responseFrameRequest = null;
+    responseIdleRequest = null;
     const queued = responseChunkQueue.shift();
     if (!queued) return;
     const { data, request, response } = queued;
@@ -393,22 +402,13 @@ function createWorkerBlockMaterializer(catalog) {
     }
     try {
       const isFinalChunk = data.transformChunkIndex + 1 === response.transformChunkCount;
-      const text = response.carry + response.decoder.decode(data.transformBytes, {
-        stream: !isFinalChunk,
-      });
-      const lines = text.split("\n");
-      if (isFinalChunk) {
-        response.transforms.push(...lines);
-        response.carry = "";
-      } else {
-        response.carry = lines.pop();
-        response.transforms.push(...lines);
-      }
+      response.transforms.push(...data.transforms);
       response.processedTransformChunkCount += 1;
-      response.receivedTransformBytes += data.transformBytes.byteLength;
+      response.idleSliceCount += 1;
+      response.receivedTransformBytes += data.transformChunkByteLength;
       response.maximumResponseChunkBytes = Math.max(
         response.maximumResponseChunkBytes,
-        data.transformBytes.byteLength,
+        data.transformChunkByteLength,
       );
       if (isFinalChunk) completeWorkerResponse(data.requestId, request, response);
     } catch (error) {
@@ -421,7 +421,7 @@ function createWorkerBlockMaterializer(catalog) {
   function completeWorkerResponse(requestId, request, response) {
     if (response.processedTransformChunkCount !== response.transformChunkCount ||
         response.receivedTransformBytes !== response.transformByteLength ||
-        response.carry !== "" || response.transforms.length !== response.expectedTransformCount ||
+        response.transforms.length !== response.expectedTransformCount ||
         response.transforms.some((transform) => !transform.startsWith("matrix3d("))) {
       throw new Error("Prepared Cyclone worker transform response drifted");
     }
@@ -436,6 +436,7 @@ function createWorkerBlockMaterializer(catalog) {
       block,
       durationMilliseconds: response.durationMilliseconds,
       responseChunkCount: response.transformChunkCount,
+      responseIdleSliceCount: response.idleSliceCount,
       maximumResponseChunkBytes: response.maximumResponseChunkBytes,
     }));
   }
@@ -476,10 +477,9 @@ function createWorkerBlockMaterializer(catalog) {
         expectedTransformCount,
         queuedTransformChunkCount: 0,
         processedTransformChunkCount: 0,
+        idleSliceCount: 0,
         receivedTransformBytes: 0,
         maximumResponseChunkBytes: 0,
-        decoder: new TextDecoder(),
-        carry: "",
         transforms: [],
       };
       return;
@@ -487,8 +487,10 @@ function createWorkerBlockMaterializer(catalog) {
     if (data?.type !== "materialized-chunk" || !Number.isSafeInteger(data.requestId) ||
         !Number.isSafeInteger(data.transformChunkIndex) || data.transformChunkIndex < 0 ||
         !Number.isSafeInteger(data.transformChunkCount) || data.transformChunkCount < 1 ||
-        !(data.transformBytes instanceof Uint8Array) || data.transformBytes.byteLength < 1 ||
-        data.transformBytes.byteLength > 128 * 1_024) {
+        !Array.isArray(data.transforms) || data.transforms.length < 1 || data.transforms.length > 960 ||
+        data.transforms.some((transform) =>
+          typeof transform !== "string" || !transform.startsWith("matrix3d(")) ||
+        !Number.isSafeInteger(data.transformChunkByteLength) || data.transformChunkByteLength < 1) {
       rejectAll(new Error("Prepared Cyclone worker response drifted"));
       return;
     }
@@ -590,6 +592,8 @@ function validateCatalog(catalog) {
       catalog.sourceTransformProfile.complexity < 1 ||
       !Number.isFinite(catalog.sourceTransformProfile?.particleSize) ||
       catalog.sourceTransformProfile.particleSize <= 0 ||
+      !Number.isFinite(catalog.sourceTransformProfile?.radialOrbitScale) ||
+      catalog.sourceTransformProfile.radialOrbitScale <= 0 ||
       catalog.chunkCount !== 24 ||
       !Number.isSafeInteger(catalog.chunkFrameCount) || catalog.chunkFrameCount < 1 ||
       !Number.isSafeInteger(catalog.blockCount) || catalog.blockCount < catalog.chunkCount ||

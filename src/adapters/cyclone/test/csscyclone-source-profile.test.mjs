@@ -63,6 +63,7 @@ test("pins the current Really Slick Cyclone source profile", () => {
     216,
   );
   assert.equal(CSSCYCLONE_PRESENTATION.saturationSampling, "floor-0.55-plus-0.45-sqrt-uniform");
+  assert.equal(CSSCYCLONE_PRESENTATION.radialOrbitScale, 0.85);
   assert.equal(CSSCYCLONE_PRESENTATION.minimumSaturation, 0.55);
   assert.equal(CSSCYCLONE_PRESENTATION.hueSampling, "source-uniform-random-targets");
   assert.equal(CSSCYCLONE_PRESENTATION.particleColorAssignment, "source-hue-at-particle-restart");
@@ -130,10 +131,10 @@ test("prepares desktop and mobile banks as complete source-particle prefixes", (
   });
   assert.equal(preparedModel.model.identity.id, "cyclone-mobile");
   assert.equal(preparedModel.model.render.shapes.length, 166);
-  assert.equal(preparedModel.model.render.leaves.length, 830);
-  assert.equal(preparedModel.metrics.polygonsPerParticle, 5);
+  assert.equal(preparedModel.model.render.leaves.length, 996);
+  assert.equal(preparedModel.metrics.polygonsPerParticle, 6);
   assert.equal(preparedPlayback.playback.particleCount, 166);
-  assert.equal(preparedPlayback.playback.leafCount, 830);
+  assert.equal(preparedPlayback.playback.leafCount, 996);
   assert.deepEqual(source.frames[0].particles, desktopSource.frames[0].particles.slice(0, 166));
 });
 
@@ -150,37 +151,31 @@ test("builds a stable retained particle graph and prepared state bank", () => {
   const preparedModel = buildCyclonePreparedModel({ source });
   const preparedPlayback = buildCyclonePreparedPlayback({ source });
   assert.equal(preparedModel.model.render.shapes.length, 3);
-  assert.equal(preparedModel.model.render.leaves.length, 15);
-  assert.equal(preparedModel.model.topology.polygons.length, 15);
+  assert.equal(preparedModel.model.render.leaves.length, 18);
+  assert.equal(preparedModel.model.topology.polygons.length, 18);
   assert.deepEqual(
-    preparedModel.model.render.leaves.slice(0, 5).map(({ strategy }) => strategy),
-    ["solid-triangle", "solid-triangle", "solid-triangle", "solid-triangle", "solid-quad"],
+    preparedModel.model.render.leaves.slice(0, 6).map(({ strategy }) => strategy),
+    Array(6).fill("solid-triangle"),
   );
-  assert.equal(CSSCYCLONE_PARTICLE_VERTICES[0][2] < 0, true);
-  assert.equal(CSSCYCLONE_PARTICLE_VERTICES.slice(1).every((vertex) => vertex[2] > 0), true);
-  assert.equal(
-    CSSCYCLONE_PARTICLE_VERTICES[1][2] - CSSCYCLONE_PARTICLE_VERTICES[0][2],
-    CSSCYCLONE_PARTICLE_VERTICES[2][0] - CSSCYCLONE_PARTICLE_VERTICES[1][0],
-  );
-  assert.ok(Math.abs(
-    CSSCYCLONE_PARTICLE_VERTICES[2][0] - CSSCYCLONE_PARTICLE_VERTICES[1][0] -
-      CSSCYCLONE_SOURCE.particleSize / 2 * 0.6 / Math.sqrt(2),
-  ) < 1e-12);
-  assert.deepEqual(CSSCYCLONE_FACE_INDICES.at(-1), [1, 2, 3, 4]);
+  assert.deepEqual(CSSCYCLONE_PARTICLE_VERTICES[0], [0, 0, CSSCYCLONE_SOURCE.particleSize / 4]);
+  assert.deepEqual(CSSCYCLONE_PARTICLE_VERTICES.at(-1), [0, 0, -CSSCYCLONE_SOURCE.particleSize / 4]);
+  assert.equal(CSSCYCLONE_PARTICLE_VERTICES.slice(1, -1).every((vertex) => vertex[2] === 0), true);
+  assert.deepEqual(CSSCYCLONE_FACE_INDICES.at(-1), [4, 1, 3]);
   assert.deepEqual(CSSCYCLONE_FACE_TILE_VERTEX_ORDERS, [
-    [2, 0, 1],
-    [2, 0, 1],
-    [2, 0, 1],
-    [2, 0, 1],
-    [0, 1, 2, 3],
+    [0, 1, 2],
+    [0, 1, 2],
+    [0, 1, 2],
+    [0, 1, 2],
+    [0, 1, 2],
+    [0, 1, 2],
   ]);
-  preparedModel.model.render.leaves.slice(0, 5).forEach((leaf, faceIndex) => {
+  preparedModel.model.render.leaves.slice(0, 6).forEach((leaf, faceIndex) => {
     const centroid = CSSCYCLONE_FACE_INDICES[faceIndex]
       .map((index) => CSSCYCLONE_PARTICLE_VERTICES[index])
       .reduce((sum, vertex) => sum.map((value, axis) => value + vertex[axis]), [0, 0, 0])
       .map((value) => value / CSSCYCLONE_FACE_INDICES[faceIndex].length);
     const normal = leaf.matrix.slice(8, 11);
-    assert.equal(normal.reduce((sum, value, axis) => sum + value * centroid[axis], 0) > 0, true);
+    assert.equal(normal.reduce((sum, value, axis) => sum + value * centroid[axis], 0) < 0, true);
   });
   assert.equal(preparedPlayback.playback.transforms.length, 12);
   assert.equal(preparedPlayback.playback.schema, "csscyclone-prepared-dom-playback@5");
@@ -190,7 +185,7 @@ test("builds a stable retained particle graph and prepared state bank", () => {
   assert.equal(preparedModel.metrics.runtimeDomGrowth, false);
 });
 
-test("points the pyramid apex along prepared particle travel", () => {
+test("points the bipyramid forward tip along prepared particle travel", () => {
   const source = buildCycloneSourceSequence({
     bank: {
       ...CSSCYCLONE_BANK,
@@ -200,7 +195,7 @@ test("points the pyramid apex along prepared particle travel", () => {
       chunkCount: 1,
     },
   });
-  const localApex = normalized(CSSCYCLONE_PARTICLE_VERTICES[0]);
+  const localApex = normalized(CSSCYCLONE_PARTICLE_VERTICES.at(-1));
   let alignmentTotal = 0;
   let closestAxisCount = 0;
   let transitionCount = 0;
@@ -283,6 +278,7 @@ test("round-trips exact prepared matrices through compact source-state blocks", 
       speed: CSSCYCLONE_SOURCE.speed,
       complexity: CSSCYCLONE_SOURCE.complexity,
       particleSize: CSSCYCLONE_SOURCE.particleSize,
+      radialOrbitScale: CSSCYCLONE_PRESENTATION.radialOrbitScale,
     }),
   });
   const decoded = decodeCyclonePreparedBlock(bytes, descriptor, catalog);
@@ -324,25 +320,24 @@ test("round-trips exact prepared matrices through compact source-state blocks", 
   );
 });
 
-test("prepares smooth reference lighting without a runtime lighting timeline", async () => {
+test("prepares flat face lighting without a runtime lighting timeline", async () => {
   const bank = { ...CSSCYCLONE_BANK, particleCount: 3, warmupFrames: 20, frameCount: 4 };
   const source = buildCycloneSourceSequence({ bank });
   const prepared = await buildCyclonePreparedLighting({ source });
-  assert.equal(prepared.contract.schema, "csscyclone-prepared-smooth-lighting-atlas@7");
-  assert.equal(prepared.contract.contentSize, 2);
-  assert.equal(prepared.contract.gutterPixels, 1);
-  assert.equal(prepared.contract.leafCount, 15);
+  assert.equal(prepared.contract.schema, "csscyclone-prepared-flat-lighting-colors@9");
+  assert.equal(prepared.contract.leafCount, 18);
   assert.equal(prepared.contract.colorStateCount, 3);
   assert.equal(prepared.contract.colorRestartCount, 0);
-  assert.equal(prepared.contract.tileCount, 15);
-  assert.ok(prepared.contract.uniqueTileCount <= prepared.contract.tileCount);
+  assert.equal(prepared.contract.colorEntryCount, 18);
+  assert.ok(prepared.contract.uniqueColorCount <= prepared.contract.colorEntryCount);
   assert.equal(
-    prepared.contract.deduplicatedTileCount,
-    prepared.contract.tileCount - prepared.contract.uniqueTileCount,
+    prepared.contract.deduplicatedColorCount,
+    prepared.contract.colorEntryCount - prepared.contract.uniqueColorCount,
   );
-  assert.equal(prepared.contract.tileDeduplication, "exact-cross-palette-rgba8-slot-content");
-  assert.equal(prepared.contract.packing, "near-square-row-major-unique-slots");
-  assert.equal(prepared.contract.tileBackgroundPositions.length, 15);
+  assert.equal(prepared.contract.colorDeduplication, "exact-cross-palette-css-srgb-tuples");
+  assert.equal(prepared.contract.colorSlotIndexCount, 18);
+  assert.ok([2, 4].includes(prepared.contract.colorSlotIndexBytes));
+  assert.ok(prepared.contract.colorSlotIndicesBase64.length > 0);
   assert.equal(prepared.contract.paletteFamilyCount, 5);
   assert.equal(prepared.contract.paletteHueSlotCount, 3);
   assert.equal(prepared.contract.maximumColorFamilyCount, 3);
@@ -353,14 +348,12 @@ test("prepares smooth reference lighting without a runtime lighting timeline", a
   assert.equal(prepared.contract.sourceStreamFrameCount, 4);
   assert.equal(prepared.contract.chunkCount, 1);
   assert.equal(prepared.chunk.frameParticleColorStateIndices.length, 4);
-  assert.equal(prepared.contract.displayScale, 16);
-  assert.ok(Math.abs(prepared.contract.width - prepared.contract.height) <= prepared.contract.slotSize);
   assert.equal(prepared.contract.runtime.rootLightingRowWritesPerSample, 0);
   assert.equal(prepared.contract.runtime.lightingCalculations, 0);
-  assert.equal(prepared.contract.runtime.atlasConstruction, 0);
-  assert.equal(prepared.assets.length, 5);
-  assert.ok(prepared.assets.every((asset) => asset.bytes.byteLength > 0));
-  assert.ok(prepared.contract.variants.every((variant) => /^[a-f0-9]{64}$/u.test(variant.assetSha256)));
+  assert.equal(prepared.contract.runtime.imageConstruction, 0);
+  assert.ok(prepared.contract.variants.every((variant) =>
+    variant.colors.length === prepared.contract.uniqueColorCount &&
+    variant.colors.every((color) => /^#[a-f0-9]{6}$/u.test(color))));
   const liftedBlack = prepareCyclonePaletteColor([0, 0, 0], "yellow");
   assert.equal(Math.max(...liftedBlack), 0.75);
   const liftedRedBlack = prepareCyclonePaletteColor([0, 0, 0], "red");
@@ -368,7 +361,7 @@ test("prepares smooth reference lighting without a runtime lighting timeline", a
   assert.equal(Number((1 - Math.min(...liftedBlack) / Math.max(...liftedBlack)).toFixed(2)), 0.55);
 });
 
-test("publishes only exact source color restarts through sparse leaf addresses", async () => {
+test("publishes only exact source color restarts through sparse leaf colors", async () => {
   const bank = { ...CSSCYCLONE_BANK, particleCount: 3, warmupFrames: 24, frameCount: 48 };
   const source = buildCycloneSourceSequence({ bank });
   const prepared = await buildCyclonePreparedLighting({ source });
@@ -383,8 +376,8 @@ test("publishes only exact source color restarts through sparse leaf addresses",
   assert.equal(prepared.contract.colorRestartCount, 1);
   assert.equal(changedParticleCount, 1);
   assert.equal(prepared.contract.colorStateCount, 4);
-  assert.equal(prepared.contract.tileCount, 20);
-  assert.equal(prepared.contract.runtime.maximumSparseLeafWritesPerParticleRestart, 5);
+  assert.equal(prepared.contract.colorEntryCount, 24);
+  assert.equal(prepared.contract.runtime.maximumSparseLeafWritesPerParticleRestart, 6);
 });
 
 test("splits one uninterrupted prepared source stream into exact consecutive chunks", () => {
@@ -404,7 +397,7 @@ test("splits one uninterrupted prepared source stream into exact consecutive chu
   assert.deepEqual(chunks.flatMap((chunk) => chunk.frames), continuous.frames);
 });
 
-test("prepares one shared lighting address space across consecutive chunks", async () => {
+test("prepares one shared lighting color-slot space across consecutive chunks", async () => {
   const bank = {
     ...CSSCYCLONE_BANK,
     particleCount: 3,
@@ -436,6 +429,6 @@ test("preserves the source tangent orientation", () => {
     0.532427, -0.451061, 0.716286, 0,
     0.215511, 0.890546, 0.400604, 0,
     -4.092909, -0.294623, 2.856797, 0,
-    12.934245, -19.506742, 81.488458, 1,
+    12.119759, -18.816726, 80.392711, 1,
   ]);
 });

@@ -8,12 +8,14 @@ export function advanceCycloneParticleTransform({
   speed,
   complexity,
   particleSize,
+  radialOrbitScale = 1,
 }) {
   if (!validState(state) || !validPoints(points) || !validWidths(widths) ||
       !Number.isFinite(deltaSeconds) || deltaSeconds <= 0 ||
       !Number.isFinite(speed) || speed <= 0 ||
       !Number.isSafeInteger(complexity) || complexity < 1 || complexity + 2 >= widths.length ||
-      !Number.isFinite(particleSize) || particleSize <= 0) {
+      !Number.isFinite(particleSize) || particleSize <= 0 ||
+      !Number.isFinite(radialOrbitScale) || radialOrbitScale <= 0) {
     throw new TypeError("Complete prepared Cyclone particle transform inputs are required");
   }
   const { width } = state;
@@ -43,7 +45,10 @@ export function advanceCycloneParticleTransform({
       rotationAxis(tiltAngle, crossVector),
       multiply4(
         rotationY(nextState.spinAngle),
-        multiply4(translation([width * cycloneWidth, 0, 0]), scale4([1, 1, stretch])),
+        multiply4(
+          translation([width * cycloneWidth * radialOrbitScale, 0, 0]),
+          scale4([1, 1, stretch]),
+        ),
       ),
     ),
   );

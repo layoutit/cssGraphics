@@ -1,6 +1,6 @@
 import { decodeCyclonePreparedBlock } from "../shared/csscyclone/preparedBlockTransport.mjs";
 
-const TRANSFORM_RESPONSE_CHUNK_BYTES = 128 * 1_024;
+const TRANSFORM_RESPONSE_CHUNK_TRANSFORMS = 960;
 
 let catalog = null;
 let materializationTail = Promise.resolve();
@@ -31,9 +31,11 @@ self.addEventListener("message", ({ data }) => {
 async function materializeBlock(data) {
   const startedAt = performance.now();
   const block = decodeCyclonePreparedBlock(data.bytes, data.descriptor, catalog);
-  const transformBytes = new TextEncoder().encode(block.playback.transforms.join("\n"));
+  const transforms = block.playback.transforms;
+  const transformByteLength = transforms.reduce((total, transform) => total + transform.length, 0) +
+    transforms.length - 1;
   const transformChunkCount = Math.ceil(
-    transformBytes.byteLength / TRANSFORM_RESPONSE_CHUNK_BYTES,
+    transforms.length / TRANSFORM_RESPONSE_CHUNK_TRANSFORMS,
   );
   const transferredBlock = {
     ...block,
@@ -43,27 +45,32 @@ async function materializeBlock(data) {
     type: "materialized-start",
     requestId: data.requestId,
     block: transferredBlock,
-    transformByteLength: transformBytes.byteLength,
+    transformByteLength,
     transformChunkCount,
     durationMilliseconds: performance.now() - startedAt,
   }, [block.lighting.frameParticleColorStateIndices.buffer]);
   for (let transformChunkIndex = 0;
     transformChunkIndex < transformChunkCount;
     transformChunkIndex += 1) {
-    const offset = transformChunkIndex * TRANSFORM_RESPONSE_CHUNK_BYTES;
-    const transformChunk = transformBytes.slice(
+    const offset = transformChunkIndex * TRANSFORM_RESPONSE_CHUNK_TRANSFORMS;
+    const transformChunk = transforms.slice(
       offset,
-      Math.min(transformBytes.byteLength, offset + TRANSFORM_RESPONSE_CHUNK_BYTES),
+      Math.min(transforms.length, offset + TRANSFORM_RESPONSE_CHUNK_TRANSFORMS),
+    );
+    const transformChunkByteLength = transformChunk.reduce(
+      (total, transform) => total + transform.length,
+      Math.min(transformChunk.length, transforms.length - offset - 1),
     );
     self.postMessage({
       type: "materialized-chunk",
       requestId: data.requestId,
       transformChunkIndex,
       transformChunkCount,
-      transformBytes: transformChunk,
-    }, [transformChunk.buffer]);
+      transforms: transformChunk,
+      transformChunkByteLength,
+    });
     if (transformChunkIndex + 1 < transformChunkCount) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, catalog.frameMilliseconds));
     }
   }
 }

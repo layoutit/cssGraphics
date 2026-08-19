@@ -170,10 +170,6 @@ body > .polycss-camera :is(u, b) {
   width: 32px;
   height: 32px;
   border-width: 0;
-  border-top-left-radius: 50% 100%;
-  border-top-right-radius: 50% 100%;
-  corner-top-left-shape: bevel;
-  corner-top-right-shape: bevel;
   backface-visibility: hidden;
   color: transparent;
   background-color: transparent;
@@ -182,6 +178,13 @@ body > .polycss-camera :is(u, b) {
   background-size: var(--cyclone-lighting-size);
   image-rendering: auto;
   transform-origin: 0 0;
+}
+
+body > .polycss-camera u {
+  border-top-left-radius: 50% 100%;
+  border-top-right-radius: 50% 100%;
+  corner-top-left-shape: bevel;
+  corner-top-right-shape: bevel;
 }
 
 body.error::after {

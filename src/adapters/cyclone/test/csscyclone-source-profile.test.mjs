@@ -12,6 +12,7 @@ import {
 } from "../src/prepare/csscyclone/sourceModel.mjs";
 import {
   CSSCYCLONE_FACE_INDICES,
+  CSSCYCLONE_FACE_TILE_VERTEX_ORDERS,
   CSSCYCLONE_MODEL_IDS,
   CSSCYCLONE_PARTICLE_VERTICES,
   buildCyclonePreparedModel,
@@ -31,6 +32,16 @@ import {
   decodeCyclonePreparedBlockIncrementally,
   encodeCyclonePreparedBlock,
 } from "../src/shared/csscyclone/preparedBlockTransport.mjs";
+
+function dot(left, right) {
+  return left.reduce((sum, value, index) => sum + value * right[index], 0);
+}
+
+function normalized(vector) {
+  const length = Math.hypot(...vector);
+  assert.ok(length > 1e-12);
+  return vector.map((value) => value / length);
+}
 
 test("pins the current Really Slick Cyclone source profile", () => {
   assert.equal(CSSCYCLONE_SOURCE.revision, "5f0a788bf0cc47f66a233ed528919295cd1e7500");
@@ -145,15 +156,88 @@ test("builds a stable retained particle graph and prepared state bank", () => {
     preparedModel.model.render.leaves.slice(0, 5).map(({ strategy }) => strategy),
     ["solid-triangle", "solid-triangle", "solid-triangle", "solid-triangle", "solid-quad"],
   );
-  assert.equal(CSSCYCLONE_PARTICLE_VERTICES[0][1] > 0, true);
-  assert.equal(CSSCYCLONE_PARTICLE_VERTICES.slice(1).every((vertex) => vertex[1] < 0), true);
+  assert.equal(CSSCYCLONE_PARTICLE_VERTICES[0][2] < 0, true);
+  assert.equal(CSSCYCLONE_PARTICLE_VERTICES.slice(1).every((vertex) => vertex[2] > 0), true);
+  assert.equal(
+    CSSCYCLONE_PARTICLE_VERTICES[1][2] - CSSCYCLONE_PARTICLE_VERTICES[0][2],
+    CSSCYCLONE_PARTICLE_VERTICES[2][0] - CSSCYCLONE_PARTICLE_VERTICES[1][0],
+  );
+  assert.ok(Math.abs(
+    CSSCYCLONE_PARTICLE_VERTICES[2][0] - CSSCYCLONE_PARTICLE_VERTICES[1][0] -
+      CSSCYCLONE_SOURCE.particleSize / 2 * 0.6 / Math.sqrt(2),
+  ) < 1e-12);
   assert.deepEqual(CSSCYCLONE_FACE_INDICES.at(-1), [1, 2, 3, 4]);
+  assert.deepEqual(CSSCYCLONE_FACE_TILE_VERTEX_ORDERS, [
+    [2, 0, 1],
+    [2, 0, 1],
+    [2, 0, 1],
+    [2, 0, 1],
+    [0, 1, 2, 3],
+  ]);
+  preparedModel.model.render.leaves.slice(0, 5).forEach((leaf, faceIndex) => {
+    const centroid = CSSCYCLONE_FACE_INDICES[faceIndex]
+      .map((index) => CSSCYCLONE_PARTICLE_VERTICES[index])
+      .reduce((sum, vertex) => sum.map((value, axis) => value + vertex[axis]), [0, 0, 0])
+      .map((value) => value / CSSCYCLONE_FACE_INDICES[faceIndex].length);
+    const normal = leaf.matrix.slice(8, 11);
+    assert.equal(normal.reduce((sum, value, axis) => sum + value * centroid[axis], 0) > 0, true);
+  });
   assert.equal(preparedPlayback.playback.transforms.length, 12);
   assert.equal(preparedPlayback.playback.schema, "csscyclone-prepared-dom-playback@5");
   assert.equal(preparedPlayback.metrics.shapeTransformSelections, 12);
   assert.equal(preparedModel.metrics.runtimeGeometryConstructionCount, 0);
   assert.equal(preparedModel.metrics.runtimeAtlasRasterizationCount, 0);
   assert.equal(preparedModel.metrics.runtimeDomGrowth, false);
+});
+
+test("points the pyramid apex along prepared particle travel", () => {
+  const source = buildCycloneSourceSequence({
+    bank: {
+      ...CSSCYCLONE_BANK,
+      particleCount: 80,
+      warmupFrames: 720,
+      frameCount: 180,
+      chunkCount: 1,
+    },
+  });
+  const localApex = normalized(CSSCYCLONE_PARTICLE_VERTICES[0]);
+  let alignmentTotal = 0;
+  let closestAxisCount = 0;
+  let transitionCount = 0;
+  for (let frameIndex = 0; frameIndex < source.frames.length - 1; frameIndex += 1) {
+    const frame = source.frames[frameIndex];
+    const nextFrame = source.frames[frameIndex + 1];
+    for (let particleIndex = 0; particleIndex < source.bank.particleCount; particleIndex += 1) {
+      const matrix = frame.particles[particleIndex].matrix;
+      const nextMatrix = nextFrame.particles[particleIndex].matrix;
+      const velocity = normalized([
+        nextMatrix[12] - matrix[12],
+        nextMatrix[13] - matrix[13],
+        nextMatrix[14] - matrix[14],
+      ]);
+      const transformedAxes = [
+        [matrix[0], matrix[1], matrix[2]],
+        [matrix[4], matrix[5], matrix[6]],
+        [matrix[8], matrix[9], matrix[10]],
+      ].map(normalized);
+      const apexDirection = normalized([
+        matrix[0] * localApex[0] + matrix[4] * localApex[1] + matrix[8] * localApex[2],
+        matrix[1] * localApex[0] + matrix[5] * localApex[1] + matrix[9] * localApex[2],
+        matrix[2] * localApex[0] + matrix[6] * localApex[1] + matrix[10] * localApex[2],
+      ]);
+      const apexAlignment = dot(velocity, apexDirection);
+      const cardinalAlignments = transformedAxes.flatMap((axis) => [
+        dot(velocity, axis),
+        dot(velocity, axis.map((value) => -value)),
+      ]);
+      alignmentTotal += apexAlignment;
+      if (apexAlignment >= Math.max(...cardinalAlignments)) closestAxisCount += 1;
+      transitionCount += 1;
+    }
+  }
+  assert.equal(transitionCount, 14_320);
+  assert.ok(alignmentTotal / transitionCount > 0.95);
+  assert.ok(closestAxisCount / transitionCount > 0.97);
 });
 
 test("round-trips exact prepared matrices through compact source-state blocks", async () => {

@@ -139,13 +139,14 @@ export function buildCyclonePreparedPlayback({
   const transforms = source.frames.flatMap((frame) => frame.particles.map((particle) =>
     `matrix3d(${formatMatrix3dValues(particle.matrix, 6)})`));
   const playback = deepFreeze({
-    schema: "csscyclone-prepared-dom-playback@4",
+    schema: "csscyclone-prepared-dom-playback@5",
     bankId: source.bank.id,
     streamId: source.bank.streamId,
     chunkIndex: source.bank.chunkIndex,
     chunkCount: source.bank.chunkCount,
     startFrameIndex: source.bank.startFrameIndex,
     modelId,
+    framesPerSecond: source.bank.framesPerSecond,
     frameMilliseconds: source.bank.frameMilliseconds,
     durationMilliseconds: source.durationMilliseconds,
     frameCount: source.frames.length,

@@ -37,8 +37,17 @@ test("pins the current Really Slick Cyclone source profile", () => {
   assert.equal(CSSCYCLONE_SOURCE.particleSize, 7);
   assert.equal(CSSCYCLONE_SOURCE.complexity, 3);
   assert.equal(CSSCYCLONE_SOURCE.speed, 10);
+  assert.equal(CSSCYCLONE_BANK.framesPerSecond, 60);
+  assert.equal(CSSCYCLONE_BANK.frameMilliseconds, 1_000 / 60);
+  assert.equal(CSSCYCLONE_BANK.warmupFrames, 720);
   assert.equal(CSSCYCLONE_BANK.chunkCount, 24);
-  assert.equal(CSSCYCLONE_BANK.frameCount, 450);
+  assert.equal(CSSCYCLONE_BANK.frameCount, 540);
+  assert.equal(CSSCYCLONE_BANK.warmupFrames / CSSCYCLONE_BANK.framesPerSecond, 12);
+  assert.equal(CSSCYCLONE_BANK.frameCount / CSSCYCLONE_BANK.framesPerSecond, 9);
+  assert.equal(
+    CSSCYCLONE_BANK.chunkCount * CSSCYCLONE_BANK.frameCount / CSSCYCLONE_BANK.framesPerSecond,
+    216,
+  );
   assert.equal(CSSCYCLONE_PRESENTATION.saturationSampling, "floor-0.55-plus-0.45-sqrt-uniform");
   assert.equal(CSSCYCLONE_PRESENTATION.minimumSaturation, 0.55);
   assert.equal(CSSCYCLONE_PRESENTATION.hueSampling, "source-uniform-random-targets");
@@ -57,24 +66,24 @@ test("pins the current Really Slick Cyclone source profile", () => {
   assert.equal(CSSCYCLONE_PRESENTATION.mobileStartupSelections.length, 10);
   assert.deepEqual(
     CSSCYCLONE_PRESENTATION.mobileStartupSelections.find(({ id }) => id === "blue-a"),
-    { id: "blue-a", paletteFamily: "blue", chunkIndex: 0, startFrameIndex: 75, frameCount: 40 },
+    { id: "blue-a", paletteFamily: "blue", chunkIndex: 1, startFrameIndex: 123, frameCount: 48 },
   );
   assert.deepEqual(
     CSSCYCLONE_PRESENTATION.startupSelections.map(({ id, paletteFamily, chunkIndex }) =>
       [id, paletteFamily, chunkIndex]),
     [
-      ["blue-a", "blue", 0], ["blue-b", "blue", 0],
-      ["yellow-a", "yellow", 1], ["yellow-b", "yellow", 7],
-      ["red-a", "red", 5], ["red-b", "red", 9],
-      ["magenta-a", "magenta", 4], ["magenta-b", "magenta", 11],
-      ["green-a", "green", 17], ["green-b", "green", 19],
+      ["blue-a", "blue", 17], ["blue-b", "blue", 23],
+      ["yellow-a", "yellow", 6], ["yellow-b", "yellow", 21],
+      ["red-a", "red", 19], ["red-b", "red", 13],
+      ["magenta-a", "magenta", 18], ["magenta-b", "magenta", 12],
+      ["green-a", "green", 7], ["green-b", "green", 15],
     ],
   );
   assert.equal(
     CSSCYCLONE_PRESENTATION.startupSilhouetteSampling,
     "browser-reviewed-expressive-source-windows",
   );
-  assert.deepEqual(CSSCYCLONE_PRESENTATION.startupSilhouetteSampleFrameOffsets, [0, 10, 20, 30, 39]);
+  assert.deepEqual(CSSCYCLONE_PRESENTATION.startupSilhouetteSampleFrameOffsets, [0, 12, 24, 36, 47]);
   assert.equal(CSSCYCLONE_PRESENTATION.startupMinimumMeanSaturation, 0.68);
   assert.equal(CSSCYCLONE_PRESENTATION.startupMinimumDominantHueShare, 0.25);
 });
@@ -129,7 +138,7 @@ test("builds a stable retained particle graph and prepared state bank", () => {
   assert.equal(preparedModel.model.render.leaves.length, 18);
   assert.equal(preparedModel.model.topology.polygons.length, 18);
   assert.equal(preparedPlayback.playback.transforms.length, 12);
-  assert.equal(preparedPlayback.playback.schema, "csscyclone-prepared-dom-playback@4");
+  assert.equal(preparedPlayback.playback.schema, "csscyclone-prepared-dom-playback@5");
   assert.equal(preparedPlayback.metrics.shapeTransformSelections, 12);
   assert.equal(preparedModel.metrics.runtimeGeometryConstructionCount, 0);
   assert.equal(preparedModel.metrics.runtimeAtlasRasterizationCount, 0);
@@ -263,7 +272,7 @@ test("prepares smooth reference lighting without a runtime lighting timeline", a
 });
 
 test("publishes only exact source color restarts through sparse leaf addresses", async () => {
-  const bank = { ...CSSCYCLONE_BANK, particleCount: 3, warmupFrames: 20, frameCount: 40 };
+  const bank = { ...CSSCYCLONE_BANK, particleCount: 3, warmupFrames: 24, frameCount: 48 };
   const source = buildCycloneSourceSequence({ bank });
   const prepared = await buildCyclonePreparedLighting({ source });
   let changedParticleCount = 0;
@@ -324,12 +333,12 @@ test("is deterministic for an explicit bank seed", () => {
 });
 
 test("preserves the source tangent orientation", () => {
-  const bank = { ...CSSCYCLONE_BANK, particleCount: 2, warmupFrames: 20, frameCount: 2 };
+  const bank = { ...CSSCYCLONE_BANK, particleCount: 2, warmupFrames: 24, frameCount: 2 };
   const source = buildCycloneSourceSequence({ bank });
   assert.deepEqual(source.frames[0].particles[0].matrix, [
-    0.616677, -0.443615, 0.65032, 0,
-    0.215753, 0.889711, 0.402324, 0,
-    -4.542442, -0.646772, 3.866253, 0,
-    13.837036, -19.302883, 80.890841, 1,
+    0.532427, -0.451061, 0.716286, 0,
+    0.215511, 0.890546, 0.400604, 0,
+    -4.092909, -0.294623, 2.856797, 0,
+    12.934245, -19.506742, 81.488458, 1,
   ]);
 });

@@ -1,6 +1,19 @@
 import { advanceCycloneParticleTransform } from "../../shared/csscyclone/particleTransform.mjs";
 
 const CONTROL_POINT_COUNT = 6;
+const PREPARED_FRAMES_PER_SECOND = 60;
+const preparedFrames = (seconds) => Math.round(seconds * PREPARED_FRAMES_PER_SECOND);
+const STARTUP_WINDOW_FRAME_COUNT = preparedFrames(0.8);
+
+export const CSSCYCLONE_PREPARED_CADENCE = Object.freeze({
+  framesPerSecond: PREPARED_FRAMES_PER_SECOND,
+  frameMilliseconds: 1_000 / PREPARED_FRAMES_PER_SECOND,
+  warmupSeconds: 12,
+  chunkSeconds: 9,
+  blockSeconds: 1,
+  streamSeconds: 216,
+  startupWindowSeconds: 0.8,
+});
 
 export const CSSCYCLONE_SOURCE = Object.freeze({
   repository: "https://github.com/reallyslickscreensavers/reallyslickscreensavers",
@@ -26,9 +39,10 @@ const CSSCYCLONE_DESKTOP_BANK = Object.freeze({
   name: "Cyclone",
   seed: 1,
   particleCount: 400,
-  frameMilliseconds: 20,
-  warmupFrames: 600,
-  frameCount: 450,
+  framesPerSecond: CSSCYCLONE_PREPARED_CADENCE.framesPerSecond,
+  frameMilliseconds: CSSCYCLONE_PREPARED_CADENCE.frameMilliseconds,
+  warmupFrames: preparedFrames(CSSCYCLONE_PREPARED_CADENCE.warmupSeconds),
+  frameCount: preparedFrames(CSSCYCLONE_PREPARED_CADENCE.chunkSeconds),
   chunkCount: 24,
 });
 
@@ -54,31 +68,31 @@ export const CSSCYCLONE_PRESENTATION = Object.freeze({
   maximumColorFamilyCount: 3,
   startupPaletteFamilies: Object.freeze(["blue", "yellow", "red", "magenta", "green"]),
   startupSelections: Object.freeze([
-    Object.freeze({ id: "blue-a", paletteFamily: "blue", chunkIndex: 0, startFrameIndex: 20, frameCount: 40 }),
-    Object.freeze({ id: "blue-b", paletteFamily: "blue", chunkIndex: 0, startFrameIndex: 190, frameCount: 40 }),
-    Object.freeze({ id: "yellow-a", paletteFamily: "yellow", chunkIndex: 1, startFrameIndex: 55, frameCount: 40 }),
-    Object.freeze({ id: "yellow-b", paletteFamily: "yellow", chunkIndex: 7, startFrameIndex: 55, frameCount: 40 }),
-    Object.freeze({ id: "red-a", paletteFamily: "red", chunkIndex: 5, startFrameIndex: 55, frameCount: 40 }),
-    Object.freeze({ id: "red-b", paletteFamily: "red", chunkIndex: 9, startFrameIndex: 55, frameCount: 40 }),
-    Object.freeze({ id: "magenta-a", paletteFamily: "magenta", chunkIndex: 4, startFrameIndex: 55, frameCount: 40 }),
-    Object.freeze({ id: "magenta-b", paletteFamily: "magenta", chunkIndex: 11, startFrameIndex: 55, frameCount: 40 }),
-    Object.freeze({ id: "green-a", paletteFamily: "green", chunkIndex: 17, startFrameIndex: 55, frameCount: 40 }),
-    Object.freeze({ id: "green-b", paletteFamily: "green", chunkIndex: 19, startFrameIndex: 55, frameCount: 40 }),
+    startupSelection("blue-a", "blue", 17, 249),
+    startupSelection("blue-b", "blue", 23, 492),
+    startupSelection("yellow-a", "yellow", 6, 450),
+    startupSelection("yellow-b", "yellow", 21, 162),
+    startupSelection("red-a", "red", 19, 171),
+    startupSelection("red-b", "red", 13, 104),
+    startupSelection("magenta-a", "magenta", 18, 279),
+    startupSelection("magenta-b", "magenta", 12, 414),
+    startupSelection("green-a", "green", 7, 250),
+    startupSelection("green-b", "green", 15, 201),
   ]),
   mobileStartupSelections: Object.freeze([
-    Object.freeze({ id: "blue-a", paletteFamily: "blue", chunkIndex: 0, startFrameIndex: 75, frameCount: 40 }),
-    Object.freeze({ id: "blue-b", paletteFamily: "blue", chunkIndex: 0, startFrameIndex: 190, frameCount: 40 }),
-    Object.freeze({ id: "yellow-a", paletteFamily: "yellow", chunkIndex: 1, startFrameIndex: 55, frameCount: 40 }),
-    Object.freeze({ id: "yellow-b", paletteFamily: "yellow", chunkIndex: 7, startFrameIndex: 55, frameCount: 40 }),
-    Object.freeze({ id: "red-a", paletteFamily: "red", chunkIndex: 5, startFrameIndex: 55, frameCount: 40 }),
-    Object.freeze({ id: "red-b", paletteFamily: "red", chunkIndex: 9, startFrameIndex: 55, frameCount: 40 }),
-    Object.freeze({ id: "magenta-a", paletteFamily: "magenta", chunkIndex: 4, startFrameIndex: 55, frameCount: 40 }),
-    Object.freeze({ id: "magenta-b", paletteFamily: "magenta", chunkIndex: 11, startFrameIndex: 55, frameCount: 40 }),
-    Object.freeze({ id: "green-a", paletteFamily: "green", chunkIndex: 17, startFrameIndex: 55, frameCount: 40 }),
-    Object.freeze({ id: "green-b", paletteFamily: "green", chunkIndex: 19, startFrameIndex: 55, frameCount: 40 }),
+    startupSelection("blue-a", "blue", 1, 123),
+    startupSelection("blue-b", "blue", 23, 492),
+    startupSelection("yellow-a", "yellow", 6, 447),
+    startupSelection("yellow-b", "yellow", 21, 168),
+    startupSelection("red-a", "red", 19, 160),
+    startupSelection("red-b", "red", 13, 339),
+    startupSelection("magenta-a", "magenta", 18, 261),
+    startupSelection("magenta-b", "magenta", 12, 414),
+    startupSelection("green-a", "green", 7, 256),
+    startupSelection("green-b", "green", 7, 492),
   ]),
   startupSilhouetteSampling: "browser-reviewed-expressive-source-windows",
-  startupSilhouetteSampleFrameOffsets: Object.freeze([0, 10, 20, 30, 39]),
+  startupSilhouetteSampleFrameOffsets: Object.freeze([0, 0.2, 0.4, 0.6, 0.78].map(preparedFrames)),
   startupMinimumMeanSaturation: 0.68,
   startupMinimumDominantHueShare: 0.25,
 });
@@ -102,7 +116,7 @@ export function* buildCycloneSourceChunks({ bank = CSSCYCLONE_BANK } = {}) {
     for (let frame = 0; frame < bank.frameCount; frame += 1) {
       const transformState = stepSource(cyclone, particles, rng, deltaSeconds);
       frames.push(Object.freeze({
-        timeMs: (startFrameIndex + frame) * bank.frameMilliseconds,
+        timeMs: (startFrameIndex + frame) / bank.framesPerSecond * 1_000,
         transformState,
         particles: Object.freeze(particles.map((particle) => Object.freeze({
           matrix: particle.matrix,
@@ -123,8 +137,8 @@ export function* buildCycloneSourceChunks({ bank = CSSCYCLONE_BANK } = {}) {
       }),
       modelMatrix: flattenCss(multiply4(scale4([1, -1, 1]), translation([0, 0, -CSSCYCLONE_SOURCE.viewDistance]))),
       frames,
-      durationMilliseconds: bank.frameCount * bank.frameMilliseconds,
-      streamDurationMilliseconds: bank.chunkCount * bank.frameCount * bank.frameMilliseconds,
+      durationMilliseconds: bank.frameCount / bank.framesPerSecond * 1_000,
+      streamDurationMilliseconds: bank.chunkCount * bank.frameCount / bank.framesPerSecond * 1_000,
     });
   }
 }
@@ -135,6 +149,7 @@ export function selectCycloneSourceParticlePrefix(source, bank = CSSCYCLONE_BANK
       !Array.isArray(source.frames) || source.frames.length !== source.bank?.frameCount ||
       bank.particleCount > source.bank.particleCount ||
       bank.seed !== source.bank.seed ||
+      bank.framesPerSecond !== source.bank.framesPerSecond ||
       bank.frameMilliseconds !== source.bank.frameMilliseconds ||
       bank.warmupFrames !== source.bank.warmupFrames ||
       bank.frameCount !== source.bank.frameCount ||
@@ -165,7 +180,7 @@ function validateBank(bank) {
   for (const [name, value] of Object.entries({
     seed: bank?.seed,
     particleCount: bank?.particleCount,
-    frameMilliseconds: bank?.frameMilliseconds,
+    framesPerSecond: bank?.framesPerSecond,
     warmupFrames: bank?.warmupFrames,
     frameCount: bank?.frameCount,
     chunkCount: bank?.chunkCount,
@@ -174,6 +189,20 @@ function validateBank(bank) {
       throw new RangeError(`Cyclone ${name} must be a positive safe integer`);
     }
   }
+  if (!Number.isFinite(bank?.frameMilliseconds) ||
+      bank.frameMilliseconds !== 1_000 / bank.framesPerSecond) {
+    throw new RangeError("Cyclone frame milliseconds must match the prepared frame rate");
+  }
+}
+
+function startupSelection(id, paletteFamily, chunkIndex, startFrameIndex) {
+  return Object.freeze({
+    id,
+    paletteFamily,
+    chunkIndex,
+    startFrameIndex,
+    frameCount: STARTUP_WINDOW_FRAME_COUNT,
+  });
 }
 
 function createCyclone(rng) {

@@ -32,6 +32,7 @@ test("uses the cssGraphics shell without product UI or alternate renderers", asy
     /body > \.polycss-camera > \.polycss-scene\s*\{[^}]*transform:\s*translateZ\(var\(--cyclone-perspective\)\)\s*matrix3d\(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, -400, 1\);/su,
   );
   assert.match(styles, /background-image:\s*var\(--cyclone-lighting-atlas\)/u);
+  assert.match(styles, /body > \.polycss-camera :is\(u, b\)/u);
   assert.doesNotMatch(styles, /color-mix|--cyclone-tone/u);
   assert.match(client, /cameraElement\.style\.removeProperty\("perspective"\)/u);
   assert.match(client, /sceneElement\.style\.removeProperty\("transform"\)/u);

@@ -85,7 +85,7 @@ await writeJson(join(stagingRoot, "prepared.json"), {
   renderer: {
     package: "@layoutit/polycss-morph",
     profile: "static-prepared",
-    representation: "retained-particle-roots-with-six-solid-triangle-leaves",
+    representation: "retained-forward-pyramid-roots-with-four-solid-triangle-sides-and-one-solid-quad-cap",
     runtimeGeometryConstruction: false,
     runtimeAtlasRasterization: false,
     runtimeDomGrowth: false,
@@ -209,6 +209,7 @@ async function prepareProfile(profile) {
     streamId: bank.id,
     modelId: profile.modelId,
     particleCount: bank.particleCount,
+    facesPerParticle: CSSCYCLONE_FACE_INDICES.length,
     leafCount: bank.particleCount * CSSCYCLONE_FACE_INDICES.length,
     playbackSchema: CSSCYCLONE_PLAYBACK_SCHEMA,
     lightingBlockSchema: CSSCYCLONE_LIGHTING_BLOCK_SCHEMA,

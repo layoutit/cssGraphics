@@ -579,7 +579,9 @@ function validateCatalog(catalog) {
       typeof catalog.streamId !== "string" ||
       typeof catalog.modelId !== "string" || catalog.modelId.length < 1 ||
       !Number.isSafeInteger(catalog.particleCount) || catalog.particleCount < 1 ||
-      !Number.isSafeInteger(catalog.leafCount) || catalog.leafCount !== catalog.particleCount * 6 ||
+      !Number.isSafeInteger(catalog.facesPerParticle) || catalog.facesPerParticle < 1 ||
+      !Number.isSafeInteger(catalog.leafCount) ||
+      catalog.leafCount !== catalog.particleCount * catalog.facesPerParticle ||
       catalog.playbackSchema !== CSSCYCLONE_PLAYBACK_SCHEMA ||
       catalog.lightingBlockSchema !== CSSCYCLONE_LIGHTING_BLOCK_SCHEMA ||
       catalog.sourceTransformProfile?.controlPointCount !== 6 ||

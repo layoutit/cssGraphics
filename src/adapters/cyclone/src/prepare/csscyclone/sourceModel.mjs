@@ -50,7 +50,7 @@ export const CSSCYCLONE_BANKS = Object.freeze({
   desktop: Object.freeze({
     ...CSSCYCLONE_SOURCE_BANK,
     id: "desktop-stream",
-    particleCount: 340,
+    particleCount: 320,
   }),
   mobile: Object.freeze({
     ...CSSCYCLONE_SOURCE_BANK,
@@ -81,7 +81,7 @@ export const CSSCYCLONE_PRESENTATION = Object.freeze({
     startupSelection("magenta-a", "magenta", 18, 279),
     startupSelection("magenta-b", "magenta", 12, 414),
     startupSelection("green-a", "green", 7, 250),
-    startupSelection("green-b", "green", 15, 201),
+    startupSelection("green-b", "green", 15, 196),
   ]),
   mobileStartupSelections: Object.freeze([
     startupSelection("blue-a", "blue", 1, 123),

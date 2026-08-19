@@ -25,6 +25,7 @@ const catalog = Object.freeze({
   streamId: "desktop-stream",
   modelId: "cyclone",
   particleCount: 340,
+  facesPerParticle: 6,
   leafCount: 2_040,
   playbackSchema: "csscyclone-prepared-dom-playback@5",
   lightingBlockSchema: "csscyclone-prepared-lighting-block@2",

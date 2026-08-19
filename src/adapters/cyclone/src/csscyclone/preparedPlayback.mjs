@@ -11,6 +11,8 @@ const LIGHTING_SCHEMA = "csscyclone-prepared-smooth-lighting-atlas@7";
 const SOURCE_FIELD_OF_VIEW_DEGREES = 80;
 const MOBILE_FIELD_OF_VIEW_DEGREES = 90;
 const MOBILE_MAX_WIDTH = 600;
+const STYLESHEET_MODEL_TRANSFORM =
+  "matrix3d(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, -400, 1)";
 
 export function resolveCyclonePerspective(viewportWidth, viewportHeight) {
   const fieldOfViewDegrees = viewportWidth < MOBILE_MAX_WIDTH
@@ -54,24 +56,14 @@ export function createCyclonePreparedPlayer({
   if (shapeElements.some((element) => !element) || leafElements.some((element) => !element)) {
     throw new Error("Cyclone retained DOM binding is incomplete");
   }
-  let publishedModelTransform = modelTransform;
-  let publishedProjectionTransform = mounted.sceneElement.style.transform;
-  let publishedSceneTransform = "";
-  const publishSceneTransform = () => {
-    const transform = `${publishedProjectionTransform} ${publishedModelTransform}`.trim();
-    if (transform === publishedSceneTransform) return false;
-    mounted.sceneElement.style.transform = transform;
-    publishedSceneTransform = transform;
-    return true;
-  };
-  publishSceneTransform();
   const target = createPolyMorphPreparedDomTarget({
     model: {
       element: mounted.sceneElement,
       writeTransform(transform) {
-        if (transform === publishedModelTransform) return false;
-        publishedModelTransform = transform;
-        return publishSceneTransform();
+        if (transform !== STYLESHEET_MODEL_TRANSFORM) {
+          throw new Error("Cyclone stylesheet-owned model transform drifted");
+        }
+        return false;
       },
     },
     shapes: shapeElements.map((element) => ({ element })),
@@ -320,9 +312,7 @@ export function createCyclonePreparedPlayer({
 
   function resize() {
     const perspective = resolveCyclonePerspective(innerWidth, innerHeight);
-    mounted.cameraElement.style.perspective = `${perspective}px`;
-    publishedProjectionTransform = `translateZ(${perspective}px)`;
-    publishSceneTransform();
+    mounted.cameraElement.style.setProperty("--cyclone-perspective", `${perspective}px`);
   }
 
   function snapshot() {
@@ -416,7 +406,7 @@ function validateBinding(
 ) {
   const lightingVariant = lighting?.variants?.find((variant) =>
     variant?.paletteFamily === lightingAsset?.paletteFamily);
-  if (typeof modelTransform !== "string" || !modelTransform.startsWith("matrix3d(") ||
+  if (modelTransform !== STYLESHEET_MODEL_TRANSFORM ||
       catalog?.schema !== CATALOG_SCHEMA ||
       catalog.blockCount !== catalog.entries?.length ||
       !Number.isSafeInteger(catalog.runtimeLookaheadBlockCount) ||

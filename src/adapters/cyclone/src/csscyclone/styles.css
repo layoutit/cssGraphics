@@ -142,6 +142,7 @@ body > .polycss-camera {
   height: 100%;
   overflow: hidden;
   background: transparent;
+  perspective: var(--cyclone-perspective);
   perspective-origin: 50% 50%;
 }
 
@@ -150,6 +151,11 @@ body > .polycss-camera > .polycss-scene > div {
   position: absolute;
   transform-style: preserve-3d;
   transform-origin: 0 0 0;
+}
+
+body > .polycss-camera > .polycss-scene {
+  transform: translateZ(var(--cyclone-perspective))
+    matrix3d(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, -400, 1);
 }
 
 body > .polycss-camera u {

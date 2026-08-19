@@ -26,8 +26,17 @@ test("uses the cssGraphics shell without product UI or alternate renderers", asy
     2,
   );
   assert.match(styles, /body > \.polycss-camera\s*\{[^}]*background:\s*transparent;/su);
+  assert.match(styles, /body > \.polycss-camera\s*\{[^}]*perspective:\s*var\(--cyclone-perspective\);/su);
+  assert.match(
+    styles,
+    /body > \.polycss-camera > \.polycss-scene\s*\{[^}]*transform:\s*translateZ\(var\(--cyclone-perspective\)\)\s*matrix3d\(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, -400, 1\);/su,
+  );
   assert.match(styles, /background-image:\s*var\(--cyclone-lighting-atlas\)/u);
   assert.doesNotMatch(styles, /color-mix|--cyclone-tone/u);
+  assert.match(client, /cameraElement\.style\.removeProperty\("perspective"\)/u);
+  assert.match(client, /sceneElement\.style\.removeProperty\("transform"\)/u);
+  assert.match(playback, /style\.setProperty\("--cyclone-perspective"/u);
+  assert.doesNotMatch(playback, /sceneElement\.style\.transform|cameraElement\.style\.perspective/u);
   assert.match(playback, /deadline-setTimeout-requestAnimationFrame-prepared-publication/u);
   assert.match(client, /blockLoader\.prime\(residentBlockIndices\)/u);
   assert.match(stream, /new Worker\(new URL\("\.\/preparedBlockWorker\.mjs"/u);

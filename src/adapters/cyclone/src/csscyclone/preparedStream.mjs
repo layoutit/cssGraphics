@@ -206,7 +206,9 @@ function validateCatalog(catalog) {
         !Number.isSafeInteger(frameOffset) || frameOffset < 0 ||
         catalog.startupSelections.some((selection) => frameOffset >= selection.frameCount)) ||
       catalog.selection !== STARTUP_SELECTION ||
-      catalog.runtimeLookaheadBlockCount !== 1 ||
+      !Number.isSafeInteger(catalog.runtimeLookaheadBlockCount) ||
+      catalog.runtimeLookaheadBlockCount < 1 ||
+      catalog.runtimeLookaheadBlockCount >= catalog.blockCount ||
       catalog.entries.some((entry, index) => entry?.index !== index ||
         entry.chunkIndex !== Math.floor(index / catalog.blocksPerChunk) ||
         entry.blockIndex !== index % catalog.blocksPerChunk ||

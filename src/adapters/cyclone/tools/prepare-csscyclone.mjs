@@ -118,6 +118,7 @@ async function prepareProfile(profile) {
   const { bank, startupSelections } = profile;
   const blocksPerChunk = bank.frameCount / blockFrameCount;
   const blockCount = bank.chunkCount * blocksPerChunk;
+  const runtimeLookaheadBlockCount = blockCount - 1;
   if (!Number.isSafeInteger(blocksPerChunk)) {
     throw new Error(`Cyclone ${profile.id} prepared chunk must divide into exact transport blocks`);
   }
@@ -132,9 +133,6 @@ async function prepareProfile(profile) {
   let shapeTransformSelections = 0;
   let preparedBlockEncodedBytes = 0;
   let preparedBlockDecodedBytes = 0;
-  let maximumResidentBlockPairDecodedBytes = 0;
-  let previousBlockDecodedBytes = 0;
-  let firstBlockDecodedBytes = 0;
   for (const desktopSource of buildCycloneSourceChunks({ bank: CSSCYCLONE_BANKS.desktop })) {
     const source = profile.id === "mobile"
       ? selectCycloneSourceParticlePrefix(desktopSource, bank)
@@ -208,21 +206,16 @@ async function prepareProfile(profile) {
       }));
       preparedBlockEncodedBytes += encoded.byteLength;
       preparedBlockDecodedBytes += decoded.byteLength;
-      if (streamBlockIndex === 0) firstBlockDecodedBytes = decoded.byteLength;
-      maximumResidentBlockPairDecodedBytes = Math.max(
-        maximumResidentBlockPairDecodedBytes,
-        previousBlockDecodedBytes + decoded.byteLength,
-      );
-      previousBlockDecodedBytes = decoded.byteLength;
     }
     preparedFrameCount += preparedPlayback.metrics.preparedFrameCount;
     uniquePreparedTransformCount += preparedPlayback.metrics.uniquePreparedTransformCount;
     shapeTransformSelections += preparedPlayback.metrics.shapeTransformSelections;
   }
-  maximumResidentBlockPairDecodedBytes = Math.max(
-    maximumResidentBlockPairDecodedBytes,
-    previousBlockDecodedBytes + firstBlockDecodedBytes,
-  );
+  const residentBlockWindowCount = runtimeLookaheadBlockCount + 1;
+  const maximumResidentBlockWindowDecodedBytes = Math.max(...blockEntries.map((unused, startIndex) =>
+    Array.from({ length: residentBlockWindowCount }, (ignored, offset) =>
+      blockEntries[(startIndex + offset) % blockEntries.length].decodedByteLength)
+      .reduce((total, byteLength) => total + byteLength, 0)));
   const startupColorProfile = buildStartupColorProfile(
     startupSelections.map((selection) => startupSelectionColorProfiles.get(selection.id)),
     bank,
@@ -249,7 +242,7 @@ async function prepareProfile(profile) {
     startupColorProfile,
     selection: "session-crypto-shuffled-palette-family-source-window-no-immediate-repeat",
     playbackOrder: "source-continuous-ascending-chunks-with-one-terminal-stream-wrap",
-    runtimeLookaheadBlockCount: 1,
+    runtimeLookaheadBlockCount,
     entries: blockEntries,
   })}\n`);
   const catalogSha256 = sha256(catalogBytes);
@@ -302,7 +295,7 @@ async function prepareProfile(profile) {
         maximumColorFamilyCount: CSSCYCLONE_PRESENTATION.maximumColorFamilyCount,
         startupColorProfile,
         startupSelection: "session-crypto-shuffled-palette-family-source-window-no-immediate-repeat",
-        handoff: "source-continuous-next-block-with-one-block-lookahead",
+        handoff: "source-continuous-full-stream-decoded-before-playback",
       }),
       productParticleCount: bank.particleCount,
       productLeafCount: bank.particleCount * CSSCYCLONE_FACE_INDICES.length,
@@ -326,8 +319,9 @@ async function prepareProfile(profile) {
       shapeTransformSelections,
       preparedBlockEncodedBytes,
       preparedBlockDecodedBytes,
-      maximumResidentBlockPairDecodedBytes,
-      runtimeLookaheadBlockCount: 1,
+      residentBlockWindowCount,
+      maximumResidentBlockWindowDecodedBytes,
+      runtimeLookaheadBlockCount,
       runtimePreparedStateMaterialization: false,
     }),
     lighting: preparedLighting.contract,
@@ -344,7 +338,8 @@ async function prepareProfile(profile) {
       shapeTransformSelections,
       preparedBlockEncodedBytes,
       preparedBlockDecodedBytes,
-      maximumResidentBlockPairDecodedBytes,
+      residentBlockWindowCount,
+      maximumResidentBlockWindowDecodedBytes,
       ...preparedLighting.metrics,
     }),
   });

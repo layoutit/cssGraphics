@@ -44,8 +44,9 @@ Startup uses `crypto.getRandomValues` to shuffle the five-family session bag and
 to select an audited source window and frame, excluding the previous exact
 window. Playback
 then follows the original source order. Each hash-bound
-gzip block prefetches its exact successor; only the active and lookahead blocks
-remain resident. The single terminal stream wrap is the only
+gzip transport fully fetches and decodes all 216 blocks behind the loading
+indicator before playback starts on both desktop and mobile. The single
+terminal stream wrap is the only
 non-source-continuous boundary.
 
 Source identity is pinned in `notes/references/source-lock.json`. Preparation

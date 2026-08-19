@@ -22,7 +22,11 @@ test.after(() => {
   else globalThis.HTMLElement = originalHTMLElement;
 });
 
-function fixture() {
+function fixture({
+  blockCount = 1,
+  runtimeLookaheadBlockCount = 1,
+  initialLookaheadBlockCount = 0,
+} = {}) {
   let now = 0;
   let nextRequestId = 0;
   const frames = new Map();
@@ -37,8 +41,8 @@ function fixture() {
     chunkIndex: 0,
     blockIndex: 0,
     chunkCount: 1,
-    blockCount: 1,
-    blocksPerChunk: 1,
+    blockCount,
+    blocksPerChunk: blockCount,
     startFrameIndex: 0,
     frameCount: 4,
     particleCount: 2,
@@ -58,7 +62,7 @@ function fixture() {
     schema: "csscyclone-prepared-smooth-lighting-atlas@7",
     streamId: "stream",
     chunkCount: 1,
-    chunkFrameCount: 4,
+    chunkFrameCount: blockCount * 4,
     leafCount: 2,
     facesPerParticle: 1,
     colorStateCount: 1,
@@ -74,39 +78,47 @@ function fixture() {
     variants: [{ paletteFamily: "blue", assetSha256: "hash" }],
     runtime: { lightingCalculations: 0, atlasConstruction: 0 },
   };
-  const block = {
-    schema: "csscyclone-prepared-stream-block@1",
-    streamId: "stream",
-    streamBlockIndex: 0,
-    chunkIndex: 0,
-    blockIndex: 0,
-    startFrameIndex: 0,
-    frameCount: 4,
-    playback,
-    lighting: {
-      schema: "csscyclone-prepared-lighting-block@1",
+  const blocks = Array.from({ length: blockCount }, (_, streamBlockIndex) => {
+    const blockPlayback = {
+      ...playback,
+      streamBlockIndex,
+      blockIndex: streamBlockIndex,
+      startFrameIndex: streamBlockIndex * 4,
+    };
+    return {
+      schema: "csscyclone-prepared-stream-block@1",
       streamId: "stream",
-      streamBlockIndex: 0,
+      streamBlockIndex,
       chunkIndex: 0,
-      blockIndex: 0,
-      startFrameIndex: 0,
+      blockIndex: streamBlockIndex,
+      startFrameIndex: streamBlockIndex * 4,
       frameCount: 4,
-      particleCount: 2,
-      frameParticleColorStateIndices: [[0, 0], [0, 0], [0, 0], [0, 0]],
-    },
-  };
+      playback: blockPlayback,
+      lighting: {
+        schema: "csscyclone-prepared-lighting-block@1",
+        streamId: "stream",
+        streamBlockIndex,
+        chunkIndex: 0,
+        blockIndex: streamBlockIndex,
+        startFrameIndex: streamBlockIndex * 4,
+        frameCount: 4,
+        particleCount: 2,
+        frameParticleColorStateIndices: [[0, 0], [0, 0], [0, 0], [0, 0]],
+      },
+    };
+  });
   const catalog = {
     schema: "csscyclone-prepared-stream-catalog@1",
     streamId: "stream",
     chunkCount: 1,
-    chunkFrameCount: 4,
-    blockCount: 1,
-    entries: [{}],
-    blocksPerChunk: 1,
+    chunkFrameCount: blockCount * 4,
+    blockCount,
+    entries: Array.from({ length: blockCount }, () => ({})),
+    blocksPerChunk: blockCount,
     blockFrameCount: 4,
-    runtimeLookaheadBlockCount: 1,
-    streamFrameCount: 4,
-    streamDurationMilliseconds: 80,
+    runtimeLookaheadBlockCount,
+    streamFrameCount: blockCount * 4,
+    streamDurationMilliseconds: blockCount * 80,
   };
   const mounted = {
     model: {
@@ -124,11 +136,13 @@ function fixture() {
     assertStableDomIdentity: identity,
     destroy: identity,
   };
+  const loadBlockCalls = [];
   const player = createCyclonePreparedPlayer({
     mounted,
     modelTransform: "matrix3d(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, -400, 1)",
     catalog,
-    initialBlock: block,
+    initialBlock: blocks[0],
+    initialLookaheadBlocks: blocks.slice(1, initialLookaheadBlockCount + 1),
     initialFrameIndex: 0,
     lighting,
     lightingAsset: {
@@ -139,7 +153,10 @@ function fixture() {
       hueSlots: [0.5, 2 / 3, 5 / 6],
       destroy: identity,
     },
-    loadBlock: async () => block,
+    loadBlock: async (streamBlockIndex) => {
+      loadBlockCalls.push(streamBlockIndex);
+      return blocks[streamBlockIndex];
+    },
     readNow: () => now,
     requestFrame(callback) {
       const id = ++nextRequestId;
@@ -159,6 +176,7 @@ function fixture() {
     shapeElements,
     frames,
     delays,
+    loadBlockCalls,
     setNow(value) { now = value; },
     fireDelay() {
       const [id, request] = delays.entries().next().value;
@@ -189,6 +207,30 @@ test("hands each prepared publication from its deadline timer to requestAnimatio
   assert.equal(stats.runtimeSchedulerTransport, "deadline-setTimeout-requestAnimationFrame-prepared-publication");
   assert.equal(stats.schedulerFrameCallbackCount, 1);
   assert.equal(stats.schedulerDelayCallbackCount, 1);
+});
+
+test("starts only after the complete prepared stream is decoded", async () => {
+  const state = fixture({
+    blockCount: 5,
+    runtimeLookaheadBlockCount: 4,
+    initialLookaheadBlockCount: 4,
+  });
+  assert.deepEqual(state.player.stats().pendingBlockIndices, [1, 2, 3, 4]);
+  assert.equal(state.player.stats().pendingBlockReadyCount, 4);
+  assert.deepEqual(state.loadBlockCalls, []);
+
+  state.player.resume();
+  state.fireDelay();
+  state.setNow(81);
+  await state.fireFrame();
+  await Promise.resolve();
+
+  const stats = state.player.stats();
+  assert.equal(stats.activeBlockIndex, 1);
+  assert.deepEqual(stats.pendingBlockIndices, [2, 3, 4, 0]);
+  assert.equal(stats.pendingBlockReadyCount, 4);
+  assert.equal(stats.runtimePreparedBlockWaitCount, 0);
+  assert.deepEqual(state.loadBlockCalls, [0]);
 });
 
 test("collapses missed prepared frames once at the next paint-aligned callback", async () => {

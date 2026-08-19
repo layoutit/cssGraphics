@@ -5,10 +5,12 @@ import test from "node:test";
 const adapter = new URL("../", import.meta.url);
 
 test("uses the cssGraphics shell without product UI or alternate renderers", async () => {
-  const [html, client, playback, styles] = await Promise.all([
+  const [html, client, playback, stream, worker, styles] = await Promise.all([
     readFile(new URL("index.html", adapter), "utf8"),
     readFile(new URL("src/csscyclone/client.mjs", adapter), "utf8"),
     readFile(new URL("src/csscyclone/preparedPlayback.mjs", adapter), "utf8"),
+    readFile(new URL("src/csscyclone/preparedStream.mjs", adapter), "utf8"),
+    readFile(new URL("src/csscyclone/preparedBlockWorker.mjs", adapter), "utf8"),
     readFile(new URL("src/csscyclone/styles.css", adapter), "utf8"),
   ]);
   assert.match(html, /class="site-wordmark-svg" viewBox="0 0 190 30"/u);
@@ -27,6 +29,9 @@ test("uses the cssGraphics shell without product UI or alternate renderers", asy
   assert.match(styles, /background-image:\s*var\(--cyclone-lighting-atlas\)/u);
   assert.doesNotMatch(styles, /color-mix|--cyclone-tone/u);
   assert.match(playback, /deadline-setTimeout-requestAnimationFrame-prepared-publication/u);
-  assert.doesNotMatch(`${client}\n${playback}`, /WebGL|CanvasRenderingContext/u);
+  assert.match(client, /blockLoader\.prime\(residentBlockIndices\)/u);
+  assert.match(stream, /new Worker\(new URL\("\.\/preparedBlockWorker\.mjs"/u);
+  assert.match(worker, /decodeCyclonePreparedBlock/u);
+  assert.doesNotMatch(`${client}\n${playback}\n${stream}\n${worker}`, /WebGL|CanvasRenderingContext/u);
   assert.doesNotMatch(styles, /filter:\s*(?:blur|drop-shadow)|box-shadow|clip-path/u);
 });

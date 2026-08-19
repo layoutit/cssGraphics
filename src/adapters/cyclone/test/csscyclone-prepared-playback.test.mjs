@@ -203,15 +203,18 @@ test("hands each prepared publication from its deadline timer to requestAnimatio
   assert.equal(stats.schedulerDelayCallbackCount, 1);
 });
 
-test("starts with the complete configured decoded horizon", async () => {
+test("starts from one materialized successor while filling the verified horizon", async () => {
   const state = fixture({
     blockCount: 13,
     runtimeLookaheadBlockCount: 11,
-    initialLookaheadBlockCount: 11,
+    initialLookaheadBlockCount: 1,
   });
   assert.deepEqual(state.player.stats().pendingBlockIndices, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+  assert.equal(state.player.stats().pendingBlockReadyCount, 1);
+  assert.deepEqual(state.loadBlockCalls, [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+  await Promise.resolve();
+  await Promise.resolve();
   assert.equal(state.player.stats().pendingBlockReadyCount, 11);
-  assert.deepEqual(state.loadBlockCalls, []);
 
   state.player.resume();
   state.fireDelay();
@@ -224,7 +227,7 @@ test("starts with the complete configured decoded horizon", async () => {
   assert.deepEqual(stats.pendingBlockIndices, [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   assert.equal(stats.pendingBlockReadyCount, 11);
   assert.equal(stats.runtimePreparedBlockWaitCount, 0);
-  assert.deepEqual(state.loadBlockCalls, [12]);
+  assert.deepEqual(state.loadBlockCalls, [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
 });
 
 test("collapses missed prepared frames once at the next paint-aligned callback", async () => {

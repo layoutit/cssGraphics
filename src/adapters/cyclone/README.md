@@ -46,11 +46,13 @@ window. Playback
 then follows the original source order. Each hash-bound
 gzip transport stores shared source control points and widths, one initial
 state per particle, sparse reset events, and flat `Uint16` lighting indices;
-it does not store repeated CSS transform strings. It fetches and decodes the active block plus 11 successors behind
-the loading indicator on both desktop and mobile. Playback maintains that
-12-second bounded resident window, so each replacement block starts loading
-11 seconds before use and uses the established incremental decode pattern to
-keep preparation slices bounded during playback. The single terminal stream wrap is the only
+it does not store repeated CSS transform strings. It downloads, verifies, and
+decompresses the active block plus 11 successors behind the loading indicator
+on both desktop and mobile, but initially expands CSS strings only for the
+active block and its immediate successor. A dedicated preparation worker
+materializes the rest sequentially while the main thread publishes the same
+stable retained DOM and maintains the 12-second source-state window. The
+single terminal stream wrap is the only
 non-source-continuous boundary.
 
 Source identity is pinned in `notes/references/source-lock.json`. Preparation

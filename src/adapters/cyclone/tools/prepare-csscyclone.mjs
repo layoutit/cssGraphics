@@ -32,6 +32,7 @@ const stagingRoot = join(repositoryRoot, `build/generated/.csscyclone-${process.
 const sourceLock = JSON.parse(await readFile(join(adapterRoot, "notes/references/source-lock.json"), "utf8"));
 const blockFrameCount = 50;
 const runtimeLookaheadBlockCount = 11;
+const startupMaterializedLookaheadBlockCount = 1;
 const startupPaletteFamilies = CSSCYCLONE_PRESENTATION.startupPaletteFamilies;
 const startupSilhouetteSampleFrameOffsets = CSSCYCLONE_PRESENTATION.startupSilhouetteSampleFrameOffsets;
 const hueSectorNames = Object.freeze(["red", "yellow", "green", "cyan", "blue", "magenta"]);
@@ -233,6 +234,7 @@ async function prepareProfile(profile) {
     selection: "session-crypto-shuffled-palette-family-source-window-no-immediate-repeat",
     playbackOrder: "source-continuous-ascending-chunks-with-one-terminal-stream-wrap",
     runtimeLookaheadBlockCount,
+    startupMaterializedLookaheadBlockCount,
     entries: blockEntries,
   })}\n`);
   const catalogSha256 = sha256(catalogBytes);
@@ -312,10 +314,14 @@ async function prepareProfile(profile) {
       residentBlockWindowCount,
       maximumResidentBlockWindowDecodedBytes,
       runtimeLookaheadBlockCount,
+      startupMaterializedLookaheadBlockCount,
       transportEncoding: CSSCYCLONE_BLOCK_ENCODING,
       runtimePreparedStateMaterialization: true,
       runtimePreparedStateMaterializationPhase: "block-load-before-publication",
       runtimeIncrementalLookaheadMaterialization: true,
+      runtimeOffMainThreadLookaheadMaterialization: true,
+      startupVerifiedBlockCount: residentBlockWindowCount,
+      startupMaterializedBlockCount: startupMaterializedLookaheadBlockCount + 1,
     }),
     lighting: preparedLighting.contract,
   });

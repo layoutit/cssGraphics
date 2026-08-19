@@ -9,6 +9,7 @@ import {
 const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@1";
 const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@2";
 const RUNTIME_LOOKAHEAD_BLOCK_COUNT = 11;
+const STARTUP_MATERIALIZED_LOOKAHEAD_BLOCK_COUNT = 1;
 const STARTUP_HUE_SECTOR_NAMES = Object.freeze(["red", "yellow", "green", "cyan", "blue", "magenta"]);
 const STARTUP_PALETTE_FAMILIES = Object.freeze(["blue", "yellow", "red", "magenta", "green"]);
 const STARTUP_SILHOUETTE_SAMPLING = "browser-reviewed-expressive-source-windows";
@@ -89,10 +90,14 @@ export function selectInitialCyclonePosition(catalog, {
 
 export function createCyclonePreparedBlockLoader(catalog) {
   validateCatalog(catalog);
-  const records = new Map();
+  const decodedRecords = new Map();
+  const blockRecords = new Map();
+  const workerMaterializer = createWorkerBlockMaterializer(catalog);
   let desiredBlockIndices = new Set();
+  let fetchCount = 0;
   let loadCount = 0;
   let releaseCount = 0;
+  let verifiedBlockReleaseCount = 0;
   let residentDecodedBytes = 0;
   let peakResidentDecodedBytes = 0;
   let residentPreparedCssStringBytes = 0;
@@ -103,101 +108,201 @@ export function createCyclonePreparedBlockLoader(catalog) {
   let incrementalDecodeSliceCount = 0;
   let incrementalDecodeOperationCount = 0;
   let incrementalDecodeMaximumSliceMilliseconds = 0;
+  let incrementalDecodeQueuedCount = 0;
+  let incrementalDecodeActiveCount = 0;
+  let incrementalDecodeMaximumQueuedCount = 0;
+  let workerMaterializationRequestCount = 0;
+  let workerMaterializationCompletedBlockCount = 0;
+  let workerMaterializationMaximumBlockMilliseconds = 0;
+  let incrementalDecodeTail = Promise.resolve();
   let destroyed = false;
 
-  async function load(streamBlockIndex, { incremental = false } = {}) {
+  function descriptorFor(streamBlockIndex) {
     if (destroyed) throw new Error("Prepared Cyclone block loader is destroyed");
     const descriptor = catalog.entries[streamBlockIndex];
     if (!descriptor || descriptor.index !== streamBlockIndex) {
       throw new RangeError(`Prepared Cyclone block ${streamBlockIndex} is missing`);
     }
-    const existing = records.get(streamBlockIndex);
-    if (existing?.block) return existing.block;
+    return descriptor;
+  }
+
+  async function ensureDecoded(streamBlockIndex) {
+    const descriptor = descriptorFor(streamBlockIndex);
+    const existing = decodedRecords.get(streamBlockIndex);
+    if (existing?.bytes) return existing;
     if (existing?.promise) return existing.promise;
     const promise = (async () => {
       const encoded = new Uint8Array(await fetchBytes(descriptor.assetUrl, { cache: "force-cache" }));
       await verifyBytes(encoded, descriptor.byteLength, descriptor.sha256, `block ${streamBlockIndex}`);
-      const decoded = await decompressGzip(encoded);
+      const bytes = await decompressGzip(encoded);
       await verifyBytes(
-        decoded,
+        bytes,
         descriptor.decodedByteLength,
         descriptor.decodedSha256,
         `decoded block ${streamBlockIndex}`,
       );
-      if (incremental) incrementalDecodeRequestCount += 1;
-      const block = incremental
-        ? await decodeCyclonePreparedBlockIncrementally(decoded, descriptor, catalog, {
-          isCurrent: () => !destroyed && desiredBlockIndices.has(streamBlockIndex),
-          onSlice(operationCount, durationMilliseconds) {
-            incrementalDecodeSliceCount += 1;
-            incrementalDecodeOperationCount += operationCount;
-            incrementalDecodeMaximumSliceMilliseconds = Math.max(
-              incrementalDecodeMaximumSliceMilliseconds,
-              durationMilliseconds,
-            );
-          },
+      const record = Object.freeze({ bytes, decodedByteLength: bytes.byteLength });
+      decodedRecords.set(streamBlockIndex, record);
+      fetchCount += 1;
+      residentDecodedBytes += bytes.byteLength;
+      peakResidentDecodedBytes = Math.max(peakResidentDecodedBytes, residentDecodedBytes);
+      if (!desiredBlockIndices.has(streamBlockIndex)) releaseDecoded(streamBlockIndex, record);
+      return record;
+    })();
+    decodedRecords.set(streamBlockIndex, { promise });
+    try {
+      return await promise;
+    } catch (error) {
+      if (decodedRecords.get(streamBlockIndex)?.promise === promise) {
+        decodedRecords.delete(streamBlockIndex);
+      }
+      throw error;
+    }
+  }
+
+  function scheduleIncrementalDecode(work) {
+    incrementalDecodeQueuedCount += 1;
+    incrementalDecodeMaximumQueuedCount = Math.max(
+      incrementalDecodeMaximumQueuedCount,
+      incrementalDecodeQueuedCount,
+    );
+    const scheduled = incrementalDecodeTail.then(async () => {
+      incrementalDecodeQueuedCount -= 1;
+      incrementalDecodeActiveCount = 1;
+      try {
+        return await work();
+      } finally {
+        incrementalDecodeActiveCount = 0;
+      }
+    });
+    incrementalDecodeTail = scheduled.then(() => undefined, () => undefined);
+    return scheduled;
+  }
+
+  async function load(streamBlockIndex, { incremental = false, offMainThread = false } = {}) {
+    const descriptor = descriptorFor(streamBlockIndex);
+    const existing = blockRecords.get(streamBlockIndex);
+    if (existing?.block) return existing.block;
+    if (existing?.promise) return existing.promise;
+    const promise = (async () => {
+      const decodedRecord = await ensureDecoded(streamBlockIndex);
+      if (offMainThread && workerMaterializer !== null) {
+        workerMaterializationRequestCount += 1;
+      } else if (incremental) {
+        incrementalDecodeRequestCount += 1;
+      }
+      let workerDurationMilliseconds = 0;
+      const block = offMainThread && workerMaterializer !== null
+        ? await workerMaterializer.materialize(decodedRecord.bytes, descriptor).then((result) => {
+          workerDurationMilliseconds = result.durationMilliseconds;
+          return result.block;
         })
-        : decodeCyclonePreparedBlock(decoded, descriptor, catalog);
+        : incremental
+        ? await scheduleIncrementalDecode(() => decodeCyclonePreparedBlockIncrementally(
+          decodedRecord.bytes,
+          descriptor,
+          catalog,
+          {
+            isCurrent: () => !destroyed && desiredBlockIndices.has(streamBlockIndex),
+            onSlice(operationCount, durationMilliseconds) {
+              incrementalDecodeSliceCount += 1;
+              incrementalDecodeOperationCount += operationCount;
+              incrementalDecodeMaximumSliceMilliseconds = Math.max(
+                incrementalDecodeMaximumSliceMilliseconds,
+                durationMilliseconds,
+              );
+            },
+          },
+        ))
+        : decodeCyclonePreparedBlock(decodedRecord.bytes, descriptor, catalog);
       if (block === null) {
         throw new Error(`Prepared Cyclone block ${streamBlockIndex} incremental decode was cancelled`);
       }
       validateBlock(block, descriptor, catalog);
       const record = Object.freeze({
         block,
-        decodedByteLength: decoded.byteLength,
         preparedCssStringByteLength: block.preparedCssStringByteLength,
       });
-      records.set(streamBlockIndex, record);
+      blockRecords.set(streamBlockIndex, record);
       loadCount += 1;
-      if (incremental) incrementalDecodeCompletedBlockCount += 1;
+      if (offMainThread && workerMaterializer !== null) {
+        workerMaterializationCompletedBlockCount += 1;
+        workerMaterializationMaximumBlockMilliseconds = Math.max(
+          workerMaterializationMaximumBlockMilliseconds,
+          workerDurationMilliseconds,
+        );
+      } else if (incremental) {
+        incrementalDecodeCompletedBlockCount += 1;
+      }
       preparedMatrixExpansionCount += block.preparedMatrixExpansionCount;
-      residentDecodedBytes += decoded.byteLength;
-      peakResidentDecodedBytes = Math.max(peakResidentDecodedBytes, residentDecodedBytes);
       residentPreparedCssStringBytes += block.preparedCssStringByteLength;
       peakResidentPreparedCssStringBytes = Math.max(
         peakResidentPreparedCssStringBytes,
         residentPreparedCssStringBytes,
       );
-      if (!desiredBlockIndices.has(streamBlockIndex)) release(streamBlockIndex, record);
+      if (!desiredBlockIndices.has(streamBlockIndex)) releaseBlock(streamBlockIndex, record);
       return block;
     })();
-    records.set(streamBlockIndex, { promise });
+    blockRecords.set(streamBlockIndex, { promise });
     try {
       return await promise;
     } catch (error) {
-      if (records.get(streamBlockIndex)?.promise === promise) records.delete(streamBlockIndex);
+      if (blockRecords.get(streamBlockIndex)?.promise === promise) {
+        blockRecords.delete(streamBlockIndex);
+      }
       throw error;
     }
   }
 
+  async function prime(streamBlockIndices) {
+    if (!Array.isArray(streamBlockIndices) ||
+        streamBlockIndices.some((index) => !Number.isSafeInteger(index))) {
+      throw new TypeError("Prepared Cyclone verified block horizon is invalid");
+    }
+    await Promise.all(streamBlockIndices.map((streamBlockIndex) => ensureDecoded(streamBlockIndex)));
+  }
+
   function prefetch(streamBlockIndex) {
-    void load(streamBlockIndex).catch(() => undefined);
+    void ensureDecoded(streamBlockIndex).catch(() => undefined);
   }
 
   function retain(streamBlockIndices) {
     desiredBlockIndices = new Set(streamBlockIndices);
-    for (const [streamBlockIndex, record] of records) {
-      if (!desiredBlockIndices.has(streamBlockIndex)) release(streamBlockIndex, record);
+    for (const [streamBlockIndex, record] of blockRecords) {
+      if (!desiredBlockIndices.has(streamBlockIndex)) releaseBlock(streamBlockIndex, record);
+    }
+    for (const [streamBlockIndex, record] of decodedRecords) {
+      if (!desiredBlockIndices.has(streamBlockIndex)) releaseDecoded(streamBlockIndex, record);
     }
   }
 
-  function release(streamBlockIndex, record) {
-    if (!record?.block || records.get(streamBlockIndex) !== record) return;
-    records.delete(streamBlockIndex);
-    residentDecodedBytes -= record.decodedByteLength;
+  function releaseBlock(streamBlockIndex, record) {
+    if (!record?.block || blockRecords.get(streamBlockIndex) !== record) return;
+    blockRecords.delete(streamBlockIndex);
     residentPreparedCssStringBytes -= record.preparedCssStringByteLength;
     releaseCount += 1;
   }
 
+  function releaseDecoded(streamBlockIndex, record) {
+    if (!record?.bytes || decodedRecords.get(streamBlockIndex) !== record) return;
+    decodedRecords.delete(streamBlockIndex);
+    residentDecodedBytes -= record.decodedByteLength;
+    verifiedBlockReleaseCount += 1;
+  }
+
   return Object.freeze({
     load,
+    prime,
     prefetch,
     retain,
     stats() {
       return Object.freeze({
+        fetchCount,
         loadCount,
         releaseCount,
-        residentBlockCount: [...records.values()].filter((record) => record?.block).length,
+        verifiedBlockReleaseCount,
+        residentVerifiedBlockCount: [...decodedRecords.values()].filter((record) => record?.bytes).length,
+        residentBlockCount: [...blockRecords.values()].filter((record) => record?.block).length,
         residentDecodedBytes,
         peakResidentDecodedBytes,
         residentPreparedCssStringBytes,
@@ -208,12 +313,116 @@ export function createCyclonePreparedBlockLoader(catalog) {
         incrementalDecodeSliceCount,
         incrementalDecodeOperationCount,
         incrementalDecodeMaximumSliceMilliseconds,
+        incrementalDecodeQueuedCount,
+        incrementalDecodeActiveCount,
+        incrementalDecodeMaximumQueuedCount,
+        workerMaterializationAvailable: workerMaterializer !== null,
+        workerMaterializationRequestCount,
+        workerMaterializationCompletedBlockCount,
+        workerMaterializationMaximumBlockMilliseconds,
         desiredBlockIndices: Object.freeze([...desiredBlockIndices].sort((left, right) => left - right)),
       });
     },
     destroy() {
       destroyed = true;
       retain([]);
+      workerMaterializer?.destroy();
+    },
+  });
+}
+
+function createWorkerBlockMaterializer(catalog) {
+  if (typeof Worker !== "function") return null;
+  let worker;
+  try {
+    worker = new Worker(new URL("./preparedBlockWorker.mjs", import.meta.url), {
+      type: "module",
+      name: "csscyclone-prepared-block-materializer",
+    });
+  } catch {
+    return null;
+  }
+  const pending = new Map();
+  const transformDecoder = new TextDecoder();
+  let nextRequestId = 0;
+  let destroyed = false;
+  let resolveInitialization;
+  let rejectInitialization;
+  const initialized = new Promise((resolve, reject) => {
+    resolveInitialization = resolve;
+    rejectInitialization = reject;
+  });
+
+  function rejectAll(error) {
+    rejectInitialization(error);
+    for (const { reject } of pending.values()) reject(error);
+    pending.clear();
+  }
+
+  worker.addEventListener("message", ({ data }) => {
+    if (data?.type === "initialized") {
+      resolveInitialization();
+      return;
+    }
+    if (data?.type === "error") {
+      const error = new Error(data.message);
+      if (data.stack) error.stack = data.stack;
+      if (data.requestId === null) rejectAll(error);
+      else {
+        const request = pending.get(data.requestId);
+        pending.delete(data.requestId);
+        request?.reject(error);
+      }
+      return;
+    }
+    if (data?.type !== "materialized" || !Number.isSafeInteger(data.requestId) ||
+        !(data.transformBytes instanceof Uint8Array) ||
+        !Number.isFinite(data.durationMilliseconds) || data.durationMilliseconds < 0) {
+      rejectAll(new Error("Prepared Cyclone worker response drifted"));
+      return;
+    }
+    const request = pending.get(data.requestId);
+    if (!request) return;
+    pending.delete(data.requestId);
+    const transforms = Object.freeze(transformDecoder.decode(data.transformBytes).split("\n"));
+    const block = Object.freeze({
+      ...data.block,
+      playback: Object.freeze({ ...data.block.playback, transforms }),
+      lighting: Object.freeze(data.block.lighting),
+    });
+    request.resolve(Object.freeze({
+      block,
+      durationMilliseconds: data.durationMilliseconds,
+    }));
+  });
+  worker.addEventListener("error", (event) => {
+    rejectAll(new Error(event.message || "Prepared Cyclone worker failed"));
+  });
+  worker.postMessage({ type: "initialize", catalog });
+
+  return Object.freeze({
+    async materialize(bytes, descriptor) {
+      if (destroyed) throw new Error("Prepared Cyclone worker is destroyed");
+      await initialized;
+      const requestId = nextRequestId;
+      nextRequestId += 1;
+      const workerBytes = bytes.slice();
+      const result = new Promise((resolve, reject) => {
+        pending.set(requestId, { resolve, reject });
+      });
+      worker.postMessage({
+        type: "materialize",
+        requestId,
+        bytes: workerBytes,
+        descriptor,
+      }, [workerBytes.buffer]);
+      return result;
+    },
+    destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      rejectAll(new Error("Prepared Cyclone worker is destroyed"));
+      worker.terminate();
     },
   });
 }
@@ -269,6 +478,9 @@ function validateCatalog(catalog) {
         catalog.startupSelections.some((selection) => frameOffset >= selection.frameCount)) ||
       catalog.selection !== STARTUP_SELECTION ||
       catalog.runtimeLookaheadBlockCount !== RUNTIME_LOOKAHEAD_BLOCK_COUNT ||
+      catalog.startupMaterializedLookaheadBlockCount !==
+        STARTUP_MATERIALIZED_LOOKAHEAD_BLOCK_COUNT ||
+      catalog.startupMaterializedLookaheadBlockCount >= catalog.runtimeLookaheadBlockCount ||
       catalog.entries.some((entry, index) => entry?.index !== index ||
         entry.chunkIndex !== Math.floor(index / catalog.blocksPerChunk) ||
         entry.blockIndex !== index % catalog.blocksPerChunk ||

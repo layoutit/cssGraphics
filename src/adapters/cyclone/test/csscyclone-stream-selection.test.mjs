@@ -67,6 +67,7 @@ const catalog = Object.freeze({
     })),
   }),
   runtimeLookaheadBlockCount: 11,
+  startupMaterializedLookaheadBlockCount: 1,
   entries: Object.freeze(Array.from({ length: 216 }, (_, index) => Object.freeze({
     index,
     chunkIndex: Math.floor(index / 9),

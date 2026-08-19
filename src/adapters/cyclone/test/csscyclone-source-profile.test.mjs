@@ -27,7 +27,39 @@ test("pins the current Really Slick Cyclone source profile", () => {
   assert.equal(CSSCYCLONE_SOURCE.speed, 10);
   assert.equal(CSSCYCLONE_BANK.chunkCount, 24);
   assert.equal(CSSCYCLONE_BANK.frameCount, 450);
-  assert.equal(CSSCYCLONE_PRESENTATION.saturationSampling, "sqrt-uniform");
+  assert.equal(CSSCYCLONE_PRESENTATION.saturationSampling, "floor-0.55-plus-0.45-sqrt-uniform");
+  assert.equal(CSSCYCLONE_PRESENTATION.minimumSaturation, 0.55);
+  assert.equal(CSSCYCLONE_PRESENTATION.hueSampling, "source-uniform-random-targets");
+  assert.equal(CSSCYCLONE_PRESENTATION.particleColorAssignment, "source-hue-at-particle-restart");
+  assert.equal(CSSCYCLONE_PRESENTATION.preparedPaletteHueSlotCount, 3);
+  assert.equal(
+    CSSCYCLONE_PRESENTATION.preparedPaletteAssignment,
+    "source-hue-quantized-to-session-three-family-variant",
+  );
+  assert.equal(CSSCYCLONE_PRESENTATION.maximumColorFamilyCount, 3);
+  assert.deepEqual(
+    CSSCYCLONE_PRESENTATION.startupPaletteFamilies,
+    ["blue", "yellow", "red", "magenta", "green"],
+  );
+  assert.equal(CSSCYCLONE_PRESENTATION.startupSelections.length, 10);
+  assert.deepEqual(
+    CSSCYCLONE_PRESENTATION.startupSelections.map(({ id, paletteFamily, chunkIndex }) =>
+      [id, paletteFamily, chunkIndex]),
+    [
+      ["blue-a", "blue", 0], ["blue-b", "blue", 0],
+      ["yellow-a", "yellow", 1], ["yellow-b", "yellow", 7],
+      ["red-a", "red", 5], ["red-b", "red", 9],
+      ["magenta-a", "magenta", 4], ["magenta-b", "magenta", 11],
+      ["green-a", "green", 17], ["green-b", "green", 19],
+    ],
+  );
+  assert.equal(
+    CSSCYCLONE_PRESENTATION.startupSilhouetteSampling,
+    "browser-reviewed-expressive-source-windows",
+  );
+  assert.deepEqual(CSSCYCLONE_PRESENTATION.startupSilhouetteSampleFrameOffsets, [0, 10, 20, 30, 39]);
+  assert.equal(CSSCYCLONE_PRESENTATION.startupMinimumMeanSaturation, 0.68);
+  assert.equal(CSSCYCLONE_PRESENTATION.startupMinimumDominantHueShare, 0.25);
 });
 
 test("widens only the mobile presentation field of view", () => {
@@ -59,7 +91,7 @@ test("prepares smooth reference lighting without a runtime lighting timeline", a
   const bank = { ...CSSCYCLONE_BANK, particleCount: 3, warmupFrames: 20, frameCount: 4 };
   const source = buildCycloneSourceSequence({ bank });
   const prepared = await buildCyclonePreparedLighting({ source });
-  assert.equal(prepared.contract.schema, "csscyclone-prepared-smooth-lighting-atlas@4");
+  assert.equal(prepared.contract.schema, "csscyclone-prepared-smooth-lighting-atlas@5");
   assert.equal(prepared.contract.contentSize, 2);
   assert.equal(prepared.contract.gutterPixels, 1);
   assert.equal(prepared.contract.leafCount, 18);
@@ -67,6 +99,11 @@ test("prepares smooth reference lighting without a runtime lighting timeline", a
   assert.equal(prepared.contract.colorRestartCount, 0);
   assert.equal(prepared.contract.tileCount, 18);
   assert.equal(prepared.contract.tileBackgroundPositions.length, 18);
+  assert.equal(prepared.contract.paletteFamilyCount, 5);
+  assert.equal(prepared.contract.paletteHueSlotCount, 3);
+  assert.equal(prepared.contract.maximumColorFamilyCount, 3);
+  assert.equal(prepared.contract.variants.length, 5);
+  assert.ok(prepared.contract.variants.every((variant) => variant.hueSlots.length === 3));
   assert.equal(prepared.contract.sourceStreamFrameCount, 4);
   assert.equal(prepared.contract.chunkCount, 1);
   assert.equal(prepared.chunk.frameParticleColorStateIndices.length, 4);
@@ -75,8 +112,9 @@ test("prepares smooth reference lighting without a runtime lighting timeline", a
   assert.equal(prepared.contract.runtime.rootLightingRowWritesPerSample, 0);
   assert.equal(prepared.contract.runtime.lightingCalculations, 0);
   assert.equal(prepared.contract.runtime.atlasConstruction, 0);
-  assert.ok(prepared.bytes.byteLength > 0);
-  assert.match(prepared.contract.assetSha256, /^[a-f0-9]{64}$/u);
+  assert.equal(prepared.assets.length, 5);
+  assert.ok(prepared.assets.every((asset) => asset.bytes.byteLength > 0));
+  assert.ok(prepared.contract.variants.every((variant) => /^[a-f0-9]{64}$/u.test(variant.assetSha256)));
 });
 
 test("publishes only exact source color restarts through sparse leaf addresses", async () => {

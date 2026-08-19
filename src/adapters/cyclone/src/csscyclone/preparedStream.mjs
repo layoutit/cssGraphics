@@ -2,6 +2,10 @@ const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@1";
 const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@1";
 const PLAYBACK_SCHEMA = "csscyclone-prepared-dom-playback@3";
 const LIGHTING_BLOCK_SCHEMA = "csscyclone-prepared-lighting-block@1";
+const STARTUP_HUE_SECTOR_NAMES = Object.freeze(["red", "yellow", "green", "cyan", "blue", "magenta"]);
+const STARTUP_PALETTE_FAMILIES = Object.freeze(["blue", "yellow", "red", "magenta", "green"]);
+const STARTUP_SILHOUETTE_SAMPLING = "browser-reviewed-expressive-source-windows";
+const STARTUP_SELECTION = "session-crypto-random-balanced-source-palette-window-no-immediate-repeat";
 
 export async function loadCyclonePreparedCatalog(descriptor) {
   if (typeof descriptor?.catalogUrl !== "string" ||
@@ -18,39 +22,52 @@ export async function loadCyclonePreparedCatalog(descriptor) {
 
 export function selectInitialCyclonePosition(catalog, {
   search = globalThis.location?.search ?? "",
-  previousChunkIndex = null,
+  previousSelectionId = null,
   randomUint32Pair = cryptoRandomUint32Pair,
 } = {}) {
   validateCatalog(catalog);
   const params = new URLSearchParams(search);
   const requestedChunk = params.get("chunk");
   const requestedFrame = params.get("frame");
+  const requestedPaletteFamily = params.get("palette");
   if (requestedChunk !== null || requestedFrame !== null) {
     const chunkIndex = requestedChunk === null ? 0 : Number(requestedChunk);
     const frameIndex = requestedFrame === null ? 0 : Number(requestedFrame);
+    const paletteFamily = requestedPaletteFamily ?? catalog.startupPaletteFamilies[0];
     validatePosition(catalog, chunkIndex, frameIndex);
-    return Object.freeze({ chunkIndex, frameIndex, mode: "explicit" });
+    if (!catalog.startupPaletteFamilies.includes(paletteFamily)) {
+      throw new RangeError("Requested Cyclone palette family is invalid");
+    }
+    return Object.freeze({ paletteFamily, chunkIndex, frameIndex, mode: "explicit" });
   }
-  if (previousChunkIndex !== null &&
-      (!Number.isSafeInteger(previousChunkIndex) || previousChunkIndex < 0 ||
-        previousChunkIndex >= catalog.randomStartChunkCount)) {
-    throw new RangeError("Previous Cyclone start chunk is invalid");
+  if (previousSelectionId !== null &&
+      (typeof previousSelectionId !== "string" ||
+        !catalog.startupSelections.some((selection) => selection.id === previousSelectionId))) {
+    throw new RangeError("Previous Cyclone start selection is invalid");
   }
   const values = randomUint32Pair();
   if (!Array.isArray(values) || values.length !== 2 ||
       values.some((value) => !Number.isSafeInteger(value) || value < 0 || value > 0xffffffff)) {
     throw new RangeError("Cyclone startup random values must be two uint32 values");
   }
-  const availableChunkCount = previousChunkIndex === null || catalog.randomStartChunkCount === 1
-    ? catalog.randomStartChunkCount
-    : catalog.randomStartChunkCount - 1;
-  let chunkIndex = values[0] % availableChunkCount;
-  if (previousChunkIndex !== null && chunkIndex >= previousChunkIndex) chunkIndex += 1;
-  const frameIndex = values[1] % catalog.randomStartFrameCount;
+  const paletteFamilyIndex = values[0] % catalog.startupPaletteFamilies.length;
+  const paletteFamily = catalog.startupPaletteFamilies[paletteFamilyIndex];
+  const familySelections = catalog.startupSelections.filter((selection) =>
+    selection.paletteFamily === paletteFamily);
+  let selectionIndex = Math.floor(values[0] / catalog.startupPaletteFamilies.length) % familySelections.length;
+  if (familySelections[selectionIndex].id === previousSelectionId && familySelections.length > 1) {
+    selectionIndex = (selectionIndex + 1) % familySelections.length;
+  }
+  const selection = familySelections[selectionIndex];
+  const frameIndex = selection.startFrameIndex + values[1] % selection.frameCount;
   return Object.freeze({
-    chunkIndex,
+    selectionId: selection.id,
+    paletteFamily,
+    chunkIndex: selection.chunkIndex,
     frameIndex,
-    mode: previousChunkIndex === null ? "crypto-random" : "crypto-random-no-repeat",
+    mode: previousSelectionId === null
+      ? "crypto-random-balanced-source-palette"
+      : "crypto-random-balanced-source-palette-no-repeat",
   });
 }
 
@@ -155,10 +172,31 @@ function validateCatalog(catalog) {
       !Number.isSafeInteger(catalog.frameMilliseconds) || catalog.frameMilliseconds < 1 ||
       catalog.streamFrameCount !== catalog.chunkCount * catalog.chunkFrameCount ||
       catalog.streamDurationMilliseconds !== catalog.streamFrameCount * catalog.frameMilliseconds ||
-      !Number.isSafeInteger(catalog.randomStartChunkCount) || catalog.randomStartChunkCount < 1 ||
-      catalog.randomStartChunkCount > catalog.chunkCount ||
-      !Number.isSafeInteger(catalog.randomStartFrameCount) || catalog.randomStartFrameCount < 1 ||
-      catalog.randomStartFrameCount > catalog.chunkFrameCount ||
+      !Array.isArray(catalog.startupPaletteFamilies) ||
+      catalog.startupPaletteFamilies.length !== STARTUP_PALETTE_FAMILIES.length ||
+      catalog.startupPaletteFamilies.some((family, index) =>
+        family !== STARTUP_PALETTE_FAMILIES[index]) ||
+      !Array.isArray(catalog.startupSelections) || catalog.startupSelections.length < 2 ||
+      new Set(catalog.startupSelections.map((selection) => selection?.id)).size !==
+        catalog.startupSelections.length ||
+      catalog.startupSelections.some((selection) =>
+        typeof selection?.id !== "string" || selection.id.length < 1 ||
+        !catalog.startupPaletteFamilies.includes(selection.paletteFamily) ||
+        !Number.isSafeInteger(selection.chunkIndex) || selection.chunkIndex < 0 ||
+        selection.chunkIndex >= catalog.chunkCount ||
+        !Number.isSafeInteger(selection.startFrameIndex) || selection.startFrameIndex < 0 ||
+        !Number.isSafeInteger(selection.frameCount) || selection.frameCount < 1 ||
+        selection.startFrameIndex + selection.frameCount > catalog.chunkFrameCount) ||
+      catalog.maximumColorFamilyCount !== 3 ||
+      catalog.startupSilhouetteSampling !== STARTUP_SILHOUETTE_SAMPLING ||
+      !Array.isArray(catalog.startupSilhouetteSampleFrameOffsets) ||
+      catalog.startupSilhouetteSampleFrameOffsets.length < 1 ||
+      new Set(catalog.startupSilhouetteSampleFrameOffsets).size !==
+        catalog.startupSilhouetteSampleFrameOffsets.length ||
+      catalog.startupSilhouetteSampleFrameOffsets.some((frameOffset) =>
+        !Number.isSafeInteger(frameOffset) || frameOffset < 0 ||
+        catalog.startupSelections.some((selection) => frameOffset >= selection.frameCount)) ||
+      catalog.selection !== STARTUP_SELECTION ||
       catalog.runtimeLookaheadBlockCount !== 1 ||
       catalog.entries.some((entry, index) => entry?.index !== index ||
         entry.chunkIndex !== Math.floor(index / catalog.blocksPerChunk) ||
@@ -173,6 +211,53 @@ function validateCatalog(catalog) {
         !/^[a-f0-9]{64}$/u.test(entry.sha256 ?? "") ||
         !/^[a-f0-9]{64}$/u.test(entry.decodedSha256 ?? ""))) {
     throw new Error("Prepared Cyclone stream catalog drifted");
+  }
+  validateStartupColorProfile(catalog.startupColorProfile, catalog);
+}
+
+function validateStartupColorProfile(profile, catalog) {
+  const familySelectionCounts = new Map(catalog.startupPaletteFamilies.map((family) => [family, 0]));
+  for (const selection of catalog.startupSelections) {
+    familySelectionCounts.set(selection.paletteFamily, familySelectionCounts.get(selection.paletteFamily) + 1);
+  }
+  if (profile?.schema !== "csscyclone-prepared-startup-color-profile@2" ||
+      profile.metric !== "prepared-source-particle-rgb-hsv-dominant-family-per-curated-window" ||
+      typeof profile.minimumMeanSaturation !== "number" || profile.minimumMeanSaturation < 0 ||
+      profile.minimumMeanSaturation > 1 ||
+      typeof profile.minimumDominantHueShare !== "number" ||
+      profile.minimumDominantHueShare <= 0 || profile.minimumDominantHueShare > 1 ||
+      profile.maximumColorFamilyCount !== catalog.maximumColorFamilyCount ||
+      !Array.isArray(profile.hueSectorNames) ||
+      profile.hueSectorNames.length !== STARTUP_HUE_SECTOR_NAMES.length ||
+      profile.hueSectorNames.some((name, index) => name !== STARTUP_HUE_SECTOR_NAMES[index]) ||
+      !Array.isArray(profile.paletteFamilies) ||
+      profile.paletteFamilies.length !== catalog.startupPaletteFamilies.length ||
+      profile.paletteFamilies.some((family, index) => family !== catalog.startupPaletteFamilies[index]) ||
+      !Number.isSafeInteger(profile.familySelectionCount) || profile.familySelectionCount < 1 ||
+      [...familySelectionCounts.values()].some((count) => count !== profile.familySelectionCount) ||
+      !Array.isArray(profile.selections) ||
+      profile.selections.length !== catalog.startupSelections.length ||
+      profile.selections.some((selectionProfile, index) => {
+        const selection = catalog.startupSelections[index];
+        return selectionProfile?.id !== selection.id ||
+          selectionProfile.paletteFamily !== selection.paletteFamily ||
+          selectionProfile.chunkIndex !== selection.chunkIndex ||
+          selectionProfile.startFrameIndex !== selection.startFrameIndex ||
+          selectionProfile.frameCount !== selection.frameCount ||
+          typeof selectionProfile.meanSaturation !== "number" ||
+          selectionProfile.meanSaturation < profile.minimumMeanSaturation ||
+          selectionProfile.dominantHueSector !== selection.paletteFamily ||
+          typeof selectionProfile.dominantHueShare !== "number" ||
+          selectionProfile.dominantHueShare < profile.minimumDominantHueShare ||
+          selectionProfile.dominantHueShare > 1 ||
+          !Array.isArray(selectionProfile.hueSectorShares) ||
+          selectionProfile.hueSectorShares.length !== STARTUP_HUE_SECTOR_NAMES.length ||
+          selectionProfile.hueSectorShares.some((share) =>
+            typeof share !== "number" || share < 0 || share > 1) ||
+          Math.abs(selectionProfile.hueSectorShares.reduce((sum, share) => sum + share, 0) - 1) >
+            0.00001;
+      })) {
+    throw new Error("Prepared Cyclone startup color profile drifted");
   }
 }
 

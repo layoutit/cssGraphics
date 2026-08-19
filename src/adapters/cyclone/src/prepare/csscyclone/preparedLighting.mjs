@@ -4,6 +4,7 @@ import {
   CSSCYCLONE_FACE_INDICES,
   CSSCYCLONE_PARTICLE_VERTICES,
 } from "./modelBuilder.mjs";
+import { CSSCYCLONE_PRESENTATION } from "./sourceModel.mjs";
 
 const CONTENT_SIZE = 2;
 const GUTTER = 1;
@@ -11,6 +12,13 @@ const SLOT_SIZE = CONTENT_SIZE + GUTTER * 2;
 const MAXIMUM_COLUMNS = 1_200;
 const MAXIMUM_TEXTURE_DIMENSION = 8_192;
 const DISPLAY_SCALE = 16;
+const PALETTE_CENTER_HUES = Object.freeze({
+  blue: 2 / 3,
+  yellow: 1 / 6,
+  red: 0,
+  magenta: 5 / 6,
+  green: 1 / 3,
+});
 const LIGHT_DIRECTION = normalize([400, -200, 400]);
 const HALF_VECTOR = normalize([
   LIGHT_DIRECTION[0],
@@ -137,48 +145,70 @@ async function buildPreparedLightingAsset({
   if (width > MAXIMUM_TEXTURE_DIMENSION || height > MAXIMUM_TEXTURE_DIMENSION) {
     throw new Error(`Prepared Cyclone lighting atlas ${width}x${height} exceeds the image contract`);
   }
-  const rgba = Buffer.alloc(width * height * 4);
-  for (let stateIndex = 0; stateIndex < colorStates.length; stateIndex += 1) {
-    const state = colorStates[stateIndex];
-    const vertexColors = frozenVertexNormals[state.particleIndex].map((normal) => shadeVertex({
-      baseColor: state.baseColor,
-      normal,
-    }));
-    for (let faceIndex = 0; faceIndex < CSSCYCLONE_FACE_INDICES.length; faceIndex += 1) {
-      writeAffineTriangleTile({
-        rgba,
-        width,
-        columns,
-        tileIndex: stateIndex * CSSCYCLONE_FACE_INDICES.length + faceIndex,
-        vertexColors,
-        vertexIndices: CSSCYCLONE_FACE_INDICES[faceIndex],
-      });
-    }
+  if (CSSCYCLONE_PRESENTATION.preparedPaletteHueSlotCount !== 3 ||
+      CSSCYCLONE_PRESENTATION.maximumColorFamilyCount !== 3 ||
+      CSSCYCLONE_PRESENTATION.startupPaletteFamilies.some((family) =>
+        !Object.hasOwn(PALETTE_CENTER_HUES, family))) {
+    throw new Error("Cyclone prepared three-family palette configuration drifted");
   }
-  const bytes = await sharp(rgba, {
-    raw: { width, height, channels: 4 },
-    limitInputPixels: false,
-  }).webp({ lossless: true, effort: 6 }).toBuffer();
-  const assetSha256 = createHash("sha256").update(bytes).digest("hex");
+  const assets = [];
+  for (const paletteFamily of CSSCYCLONE_PRESENTATION.startupPaletteFamilies) {
+    const hueSlots = preparedPaletteHues(paletteFamily);
+    const rgba = Buffer.alloc(width * height * 4);
+    for (let stateIndex = 0; stateIndex < colorStates.length; stateIndex += 1) {
+      const state = colorStates[stateIndex];
+      const baseColor = preparedPaletteColor(state.baseColor, paletteFamily);
+      const vertexColors = frozenVertexNormals[state.particleIndex].map((normal) => shadeVertex({
+        baseColor,
+        normal,
+      }));
+      for (let faceIndex = 0; faceIndex < CSSCYCLONE_FACE_INDICES.length; faceIndex += 1) {
+        writeAffineTriangleTile({
+          rgba,
+          width,
+          columns,
+          tileIndex: stateIndex * CSSCYCLONE_FACE_INDICES.length + faceIndex,
+          vertexColors,
+          vertexIndices: CSSCYCLONE_FACE_INDICES[faceIndex],
+        });
+      }
+    }
+    const bytes = await sharp(rgba, {
+      raw: { width, height, channels: 4 },
+      limitInputPixels: false,
+    }).webp({ lossless: true, effort: 6 }).toBuffer();
+    const assetSha256 = createHash("sha256").update(bytes).digest("hex");
+    assets.push(Object.freeze({
+      paletteFamily,
+      assetUrl: `/csscyclone/assets/lighting-${paletteFamily}-${assetSha256}.webp`,
+      assetSha256,
+      byteLength: bytes.byteLength,
+      hueSlots,
+      bytes,
+    }));
+  }
   const tileBackgroundPositions = Object.freeze(Array.from({ length: tileCount }, (_, tileIndex) => {
     const contentX = tileIndex % columns * SLOT_SIZE + GUTTER;
     const contentY = Math.floor(tileIndex / columns) * SLOT_SIZE + GUTTER;
     return `${-contentX * DISPLAY_SCALE}px ${-contentY * DISPLAY_SCALE}px`;
   }));
   const contract = deepFreeze({
-    schema: "csscyclone-prepared-smooth-lighting-atlas@4",
-    technique: "prepared-stream-frame-zero-smooth-lighting-with-sparse-source-color-restarts",
+    schema: "csscyclone-prepared-smooth-lighting-atlas@5",
+    technique: "prepared-session-three-family-lighting-variants-with-sparse-source-color-restarts",
     source: "src/cyclone/cyclone.cpp#particle::update+initSaver",
     streamId,
-    assetUrl: `/csscyclone/assets/lighting-${assetSha256}.webp`,
-    assetSha256,
     encoding: "WebP-lossless-RGBA8",
     mimeType: "image/webp",
     lossless: true,
     width,
     height,
     decodedBytes: width * height * 4,
-    byteLength: bytes.byteLength,
+    paletteFamilyCount: CSSCYCLONE_PRESENTATION.startupPaletteFamilies.length,
+    paletteFamilies: CSSCYCLONE_PRESENTATION.startupPaletteFamilies,
+    paletteHueSlotCount: CSSCYCLONE_PRESENTATION.preparedPaletteHueSlotCount,
+    paletteAssignment: CSSCYCLONE_PRESENTATION.preparedPaletteAssignment,
+    maximumColorFamilyCount: CSSCYCLONE_PRESENTATION.maximumColorFamilyCount,
+    variants: Object.freeze(assets.map(({ bytes: ignored, ...asset }) => Object.freeze(asset))),
     contentSize: CONTENT_SIZE,
     gutterPixels: GUTTER,
     slotSize: SLOT_SIZE,
@@ -196,7 +226,9 @@ async function buildPreparedLightingAsset({
     colorRestartCount,
     facesPerParticle: CSSCYCLONE_FACE_INDICES.length,
     lightingReferenceFrameIndex: 0,
-    sourceColorRestartsExact: true,
+    sourceColorRestartTimingExact: true,
+    sourceHueTimingExact: true,
+    sourceHueValuesExact: false,
     dynamicLightOrientation: false,
     displayScale: DISPLAY_SCALE,
     sampling: "two-by-two-affine-field-with-one-extrapolated-sample-gutter",
@@ -204,7 +236,7 @@ async function buildPreparedLightingAsset({
     backgroundSize: `${width * DISPLAY_SCALE}px ${height * DISPLAY_SCALE}px`,
     tileBackgroundPositions,
     material: Object.freeze({
-      ambientAndDiffuse: "source-particle-rgb",
+      ambientAndDiffuse: "prepared-session-three-family-palette-from-source-particle-rgb",
       specular: Object.freeze([0.7, 0.7, 0.7, 1]),
       shininess: 20,
     }),
@@ -229,13 +261,15 @@ async function buildPreparedLightingAsset({
   });
   return Object.freeze({
     contract,
-    bytes,
+    assets: Object.freeze(assets),
     metrics: Object.freeze({
       preparedLightingChunkCount: chunkCount,
       preparedLightingStreamFrameCount: sourceStreamFrameCount,
       preparedLightingColorStateCount: colorStates.length,
       preparedLightingColorRestartCount: colorRestartCount,
-      preparedLightingAtlasBytes: bytes.byteLength,
+      preparedLightingPaletteVariantCount: assets.length,
+      preparedLightingAtlasBytes: assets.reduce((sum, asset) => sum + asset.byteLength, 0),
+      preparedLightingMaximumVariantAtlasBytes: Math.max(...assets.map((asset) => asset.byteLength)),
       preparedLightingAtlasDecodedBytes: contract.decodedBytes,
       preparedLightingLeafBindingCount: leafCount,
       runtimeLightingCalculations: 0,
@@ -252,6 +286,50 @@ function validateSourceChunk(source) {
       source.frames.some((frame) => frame.particles?.length !== source.bank?.particleCount)) {
     throw new TypeError("Complete Cyclone source chunk is required for prepared lighting");
   }
+}
+
+function preparedPaletteHues(paletteFamily) {
+  const centerHue = PALETTE_CENTER_HUES[paletteFamily];
+  return Object.freeze([-1, 0, 1].map((offset) => {
+    const hue = centerHue + offset / 6;
+    return hue < 0 ? hue + 1 : hue >= 1 ? hue - 1 : hue;
+  }));
+}
+
+function preparedPaletteColor(baseColor, paletteFamily) {
+  const maximum = Math.max(...baseColor);
+  const minimum = Math.min(...baseColor);
+  const chroma = maximum - minimum;
+  const saturation = maximum > 0 ? chroma / maximum : 0;
+  let hue = 0;
+  if (chroma > 1e-12) {
+    if (maximum === baseColor[0]) hue = ((baseColor[1] - baseColor[2]) / chroma) % 6;
+    else if (maximum === baseColor[1]) hue = (baseColor[2] - baseColor[0]) / chroma + 2;
+    else hue = (baseColor[0] - baseColor[1]) / chroma + 4;
+    hue = (hue / 6 + 1) % 1;
+  }
+  const hueSlotIndex = Math.min(
+    CSSCYCLONE_PRESENTATION.preparedPaletteHueSlotCount - 1,
+    Math.floor(hue * CSSCYCLONE_PRESENTATION.preparedPaletteHueSlotCount),
+  );
+  return hsvToRgb(preparedPaletteHues(paletteFamily)[hueSlotIndex], saturation, maximum);
+}
+
+function hsvToRgb(hue, saturation, value) {
+  const sector = hue * 6;
+  const index = Math.floor(sector) % 6;
+  const fraction = sector - Math.floor(sector);
+  const minimum = value * (1 - saturation);
+  const descending = value * (1 - fraction * saturation);
+  const ascending = value * (1 - (1 - fraction) * saturation);
+  return [
+    [value, ascending, minimum],
+    [descending, value, minimum],
+    [minimum, value, ascending],
+    [minimum, descending, value],
+    [ascending, minimum, value],
+    [value, minimum, descending],
+  ][index];
 }
 
 function writeAffineTriangleTile({

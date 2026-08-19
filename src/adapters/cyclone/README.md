@@ -11,18 +11,31 @@ address writes are limited to the six leaves of a particle when the source
 restarts it with a new color.
 There is no Canvas, SVG, WebGL, runtime random walk, geometry construction,
 lighting calculation, matrix formatting, atlas rasterization, or DOM growth.
-The prepared presentation applies a square-root bias to the source's random
-saturation samples. Hue, lightness, RNG cadence, and geometry stay unchanged,
-while low-saturation grey runs occur less often. This is an intentional product
-color bias rather than an exact native-color claim. Viewports below 600px use a
+The prepared presentation maps the source's random saturation samples into a
+0.55-1.0 range. The source's uniform random hue-target timing and its rule that
+particles change color only when they restart are preserved. At preparation,
+each source hue is assigned to one of three slots in the selected session palette.
+Five lossless lighting-atlas variants provide blue-, yellow-, red-, magenta-,
+and green-centered palettes; each variant spans at most three adjacent hue
+families for the entire playback. The browser selects one prepared atlas and
+performs no color calculation. The same source RNG draws preserve lightness,
+RNG cadence, geometry, restart timing, and coherent color bands, but prepared
+hue values are intentionally quantized and are not exact source colors.
+Startup is prebaked to ten audited 40-frame source windows. The selector gives
+equal probability to the five prepared palette variants—blue, yellow, red,
+magenta, and green—then chooses between two expressive browser-reviewed source
+windows in that family. It never phases individual particles around a full hue
+wheel. This is an intentional presentation and startup-selection bias rather
+than an exact native-color or random-start claim.
+Viewports below 600px use a
 90-degree presentation field of view instead of the source-default 80 degrees
 so the cyclone fits narrow screens without changing prepared motion or geometry.
 
 The stream discards the source's dark startup by preparing 24 seconds before its
 first published frame. Its 10,800 states cover 216 seconds before repeating.
-Startup uses `crypto.getRandomValues` once to select a logical chunk and an
-early frame from the first half of the stream, excluding the previous session
-start chunk. Playback then follows the original source order. Each hash-bound
+Startup uses `crypto.getRandomValues` once to select an audited palette family,
+source window, and frame, excluding the previous exact window. Playback
+then follows the original source order. Each hash-bound
 gzip block prefetches its exact successor; only the active and lookahead blocks
 remain resident. The single terminal stream wrap is the only
 non-source-continuous boundary.

@@ -26,6 +26,10 @@ const sourceLock = JSON.parse(await readFile(join(adapterRoot, "notes/references
 const blockFrameCount = 50;
 const blocksPerChunk = CSSCYCLONE_BANK.frameCount / blockFrameCount;
 const blockCount = CSSCYCLONE_BANK.chunkCount * blocksPerChunk;
+const startupPaletteFamilies = CSSCYCLONE_PRESENTATION.startupPaletteFamilies;
+const startupSelections = CSSCYCLONE_PRESENTATION.startupSelections;
+const startupSilhouetteSampleFrameOffsets = CSSCYCLONE_PRESENTATION.startupSilhouetteSampleFrameOffsets;
+const hueSectorNames = Object.freeze(["red", "yellow", "green", "cyan", "blue", "magenta"]);
 
 if (!Number.isSafeInteger(blocksPerChunk)) {
   throw new Error("Cyclone prepared chunk must divide into exact transport blocks");
@@ -37,6 +41,7 @@ await mkdir(stagingRoot, { recursive: true });
 
 const lightingStream = createCyclonePreparedLightingStream();
 const blockEntries = [];
+const startupSelectionColorProfiles = new Map();
 let preparedModel = null;
 let preparedFrameCount = 0;
 let uniquePreparedTransformCount = 0;
@@ -53,6 +58,10 @@ for (const source of buildCycloneSourceChunks()) {
   }
   const preparedPlayback = buildCyclonePreparedPlayback({ source });
   const lighting = lightingStream.add(source);
+  for (const selection of startupSelections.filter((entry) =>
+    entry.chunkIndex === source.bank.chunkIndex)) {
+    startupSelectionColorProfiles.set(selection.id, analyzeStartupSelectionColors(source, selection));
+  }
   for (let blockIndex = 0; blockIndex < blocksPerChunk; blockIndex += 1) {
     const streamBlockIndex = source.bank.chunkIndex * blocksPerChunk + blockIndex;
     const localStartFrameIndex = blockIndex * blockFrameCount;
@@ -125,6 +134,9 @@ maximumResidentBlockPairDecodedBytes = Math.max(
   maximumResidentBlockPairDecodedBytes,
   previousBlockDecodedBytes + firstBlockDecodedBytes,
 );
+const startupColorProfile = buildStartupColorProfile(
+  startupSelections.map((selection) => startupSelectionColorProfiles.get(selection.id)),
+);
 const preparedLighting = await lightingStream.finalize();
 const catalogBytes = Buffer.from(`${JSON.stringify({
   schema: "csscyclone-prepared-stream-catalog@1",
@@ -139,9 +151,13 @@ const catalogBytes = Buffer.from(`${JSON.stringify({
   streamFrameCount: CSSCYCLONE_BANK.chunkCount * CSSCYCLONE_BANK.frameCount,
   streamDurationMilliseconds:
     CSSCYCLONE_BANK.chunkCount * CSSCYCLONE_BANK.frameCount * CSSCYCLONE_BANK.frameMilliseconds,
-  randomStartChunkCount: Math.ceil(CSSCYCLONE_BANK.chunkCount / 2),
-  randomStartFrameCount: Math.floor(CSSCYCLONE_BANK.frameCount / 3),
-  selection: "session-crypto-random-chunk-and-frame-no-immediate-chunk-repeat",
+  startupPaletteFamilies,
+  startupSelections,
+  startupSilhouetteSampling: CSSCYCLONE_PRESENTATION.startupSilhouetteSampling,
+  startupSilhouetteSampleFrameOffsets,
+  maximumColorFamilyCount: CSSCYCLONE_PRESENTATION.maximumColorFamilyCount,
+  startupColorProfile,
+  selection: "session-crypto-random-balanced-source-palette-window-no-immediate-repeat",
   playbackOrder: "source-continuous-ascending-chunks-with-one-terminal-stream-wrap",
   runtimeLookaheadBlockCount: 1,
   entries: blockEntries,
@@ -161,10 +177,12 @@ const catalog = await buildPolyMorphCatalog(CSSCYCLONE_MODEL_ID, [{
   manifestSha256: built.manifestSha256,
 }]);
 await writeBytes(join(stagingRoot, "model", "catalog.json"), catalog.bytes);
-await writeBytes(
-  join(stagingRoot, preparedLighting.contract.assetUrl.replace(/^\/csscyclone\//u, "")),
-  preparedLighting.bytes,
-);
+for (const asset of preparedLighting.assets) {
+  await writeBytes(
+    join(stagingRoot, asset.assetUrl.replace(/^\/csscyclone\//u, "")),
+    asset.bytes,
+  );
+}
 
 await writeJson(join(stagingRoot, "prepared.json"), {
   schema: "csscyclone-prepared-scene@1",
@@ -189,7 +207,13 @@ await writeJson(join(stagingRoot, "prepared.json"), {
       complexity: CSSCYCLONE_SOURCE.complexity,
       speed: CSSCYCLONE_SOURCE.speed,
       stretch: CSSCYCLONE_SOURCE.stretch,
-      saturationSampling: CSSCYCLONE_PRESENTATION.saturationSampling
+      saturationSampling: CSSCYCLONE_PRESENTATION.saturationSampling,
+      minimumSaturation: CSSCYCLONE_PRESENTATION.minimumSaturation,
+      hueSampling: CSSCYCLONE_PRESENTATION.hueSampling,
+      particleColorAssignment: CSSCYCLONE_PRESENTATION.particleColorAssignment,
+      preparedPaletteHueSlotCount: CSSCYCLONE_PRESENTATION.preparedPaletteHueSlotCount,
+      preparedPaletteAssignment: CSSCYCLONE_PRESENTATION.preparedPaletteAssignment,
+      maximumColorFamilyCount: CSSCYCLONE_PRESENTATION.maximumColorFamilyCount,
     },
     preparedStream: {
       id: CSSCYCLONE_BANK.id,
@@ -199,9 +223,13 @@ await writeJson(join(stagingRoot, "prepared.json"), {
       streamFrameCount: CSSCYCLONE_BANK.chunkCount * CSSCYCLONE_BANK.frameCount,
       streamDurationMilliseconds:
         CSSCYCLONE_BANK.chunkCount * CSSCYCLONE_BANK.frameCount * CSSCYCLONE_BANK.frameMilliseconds,
-      randomStartChunkCount: Math.ceil(CSSCYCLONE_BANK.chunkCount / 2),
-      randomStartFrameCount: Math.floor(CSSCYCLONE_BANK.frameCount / 3),
-      startupSelection: "session-crypto-random-chunk-and-frame-no-immediate-chunk-repeat",
+      startupPaletteFamilies,
+      startupSelections,
+      startupSilhouetteSampling: CSSCYCLONE_PRESENTATION.startupSilhouetteSampling,
+      startupSilhouetteSampleFrameOffsets,
+      maximumColorFamilyCount: CSSCYCLONE_PRESENTATION.maximumColorFamilyCount,
+      startupColorProfile,
+      startupSelection: "session-crypto-random-balanced-source-palette-window-no-immediate-repeat",
       handoff: "source-continuous-next-block-with-one-block-lookahead",
     },
     productParticleCount: CSSCYCLONE_BANK.particleCount,
@@ -296,6 +324,124 @@ function slicePreparedPlayback({
     }),
     frames: Object.freeze(frames),
   });
+}
+
+function analyzeStartupSelectionColors(source, selection) {
+  const hueSectorCounts = Array(hueSectorNames.length).fill(0);
+  let saturationSum = 0;
+  let sampleCount = 0;
+  for (const frame of source.frames.slice(
+    selection.startFrameIndex,
+    selection.startFrameIndex + selection.frameCount,
+  )) {
+    for (const particle of frame.particles) {
+      const [red, green, blue] = particle.colorRgb;
+      const maximum = Math.max(red, green, blue);
+      const minimum = Math.min(red, green, blue);
+      const chroma = maximum - minimum;
+      saturationSum += maximum > 0 ? chroma / maximum : 0;
+      hueSectorCounts[hueSector(red, green, blue, maximum, chroma)] += 1;
+      sampleCount += 1;
+    }
+  }
+  const hueSectorShares = hueSectorCounts.map((count) => count / sampleCount);
+  const dominantHueSectorIndex = hueSectorShares.reduce(
+    (bestIndex, share, index) => share > hueSectorShares[bestIndex] ? index : bestIndex,
+    0,
+  );
+  return Object.freeze({
+    id: selection.id,
+    paletteFamily: selection.paletteFamily,
+    chunkIndex: source.bank.chunkIndex,
+    startFrameIndex: selection.startFrameIndex,
+    frameCount: selection.frameCount,
+    meanSaturation: saturationSum / sampleCount,
+    dominantHueSector: hueSectorNames[dominantHueSectorIndex],
+    dominantHueShare: hueSectorShares[dominantHueSectorIndex],
+    hueSectorShares: Object.freeze(hueSectorShares),
+  });
+}
+
+function buildStartupColorProfile(selectionProfiles) {
+  const familySelectionCounts = new Map(startupPaletteFamilies.map((family) => [family, 0]));
+  const selectionIds = new Set();
+  for (const selection of startupSelections) {
+    familySelectionCounts.set(
+      selection.paletteFamily,
+      (familySelectionCounts.get(selection.paletteFamily) ?? 0) + 1,
+    );
+    selectionIds.add(selection.id);
+  }
+  const familySelectionCount = familySelectionCounts.get(startupPaletteFamilies[0]);
+  if (startupPaletteFamilies.length < 2 ||
+      new Set(startupPaletteFamilies).size !== startupPaletteFamilies.length ||
+      startupPaletteFamilies.some((family) => !hueSectorNames.includes(family)) ||
+      selectionIds.size !== startupSelections.length ||
+      startupSelections.some((selection) =>
+        typeof selection.id !== "string" || selection.id.length < 1 ||
+        !startupPaletteFamilies.includes(selection.paletteFamily) ||
+        !Number.isSafeInteger(selection.chunkIndex) || selection.chunkIndex < 0 ||
+        selection.chunkIndex >= CSSCYCLONE_BANK.chunkCount ||
+        !Number.isSafeInteger(selection.startFrameIndex) || selection.startFrameIndex < 0 ||
+        !Number.isSafeInteger(selection.frameCount) || selection.frameCount < 1 ||
+        selection.startFrameIndex + selection.frameCount > CSSCYCLONE_BANK.frameCount) ||
+      !Number.isSafeInteger(familySelectionCount) || familySelectionCount < 1 ||
+      [...familySelectionCounts.values()].some((count) => count !== familySelectionCount) ||
+      new Set(startupSilhouetteSampleFrameOffsets).size !== startupSilhouetteSampleFrameOffsets.length ||
+      startupSilhouetteSampleFrameOffsets.some((offset) =>
+        !Number.isSafeInteger(offset) || offset < 0 ||
+        startupSelections.some((selection) => offset >= selection.frameCount))) {
+    throw new Error("Cyclone prepared startup selection configuration is invalid");
+  }
+  if (selectionProfiles.length !== startupSelections.length ||
+      selectionProfiles.some((profile, index) => {
+        const selection = startupSelections[index];
+        return profile?.id !== selection.id ||
+          profile.paletteFamily !== selection.paletteFamily ||
+          profile.chunkIndex !== selection.chunkIndex ||
+          profile.startFrameIndex !== selection.startFrameIndex ||
+          profile.frameCount !== selection.frameCount ||
+          profile.meanSaturation < CSSCYCLONE_PRESENTATION.startupMinimumMeanSaturation ||
+          profile.dominantHueSector !== selection.paletteFamily ||
+          profile.dominantHueShare < CSSCYCLONE_PRESENTATION.startupMinimumDominantHueShare;
+      })) {
+    throw new Error("Cyclone prepared startup source-palette profile drifted");
+  }
+  return Object.freeze({
+    schema: "csscyclone-prepared-startup-color-profile@2",
+    metric: "prepared-source-particle-rgb-hsv-dominant-family-per-curated-window",
+    minimumMeanSaturation: CSSCYCLONE_PRESENTATION.startupMinimumMeanSaturation,
+    minimumDominantHueShare: CSSCYCLONE_PRESENTATION.startupMinimumDominantHueShare,
+    maximumColorFamilyCount: CSSCYCLONE_PRESENTATION.maximumColorFamilyCount,
+    hueSectorNames,
+    paletteFamilies: startupPaletteFamilies,
+    familySelectionCount,
+    selections: Object.freeze(selectionProfiles.map((profile) => Object.freeze({
+      id: profile.id,
+      paletteFamily: profile.paletteFamily,
+      chunkIndex: profile.chunkIndex,
+      startFrameIndex: profile.startFrameIndex,
+      frameCount: profile.frameCount,
+      meanSaturation: roundMetric(profile.meanSaturation),
+      dominantHueSector: profile.dominantHueSector,
+      dominantHueShare: roundMetric(profile.dominantHueShare),
+      hueSectorShares: Object.freeze(profile.hueSectorShares.map(roundMetric)),
+    }))),
+  });
+}
+
+function hueSector(red, green, blue, maximum, chroma) {
+  if (chroma <= 1e-12) return 0;
+  let hue;
+  if (maximum === red) hue = 60 * (((green - blue) / chroma) % 6);
+  else if (maximum === green) hue = 60 * ((blue - red) / chroma + 2);
+  else hue = 60 * ((red - green) / chroma + 4);
+  if (hue < 0) hue += 360;
+  return Math.floor((hue + 30) % 360 / 60);
+}
+
+function roundMetric(value) {
+  return Number(value.toFixed(6));
 }
 
 async function assertSourceIdentity() {

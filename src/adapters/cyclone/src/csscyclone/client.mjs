@@ -10,7 +10,7 @@ import {
 } from "./preparedStream.mjs";
 
 const MODEL_ID = "cyclone";
-const LAST_START_CHUNK_STORAGE_KEY = "csscyclone:last-start-chunk";
+const LAST_START_SELECTION_STORAGE_KEY = "csscyclone:last-start-selection";
 
 export async function mountCycloneClient(host) {
   const state = {
@@ -37,13 +37,16 @@ export async function mountCycloneClient(host) {
         metadata.model?.id !== MODEL_ID ||
         metadata.presentation?.preparedStream?.id !== catalog.streamId ||
         metadata.playback?.chunkCount !== catalog.chunkCount ||
-        metadata.playback?.preparedBlockCount !== catalog.blockCount) {
+        metadata.playback?.preparedBlockCount !== catalog.blockCount ||
+        metadata.lighting?.maximumColorFamilyCount !== catalog.maximumColorFamilyCount ||
+        metadata.lighting?.paletteFamilies?.some((family, index) =>
+          family !== catalog.startupPaletteFamilies[index])) {
       throw new Error("Cyclone prepared model binding drifted");
     }
     const selection = selectInitialCyclonePosition(catalog, {
-      previousChunkIndex: readPreviousStartChunk(catalog.randomStartChunkCount),
+      previousSelectionId: readPreviousStartSelection(catalog.startupSelections),
     });
-    rememberStartChunk(selection.chunkIndex);
+    rememberStartSelection(selection.selectionId);
     const initialStreamFrameIndex = selection.chunkIndex * catalog.chunkFrameCount + selection.frameIndex;
     const initialBlockIndex = Math.floor(initialStreamFrameIndex / catalog.blockFrameCount);
     const initialBlockFrameIndex = initialStreamFrameIndex % catalog.blockFrameCount;
@@ -52,7 +55,7 @@ export async function mountCycloneClient(host) {
     blockLoader.retain([initialBlockIndex, nextBlockIndex]);
     const [initialBlock, loadedLightingAsset] = await Promise.all([
       blockLoader.load(initialBlockIndex),
-      loadCyclonePreparedLightingAsset(metadata.lighting),
+      loadCyclonePreparedLightingAsset(metadata.lighting, selection.paletteFamily),
     ]);
     lightingAsset = loadedLightingAsset;
     const mounted = mountPolyMorphModel(host, loaded.model, {
@@ -138,6 +141,8 @@ function installDebugApi(state) {
           retainedPolygonLeafCount: state.mounted.leafHandles.size,
           initialChunkIndex: state.selection.chunkIndex,
           initialFrameIndex: state.selection.frameIndex,
+          startupSelectionId: state.selection.selectionId ?? null,
+          startupPaletteFamily: state.selection.paletteFamily ?? null,
           startupSelectionMode: state.selection.mode,
           ...state.blockLoader.stats(),
           ...state.player.stats(),
@@ -147,22 +152,20 @@ function installDebugApi(state) {
   });
 }
 
-function readPreviousStartChunk(randomStartChunkCount) {
+function readPreviousStartSelection(startupSelections) {
   try {
-    const stored = globalThis.sessionStorage?.getItem(LAST_START_CHUNK_STORAGE_KEY);
+    const stored = globalThis.sessionStorage?.getItem(LAST_START_SELECTION_STORAGE_KEY);
     if (stored === null || stored === undefined) return null;
-    const chunkIndex = Number(stored);
-    return Number.isSafeInteger(chunkIndex) && chunkIndex >= 0 && chunkIndex < randomStartChunkCount
-      ? chunkIndex
-      : null;
+    return startupSelections.some((selection) => selection.id === stored) ? stored : null;
   } catch {
     return null;
   }
 }
 
-function rememberStartChunk(chunkIndex) {
+function rememberStartSelection(selectionId) {
+  if (typeof selectionId !== "string") return;
   try {
-    globalThis.sessionStorage?.setItem(LAST_START_CHUNK_STORAGE_KEY, String(chunkIndex));
+    globalThis.sessionStorage?.setItem(LAST_START_SELECTION_STORAGE_KEY, selectionId);
   } catch {
     // Startup remains cryptographically random when storage is unavailable.
   }

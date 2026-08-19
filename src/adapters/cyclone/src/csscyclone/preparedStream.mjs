@@ -2,6 +2,7 @@ const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@1";
 const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@1";
 const PLAYBACK_SCHEMA = "csscyclone-prepared-dom-playback@3";
 const LIGHTING_BLOCK_SCHEMA = "csscyclone-prepared-lighting-block@1";
+const RUNTIME_LOOKAHEAD_BLOCK_COUNT = 3;
 const STARTUP_HUE_SECTOR_NAMES = Object.freeze(["red", "yellow", "green", "cyan", "blue", "magenta"]);
 const STARTUP_PALETTE_FAMILIES = Object.freeze(["blue", "yellow", "red", "magenta", "green"]);
 const STARTUP_SILHOUETTE_SAMPLING = "browser-reviewed-expressive-source-windows";
@@ -197,7 +198,7 @@ function validateCatalog(catalog) {
         !Number.isSafeInteger(frameOffset) || frameOffset < 0 ||
         catalog.startupSelections.some((selection) => frameOffset >= selection.frameCount)) ||
       catalog.selection !== STARTUP_SELECTION ||
-      catalog.runtimeLookaheadBlockCount !== 1 ||
+      catalog.runtimeLookaheadBlockCount !== RUNTIME_LOOKAHEAD_BLOCK_COUNT ||
       catalog.entries.some((entry, index) => entry?.index !== index ||
         entry.chunkIndex !== Math.floor(index / catalog.blocksPerChunk) ||
         entry.blockIndex !== index % catalog.blocksPerChunk ||

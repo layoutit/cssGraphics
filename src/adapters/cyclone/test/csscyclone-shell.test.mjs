@@ -50,7 +50,10 @@ test("uses the cssGraphics shell without product UI or alternate renderers", asy
   );
   assert.match(styles, /body\.priming::before/u);
   assert.match(stream, /new Worker\(new URL\("\.\/preparedBlockWorker\.mjs"/u);
-  assert.match(worker, /decodeCyclonePreparedBlock/u);
+  assert.match(worker, /decodeCyclonePreparedBlockIncrementally/u);
+  assert.match(worker, /data\.incremental/u);
+  assert.match(worker, /sliceDelayMilliseconds: 0/u);
+  assert.match(stream, /\{ incremental \}/u);
   assert.match(worker, /type: "materialized-chunk"/u);
   assert.match(worker, /TRANSFORM_RESPONSE_CHUNK_TRANSFORMS = 960/u);
   assert.match(worker, /setTimeout\(resolve, catalog\.frameMilliseconds\)/u);

@@ -291,14 +291,16 @@ test("round-trips exact prepared matrices through compact source-state blocks", 
   assert.ok(decoded.preparedCssStringByteLength > bytes.byteLength);
   let clock = 0;
   let delayCount = 0;
+  const delayMilliseconds = [];
   const slices = [];
   const incrementallyDecoded = await decodeCyclonePreparedBlockIncrementally(
     bytes,
     descriptor,
     catalog,
     {
-      setDelay(callback) {
+      setDelay(callback, milliseconds) {
         delayCount += 1;
+        delayMilliseconds.push(milliseconds);
         callback();
       },
       readNow() {
@@ -313,6 +315,7 @@ test("round-trips exact prepared matrices through compact source-state blocks", 
   );
   assert.deepEqual(incrementallyDecoded.playback.transforms, expected.transforms);
   assert.ok(delayCount >= 1);
+  assert.ok(delayMilliseconds.every((milliseconds) => milliseconds === catalog.frameMilliseconds));
   assert.ok(slices.every(({ operationCount }) => operationCount <= 8_192));
   assert.throws(
     () => decodeCyclonePreparedBlock(bytes.slice(0, -1), descriptor, catalog),

@@ -200,7 +200,11 @@ export function createCyclonePreparedBlockLoader(catalog) {
       let workerResponseIdleSliceCount = 0;
       let workerMaximumResponseChunkBytes = 0;
       const block = offMainThread && workerMaterializer !== null
-        ? await workerMaterializer.materialize(decodedRecord.bytes, descriptor).then((result) => {
+        ? await workerMaterializer.materialize(
+          decodedRecord.bytes,
+          descriptor,
+          { incremental },
+        ).then((result) => {
           workerDurationMilliseconds = result.durationMilliseconds;
           workerResponseChunkCount = result.responseChunkCount;
           workerResponseIdleSliceCount = result.responseIdleSliceCount;
@@ -512,8 +516,11 @@ function createWorkerBlockMaterializer(catalog) {
   worker.postMessage({ type: "initialize", catalog });
 
   return Object.freeze({
-    async materialize(bytes, descriptor) {
+    async materialize(bytes, descriptor, { incremental }) {
       if (destroyed) throw new Error("Prepared Cyclone worker is destroyed");
+      if (typeof incremental !== "boolean") {
+        throw new TypeError("Prepared Cyclone worker materialization mode is invalid");
+      }
       await initialized;
       const requestId = nextRequestId;
       nextRequestId += 1;
@@ -524,6 +531,7 @@ function createWorkerBlockMaterializer(catalog) {
       worker.postMessage({
         type: "materialize",
         requestId,
+        incremental,
         bytes: workerBytes,
         descriptor,
       }, [workerBytes.buffer]);

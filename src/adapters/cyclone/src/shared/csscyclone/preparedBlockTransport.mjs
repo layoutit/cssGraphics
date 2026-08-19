@@ -97,6 +97,7 @@ export async function decodeCyclonePreparedBlockIncrementally(
     setDelay = globalThis.setTimeout.bind(globalThis),
     readNow = () => globalThis.performance.now(),
     sliceBudgetMilliseconds = 4,
+    sliceDelayMilliseconds = catalog?.frameMilliseconds,
     isCurrent = () => true,
     onSlice = () => undefined,
   } = {},
@@ -104,14 +105,16 @@ export async function decodeCyclonePreparedBlockIncrementally(
   if (typeof setDelay !== "function" || typeof readNow !== "function" ||
       typeof isCurrent !== "function" || typeof onSlice !== "function" ||
       !Number.isFinite(sliceBudgetMilliseconds) ||
-      sliceBudgetMilliseconds <= 0 || sliceBudgetMilliseconds > 4) {
+      sliceBudgetMilliseconds <= 0 || sliceBudgetMilliseconds > 4 ||
+      !Number.isFinite(sliceDelayMilliseconds) || sliceDelayMilliseconds < 0 ||
+      sliceDelayMilliseconds > catalog?.frameMilliseconds) {
     throw new TypeError("Cyclone incremental source-state decoder scheduling is invalid");
   }
   const operations = decodeCyclonePreparedBlockOperations(bytes, descriptor, catalog);
   let firstSlice = true;
   while (true) {
     if (!firstSlice) {
-      await new Promise((resolveDelay) => setDelay(resolveDelay, catalog.frameMilliseconds));
+      await new Promise((resolveDelay) => setDelay(resolveDelay, sliceDelayMilliseconds));
       if (!isCurrent()) return null;
     }
     firstSlice = false;

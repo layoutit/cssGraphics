@@ -32,7 +32,30 @@ export const CSSCYCLONE_BANK = Object.freeze({
 });
 
 export const CSSCYCLONE_PRESENTATION = Object.freeze({
-  saturationSampling: "sqrt-uniform",
+  saturationSampling: "floor-0.55-plus-0.45-sqrt-uniform",
+  minimumSaturation: 0.55,
+  hueSampling: "source-uniform-random-targets",
+  particleColorAssignment: "source-hue-at-particle-restart",
+  preparedPaletteHueSlotCount: 3,
+  preparedPaletteAssignment: "source-hue-quantized-to-session-three-family-variant",
+  maximumColorFamilyCount: 3,
+  startupPaletteFamilies: Object.freeze(["blue", "yellow", "red", "magenta", "green"]),
+  startupSelections: Object.freeze([
+    Object.freeze({ id: "blue-a", paletteFamily: "blue", chunkIndex: 0, startFrameIndex: 20, frameCount: 40 }),
+    Object.freeze({ id: "blue-b", paletteFamily: "blue", chunkIndex: 0, startFrameIndex: 190, frameCount: 40 }),
+    Object.freeze({ id: "yellow-a", paletteFamily: "yellow", chunkIndex: 1, startFrameIndex: 55, frameCount: 40 }),
+    Object.freeze({ id: "yellow-b", paletteFamily: "yellow", chunkIndex: 7, startFrameIndex: 55, frameCount: 40 }),
+    Object.freeze({ id: "red-a", paletteFamily: "red", chunkIndex: 5, startFrameIndex: 55, frameCount: 40 }),
+    Object.freeze({ id: "red-b", paletteFamily: "red", chunkIndex: 9, startFrameIndex: 55, frameCount: 40 }),
+    Object.freeze({ id: "magenta-a", paletteFamily: "magenta", chunkIndex: 4, startFrameIndex: 55, frameCount: 40 }),
+    Object.freeze({ id: "magenta-b", paletteFamily: "magenta", chunkIndex: 11, startFrameIndex: 55, frameCount: 40 }),
+    Object.freeze({ id: "green-a", paletteFamily: "green", chunkIndex: 17, startFrameIndex: 55, frameCount: 40 }),
+    Object.freeze({ id: "green-b", paletteFamily: "green", chunkIndex: 19, startFrameIndex: 55, frameCount: 40 }),
+  ]),
+  startupSilhouetteSampling: "browser-reviewed-expressive-source-windows",
+  startupSilhouetteSampleFrameOffsets: Object.freeze([0, 10, 20, 30, 39]),
+  startupMinimumMeanSaturation: 0.68,
+  startupMinimumDominantHueShare: 0.25,
 });
 
 const FACTORIALS = Object.freeze([1, 1, 2, 6, 24, 120, 720]);
@@ -382,7 +405,9 @@ function randf(rng, maximum) {
 }
 
 function randomSaturation(rng) {
-  return Math.sqrt(randf(rng, 1));
+  const vividSample = Math.sqrt(randf(rng, 1));
+  return CSSCYCLONE_PRESENTATION.minimumSaturation +
+    (1 - CSSCYCLONE_PRESENTATION.minimumSaturation) * vividSample;
 }
 
 function identity4() {

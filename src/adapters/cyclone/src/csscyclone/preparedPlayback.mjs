@@ -4,7 +4,7 @@ import { createPolyMorphPreparedDomTarget } from "@layoutit/polycss-morph";
 const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@1";
 const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@1";
 const PLAYBACK_SCHEMA = "csscyclone-prepared-dom-playback@3";
-const LIGHTING_SCHEMA = "csscyclone-prepared-smooth-lighting-atlas@4";
+const LIGHTING_SCHEMA = "csscyclone-prepared-smooth-lighting-atlas@5";
 const LIGHTING_BLOCK_SCHEMA = "csscyclone-prepared-lighting-block@1";
 const SOURCE_FIELD_OF_VIEW_DEGREES = 80;
 const MOBILE_FIELD_OF_VIEW_DEGREES = 90;
@@ -319,6 +319,8 @@ export function createCyclonePreparedPlayer({
       preparedContinuousHandoffCount,
       preparedTerminalWrapCount,
       preparedLightingAssetBytes: lightingAsset.byteLength,
+      preparedLightingPaletteFamily: lightingAsset.paletteFamily,
+      preparedLightingMaximumColorFamilyCount: lighting.maximumColorFamilyCount,
       preparedLightingColorStateCount: lighting.colorStateCount,
       preparedLightingColorRestartCount: lighting.colorRestartCount,
       runtimeGeometryConstructionCount: 0,
@@ -356,6 +358,8 @@ export function createCyclonePreparedPlayer({
 }
 
 function validateBinding(mounted, catalog, initialBlock, initialFrameIndex, lighting, lightingAsset, loadBlock) {
+  const lightingVariant = lighting?.variants?.find((variant) =>
+    variant?.paletteFamily === lightingAsset?.paletteFamily);
   if (catalog?.schema !== CATALOG_SCHEMA ||
       catalog.blockCount !== catalog.entries?.length ||
       catalog.runtimeLookaheadBlockCount !== 1 ||
@@ -366,9 +370,12 @@ function validateBinding(mounted, catalog, initialBlock, initialFrameIndex, ligh
       lighting.leafCount !== mounted.model.render.leaves.length ||
       lighting.facesPerParticle * mounted.model.render.shapes.length !== lighting.leafCount ||
       lighting.tileBackgroundPositions?.length !== lighting.tileCount ||
+      lighting.maximumColorFamilyCount !== 3 ||
+      lighting.paletteHueSlotCount !== 3 ||
+      lightingAsset?.hueSlots?.length !== lighting.maximumColorFamilyCount ||
       lighting.runtime?.lightingCalculations !== 0 ||
       lighting.runtime?.atlasConstruction !== 0 ||
-      lightingAsset?.sha256 !== lighting.assetSha256 ||
+      lightingAsset?.sha256 !== lightingVariant?.assetSha256 ||
       typeof loadBlock !== "function" ||
       !Number.isSafeInteger(initialFrameIndex) || initialFrameIndex < 0 ||
       initialFrameIndex >= catalog.blockFrameCount) {

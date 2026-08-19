@@ -55,7 +55,7 @@ function fixture() {
     ],
   };
   const lighting = {
-    schema: "csscyclone-prepared-smooth-lighting-atlas@4",
+    schema: "csscyclone-prepared-smooth-lighting-atlas@5",
     streamId: "stream",
     chunkCount: 1,
     chunkFrameCount: 4,
@@ -65,7 +65,9 @@ function fixture() {
     colorRestartCount: 0,
     tileCount: 1,
     tileBackgroundPositions: ["0 0"],
-    assetSha256: "hash",
+    paletteHueSlotCount: 3,
+    maximumColorFamilyCount: 3,
+    variants: [{ paletteFamily: "blue", assetSha256: "hash" }],
     runtime: { lightingCalculations: 0, atlasConstruction: 0 },
   };
   const block = {
@@ -124,7 +126,14 @@ function fixture() {
     initialBlock: block,
     initialFrameIndex: 0,
     lighting,
-    lightingAsset: { url: "atlas.png", byteLength: 1, sha256: "hash", destroy: identity },
+    lightingAsset: {
+      url: "atlas.png",
+      byteLength: 1,
+      sha256: "hash",
+      paletteFamily: "blue",
+      hueSlots: [0.5, 2 / 3, 5 / 6],
+      destroy: identity,
+    },
     loadBlock: async () => block,
     readNow: () => now,
     requestFrame(callback) {

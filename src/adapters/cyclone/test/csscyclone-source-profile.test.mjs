@@ -20,6 +20,14 @@ import {
   prepareCyclonePaletteColor,
 } from "../src/prepare/csscyclone/preparedLighting.mjs";
 import { resolveCyclonePerspective } from "../src/csscyclone/preparedPlayback.mjs";
+import {
+  CSSCYCLONE_BLOCK_ENCODING,
+  CSSCYCLONE_LIGHTING_BLOCK_SCHEMA,
+  CSSCYCLONE_PLAYBACK_SCHEMA,
+  decodeCyclonePreparedBlock,
+  decodeCyclonePreparedBlockIncrementally,
+  encodeCyclonePreparedBlock,
+} from "../src/shared/csscyclone/preparedBlockTransport.mjs";
 
 test("pins the current Really Slick Cyclone source profile", () => {
   assert.equal(CSSCYCLONE_SOURCE.revision, "5f0a788bf0cc47f66a233ed528919295cd1e7500");
@@ -120,14 +128,96 @@ test("builds a stable retained particle graph and prepared state bank", () => {
   assert.equal(preparedModel.model.render.shapes.length, 3);
   assert.equal(preparedModel.model.render.leaves.length, 18);
   assert.equal(preparedModel.model.topology.polygons.length, 18);
-  assert.equal(preparedPlayback.playback.frames.length, 4);
   assert.equal(preparedPlayback.playback.transforms.length, 12);
-  assert.equal(preparedPlayback.playback.schema, "csscyclone-prepared-dom-playback@3");
-  assert.equal(preparedPlayback.playback.frames[0].length, 6);
+  assert.equal(preparedPlayback.playback.schema, "csscyclone-prepared-dom-playback@4");
   assert.equal(preparedPlayback.metrics.shapeTransformSelections, 12);
   assert.equal(preparedModel.metrics.runtimeGeometryConstructionCount, 0);
   assert.equal(preparedModel.metrics.runtimeAtlasRasterizationCount, 0);
   assert.equal(preparedModel.metrics.runtimeDomGrowth, false);
+});
+
+test("round-trips exact prepared matrices through compact source-state blocks", async () => {
+  const bank = {
+    ...CSSCYCLONE_BANK,
+    id: "transport-test",
+    particleCount: 10,
+    warmupFrames: 20,
+    frameCount: 20,
+    chunkCount: 1,
+  };
+  const source = buildCycloneSourceSequence({ bank });
+  const expected = buildCyclonePreparedPlayback({ source }).playback;
+  const lightingRows = source.frames.map((unused, frameIndex) =>
+    Array.from({ length: bank.particleCount }, (ignored, particleIndex) =>
+      (frameIndex + particleIndex) % 7));
+  const bytes = encodeCyclonePreparedBlock({
+    frames: source.frames,
+    lightingRows,
+    particleCount: bank.particleCount,
+  });
+  const descriptor = Object.freeze({
+    index: 0,
+    chunkIndex: 0,
+    blockIndex: 0,
+    startFrameIndex: 0,
+    frameCount: bank.frameCount,
+    encoding: CSSCYCLONE_BLOCK_ENCODING,
+  });
+  const catalog = Object.freeze({
+    streamId: bank.id,
+    modelId: CSSCYCLONE_MODEL_IDS.desktop,
+    particleCount: bank.particleCount,
+    leafCount: bank.particleCount * 6,
+    frameMilliseconds: bank.frameMilliseconds,
+    chunkCount: 1,
+    blockCount: 1,
+    blocksPerChunk: 1,
+    playbackSchema: CSSCYCLONE_PLAYBACK_SCHEMA,
+    lightingBlockSchema: CSSCYCLONE_LIGHTING_BLOCK_SCHEMA,
+    sourceTransformProfile: Object.freeze({
+      controlPointCount: 6,
+      speed: CSSCYCLONE_SOURCE.speed,
+      complexity: CSSCYCLONE_SOURCE.complexity,
+      particleSize: CSSCYCLONE_SOURCE.particleSize,
+    }),
+  });
+  const decoded = decodeCyclonePreparedBlock(bytes, descriptor, catalog);
+  assert.deepEqual(decoded.playback.transforms, expected.transforms);
+  assert.deepEqual(
+    [...decoded.lighting.frameParticleColorStateIndices],
+    lightingRows.flat(),
+  );
+  assert.equal(decoded.preparedMatrixExpansionCount, expected.transforms.length);
+  assert.ok(decoded.preparedCssStringByteLength > bytes.byteLength);
+  let clock = 0;
+  let delayCount = 0;
+  const slices = [];
+  const incrementallyDecoded = await decodeCyclonePreparedBlockIncrementally(
+    bytes,
+    descriptor,
+    catalog,
+    {
+      setDelay(callback) {
+        delayCount += 1;
+        callback();
+      },
+      readNow() {
+        clock += 1;
+        return clock;
+      },
+      sliceBudgetMilliseconds: 2,
+      onSlice(operationCount, durationMilliseconds) {
+        slices.push({ operationCount, durationMilliseconds });
+      },
+    },
+  );
+  assert.deepEqual(incrementallyDecoded.playback.transforms, expected.transforms);
+  assert.ok(delayCount >= 1);
+  assert.ok(slices.every(({ operationCount }) => operationCount <= 8_192));
+  assert.throws(
+    () => decodeCyclonePreparedBlock(bytes.slice(0, -1), descriptor, catalog),
+    /binary byte length drifted/u,
+  );
 });
 
 test("prepares smooth reference lighting without a runtime lighting timeline", async () => {

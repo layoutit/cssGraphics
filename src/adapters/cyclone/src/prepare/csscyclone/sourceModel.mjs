@@ -1,4 +1,5 @@
-const PI = Math.PI;
+import { advanceCycloneParticleTransform } from "../../shared/csscyclone/particleTransform.mjs";
+
 const CONTROL_POINT_COUNT = 6;
 
 export const CSSCYCLONE_SOURCE = Object.freeze({
@@ -82,8 +83,6 @@ export const CSSCYCLONE_PRESENTATION = Object.freeze({
   startupMinimumDominantHueShare: 0.25,
 });
 
-const FACTORIALS = Object.freeze([1, 1, 2, 6, 24, 120, 720]);
-
 export function buildCycloneSourceSequence({ bank = CSSCYCLONE_BANK } = {}) {
   return buildCycloneSourceChunks({ bank }).next().value;
 }
@@ -101,9 +100,10 @@ export function* buildCycloneSourceChunks({ bank = CSSCYCLONE_BANK } = {}) {
     const frames = [];
     const startFrameIndex = chunkIndex * bank.frameCount;
     for (let frame = 0; frame < bank.frameCount; frame += 1) {
-      stepSource(cyclone, particles, rng, deltaSeconds);
+      const transformState = stepSource(cyclone, particles, rng, deltaSeconds);
       frames.push(Object.freeze({
         timeMs: (startFrameIndex + frame) * bank.frameMilliseconds,
+        transformState,
         particles: Object.freeze(particles.map((particle) => Object.freeze({
           matrix: particle.matrix,
           color: particle.color,
@@ -152,6 +152,10 @@ export function selectCycloneSourceParticlePrefix(source, bank = CSSCYCLONE_BANK
     }),
     frames: Object.freeze(source.frames.map((frame) => Object.freeze({
       ...frame,
+      transformState: Object.freeze({
+        ...frame.transformState,
+        particles: Object.freeze(frame.transformState.particles.slice(0, bank.particleCount)),
+      }),
       particles: Object.freeze(frame.particles.slice(0, bank.particleCount)),
     }))),
   });
@@ -248,7 +252,12 @@ function resetParticle(particle, rng) {
 
 function stepSource(cyclone, particles, rng, deltaSeconds) {
   updateCyclone(cyclone, rng, deltaSeconds);
-  for (const particle of particles) updateParticle(particle, rng, deltaSeconds);
+  const particleStates = particles.map((particle) => updateParticle(particle, rng, deltaSeconds));
+  return Object.freeze({
+    points: Object.freeze(cyclone.xyz.map((point) => Object.freeze([...point]))),
+    widths: Object.freeze([...cyclone.width]),
+    particles: Object.freeze(particleStates),
+  });
 }
 
 function updateCyclone(cyclone, rng, deltaSeconds) {
@@ -332,51 +341,28 @@ function retargetWidth(cyclone, index, rng, minimum, randomRange, minimumDuratio
 }
 
 function updateParticle(particle, rng, deltaSeconds) {
-  if (particle.step > 1) resetParticle(particle, rng);
-  const cyclone = particle.cyclone;
-  const position = bezier(cyclone.xyz, particle.step);
-  const previous = bezier(cyclone.xyz, particle.step - 0.01);
-  const direction = normalize(sub3(position, previous));
-  const up = [0, 1, 0];
-  const crossVector = cross3(direction, up);
-  const tiltAngle = -Math.acos(clamp(dot3(direction, up), -1, 1)) * 180 / PI;
-  let widthIndex = Math.floor(particle.step * (CSSCYCLONE_SOURCE.complexity + 2));
-  if (widthIndex >= CSSCYCLONE_SOURCE.complexity + 2) widthIndex = CSSCYCLONE_SOURCE.complexity + 1;
-  const between = (particle.step - widthIndex / (CSSCYCLONE_SOURCE.complexity + 2)) * (CSSCYCLONE_SOURCE.complexity + 2);
-  const cycloneWidth = cyclone.width[widthIndex] * (1 - between) + cyclone.width[widthIndex + 1] * between;
-  const stepDelta = 0.2 * deltaSeconds * CSSCYCLONE_SOURCE.speed /
-    (particle.width * particle.width * cycloneWidth);
-  particle.step += stepDelta;
-  const spinDelta = 1500 * deltaSeconds * CSSCYCLONE_SOURCE.speed /
-    (particle.width * cycloneWidth);
-  particle.spinAngle += spinDelta;
-  let stretch = particle.width * cycloneWidth * spinDelta * 0.02;
-  stretch = Math.min(stretch, cycloneWidth * 2 / CSSCYCLONE_SOURCE.particleSize);
-  stretch = Math.max(stretch, 3);
-  const matrix = multiply4(
-    translation(position),
-    multiply4(
-      rotationAxis(tiltAngle, crossVector),
-      multiply4(
-        rotationY(particle.spinAngle),
-        multiply4(translation([particle.width * cycloneWidth, 0, 0]), scale4([1, 1, stretch])),
-      ),
-    ),
-  );
-  particle.matrix = flattenCss(matrix);
-}
-
-function bezier(points, step) {
-  const output = [0, 0, 0];
-  const degree = CONTROL_POINT_COUNT - 1;
-  for (let index = 0; index < CONTROL_POINT_COUNT; index += 1) {
-    const blend = FACTORIALS[degree] / (FACTORIALS[index] * FACTORIALS[degree - index]) *
-      Math.pow(step, index) * Math.pow(1 - step, degree - index);
-    output[0] += points[index][0] * blend;
-    output[1] += points[index][1] * blend;
-    output[2] += points[index][2] * blend;
-  }
-  return output;
+  const reset = particle.step > 1;
+  if (reset) resetParticle(particle, rng);
+  const preparedState = Object.freeze({
+    width: particle.width,
+    step: particle.step,
+    spinAngle: particle.spinAngle,
+    reset,
+  });
+  const advanced = advanceCycloneParticleTransform({
+    state: preparedState,
+    points: particle.cyclone.xyz,
+    widths: particle.cyclone.width,
+    deltaSeconds,
+    speed: CSSCYCLONE_SOURCE.speed,
+    complexity: CSSCYCLONE_SOURCE.complexity,
+    particleSize: CSSCYCLONE_SOURCE.particleSize,
+  });
+  particle.width = advanced.state.width;
+  particle.step = advanced.state.step;
+  particle.spinAngle = advanced.state.spinAngle;
+  particle.matrix = advanced.matrix;
+  return preparedState;
 }
 
 function hsl2rgb(hue, saturation, luminosity) {
@@ -487,29 +473,6 @@ function scale4([x, y, z]) {
   return matrix;
 }
 
-function rotationY(degrees) {
-  const radians = degrees * PI / 180;
-  const cosine = Math.cos(radians);
-  const sine = Math.sin(radians);
-  return [[cosine, 0, sine, 0], [0, 1, 0, 0], [-sine, 0, cosine, 0], [0, 0, 0, 1]];
-}
-
-function rotationAxis(degrees, axis) {
-  const length = Math.hypot(...axis);
-  if (length < 1e-12 || Math.abs(degrees) < 1e-12) return identity4();
-  const [x, y, z] = axis.map((value) => value / length);
-  const radians = degrees * PI / 180;
-  const cosine = Math.cos(radians);
-  const sine = Math.sin(radians);
-  const one = 1 - cosine;
-  return [
-    [x * x * one + cosine, x * y * one - z * sine, x * z * one + y * sine, 0],
-    [y * x * one + z * sine, y * y * one + cosine, y * z * one - x * sine, 0],
-    [z * x * one - y * sine, z * y * one + x * sine, z * z * one + cosine, 0],
-    [0, 0, 0, 1],
-  ];
-}
-
 function flattenCss(matrix) {
   return Object.freeze(matrix[0].map((_, column) => matrix.map((row) => rounded(row[column]))).flat());
 }
@@ -529,27 +492,6 @@ function mix(left, right, amount) {
 
 function mix3(left, right, amount) {
   return left.map((value, index) => mix(value, right[index], amount));
-}
-
-function sub3(left, right) {
-  return left.map((value, index) => value - right[index]);
-}
-
-function dot3(left, right) {
-  return left.reduce((sum, value, index) => sum + value * right[index], 0);
-}
-
-function cross3(left, right) {
-  return [
-    left[1] * right[2] - right[1] * left[2],
-    left[2] * right[0] - right[2] * left[0],
-    left[0] * right[1] - right[0] * left[1],
-  ];
-}
-
-function normalize(vector) {
-  const length = Math.hypot(...vector);
-  return length === 0 ? [...vector] : vector.map((value) => value / length);
 }
 
 function clamp(value, minimum, maximum) {

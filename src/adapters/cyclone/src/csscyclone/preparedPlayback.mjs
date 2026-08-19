@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import { createPolyMorphPreparedDomTarget } from "@layoutit/polycss-morph";
+import {
+  CSSCYCLONE_LIGHTING_BLOCK_SCHEMA,
+  CSSCYCLONE_PLAYBACK_SCHEMA,
+} from "../shared/csscyclone/preparedBlockTransport.mjs";
 
 const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@1";
-const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@1";
-const PLAYBACK_SCHEMA = "csscyclone-prepared-dom-playback@3";
+const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@2";
 const LIGHTING_SCHEMA = "csscyclone-prepared-smooth-lighting-atlas@7";
-const LIGHTING_BLOCK_SCHEMA = "csscyclone-prepared-lighting-block@1";
 const SOURCE_FIELD_OF_VIEW_DEGREES = 80;
 const MOBILE_FIELD_OF_VIEW_DEGREES = 90;
 const MOBILE_MAX_WIDTH = 600;
@@ -117,23 +119,24 @@ export function createCyclonePreparedPlayer({
   const lightingLeafBindingWrites = leafElements.length;
   let currentParticleColorStateIndices = [];
 
-  publishTransforms(playback.frames[initialFrameIndex]);
+  publishTransforms(initialFrameIndex);
   publishLighting(initialFrameIndex, true);
   applyCount += 1;
   queueLookaheadBlocks();
 
-  function publishTransforms(row) {
-    for (let operation = 0; operation < row.length; operation += 2) {
-      const particleIndex = row[operation];
-      const transformIndex = row[operation + 1];
-      shapeTransformWrites += Number(target.shapes[particleIndex].writeTransform(playback.transforms[transformIndex]));
+  function publishTransforms(nextFrameIndex) {
+    const frameOffset = nextFrameIndex * playback.particleCount;
+    for (let particleIndex = 0; particleIndex < playback.particleCount; particleIndex += 1) {
+      shapeTransformWrites += Number(target.shapes[particleIndex].writeTransform(
+        playback.transforms[frameOffset + particleIndex],
+      ));
     }
   }
 
   function publishLighting(nextFrameIndex, force = false) {
-    const nextStateIndices = lightingFrames.frameParticleColorStateIndices[nextFrameIndex];
-    for (let particleIndex = 0; particleIndex < nextStateIndices.length; particleIndex += 1) {
-      const nextStateIndex = nextStateIndices[particleIndex];
+    const frameOffset = nextFrameIndex * playback.particleCount;
+    for (let particleIndex = 0; particleIndex < playback.particleCount; particleIndex += 1) {
+      const nextStateIndex = lightingFrames.frameParticleColorStateIndices[frameOffset + particleIndex];
       if (!force && nextStateIndex === currentParticleColorStateIndices[particleIndex]) continue;
       const leafOffset = particleIndex * lighting.facesPerParticle;
       const tileOffset = nextStateIndex * lighting.facesPerParticle;
@@ -142,15 +145,15 @@ export function createCyclonePreparedPlayer({
           lighting.tileBackgroundPositions[tileOffset + faceIndex];
         if (!force) lightingLeafAddressWrites += 1;
       }
+      currentParticleColorStateIndices[particleIndex] = nextStateIndex;
     }
-    currentParticleColorStateIndices = [...nextStateIndices];
   }
 
   function advanceTo(nextFrameIndex) {
     if (frameIndex === nextFrameIndex) return;
     const distance = nextFrameIndex - frameIndex;
     if (distance < 1) throw new RangeError("Cyclone cannot rewind across a prepared block boundary");
-    publishTransforms(playback.frames[nextFrameIndex]);
+    publishTransforms(nextFrameIndex);
     publishLighting(nextFrameIndex);
     if (distance > 1) collapsedFrameCount += distance - 1;
     frameIndex = nextFrameIndex;
@@ -214,7 +217,7 @@ export function createCyclonePreparedPlayer({
     lightingFrames = activeBlock.lighting;
     pendingBlocks.delete(nextBlockIndex);
     frameIndex = 0;
-    publishTransforms(playback.frames[0]);
+    publishTransforms(0);
     publishLighting(0);
     applyCount += 1;
     preparedBlockSwitchCount += 1;
@@ -305,7 +308,7 @@ export function createCyclonePreparedPlayer({
     const wasPaused = paused;
     if (!wasPaused) pause();
     if (nextFrameIndex !== frameIndex) {
-      publishTransforms(playback.frames[nextFrameIndex]);
+      publishTransforms(nextFrameIndex);
       publishLighting(nextFrameIndex);
       frameIndex = nextFrameIndex;
       applyCount += 1;
@@ -370,9 +373,8 @@ export function createCyclonePreparedPlayer({
       runtimeAtlasRasterizationCount: 0,
       runtimeLightingCalculationCount: 0,
       runtimeLightingAtlasConstructionCount: 0,
-      runtimeMatrixFormattingCount: 0,
+      runtimeFrameMatrixFormattingCount: 0,
       runtimeIdLookupCount: 0,
-      runtimePreparedStateMaterializationCount: 0,
       runtimeDomGrowth: false,
       retainedModelWrapperCount: 0,
       retainedDomStable: true,
@@ -461,7 +463,7 @@ function validateBlockBinding(block, catalog, model, lighting) {
       block.blockIndex !== block.streamBlockIndex % catalog.blocksPerChunk ||
       block.startFrameIndex !== block.streamBlockIndex * catalog.blockFrameCount ||
       block.frameCount !== catalog.blockFrameCount ||
-      playback?.schema !== PLAYBACK_SCHEMA ||
+      playback?.schema !== CSSCYCLONE_PLAYBACK_SCHEMA ||
       playback.modelId !== model.identity.id ||
       playback.streamId !== catalog.streamId ||
       playback.streamBlockIndex !== block.streamBlockIndex ||
@@ -472,12 +474,11 @@ function validateBlockBinding(block, catalog, model, lighting) {
       playback.blocksPerChunk !== catalog.blocksPerChunk ||
       playback.startFrameIndex !== block.startFrameIndex ||
       playback.frameCount !== block.frameCount ||
-      playback.frames?.length !== playback.frameCount ||
       playback.particleCount !== model.render.shapes.length ||
       playback.leafCount !== model.render.leaves.length ||
-      playback.mounted?.shapeTransformIndices?.length !== playback.particleCount ||
-      playback.frames.some((row) => row?.length !== playback.particleCount * 2) ||
-      lightingFrames?.schema !== LIGHTING_BLOCK_SCHEMA ||
+      playback.transforms?.length !== playback.frameCount * playback.particleCount ||
+      playback.transforms.some((transform) => typeof transform !== "string") ||
+      lightingFrames?.schema !== CSSCYCLONE_LIGHTING_BLOCK_SCHEMA ||
       lightingFrames.streamId !== catalog.streamId ||
       lightingFrames.streamBlockIndex !== block.streamBlockIndex ||
       lightingFrames.chunkIndex !== block.chunkIndex ||
@@ -485,10 +486,10 @@ function validateBlockBinding(block, catalog, model, lighting) {
       lightingFrames.startFrameIndex !== block.startFrameIndex ||
       lightingFrames.frameCount !== playback.frameCount ||
       lightingFrames.particleCount !== playback.particleCount ||
-      lightingFrames.frameParticleColorStateIndices?.length !== playback.frameCount ||
-      lightingFrames.frameParticleColorStateIndices.some((row) => row?.length !== playback.particleCount ||
-        row.some((stateIndex) => !Number.isSafeInteger(stateIndex) || stateIndex < 0 ||
-          stateIndex >= lighting.colorStateCount))) {
+      !(lightingFrames.frameParticleColorStateIndices instanceof Uint16Array) ||
+      lightingFrames.frameParticleColorStateIndices.length !== playback.frameCount * playback.particleCount ||
+      lightingFrames.frameParticleColorStateIndices.some((stateIndex) =>
+        stateIndex < 0 || stateIndex >= lighting.colorStateCount)) {
     throw new Error(`Cyclone prepared block ${block?.streamBlockIndex ?? "unknown"} binding drifted`);
   }
 }

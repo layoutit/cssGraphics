@@ -136,31 +136,10 @@ export function buildCyclonePreparedPlayback({
   source = buildCycloneSourceSequence(),
   modelId = CSSCYCLONE_MODEL_ID,
 } = {}) {
-  const transforms = [];
-  const transformIndices = new Map();
-  const internTransform = (matrix) => {
-    const transform = `matrix3d(${formatMatrix3dValues(matrix, 6)})`;
-    const existing = transformIndices.get(transform);
-    if (existing !== undefined) return existing;
-    const index = transforms.length;
-    transforms.push(transform);
-    transformIndices.set(transform, index);
-    return index;
-  };
-  const first = source.frames[0];
-  const mountedShapeTransformIndices = first.particles.map((particle) => internTransform(particle.matrix));
-  const rowForFrame = (frame) => {
-    const shapeOperations = [];
-    for (let index = 0; index < frame.particles.length; index += 1) {
-      const particle = frame.particles[index];
-      const transformIndex = internTransform(particle.matrix);
-      shapeOperations.push(index, transformIndex);
-    }
-    return Object.freeze(shapeOperations);
-  };
-  const frames = source.frames.map(rowForFrame);
+  const transforms = source.frames.flatMap((frame) => frame.particles.map((particle) =>
+    `matrix3d(${formatMatrix3dValues(particle.matrix, 6)})`));
   const playback = deepFreeze({
-    schema: "csscyclone-prepared-dom-playback@3",
+    schema: "csscyclone-prepared-dom-playback@4",
     bankId: source.bank.id,
     streamId: source.bank.streamId,
     chunkIndex: source.bank.chunkIndex,
@@ -169,23 +148,19 @@ export function buildCyclonePreparedPlayback({
     modelId,
     frameMilliseconds: source.bank.frameMilliseconds,
     durationMilliseconds: source.durationMilliseconds,
-    frameCount: frames.length,
+    frameCount: source.frames.length,
     loop: false,
     particleCount: source.bank.particleCount,
     leafCount: source.bank.particleCount * CSSCYCLONE_FACE_INDICES.length,
     transforms: Object.freeze(transforms),
-    mounted: Object.freeze({
-      shapeTransformIndices: Object.freeze(mountedShapeTransformIndices),
-    }),
-    frames: Object.freeze(frames),
   });
   return deepFreeze({
     source,
     playback,
     metrics: Object.freeze({
-      preparedFrameCount: frames.length,
-      uniquePreparedTransformCount: transforms.length,
-      shapeTransformSelections: frames.reduce((sum, row) => sum + row.length / 2, 0),
+      preparedFrameCount: source.frames.length,
+      uniquePreparedTransformCount: new Set(transforms).size,
+      shapeTransformSelections: transforms.length,
     }),
   });
 }

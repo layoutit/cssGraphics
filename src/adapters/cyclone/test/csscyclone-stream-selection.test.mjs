@@ -20,6 +20,17 @@ const startupSelections = Object.freeze([
 const catalog = Object.freeze({
   schema: "csscyclone-prepared-stream-catalog@1",
   streamId: "desktop-stream",
+  modelId: "cyclone",
+  particleCount: 400,
+  leafCount: 2_400,
+  playbackSchema: "csscyclone-prepared-dom-playback@4",
+  lightingBlockSchema: "csscyclone-prepared-lighting-block@2",
+  sourceTransformProfile: Object.freeze({
+    controlPointCount: 6,
+    speed: 10,
+    complexity: 3,
+    particleSize: 7,
+  }),
   chunkCount: 24,
   chunkFrameCount: 450,
   blockCount: 216,
@@ -55,7 +66,7 @@ const catalog = Object.freeze({
       });
     })),
   }),
-  runtimeLookaheadBlockCount: 3,
+  runtimeLookaheadBlockCount: 11,
   entries: Object.freeze(Array.from({ length: 216 }, (_, index) => Object.freeze({
     index,
     chunkIndex: Math.floor(index / 9),
@@ -63,7 +74,7 @@ const catalog = Object.freeze({
     startFrameIndex: index * 50,
     frameCount: 50,
     sourceContinuousFromPrevious: index > 0,
-    encoding: "gzip-newline-json",
+    encoding: "gzip-cyclone-source-state-float64-uint16@1",
     assetUrl: `/block-${index}.bin`,
     byteLength: 1,
     sha256: hash,

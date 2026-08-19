@@ -94,7 +94,7 @@ export async function mountCycloneClient(host) {
       lighting: profile.lighting,
       lightingAsset,
       loadBlock(streamBlockIndex) {
-        return blockLoader.load(streamBlockIndex);
+        return blockLoader.load(streamBlockIndex, { incremental: true });
       },
       onBlockWindow(streamBlockIndices) {
         blockLoader.retain(streamBlockIndices);

@@ -34,7 +34,7 @@ function fixture({
   const shapeElements = Array.from({ length: 2 }, () => new FakeHTMLElement());
   const leafElements = Array.from({ length: 2 }, () => new FakeHTMLElement());
   const playback = {
-    schema: "csscyclone-prepared-dom-playback@3",
+    schema: "csscyclone-prepared-dom-playback@4",
     modelId: "cyclone",
     streamId: "stream",
     streamBlockIndex: 0,
@@ -49,14 +49,8 @@ function fixture({
     leafCount: 2,
     frameMilliseconds: 20,
     durationMilliseconds: 80,
+    loop: false,
     transforms: ["a", "b", "c", "d", "e", "f", "g", "h"],
-    mounted: { shapeTransformIndices: [0, 1] },
-    frames: [
-      [0, 0, 1, 1],
-      [0, 2, 1, 3],
-      [0, 4, 1, 5],
-      [0, 6, 1, 7],
-    ],
   };
   const lighting = {
     schema: "csscyclone-prepared-smooth-lighting-atlas@7",
@@ -86,7 +80,7 @@ function fixture({
       startFrameIndex: streamBlockIndex * 4,
     };
     return {
-      schema: "csscyclone-prepared-stream-block@1",
+      schema: "csscyclone-prepared-stream-block@2",
       streamId: "stream",
       streamBlockIndex,
       chunkIndex: 0,
@@ -95,7 +89,7 @@ function fixture({
       frameCount: 4,
       playback: blockPlayback,
       lighting: {
-        schema: "csscyclone-prepared-lighting-block@1",
+        schema: "csscyclone-prepared-lighting-block@2",
         streamId: "stream",
         streamBlockIndex,
         chunkIndex: 0,
@@ -103,7 +97,7 @@ function fixture({
         startFrameIndex: streamBlockIndex * 4,
         frameCount: 4,
         particleCount: 2,
-        frameParticleColorStateIndices: [[0, 0], [0, 0], [0, 0], [0, 0]],
+        frameParticleColorStateIndices: new Uint16Array(8),
       },
     };
   });
@@ -209,14 +203,14 @@ test("hands each prepared publication from its deadline timer to requestAnimatio
   assert.equal(stats.schedulerDelayCallbackCount, 1);
 });
 
-test("starts only after the complete prepared stream is decoded", async () => {
+test("starts with the complete configured decoded horizon", async () => {
   const state = fixture({
-    blockCount: 5,
-    runtimeLookaheadBlockCount: 4,
-    initialLookaheadBlockCount: 4,
+    blockCount: 13,
+    runtimeLookaheadBlockCount: 11,
+    initialLookaheadBlockCount: 11,
   });
-  assert.deepEqual(state.player.stats().pendingBlockIndices, [1, 2, 3, 4]);
-  assert.equal(state.player.stats().pendingBlockReadyCount, 4);
+  assert.deepEqual(state.player.stats().pendingBlockIndices, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+  assert.equal(state.player.stats().pendingBlockReadyCount, 11);
   assert.deepEqual(state.loadBlockCalls, []);
 
   state.player.resume();
@@ -227,10 +221,10 @@ test("starts only after the complete prepared stream is decoded", async () => {
 
   const stats = state.player.stats();
   assert.equal(stats.activeBlockIndex, 1);
-  assert.deepEqual(stats.pendingBlockIndices, [2, 3, 4, 0]);
-  assert.equal(stats.pendingBlockReadyCount, 4);
+  assert.deepEqual(stats.pendingBlockIndices, [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.equal(stats.pendingBlockReadyCount, 11);
   assert.equal(stats.runtimePreparedBlockWaitCount, 0);
-  assert.deepEqual(state.loadBlockCalls, [0]);
+  assert.deepEqual(state.loadBlockCalls, [12]);
 });
 
 test("collapses missed prepared frames once at the next paint-aligned callback", async () => {

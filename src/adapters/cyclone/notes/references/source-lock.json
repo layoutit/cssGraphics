@@ -1,0 +1,28 @@
+{
+  "schema": "csscyclone-source-lock@1",
+  "repository": "https://github.com/reallyslickscreensavers/reallyslickscreensavers",
+  "revision": "5f0a788bf0cc47f66a233ed528919295cd1e7500",
+  "primary": {
+    "path": "src/cyclone/cyclone.cpp",
+    "sha256": "1b6268aaf4fe25a43a14a0dcea4c4c58f18c1d2472e1366af2287efd938ea286"
+  },
+  "license": {
+    "path": "LICENSE",
+    "sha256": "90b664a6fbc82b38595cbb39606268bef0b2eb9b76b0e9e03826befe204190bb",
+    "expression": "GPL-2.0-or-later"
+  },
+  "rslibs": {
+    "repository": "https://github.com/reallyslickscreensavers/rslibs",
+    "revision": "42d251b1a751956f54c8aad263e78af527ef2b82",
+    "files": [
+      {
+        "path": "rsMath/rsMath.h",
+        "sha256": "8d81f07b7ec4a0abc2788161fd600a260b648f0747387aff5abfea2b2510da93"
+      },
+      {
+        "path": "Rgbhsl/Rgbhsl.cpp",
+        "sha256": "1866954fedbb83f5076cf078b35501882307285a88874c4e29658da76130e05b"
+      }
+    ]
+  }
+}

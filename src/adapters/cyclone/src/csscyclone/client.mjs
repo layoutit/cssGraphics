@@ -134,8 +134,10 @@ function cleanPreparedDom(mounted) {
   mounted.cameraElement.className = "polycss-camera";
   mounted.cameraElement.removeAttribute("data-polycss-camera-projection");
   mounted.cameraElement.removeAttribute("data-polycss-camera-perspective");
+  mounted.cameraElement.style.removeProperty("perspective");
   mounted.sceneElement.className = "polycss-scene";
   mounted.sceneElement.removeAttribute("aria-hidden");
+  mounted.sceneElement.style.removeProperty("transform");
   mounted.modelElement.removeAttribute("class");
   mounted.modelElement.removeAttribute("data-poly-morph-model");
   for (const element of mounted.shapeElements.values()) {

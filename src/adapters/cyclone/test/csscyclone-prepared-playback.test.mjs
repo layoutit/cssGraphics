@@ -10,7 +10,7 @@ class FakeHTMLElement {
     this.ownerDocument = {};
     this.style = {
       transform: "",
-      backgroundPosition: "",
+      backgroundColor: "",
       setProperty(name, value) { this[name] = value; },
     };
   }
@@ -27,6 +27,7 @@ function fixture({
   runtimeLookaheadBlockCount = 1,
   runtimeMaterializedLookaheadBlockCount = Math.min(2, runtimeLookaheadBlockCount),
   initialLookaheadBlockCount = 0,
+  schedulerMode = "deadline-timer-raf",
 } = {}) {
   let now = 0;
   let nextRequestId = 0;
@@ -55,7 +56,7 @@ function fixture({
     transforms: ["a", "b", "c", "d", "e", "f", "g", "h"],
   };
   const lighting = {
-    schema: "csscyclone-prepared-smooth-lighting-atlas@7",
+    schema: "csscyclone-prepared-flat-lighting-colors@9",
     streamId: "stream",
     chunkCount: 1,
     chunkFrameCount: blockCount * 4,
@@ -63,16 +64,15 @@ function fixture({
     facesPerParticle: 1,
     colorStateCount: 1,
     colorRestartCount: 0,
-    tileCount: 1,
-    uniqueTileCount: 1,
-    deduplicatedTileCount: 0,
-    tileDeduplication: "exact-cross-palette-rgba8-slot-content",
-    packing: "near-square-row-major-unique-slots",
-    tileBackgroundPositions: ["0 0"],
+    colorEntryCount: 1,
+    uniqueColorCount: 1,
+    deduplicatedColorCount: 0,
+    colorDeduplication: "exact-cross-palette-css-srgb-tuples",
+    colorSlotIndexCount: 1,
     paletteHueSlotCount: 3,
     maximumColorFamilyCount: 3,
-    variants: [{ paletteFamily: "blue", assetSha256: "hash" }],
-    runtime: { lightingCalculations: 0, atlasConstruction: 0 },
+    variants: [{ paletteFamily: "blue", colors: ["#123456"] }],
+    runtime: { lightingCalculations: 0, imageConstruction: 0 },
   };
   const blocks = Array.from({ length: blockCount }, (_, streamBlockIndex) => {
     const blockPlayback = {
@@ -144,14 +144,14 @@ function fixture({
     initialLookaheadBlocks: blocks.slice(1, initialLookaheadBlockCount + 1),
     initialFrameIndex: 0,
     lighting,
-    lightingAsset: {
-      url: "atlas.png",
-      byteLength: 1,
-      sha256: "hash",
+    lightingColors: {
       paletteFamily: "blue",
       hueSlots: [0.5, 2 / 3, 5 / 6],
+      colors: lighting.variants[0].colors,
+      colorSlotIndices: new Uint16Array([0]),
       destroy: identity,
     },
+    schedulerMode,
     loadBlock: async (streamBlockIndex) => {
       loadBlockCalls.push(streamBlockIndex);
       return blocks[streamBlockIndex];
@@ -211,6 +211,24 @@ test("hands each prepared publication from its deadline timer to requestAnimatio
   assert.equal(stats.runtimeSchedulerTransport, "deadline-setTimeout-requestAnimationFrame-prepared-publication");
   assert.equal(stats.schedulerFrameCallbackCount, 1);
   assert.equal(stats.schedulerDelayCallbackCount, 1);
+});
+
+test("can sample the same prepared publication from a continuous animation-frame clock", async () => {
+  const state = fixture({ schedulerMode: "continuous-raf" });
+  state.player.resume();
+  assert.equal(state.delays.size, 0);
+  assert.equal(state.frames.size, 1);
+  state.setNow(7);
+  await state.fireFrame();
+  assert.deepEqual(state.shapeElements.map((element) => element.style.transform), ["a", "b"]);
+  assert.equal(state.frames.size, 1);
+  state.setNow(8);
+  await state.fireFrame();
+  assert.deepEqual(state.shapeElements.map((element) => element.style.transform), ["c", "d"]);
+  const stats = state.player.stats();
+  assert.equal(stats.runtimeSchedulerTransport, "continuous-requestAnimationFrame-prepared-publication");
+  assert.equal(stats.schedulerDelayRequestCount, 0);
+  assert.equal(stats.schedulerFrameCallbackCount, 2);
 });
 
 test("starts from one materialized successor while filling the verified horizon", async () => {

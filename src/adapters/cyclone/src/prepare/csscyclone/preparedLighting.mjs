@@ -1,18 +1,9 @@
-import { createHash } from "node:crypto";
-import sharp from "sharp";
 import {
   CSSCYCLONE_FACE_INDICES,
-  CSSCYCLONE_FACE_TILE_VERTEX_ORDERS,
-  CSSCYCLONE_PARTICLE_VERTICES,
+  CSSCYCLONE_FACE_NORMALS,
 } from "./modelBuilder.mjs";
 import { CSSCYCLONE_PRESENTATION } from "./sourceModel.mjs";
 
-const CONTENT_SIZE = 2;
-const GUTTER = 1;
-const SLOT_SIZE = CONTENT_SIZE + GUTTER * 2;
-const UNPACKED_MAXIMUM_COLUMNS = 1_200;
-const MAXIMUM_TEXTURE_DIMENSION = 8_192;
-const DISPLAY_SCALE = 16;
 const PREPARED_MINIMUM_SATURATION = CSSCYCLONE_PRESENTATION.minimumSaturation;
 const PREPARED_MINIMUM_VALUE = 0.75;
 const PALETTE_CENTER_HUES = Object.freeze({
@@ -29,16 +20,14 @@ const HALF_VECTOR = normalize([
   LIGHT_DIRECTION[2] + 1,
 ]);
 
-export function createCyclonePreparedLightingStream({
-  assetRoot = "/csscyclone/assets",
-} = {}) {
+export function createCyclonePreparedLightingStream() {
   let particleCount = null;
   let expectedChunkCount = null;
   let chunkFrameCount = null;
   let streamId = null;
   let nextChunkIndex = 0;
   let sourceStreamFrameCount = 0;
-  let frozenVertexNormals = null;
+  let frozenFaceNormals = null;
   let currentColorStateIndices = null;
   let previousColors = null;
   let colorRestartCount = 0;
@@ -89,20 +78,19 @@ export function createCyclonePreparedLightingStream({
   }
 
   async function finalize({ allowPartial = false } = {}) {
-    if (particleCount === null || frozenVertexNormals === null || colorStates.length === 0) {
+    if (particleCount === null || frozenFaceNormals === null || colorStates.length === 0) {
       throw new Error("Prepared Cyclone lighting stream has no source chunks");
     }
     if (!allowPartial && nextChunkIndex !== expectedChunkCount) {
       throw new Error(`Prepared Cyclone lighting stream has ${nextChunkIndex}/${expectedChunkCount} chunks`);
     }
-    return buildPreparedLightingAsset({
-      assetRoot,
+    return buildPreparedLightingColors({
       particleCount,
       chunkCount: nextChunkIndex,
       chunkFrameCount,
       streamId,
       sourceStreamFrameCount,
-      frozenVertexNormals,
+      frozenFaceNormals,
       colorStates,
       colorRestartCount,
     });
@@ -115,31 +103,29 @@ export function createCyclonePreparedLightingStream({
     streamId = source.bank.streamId;
     currentColorStateIndices = Array(particleCount).fill(-1);
     previousColors = Array(particleCount).fill(null);
-    frozenVertexNormals = source.frames[0].particles.map((particle) => {
+    frozenFaceNormals = source.frames[0].particles.map((particle) => {
       const normalMatrix = inverseTranspose3(particle.matrix);
-      return CSSCYCLONE_PARTICLE_VERTICES.map((vertex) =>
-        transform3(normalMatrix, normalize(vertex)));
+      return CSSCYCLONE_FACE_NORMALS.map((normal) => transform3(normalMatrix, normal));
     });
   }
 
   return Object.freeze({ add, finalize });
 }
 
-export async function buildCyclonePreparedLighting({ source, assetRoot }) {
-  const stream = createCyclonePreparedLightingStream({ assetRoot });
+export async function buildCyclonePreparedLighting({ source }) {
+  const stream = createCyclonePreparedLightingStream();
   const chunk = stream.add(source);
   const prepared = await stream.finalize({ allowPartial: true });
   return Object.freeze({ ...prepared, chunk });
 }
 
-async function buildPreparedLightingAsset({
-  assetRoot,
+async function buildPreparedLightingColors({
   particleCount,
   chunkCount,
   chunkFrameCount,
   streamId,
   sourceStreamFrameCount,
-  frozenVertexNormals,
+  frozenFaceNormals,
   colorStates,
   colorRestartCount,
 }) {
@@ -151,89 +137,43 @@ async function buildPreparedLightingAsset({
         !Object.hasOwn(PALETTE_CENTER_HUES, family))) {
     throw new Error("Cyclone prepared three-family palette configuration drifted");
   }
-  const unpackedColumns = Math.min(UNPACKED_MAXIMUM_COLUMNS, tileCount);
-  const unpackedRows = Math.ceil(tileCount / unpackedColumns);
-  const unpackedWidth = unpackedColumns * SLOT_SIZE;
-  const unpackedHeight = unpackedRows * SLOT_SIZE;
-  const unpackedVariants = [];
+  const logicalVariants = [];
   for (const paletteFamily of CSSCYCLONE_PRESENTATION.startupPaletteFamilies) {
     const hueSlots = preparedPaletteHues(paletteFamily);
-    const rgba = Buffer.alloc(unpackedWidth * unpackedHeight * 4);
+    const colors = [];
     for (let stateIndex = 0; stateIndex < colorStates.length; stateIndex += 1) {
       const state = colorStates[stateIndex];
       const baseColor = prepareCyclonePaletteColor(state.baseColor, paletteFamily);
-      const vertexColors = frozenVertexNormals[state.particleIndex].map((normal) => shadeVertex({
-        baseColor,
-        normal,
-      }));
       for (let faceIndex = 0; faceIndex < CSSCYCLONE_FACE_INDICES.length; faceIndex += 1) {
-        const faceVertexIndices = CSSCYCLONE_FACE_INDICES[faceIndex];
-        writeAffineFaceTile({
-          rgba,
-          width: unpackedWidth,
-          columns: unpackedColumns,
-          tileIndex: stateIndex * CSSCYCLONE_FACE_INDICES.length + faceIndex,
-          vertexColors,
-          vertexIndices: CSSCYCLONE_FACE_TILE_VERTEX_ORDERS[faceIndex]
-            .map((index) => faceVertexIndices[index]),
+        const faceColor = shadeVertex({
+          baseColor,
+          normal: frozenFaceNormals[state.particleIndex][faceIndex],
         });
+        colors.push(rgbHex(faceColor));
       }
     }
-    unpackedVariants.push(Object.freeze({ paletteFamily, hueSlots, rgba }));
+    logicalVariants.push(Object.freeze({ paletteFamily, hueSlots, colors: Object.freeze(colors) }));
   }
-  const deduplication = deduplicateExactCrossVariantTiles(
-    unpackedVariants.map((variant) => variant.rgba),
-    { width: unpackedWidth, columns: unpackedColumns, tileCount },
+  const deduplication = deduplicateExactCrossVariantColors(logicalVariants, tileCount);
+  const uniqueColorCount = deduplication.uniqueSourceColorIndices.length;
+  const colorSlotIndexBytes = uniqueColorCount <= 0xffff ? 2 : 4;
+  const colorSlotIndicesBase64 = encodeColorSlotIndices(
+    deduplication.colorSlotIndices,
+    colorSlotIndexBytes,
   );
-  const uniqueTileCount = deduplication.uniqueSourceTileIndices.length;
-  const columns = Math.ceil(Math.sqrt(uniqueTileCount));
-  const rows = Math.ceil(uniqueTileCount / columns);
-  const width = columns * SLOT_SIZE;
-  const height = rows * SLOT_SIZE;
-  if (width > MAXIMUM_TEXTURE_DIMENSION || height > MAXIMUM_TEXTURE_DIMENSION) {
-    throw new Error(`Prepared Cyclone lighting atlas ${width}x${height} exceeds the image contract`);
-  }
-  const assets = [];
-  for (const variant of unpackedVariants) {
-    const rgba = packUniqueTiles(variant.rgba, {
-      sourceWidth: unpackedWidth,
-      sourceColumns: unpackedColumns,
-      uniqueSourceTileIndices: deduplication.uniqueSourceTileIndices,
-      targetWidth: width,
-      targetColumns: columns,
-      targetHeight: height,
-    });
-    const bytes = await sharp(rgba, {
-      raw: { width, height, channels: 4 },
-      limitInputPixels: false,
-    }).webp({ lossless: true, effort: 6 }).toBuffer();
-    const assetSha256 = createHash("sha256").update(bytes).digest("hex");
-    assets.push(Object.freeze({
-      paletteFamily: variant.paletteFamily,
-      assetUrl: `${assetRoot}/lighting-${variant.paletteFamily}-${assetSha256}.webp`,
-      assetSha256,
-      byteLength: bytes.byteLength,
-      hueSlots: variant.hueSlots,
-      bytes,
-    }));
-  }
-  const tileBackgroundPositions = Object.freeze(Array.from({ length: tileCount }, (_, tileIndex) => {
-    const slotIndex = deduplication.tileSlotIndices[tileIndex];
-    const contentX = slotIndex % columns * SLOT_SIZE + GUTTER;
-    const contentY = Math.floor(slotIndex / columns) * SLOT_SIZE + GUTTER;
-    return `${-contentX * DISPLAY_SCALE}px ${-contentY * DISPLAY_SCALE}px`;
+  const variants = logicalVariants.map((variant) => Object.freeze({
+    paletteFamily: variant.paletteFamily,
+    hueSlots: variant.hueSlots,
+    colors: Object.freeze(deduplication.uniqueSourceColorIndices.map((index) =>
+      variant.colors[index])),
   }));
   const contract = deepFreeze({
-    schema: "csscyclone-prepared-smooth-lighting-atlas@7",
-    technique: "prepared-session-three-family-lighting-variants-with-dark-color-floor-sparse-source-color-restarts-and-exact-tile-deduplication",
+    schema: "csscyclone-prepared-flat-lighting-colors@9",
+    technique: "prepared-flat-face-session-three-family-solid-colors-with-dark-color-floor-sparse-source-color-restarts-and-exact-cross-variant-deduplication",
     source: "src/cyclone/cyclone.cpp#particle::update+initSaver",
     streamId,
-    encoding: "WebP-lossless-RGBA8",
-    mimeType: "image/webp",
+    encoding: "CSS-sRGB-hex-plus-little-endian-color-slot-indices-base64",
     lossless: true,
-    width,
-    height,
-    decodedBytes: width * height * 4,
     paletteFamilyCount: CSSCYCLONE_PRESENTATION.startupPaletteFamilies.length,
     paletteFamilies: CSSCYCLONE_PRESENTATION.startupPaletteFamilies,
     paletteHueSlotCount: CSSCYCLONE_PRESENTATION.preparedPaletteHueSlotCount,
@@ -241,17 +181,15 @@ async function buildPreparedLightingAsset({
     preparedMinimumSaturation: PREPARED_MINIMUM_SATURATION,
     preparedMinimumValue: PREPARED_MINIMUM_VALUE,
     maximumColorFamilyCount: CSSCYCLONE_PRESENTATION.maximumColorFamilyCount,
-    variants: Object.freeze(assets.map(({ bytes: ignored, ...asset }) => Object.freeze(asset))),
-    contentSize: CONTENT_SIZE,
-    gutterPixels: GUTTER,
-    slotSize: SLOT_SIZE,
-    columns,
-    rows,
-    tileCount,
-    uniqueTileCount,
-    deduplicatedTileCount: tileCount - uniqueTileCount,
-    tileDeduplication: "exact-cross-palette-rgba8-slot-content",
-    packing: "near-square-row-major-unique-slots",
+    variants: Object.freeze(variants),
+    colorEntryCount: tileCount,
+    uniqueColorCount,
+    deduplicatedColorCount: tileCount - uniqueColorCount,
+    colorDeduplication: "exact-cross-palette-css-srgb-tuples",
+    colorSlotIndexEncoding: colorSlotIndexBytes === 2 ? "uint16-le-base64" : "uint32-le-base64",
+    colorSlotIndexBytes,
+    colorSlotIndexCount: tileCount,
+    colorSlotIndicesBase64,
     leafCount,
     sourceFaceCount: leafCount,
     sourceFaceCoverageCount: leafCount,
@@ -267,11 +205,8 @@ async function buildPreparedLightingAsset({
     sourceHueTimingExact: true,
     sourceHueValuesExact: false,
     dynamicLightOrientation: false,
-    displayScale: DISPLAY_SCALE,
-    sampling: "two-by-two-affine-field-with-one-extrapolated-sample-gutter",
-    interpolation: "browser-perspective-transformed-stream-frame-zero-smooth-vertex-color-field",
-    backgroundSize: `${width * DISPLAY_SCALE}px ${height * DISPLAY_SCALE}px`,
-    tileBackgroundPositions,
+    sampling: "one-prepared-solid-srgb-color-per-face-state",
+    interpolation: "browser-perspective-transformed-stream-frame-zero-flat-face-color",
     material: Object.freeze({
       ambientAndDiffuse: "prepared-session-three-family-palette-from-source-particle-rgb",
       specular: Object.freeze([0.7, 0.7, 0.7, 1]),
@@ -288,7 +223,7 @@ async function buildPreparedLightingAsset({
     }),
     runtime: Object.freeze({
       geometryConstruction: 0,
-      atlasConstruction: 0,
+      imageConstruction: 0,
       lightingCalculations: 0,
       colorCalculations: 0,
       rootLightingRowWritesPerSample: 0,
@@ -298,121 +233,57 @@ async function buildPreparedLightingAsset({
   });
   return Object.freeze({
     contract,
-    assets: Object.freeze(assets),
     metrics: Object.freeze({
       preparedLightingChunkCount: chunkCount,
       preparedLightingStreamFrameCount: sourceStreamFrameCount,
       preparedLightingColorStateCount: colorStates.length,
       preparedLightingColorRestartCount: colorRestartCount,
-      preparedLightingLogicalTileCount: tileCount,
-      preparedLightingUniqueTileCount: uniqueTileCount,
-      preparedLightingDeduplicatedTileCount: tileCount - uniqueTileCount,
-      preparedLightingPaletteVariantCount: assets.length,
-      preparedLightingAtlasBytes: assets.reduce((sum, asset) => sum + asset.byteLength, 0),
-      preparedLightingMaximumVariantAtlasBytes: Math.max(...assets.map((asset) => asset.byteLength)),
-      preparedLightingAtlasDecodedBytes: contract.decodedBytes,
+      preparedLightingLogicalColorCount: tileCount,
+      preparedLightingUniqueColorCount: uniqueColorCount,
+      preparedLightingDeduplicatedColorCount: tileCount - uniqueColorCount,
+      preparedLightingPaletteVariantCount: variants.length,
+      preparedLightingColorSlotIndexBytes: tileCount * colorSlotIndexBytes,
+      preparedLightingStoredColorCharacters: variants.reduce((sum, variant) =>
+        sum + variant.colors.reduce((colorSum, color) => colorSum + color.length, 0), 0),
       preparedLightingLeafBindingCount: leafCount,
       runtimeLightingCalculations: 0,
-      runtimeLightingAtlasConstruction: 0,
+      runtimeLightingImageConstruction: 0,
       runtimeLightingWritesPerSample: 0,
     }),
   });
 }
 
-function deduplicateExactCrossVariantTiles(variantRgba, { width, columns, tileCount }) {
-  if (!Array.isArray(variantRgba) || variantRgba.length < 1) {
-    throw new Error("Cyclone lighting tile deduplication requires every palette variant");
+function deduplicateExactCrossVariantColors(variants, colorEntryCount) {
+  if (!Array.isArray(variants) || variants.length < 1 ||
+      variants.some((variant) => variant.colors.length !== colorEntryCount)) {
+    throw new Error("Cyclone lighting color deduplication requires every palette variant");
   }
-  const tileByteLength = SLOT_SIZE * SLOT_SIZE * 4;
-  const signatureBytes = Buffer.alloc(tileByteLength * variantRgba.length);
   const slotBySignature = new Map();
-  const tileSlotIndices = new Uint32Array(tileCount);
-  const uniqueSourceTileIndices = [];
-  for (let tileIndex = 0; tileIndex < tileCount; tileIndex += 1) {
-    for (let variantIndex = 0; variantIndex < variantRgba.length; variantIndex += 1) {
-      copyTileToLinear(
-        variantRgba[variantIndex],
-        width,
-        columns,
-        tileIndex,
-        signatureBytes,
-        variantIndex * tileByteLength,
-      );
-    }
-    const signature = signatureBytes.toString("base64");
+  const colorSlotIndices = new Uint32Array(colorEntryCount);
+  const uniqueSourceColorIndices = [];
+  for (let colorIndex = 0; colorIndex < colorEntryCount; colorIndex += 1) {
+    const signature = variants.map((variant) => variant.colors[colorIndex]).join("");
     let slotIndex = slotBySignature.get(signature);
     if (slotIndex === undefined) {
-      slotIndex = uniqueSourceTileIndices.length;
+      slotIndex = uniqueSourceColorIndices.length;
       slotBySignature.set(signature, slotIndex);
-      uniqueSourceTileIndices.push(tileIndex);
+      uniqueSourceColorIndices.push(colorIndex);
     }
-    tileSlotIndices[tileIndex] = slotIndex;
+    colorSlotIndices[colorIndex] = slotIndex;
   }
   return Object.freeze({
-    tileSlotIndices,
-    uniqueSourceTileIndices: Object.freeze(uniqueSourceTileIndices),
+    colorSlotIndices,
+    uniqueSourceColorIndices: Object.freeze(uniqueSourceColorIndices),
   });
 }
 
-function packUniqueTiles(source, {
-  sourceWidth,
-  sourceColumns,
-  uniqueSourceTileIndices,
-  targetWidth,
-  targetColumns,
-  targetHeight,
-}) {
-  const target = Buffer.alloc(targetWidth * targetHeight * 4);
-  for (let slotIndex = 0; slotIndex < uniqueSourceTileIndices.length; slotIndex += 1) {
-    copyAtlasTile({
-      source,
-      sourceWidth,
-      sourceColumns,
-      sourceTileIndex: uniqueSourceTileIndices[slotIndex],
-      target,
-      targetWidth,
-      targetColumns,
-      targetTileIndex: slotIndex,
-    });
+function encodeColorSlotIndices(indices, bytesPerIndex) {
+  const bytes = Buffer.alloc(indices.length * bytesPerIndex);
+  for (let index = 0; index < indices.length; index += 1) {
+    if (bytesPerIndex === 2) bytes.writeUInt16LE(indices[index], index * bytesPerIndex);
+    else bytes.writeUInt32LE(indices[index], index * bytesPerIndex);
   }
-  return target;
-}
-
-function copyTileToLinear(source, sourceWidth, sourceColumns, sourceTileIndex, target, targetOffset) {
-  const sourceX = sourceTileIndex % sourceColumns * SLOT_SIZE;
-  const sourceY = Math.floor(sourceTileIndex / sourceColumns) * SLOT_SIZE;
-  const rowByteLength = SLOT_SIZE * 4;
-  for (let localY = 0; localY < SLOT_SIZE; localY += 1) {
-    const sourceOffset = ((sourceY + localY) * sourceWidth + sourceX) * 4;
-    source.copy(
-      target,
-      targetOffset + localY * rowByteLength,
-      sourceOffset,
-      sourceOffset + rowByteLength,
-    );
-  }
-}
-
-function copyAtlasTile({
-  source,
-  sourceWidth,
-  sourceColumns,
-  sourceTileIndex,
-  target,
-  targetWidth,
-  targetColumns,
-  targetTileIndex,
-}) {
-  const sourceX = sourceTileIndex % sourceColumns * SLOT_SIZE;
-  const sourceY = Math.floor(sourceTileIndex / sourceColumns) * SLOT_SIZE;
-  const targetX = targetTileIndex % targetColumns * SLOT_SIZE;
-  const targetY = Math.floor(targetTileIndex / targetColumns) * SLOT_SIZE;
-  const rowByteLength = SLOT_SIZE * 4;
-  for (let localY = 0; localY < SLOT_SIZE; localY += 1) {
-    const sourceOffset = ((sourceY + localY) * sourceWidth + sourceX) * 4;
-    const targetOffset = ((targetY + localY) * targetWidth + targetX) * 4;
-    source.copy(target, targetOffset, sourceOffset, sourceOffset + rowByteLength);
-  }
+  return bytes.toString("base64");
 }
 
 function validateSourceChunk(source) {
@@ -475,51 +346,6 @@ function hsvToRgb(hue, saturation, value) {
   ][index];
 }
 
-function writeAffineFaceTile({
-  rgba,
-  width,
-  columns,
-  tileIndex,
-  vertexColors,
-  vertexIndices,
-}) {
-  const originX = tileIndex % columns * SLOT_SIZE;
-  const originY = Math.floor(tileIndex / columns) * SLOT_SIZE;
-  for (let localY = -GUTTER; localY < CONTENT_SIZE + GUTTER; localY += 1) {
-    const v = (localY + 0.5) / CONTENT_SIZE;
-    for (let localX = -GUTTER; localX < CONTENT_SIZE + GUTTER; localX += 1) {
-      const u = (localX + 0.5) / CONTENT_SIZE;
-      const weights = vertexIndices.length === 3
-        ? triangleWeights(u, v)
-        : vertexIndices.length === 4
-        ? quadWeights(u, v)
-        : null;
-      if (weights === null) throw new Error("Cyclone lighting face must be a triangle or quad");
-      const color = [0, 1, 2].map((channel) => clampByte(weights.reduce(
-        (sum, weight, index) => sum + vertexColors[vertexIndices[index]][channel] * weight,
-        0,
-      )));
-      const x = originX + localX + GUTTER;
-      const y = originY + localY + GUTTER;
-      const offset = (y * width + x) * 4;
-      rgba[offset] = color[0];
-      rgba[offset + 1] = color[1];
-      rgba[offset + 2] = color[2];
-      rgba[offset + 3] = 255;
-    }
-  }
-}
-
-function triangleWeights(u, v) {
-  const apex = 1 - v;
-  const right = u - 0.5 * apex;
-  return [apex, 1 - apex - right, right];
-}
-
-function quadWeights(u, v) {
-  return [(1 - u) * (1 - v), u * (1 - v), u * v, (1 - u) * v];
-}
-
 function shadeVertex({ baseColor, normal }) {
   const diffuse = Math.max(0, dot(normal, LIGHT_DIRECTION));
   const specular = diffuse > 0
@@ -531,6 +357,10 @@ function shadeVertex({ baseColor, normal }) {
       baseColor[channel] * diffuse +
       0.7 * specular) * 255,
   ));
+}
+
+function rgbHex(color) {
+  return `#${color.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
 }
 
 function inverseTranspose3(matrix) {

@@ -47,7 +47,6 @@ const profileConfigs = Object.freeze([
     modelId: CSSCYCLONE_MODEL_IDS.desktop,
     catalogUrl: "/csscyclone/catalog.json",
     blockRoot: "/csscyclone/blocks",
-    lightingAssetRoot: "/csscyclone/assets",
     particleSelection: "prepared-source-particle-prefix",
     startupSelections: CSSCYCLONE_PRESENTATION.startupSelections,
   }),
@@ -57,7 +56,6 @@ const profileConfigs = Object.freeze([
     modelId: CSSCYCLONE_MODEL_IDS.mobile,
     catalogUrl: "/csscyclone/mobile/catalog.json",
     blockRoot: "/csscyclone/mobile/blocks",
-    lightingAssetRoot: "/csscyclone/mobile/assets",
     particleSelection: "prepared-source-particle-prefix",
     startupSelections: CSSCYCLONE_PRESENTATION.mobileStartupSelections,
   }),
@@ -85,7 +83,7 @@ await writeJson(join(stagingRoot, "prepared.json"), {
   renderer: {
     package: "@layoutit/polycss-morph",
     profile: "static-prepared",
-    representation: "retained-forward-pyramid-roots-with-four-solid-triangle-sides-and-one-solid-quad-cap",
+    representation: "retained-forward-triangular-bipyramid-roots-with-six-solid-triangle-faces",
     runtimeGeometryConstruction: false,
     runtimeAtlasRasterization: false,
     runtimeDomGrowth: false,
@@ -133,9 +131,7 @@ async function prepareProfile(profile) {
   if (!Number.isSafeInteger(blocksPerChunk)) {
     throw new Error(`Cyclone ${profile.id} prepared chunk must divide into exact transport blocks`);
   }
-  const lightingStream = createCyclonePreparedLightingStream({
-    assetRoot: profile.lightingAssetRoot,
-  });
+  const lightingStream = createCyclonePreparedLightingStream();
   const blockEntries = [];
   const startupSelectionColorProfiles = new Map();
   let preparedModel = null;
@@ -218,6 +214,7 @@ async function prepareProfile(profile) {
       speed: CSSCYCLONE_SOURCE.speed,
       complexity: CSSCYCLONE_SOURCE.complexity,
       particleSize: CSSCYCLONE_SOURCE.particleSize,
+      radialOrbitScale: CSSCYCLONE_PRESENTATION.radialOrbitScale,
     }),
     seed: bank.seed,
     chunkCount: bank.chunkCount,
@@ -253,16 +250,11 @@ async function prepareProfile(profile) {
   await mkdir(packageRoot, { recursive: true });
   for (const [path, bytes] of built.files) await writeBytes(join(packageRoot, path), bytes);
   await writeBytes(join(packageRoot, "manifest.json"), built.manifestBytes);
-  for (const asset of preparedLighting.assets) {
-    await writeBytes(
-      join(stagingRoot, asset.assetUrl.replace(/^\/csscyclone\//u, "")),
-      asset.bytes,
-    );
-  }
   const metadata = Object.freeze({
     id: profile.id,
     particleSelection: profile.particleSelection,
     presentation: Object.freeze({
+      radialOrbitScale: CSSCYCLONE_PRESENTATION.radialOrbitScale,
       sourceDefaults: Object.freeze({
         cyclones: 1,
         particles: CSSCYCLONE_SOURCE_BANK.particleCount,

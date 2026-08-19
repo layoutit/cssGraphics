@@ -219,6 +219,7 @@ function* decodeCyclonePreparedBlockOperations(bytes, descriptor, catalog) {
         speed: catalog.sourceTransformProfile.speed,
         complexity: catalog.sourceTransformProfile.complexity,
         particleSize: catalog.sourceTransformProfile.particleSize,
+        radialOrbitScale: catalog.sourceTransformProfile.radialOrbitScale,
       });
       transforms[frameIndex * particleCount + particleIndex] =
         `matrix3d(${formatMatrix3dValues(advanced.matrix, 6)})`;
@@ -302,5 +303,6 @@ function validParticleState(state) {
 function validSourceProfile(profile) {
   return profile?.controlPointCount === CONTROL_POINT_COUNT && Number.isFinite(profile.speed) && profile.speed > 0 &&
     Number.isSafeInteger(profile.complexity) && profile.complexity >= 1 &&
-    Number.isFinite(profile.particleSize) && profile.particleSize > 0;
+    Number.isFinite(profile.particleSize) && profile.particleSize > 0 &&
+    Number.isFinite(profile.radialOrbitScale) && profile.radialOrbitScale > 0;
 }

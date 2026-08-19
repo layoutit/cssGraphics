@@ -4,7 +4,7 @@ import { createPolyMorphPreparedDomTarget } from "@layoutit/polycss-morph";
 const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@1";
 const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@1";
 const PLAYBACK_SCHEMA = "csscyclone-prepared-dom-playback@3";
-const LIGHTING_SCHEMA = "csscyclone-prepared-smooth-lighting-atlas@6";
+const LIGHTING_SCHEMA = "csscyclone-prepared-smooth-lighting-atlas@7";
 const LIGHTING_BLOCK_SCHEMA = "csscyclone-prepared-lighting-block@1";
 const SOURCE_FIELD_OF_VIEW_DEGREES = 80;
 const MOBILE_FIELD_OF_VIEW_DEGREES = 90;
@@ -20,9 +20,9 @@ export function resolveCyclonePerspective(viewportWidth, viewportHeight) {
 
 export function createCyclonePreparedPlayer({
   mounted,
+  modelTransform,
   catalog,
   initialBlock,
-  initialLookaheadBlocks = [],
   initialFrameIndex,
   lighting,
   lightingAsset,
@@ -37,9 +37,9 @@ export function createCyclonePreparedPlayer({
 }) {
   validateBinding(
     mounted,
+    modelTransform,
     catalog,
     initialBlock,
-    initialLookaheadBlocks,
     initialFrameIndex,
     lighting,
     lightingAsset,
@@ -50,34 +50,43 @@ export function createCyclonePreparedPlayer({
   if (shapeElements.some((element) => !element) || leafElements.some((element) => !element)) {
     throw new Error("Cyclone retained DOM binding is incomplete");
   }
-  let publishedModelTransform = mounted.modelElement.style.transform;
+  let publishedModelTransform = modelTransform;
+  let publishedProjectionTransform = mounted.sceneElement.style.transform;
+  let publishedSceneTransform = "";
+  const publishSceneTransform = () => {
+    const transform = `${publishedProjectionTransform} ${publishedModelTransform}`.trim();
+    if (transform === publishedSceneTransform) return false;
+    mounted.sceneElement.style.transform = transform;
+    publishedSceneTransform = transform;
+    return true;
+  };
+  publishSceneTransform();
   const target = createPolyMorphPreparedDomTarget({
     model: {
-      element: mounted.modelElement,
+      element: mounted.sceneElement,
       writeTransform(transform) {
         if (transform === publishedModelTransform) return false;
-        mounted.modelElement.style.transform = transform;
         publishedModelTransform = transform;
-        return true;
+        return publishSceneTransform();
       },
     },
     shapes: shapeElements.map((element) => ({ element })),
     leaves: leafElements.map((element) => ({ element })),
   });
-  mounted.modelElement.style.setProperty(
+  mounted.sceneElement.style.setProperty(
     "--cyclone-lighting-atlas",
     `url("${lightingAsset.url.replace(/"/gu, "%22")}")`,
   );
-  mounted.modelElement.style.setProperty("--cyclone-lighting-size", lighting.backgroundSize);
+  mounted.sceneElement.style.setProperty("--cyclone-lighting-size", lighting.backgroundSize);
 
   let activeBlock = initialBlock;
   let playback = activeBlock.playback;
   let lightingFrames = activeBlock.lighting;
   let activeBlockIndex = activeBlock.streamBlockIndex;
-  const pendingBlocks = new Map(initialLookaheadBlocks.map((block) => [
-    block.streamBlockIndex,
-    { block, promise: Promise.resolve(block), error: null },
-  ]));
+  let pendingBlock = null;
+  let pendingBlockIndex = null;
+  let pendingBlockPromise = null;
+  let pendingBlockError = null;
   let paused = true;
   let destroyed = false;
   let frameRequest = null;
@@ -98,7 +107,7 @@ export function createCyclonePreparedPlayer({
   let lightingLeafAddressWrites = 0;
   let preparedChunkSwitchCount = 0;
   let preparedBlockSwitchCount = 0;
-  let preparedBlockPrefetchCount = initialLookaheadBlocks.length;
+  let preparedBlockPrefetchCount = 0;
   let runtimePreparedBlockWaitCount = 0;
   let preparedContinuousHandoffCount = 0;
   let preparedTerminalWrapCount = 0;
@@ -109,7 +118,7 @@ export function createCyclonePreparedPlayer({
   publishTransforms(playback.frames[initialFrameIndex]);
   publishLighting(initialFrameIndex, true);
   applyCount += 1;
-  queueLookaheadBlocks();
+  queueNextBlock();
 
   function publishTransforms(row) {
     for (let operation = 0; operation < row.length; operation += 2) {
@@ -146,62 +155,45 @@ export function createCyclonePreparedPlayer({
     applyCount += 1;
   }
 
-  function lookaheadBlockIndices() {
-    const indices = [];
-    for (let offset = 1; offset <= catalog.runtimeLookaheadBlockCount; offset += 1) {
-      const index = (activeBlockIndex + offset) % catalog.blockCount;
-      if (!indices.includes(index)) indices.push(index);
-    }
-    return indices;
-  }
-
-  function queueLookaheadBlocks() {
-    if (destroyed) return;
-    const indices = lookaheadBlockIndices();
-    const retainedIndices = new Set(indices);
-    onBlockWindow([activeBlockIndex, ...indices]);
-    for (const index of pendingBlocks.keys()) {
-      if (!retainedIndices.has(index)) pendingBlocks.delete(index);
-    }
-    for (const index of indices) {
-      if (pendingBlocks.has(index)) continue;
-      const pending = { block: null, promise: null, error: null };
-      preparedBlockPrefetchCount += 1;
-      pending.promise = Promise.resolve(loadBlock(index)).then((block) => {
-        if (destroyed || pendingBlocks.get(index) !== pending) return null;
-        validateBlockBinding(block, catalog, mounted.model, lighting);
-        pending.block = block;
-        return block;
-      }).catch((error) => {
-        if (pendingBlocks.get(index) === pending) pending.error = error;
-        onError(error);
-        return null;
-      });
-      pendingBlocks.set(index, pending);
-    }
+  function queueNextBlock() {
+    if (destroyed || pendingBlock || pendingBlockPromise) return pendingBlockPromise;
+    pendingBlockIndex = (activeBlockIndex + 1) % catalog.blockCount;
+    pendingBlockError = null;
+    preparedBlockPrefetchCount += 1;
+    onBlockWindow(activeBlockIndex, pendingBlockIndex);
+    pendingBlockPromise = Promise.resolve(loadBlock(pendingBlockIndex)).then((block) => {
+      if (destroyed) return null;
+      validateBlockBinding(block, catalog, mounted.model, lighting);
+      pendingBlock = block;
+      pendingBlockPromise = null;
+      return block;
+    }).catch((error) => {
+      pendingBlockError = error;
+      pendingBlockPromise = null;
+      onError(error);
+      return null;
+    });
+    return pendingBlockPromise;
   }
 
   async function activatePendingBlock() {
-    const nextBlockIndex = (activeBlockIndex + 1) % catalog.blockCount;
-    if (!pendingBlocks.has(nextBlockIndex)) queueLookaheadBlocks();
-    const pending = pendingBlocks.get(nextBlockIndex);
-    if (!pending) throw new Error(`Prepared Cyclone lookahead block ${nextBlockIndex} is unavailable`);
-    const waited = pending.block === null;
+    const waited = pendingBlock === null;
     if (waited) {
       runtimePreparedBlockWaitCount += 1;
-      if (pending.error) throw pending.error;
-      await pending.promise;
+      if (pendingBlockError) throw pendingBlockError;
+      await (pendingBlockPromise ?? queueNextBlock());
     }
-    if (!pending.block) {
-      throw pending.error ?? new Error(`Prepared Cyclone lookahead block ${nextBlockIndex} is unavailable`);
-    }
+    if (!pendingBlock) throw pendingBlockError ?? new Error("Prepared Cyclone lookahead block is unavailable");
     const previousBlockIndex = activeBlockIndex;
     const previousChunkIndex = activeBlock.chunkIndex;
-    activeBlock = pending.block;
-    activeBlockIndex = nextBlockIndex;
+    activeBlock = pendingBlock;
+    activeBlockIndex = pendingBlockIndex;
     playback = activeBlock.playback;
     lightingFrames = activeBlock.lighting;
-    pendingBlocks.delete(nextBlockIndex);
+    pendingBlock = null;
+    pendingBlockIndex = null;
+    pendingBlockPromise = null;
+    pendingBlockError = null;
     frameIndex = 0;
     publishTransforms(playback.frames[0]);
     publishLighting(0);
@@ -210,7 +202,7 @@ export function createCyclonePreparedPlayer({
     if (activeBlockIndex === previousBlockIndex + 1) preparedContinuousHandoffCount += 1;
     else preparedTerminalWrapCount += 1;
     if (activeBlock.chunkIndex !== previousChunkIndex) preparedChunkSwitchCount += 1;
-    queueLookaheadBlocks();
+    queueNextBlock();
     return waited;
   }
 
@@ -307,13 +299,12 @@ export function createCyclonePreparedPlayer({
   function resize() {
     const perspective = resolveCyclonePerspective(innerWidth, innerHeight);
     mounted.cameraElement.style.perspective = `${perspective}px`;
-    mounted.sceneElement.style.transform = `translateZ(${perspective}px)`;
+    publishedProjectionTransform = `translateZ(${perspective}px)`;
+    publishSceneTransform();
   }
 
   function snapshot() {
     target.assertStableDomIdentity();
-    const pendingBlockIndices = lookaheadBlockIndices();
-    const nextPendingBlock = pendingBlocks.get(pendingBlockIndices[0]);
     return Object.freeze({
       paused,
       frameIndex,
@@ -325,10 +316,8 @@ export function createCyclonePreparedPlayer({
       streamDurationMilliseconds: catalog.streamDurationMilliseconds,
       activeBlockIndex,
       activeChunkIndex: activeBlock.chunkIndex,
-      pendingBlockIndex: pendingBlockIndices[0] ?? null,
-      pendingBlockReady: nextPendingBlock?.block !== null && nextPendingBlock?.block !== undefined,
-      pendingBlockIndices: Object.freeze(pendingBlockIndices),
-      pendingBlockReadyCount: pendingBlockIndices.filter((index) => pendingBlocks.get(index)?.block).length,
+      pendingBlockIndex,
+      pendingBlockReady: pendingBlock !== null,
       schedulerLeadMilliseconds,
       schedulerFrameRequestCount,
       schedulerFrameCallbackCount,
@@ -362,6 +351,7 @@ export function createCyclonePreparedPlayer({
       runtimeIdLookupCount: 0,
       runtimePreparedStateMaterializationCount: 0,
       runtimeDomGrowth: false,
+      retainedModelWrapperCount: 0,
       retainedDomStable: true,
     });
   }
@@ -390,9 +380,9 @@ export function createCyclonePreparedPlayer({
 
 function validateBinding(
   mounted,
+  modelTransform,
   catalog,
   initialBlock,
-  initialLookaheadBlocks,
   initialFrameIndex,
   lighting,
   lightingAsset,
@@ -400,17 +390,10 @@ function validateBinding(
 ) {
   const lightingVariant = lighting?.variants?.find((variant) =>
     variant?.paletteFamily === lightingAsset?.paletteFamily);
-  if (catalog?.schema !== CATALOG_SCHEMA ||
+  if (typeof modelTransform !== "string" || !modelTransform.startsWith("matrix3d(") ||
+      catalog?.schema !== CATALOG_SCHEMA ||
       catalog.blockCount !== catalog.entries?.length ||
-      !Number.isSafeInteger(catalog.runtimeLookaheadBlockCount) ||
-      catalog.runtimeLookaheadBlockCount < 1 ||
-      catalog.runtimeLookaheadBlockCount > catalog.blockCount ||
-      !Array.isArray(initialLookaheadBlocks) ||
-      initialLookaheadBlocks.length > catalog.runtimeLookaheadBlockCount ||
-      new Set(initialLookaheadBlocks.map((block) => block?.streamBlockIndex)).size !==
-        initialLookaheadBlocks.length ||
-      initialLookaheadBlocks.some((block, index) =>
-        block?.streamBlockIndex !== (initialBlock.streamBlockIndex + index + 1) % catalog.blockCount) ||
+      catalog.runtimeLookaheadBlockCount !== 1 ||
       lighting?.schema !== LIGHTING_SCHEMA ||
       lighting.streamId !== catalog.streamId ||
       lighting.chunkCount !== catalog.chunkCount ||
@@ -430,9 +413,6 @@ function validateBinding(
     throw new Error("Cyclone prepared stream binding drifted");
   }
   validateBlockBinding(initialBlock, catalog, mounted.model, lighting);
-  for (const block of initialLookaheadBlocks) {
-    validateBlockBinding(block, catalog, mounted.model, lighting);
-  }
 }
 
 function validateBlockBinding(block, catalog, model, lighting) {

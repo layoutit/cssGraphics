@@ -8,8 +8,12 @@ import {
   loadCyclonePreparedCatalog,
   selectInitialCyclonePosition,
 } from "./preparedStream.mjs";
+import {
+  CSSCYCLONE_PREPARED_PROFILES,
+  selectCyclonePreparedProfile,
+} from "./profileSelection.mjs";
+import { selectCycloneStartupPaletteFamily } from "./startupPaletteSelection.mjs";
 
-const MODEL_ID = "cyclone";
 const LAST_START_SELECTION_STORAGE_KEY = "csscyclone:last-start-selection";
 
 export async function mountCycloneClient(host) {
@@ -17,6 +21,7 @@ export async function mountCycloneClient(host) {
     ready: false,
     errors: [],
     metadata: null,
+    profile: null,
     catalog: null,
     selection: null,
     blockLoader: null,
@@ -26,67 +31,75 @@ export async function mountCycloneClient(host) {
   let lightingAsset = null;
   installDebugApi(state);
   try {
+    const profileId = selectCyclonePreparedProfile({
+      width: host.clientWidth || innerWidth,
+      height: host.clientHeight || innerHeight,
+    });
+    const profileBinding = CSSCYCLONE_PREPARED_PROFILES[profileId];
     const [loaded, metadata] = await Promise.all([
-      loadPolyMorphPackage("/csscyclone/model/", { modelId: MODEL_ID }),
+      loadPolyMorphPackage("/csscyclone/model/", { modelId: profileBinding.modelId }),
       fetchJson("/csscyclone/prepared.json", { cache: "no-store" }),
     ]);
-    const catalog = await loadCyclonePreparedCatalog(metadata?.playback);
-    if (metadata?.schema !== "csscyclone-prepared-scene@1" ||
+    const profile = metadata?.profiles?.[profileId];
+    const catalog = await loadCyclonePreparedCatalog(profile?.playback);
+    if (metadata?.schema !== "csscyclone-prepared-scene@2" ||
         metadata.status !== "ready" ||
-        loaded.model.identity.id !== MODEL_ID ||
-        metadata.model?.id !== MODEL_ID ||
-        metadata.presentation?.preparedStream?.id !== catalog.streamId ||
-        metadata.playback?.chunkCount !== catalog.chunkCount ||
-        metadata.playback?.preparedBlockCount !== catalog.blockCount ||
-        metadata.lighting?.maximumColorFamilyCount !== catalog.maximumColorFamilyCount ||
-        metadata.lighting?.paletteFamilies?.some((family, index) =>
+        profile?.id !== profileId ||
+        profile.model?.id !== profileBinding.modelId ||
+        loaded.model.identity.id !== profileBinding.modelId ||
+        profile.presentation?.preparedStream?.id !== catalog.streamId ||
+        profile.playback?.chunkCount !== catalog.chunkCount ||
+        profile.playback?.preparedBlockCount !== catalog.blockCount ||
+        profile.lighting?.maximumColorFamilyCount !== catalog.maximumColorFamilyCount ||
+        profile.lighting?.paletteFamilies?.some((family, index) =>
           family !== catalog.startupPaletteFamilies[index])) {
       throw new Error("Cyclone prepared model binding drifted");
     }
+    const route = new URLSearchParams(globalThis.location?.search ?? "");
+    const paletteSelection = route.has("chunk") || route.has("frame")
+      ? null
+      : selectCycloneStartupPaletteFamily(catalog.startupPaletteFamilies);
     const selection = selectInitialCyclonePosition(catalog, {
       previousSelectionId: readPreviousStartSelection(catalog.startupSelections),
+      preferredPaletteFamily: paletteSelection?.paletteFamily ?? null,
     });
     rememberStartSelection(selection.selectionId);
     const initialStreamFrameIndex = selection.chunkIndex * catalog.chunkFrameCount + selection.frameIndex;
     const initialBlockIndex = Math.floor(initialStreamFrameIndex / catalog.blockFrameCount);
     const initialBlockFrameIndex = initialStreamFrameIndex % catalog.blockFrameCount;
     const blockLoader = createCyclonePreparedBlockLoader(catalog);
-    const lookaheadBlockIndices = Array.from(
-      { length: catalog.runtimeLookaheadBlockCount },
-      (unused, offset) => (initialBlockIndex + offset + 1) % catalog.blockCount,
-    );
-    const residentBlockIndices = [initialBlockIndex, ...lookaheadBlockIndices];
-    blockLoader.retain(residentBlockIndices);
-    const [initialBlock, initialLookaheadBlocks, loadedLightingAsset] = await Promise.all([
+    const nextBlockIndex = (initialBlockIndex + 1) % catalog.blockCount;
+    blockLoader.retain([initialBlockIndex, nextBlockIndex]);
+    const [initialBlock, loadedLightingAsset] = await Promise.all([
       blockLoader.load(initialBlockIndex),
-      Promise.all(lookaheadBlockIndices.map((streamBlockIndex) => blockLoader.load(streamBlockIndex))),
-      loadCyclonePreparedLightingAsset(metadata.lighting, selection.paletteFamily),
+      loadCyclonePreparedLightingAsset(profile.lighting, selection.paletteFamily),
     ]);
     lightingAsset = loadedLightingAsset;
     const mounted = mountPolyMorphModel(host, loaded.model, {
       resources: loaded.resources,
       camera: createPolyPerspectiveCamera({ perspective: 800, target: [0, 0, 0], rotX: 0, rotY: 0, zoom: 50 }),
     });
-    cleanPreparedDom(mounted);
+    const modelTransform = cleanPreparedDom(mounted);
     const player = createCyclonePreparedPlayer({
       mounted,
+      modelTransform,
       catalog,
       initialBlock,
-      initialLookaheadBlocks,
       initialFrameIndex: initialBlockFrameIndex,
-      lighting: metadata.lighting,
+      lighting: profile.lighting,
       lightingAsset,
       loadBlock(streamBlockIndex) {
         return blockLoader.load(streamBlockIndex);
       },
-      onBlockWindow(streamBlockIndices) {
-        blockLoader.retain(streamBlockIndices);
+      onBlockWindow(activeBlockIndex, pendingBlockIndex) {
+        blockLoader.retain([activeBlockIndex, pendingBlockIndex]);
       },
     });
     player.resize();
     addEventListener("resize", player.resize, { passive: true });
     state.ready = true;
     state.metadata = metadata;
+    state.profile = profile;
     state.catalog = catalog;
     state.selection = selection;
     state.blockLoader = blockLoader;
@@ -128,6 +141,18 @@ function cleanPreparedDom(mounted) {
     element.style.removeProperty("transform-origin");
     element.style.removeProperty("visibility");
   }
+  if (mounted.modelElement.parentElement !== mounted.sceneElement ||
+      [...mounted.shapeElements.values()].some((element) =>
+        element.parentElement !== mounted.modelElement)) {
+    throw new Error("Cyclone prepared model wrapper binding drifted");
+  }
+  const modelTransform = mounted.modelElement.style.transform;
+  for (const element of mounted.shapeElements.values()) mounted.sceneElement.append(element);
+  if (mounted.modelElement.childElementCount !== 0) {
+    throw new Error("Cyclone prepared model wrapper contains unexpected retained nodes");
+  }
+  mounted.modelElement.remove();
+  return modelTransform;
 }
 
 function installDebugApi(state) {
@@ -145,6 +170,8 @@ function installDebugApi(state) {
         return Object.freeze({
           retainedParticleRootCount: state.mounted.shapeElements.size,
           retainedPolygonLeafCount: state.mounted.leafHandles.size,
+          preparedProfileId: state.profile.id,
+          preparedProfileParticleCount: state.profile.presentation.productParticleCount,
           initialChunkIndex: state.selection.chunkIndex,
           initialFrameIndex: state.selection.frameIndex,
           startupSelectionId: state.selection.selectionId ?? null,

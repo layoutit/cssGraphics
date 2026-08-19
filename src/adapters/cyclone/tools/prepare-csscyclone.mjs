@@ -22,6 +22,7 @@ import {
   CSSCYCLONE_PREPARED_CADENCE,
   CSSCYCLONE_PRESENTATION,
   CSSCYCLONE_SOURCE,
+  CSSCYCLONE_SOURCE_BANK,
   buildCycloneSourceChunks,
   selectCycloneSourceParticlePrefix,
 } from "../src/prepare/csscyclone/sourceModel.mjs";
@@ -47,7 +48,7 @@ const profileConfigs = Object.freeze([
     catalogUrl: "/csscyclone/catalog.json",
     blockRoot: "/csscyclone/blocks",
     lightingAssetRoot: "/csscyclone/assets",
-    particleSelection: "source-default-all-particles",
+    particleSelection: "prepared-source-particle-prefix",
     startupSelections: CSSCYCLONE_PRESENTATION.startupSelections,
   }),
   Object.freeze({
@@ -143,10 +144,8 @@ async function prepareProfile(profile) {
   let shapeTransformSelections = 0;
   let preparedBlockEncodedBytes = 0;
   let preparedBlockDecodedBytes = 0;
-  for (const desktopSource of buildCycloneSourceChunks({ bank: CSSCYCLONE_BANKS.desktop })) {
-    const source = profile.id === "mobile"
-      ? selectCycloneSourceParticlePrefix(desktopSource, bank)
-      : desktopSource;
+  for (const desktopSource of buildCycloneSourceChunks({ bank: CSSCYCLONE_SOURCE_BANK })) {
+    const source = selectCycloneSourceParticlePrefix(desktopSource, bank);
     if (preparedModel === null) {
       const result = buildCyclonePreparedModel({ source, modelId: profile.modelId });
       preparedModel = Object.freeze({ model: result.model, metrics: result.metrics });
@@ -265,7 +264,7 @@ async function prepareProfile(profile) {
     presentation: Object.freeze({
       sourceDefaults: Object.freeze({
         cyclones: 1,
-        particles: CSSCYCLONE_BANKS.desktop.particleCount,
+        particles: CSSCYCLONE_SOURCE_BANK.particleCount,
         size: CSSCYCLONE_SOURCE.particleSize,
         complexity: CSSCYCLONE_SOURCE.complexity,
         speed: CSSCYCLONE_SOURCE.speed,

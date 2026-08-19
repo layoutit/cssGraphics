@@ -188,6 +188,11 @@ function fixture({
       frames.delete(id);
       await callback(now);
     },
+    async advanceAt(value) {
+      now = value;
+      if (delays.size > 0) this.fireDelay();
+      await this.fireFrame();
+    },
   };
 }
 
@@ -222,9 +227,10 @@ test("starts from one materialized successor while filling the verified horizon"
   assert.equal(state.player.stats().pendingBlockReadyCount, 2);
 
   state.player.resume();
-  state.fireDelay();
-  state.setNow(81);
-  await state.fireFrame();
+  await state.advanceAt(20);
+  await state.advanceAt(40);
+  await state.advanceAt(60);
+  await state.advanceAt(80);
   await Promise.resolve();
 
   const stats = state.player.stats();
@@ -235,18 +241,32 @@ test("starts from one materialized successor while filling the verified horizon"
   assert.deepEqual(state.loadBlockCalls, [2, 3]);
 });
 
-test("collapses missed prepared frames once at the next paint-aligned callback", async () => {
+test("publishes one adjacent prepared frame and resets a missed deadline", async () => {
   const state = fixture();
   state.player.resume();
   state.fireDelay();
   state.setNow(57);
   await state.fireFrame();
-  assert.deepEqual(state.shapeElements.map((element) => element.style.transform), ["g", "h"]);
+  assert.deepEqual(state.shapeElements.map((element) => element.style.transform), ["c", "d"]);
   const stats = state.player.stats();
-  assert.equal(stats.frameIndex, 3);
-  assert.equal(stats.collapsedFrameCount, 2);
+  assert.equal(stats.frameIndex, 1);
+  assert.equal(stats.collapsedFrameCount, 0);
+  assert.equal(stats.schedulerLateResetCount, 1);
   assert.equal(stats.applyCount, 2);
   assert.equal(stats.shapeTransformWrites, 4);
+});
+
+test("does not skip a prepared frame when only the scheduler lead crosses its deadline", async () => {
+  const state = fixture();
+  state.player.resume();
+  state.fireDelay();
+  state.setNow(26);
+  await state.fireFrame();
+  assert.deepEqual(state.shapeElements.map((element) => element.style.transform), ["c", "d"]);
+  const stats = state.player.stats();
+  assert.equal(stats.frameIndex, 1);
+  assert.equal(stats.collapsedFrameCount, 0);
+  assert.equal(stats.applyCount, 2);
 });
 
 test("pause cancels pending delay and frame requests", () => {

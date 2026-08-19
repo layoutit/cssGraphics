@@ -5,6 +5,7 @@ import {
   CSSCYCLONE_BANKS,
   CSSCYCLONE_PRESENTATION,
   CSSCYCLONE_SOURCE,
+  CSSCYCLONE_SOURCE_BANK,
   buildCycloneSourceChunks,
   buildCycloneSourceSequence,
   selectCycloneSourceParticlePrefix,
@@ -88,11 +89,12 @@ test("pins the current Really Slick Cyclone source profile", () => {
   assert.equal(CSSCYCLONE_PRESENTATION.startupMinimumDominantHueShare, 0.25);
 });
 
-test("prepares the mobile bank with fewer complete source particles", () => {
-  assert.equal(CSSCYCLONE_BANKS.desktop.particleCount, 400);
+test("prepares desktop and mobile banks as complete source-particle prefixes", () => {
+  assert.equal(CSSCYCLONE_SOURCE_BANK.particleCount, 400);
+  assert.equal(CSSCYCLONE_BANKS.desktop.particleCount, 360);
   assert.equal(CSSCYCLONE_BANKS.mobile.particleCount, 166);
   const desktopBank = {
-    ...CSSCYCLONE_BANKS.desktop,
+    ...CSSCYCLONE_SOURCE_BANK,
     warmupFrames: 2,
     frameCount: 2,
     chunkCount: 1,

@@ -87,8 +87,8 @@ export function createCyclonePreparedPlayer({
   let destroyed = false;
   let frameRequest = null;
   let delayRequest = null;
-  let clockOrigin = readNow() - initialFrameIndex * playback.frameMilliseconds;
-  let pausedAt = initialFrameIndex * playback.frameMilliseconds;
+  let nextFrameAt = null;
+  let pausedDelayMilliseconds = playback.frameMilliseconds;
   let frameIndex = initialFrameIndex;
   const schedulerLeadMilliseconds = Math.min(8, playback.frameMilliseconds / 2);
   let schedulerFrameRequestCount = 0;
@@ -97,6 +97,7 @@ export function createCyclonePreparedPlayer({
   let schedulerDelayRequestCount = 0;
   let schedulerDelayCallbackCount = 0;
   let schedulerDelayCancelCount = 0;
+  let schedulerLateResetCount = 0;
   let collapsedFrameCount = 0;
   let applyCount = 0;
   let shapeTransformWrites = 0;
@@ -228,9 +229,7 @@ export function createCyclonePreparedPlayer({
 
   function schedule() {
     if (paused || destroyed || frameRequest !== null || delayRequest !== null) return;
-    const elapsed = Math.max(0, readNow() - clockOrigin);
-    const nextFrameTime = Math.min(playback.durationMilliseconds, (frameIndex + 1) * playback.frameMilliseconds);
-    const waitMilliseconds = Math.max(0, nextFrameTime - elapsed - schedulerLeadMilliseconds);
+    const waitMilliseconds = Math.max(0, nextFrameAt - readNow() - schedulerLeadMilliseconds);
     if (waitMilliseconds <= 1) {
       requestPaintAlignedWake();
       return;
@@ -243,20 +242,21 @@ export function createCyclonePreparedPlayer({
     schedulerDelayRequestCount += 1;
   }
 
-  async function wake() {
+  async function wake(timestamp) {
     frameRequest = null;
     if (paused || destroyed) return;
     schedulerFrameCallbackCount += 1;
     try {
-      const elapsed = Math.max(0, readNow() - clockOrigin);
-      const paintAlignedElapsed = elapsed + schedulerLeadMilliseconds;
-      if (paintAlignedElapsed >= playback.durationMilliseconds) {
-        const boundaryTime = clockOrigin + playback.durationMilliseconds;
-        const waited = await activatePendingBlock();
-        clockOrigin = waited ? readNow() : boundaryTime;
-        pausedAt = 0;
+      if (frameIndex + 1 >= playback.frameCount) {
+        await activatePendingBlock();
       } else {
-        advanceTo(Math.floor(paintAlignedElapsed / playback.frameMilliseconds));
+        advanceTo(frameIndex + 1);
+      }
+      nextFrameAt += playback.frameMilliseconds;
+      const publicationTime = Math.max(Number(timestamp) || 0, readNow());
+      if (nextFrameAt <= publicationTime) {
+        nextFrameAt = publicationTime + playback.frameMilliseconds;
+        schedulerLateResetCount += 1;
       }
     } catch (error) {
       paused = true;
@@ -268,9 +268,9 @@ export function createCyclonePreparedPlayer({
 
   function pause() {
     if (paused || destroyed) return snapshot();
-    pausedAt = Math.min(
-      playback.durationMilliseconds,
-      Math.max(0, readNow() - clockOrigin),
+    pausedDelayMilliseconds = Math.min(
+      playback.frameMilliseconds,
+      Math.max(0, nextFrameAt - readNow()),
     );
     paused = true;
     if (frameRequest !== null) {
@@ -288,7 +288,8 @@ export function createCyclonePreparedPlayer({
 
   function resume() {
     if (!paused || destroyed) return snapshot();
-    clockOrigin = readNow() - pausedAt;
+    nextFrameAt = readNow() + pausedDelayMilliseconds;
+    pausedDelayMilliseconds = playback.frameMilliseconds;
     paused = false;
     schedule();
     return snapshot();
@@ -306,7 +307,7 @@ export function createCyclonePreparedPlayer({
       frameIndex = nextFrameIndex;
       applyCount += 1;
     }
-    pausedAt = nextFrameIndex * playback.frameMilliseconds;
+    pausedDelayMilliseconds = playback.frameMilliseconds;
     if (!wasPaused) resume();
     return snapshot();
   }
@@ -342,6 +343,7 @@ export function createCyclonePreparedPlayer({
       schedulerDelayRequestCount,
       schedulerDelayCallbackCount,
       schedulerDelayCancelCount,
+      schedulerLateResetCount,
       runtimeSchedulerTransport: "deadline-setTimeout-requestAnimationFrame-prepared-publication",
       collapsedFrameCount,
       applyCount,

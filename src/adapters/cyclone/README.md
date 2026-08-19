@@ -1,9 +1,10 @@
 # cssCyclone
 
 This adapter translates Really Slick Cyclone into one retained PolyCSS Morph
-graph. Desktop mounts the source-default 400 particle roots and mobile mounts a
-prepared prefix of 166 complete source particles. Every particle retains all six
-original solid-triangle leaves: 2,400 desktop leaves or 996 mobile leaves. The
+graph. The source-default 400-particle simulation is prepared into prefixes of
+360 complete particles on desktop and 166 on mobile. Every retained particle
+keeps all six original solid-triangle leaves: 2,160 desktop leaves or 996 mobile
+leaves. The
 selected profile plays 24 source-continuous logical chunks of 540 prepared
 16.667 ms
 transform states. The stream is transported as 216 one-second prepared blocks

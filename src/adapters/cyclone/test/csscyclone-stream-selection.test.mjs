@@ -11,7 +11,7 @@ const startupPaletteFamilies = Object.freeze(["blue", "yellow", "red", "magenta"
 const startupSelections = Object.freeze([
   Object.freeze({ id: "blue-a", paletteFamily: "blue", chunkIndex: 17, startFrameIndex: 249, frameCount: 48 }),
   Object.freeze({ id: "blue-b", paletteFamily: "blue", chunkIndex: 23, startFrameIndex: 492, frameCount: 48 }),
-  Object.freeze({ id: "yellow-a", paletteFamily: "yellow", chunkIndex: 6, startFrameIndex: 450, frameCount: 48 }),
+  Object.freeze({ id: "yellow-a", paletteFamily: "yellow", chunkIndex: 6, startFrameIndex: 447, frameCount: 48 }),
   Object.freeze({ id: "yellow-b", paletteFamily: "yellow", chunkIndex: 21, startFrameIndex: 162, frameCount: 48 }),
   Object.freeze({ id: "red-a", paletteFamily: "red", chunkIndex: 19, startFrameIndex: 171, frameCount: 48 }),
   Object.freeze({ id: "red-b", paletteFamily: "red", chunkIndex: 13, startFrameIndex: 104, frameCount: 48 }),
@@ -24,8 +24,8 @@ const catalog = Object.freeze({
   schema: "csscyclone-prepared-stream-catalog@3",
   streamId: "desktop-stream",
   modelId: "cyclone",
-  particleCount: 400,
-  leafCount: 2_400,
+  particleCount: 360,
+  leafCount: 2_160,
   playbackSchema: "csscyclone-prepared-dom-playback@5",
   lightingBlockSchema: "csscyclone-prepared-lighting-block@2",
   sourceTransformProfile: Object.freeze({

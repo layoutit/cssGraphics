@@ -34,8 +34,8 @@ export const CSSCYCLONE_SOURCE = Object.freeze({
   stretch: true,
 });
 
-const CSSCYCLONE_DESKTOP_BANK = Object.freeze({
-  id: "desktop-stream",
+export const CSSCYCLONE_SOURCE_BANK = Object.freeze({
+  id: "source-stream",
   name: "Cyclone",
   seed: 1,
   particleCount: 400,
@@ -47,9 +47,13 @@ const CSSCYCLONE_DESKTOP_BANK = Object.freeze({
 });
 
 export const CSSCYCLONE_BANKS = Object.freeze({
-  desktop: CSSCYCLONE_DESKTOP_BANK,
+  desktop: Object.freeze({
+    ...CSSCYCLONE_SOURCE_BANK,
+    id: "desktop-stream",
+    particleCount: 360,
+  }),
   mobile: Object.freeze({
-    ...CSSCYCLONE_DESKTOP_BANK,
+    ...CSSCYCLONE_SOURCE_BANK,
     id: "mobile-stream",
     name: "Cyclone Mobile",
     particleCount: 166,
@@ -70,7 +74,7 @@ export const CSSCYCLONE_PRESENTATION = Object.freeze({
   startupSelections: Object.freeze([
     startupSelection("blue-a", "blue", 17, 249),
     startupSelection("blue-b", "blue", 23, 492),
-    startupSelection("yellow-a", "yellow", 6, 450),
+    startupSelection("yellow-a", "yellow", 6, 447),
     startupSelection("yellow-b", "yellow", 21, 162),
     startupSelection("red-a", "red", 19, 171),
     startupSelection("red-b", "red", 13, 104),
@@ -154,7 +158,7 @@ export function selectCycloneSourceParticlePrefix(source, bank = CSSCYCLONE_BANK
       bank.warmupFrames !== source.bank.warmupFrames ||
       bank.frameCount !== source.bank.frameCount ||
       bank.chunkCount !== source.bank.chunkCount) {
-    throw new Error("Cyclone mobile particle-prefix source binding drifted");
+    throw new Error("Cyclone particle-prefix source binding drifted");
   }
   return deepFreeze({
     ...source,

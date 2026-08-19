@@ -91,13 +91,20 @@ test("prepares smooth reference lighting without a runtime lighting timeline", a
   const bank = { ...CSSCYCLONE_BANK, particleCount: 3, warmupFrames: 20, frameCount: 4 };
   const source = buildCycloneSourceSequence({ bank });
   const prepared = await buildCyclonePreparedLighting({ source });
-  assert.equal(prepared.contract.schema, "csscyclone-prepared-smooth-lighting-atlas@5");
+  assert.equal(prepared.contract.schema, "csscyclone-prepared-smooth-lighting-atlas@6");
   assert.equal(prepared.contract.contentSize, 2);
   assert.equal(prepared.contract.gutterPixels, 1);
   assert.equal(prepared.contract.leafCount, 18);
   assert.equal(prepared.contract.colorStateCount, 3);
   assert.equal(prepared.contract.colorRestartCount, 0);
   assert.equal(prepared.contract.tileCount, 18);
+  assert.ok(prepared.contract.uniqueTileCount <= prepared.contract.tileCount);
+  assert.equal(
+    prepared.contract.deduplicatedTileCount,
+    prepared.contract.tileCount - prepared.contract.uniqueTileCount,
+  );
+  assert.equal(prepared.contract.tileDeduplication, "exact-cross-palette-rgba8-slot-content");
+  assert.equal(prepared.contract.packing, "near-square-row-major-unique-slots");
   assert.equal(prepared.contract.tileBackgroundPositions.length, 18);
   assert.equal(prepared.contract.paletteFamilyCount, 5);
   assert.equal(prepared.contract.paletteHueSlotCount, 3);
@@ -108,7 +115,7 @@ test("prepares smooth reference lighting without a runtime lighting timeline", a
   assert.equal(prepared.contract.chunkCount, 1);
   assert.equal(prepared.chunk.frameParticleColorStateIndices.length, 4);
   assert.equal(prepared.contract.displayScale, 16);
-  assert.equal(prepared.contract.height, 4);
+  assert.ok(Math.abs(prepared.contract.width - prepared.contract.height) <= prepared.contract.slotSize);
   assert.equal(prepared.contract.runtime.rootLightingRowWritesPerSample, 0);
   assert.equal(prepared.contract.runtime.lightingCalculations, 0);
   assert.equal(prepared.contract.runtime.atlasConstruction, 0);

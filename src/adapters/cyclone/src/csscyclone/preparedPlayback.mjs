@@ -4,7 +4,7 @@ import { createPolyMorphPreparedDomTarget } from "@layoutit/polycss-morph";
 const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@1";
 const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@1";
 const PLAYBACK_SCHEMA = "csscyclone-prepared-dom-playback@3";
-const LIGHTING_SCHEMA = "csscyclone-prepared-smooth-lighting-atlas@5";
+const LIGHTING_SCHEMA = "csscyclone-prepared-smooth-lighting-atlas@6";
 const LIGHTING_BLOCK_SCHEMA = "csscyclone-prepared-lighting-block@1";
 const SOURCE_FIELD_OF_VIEW_DEGREES = 80;
 const MOBILE_FIELD_OF_VIEW_DEGREES = 90;

@@ -55,7 +55,7 @@ function fixture() {
     ],
   };
   const lighting = {
-    schema: "csscyclone-prepared-smooth-lighting-atlas@5",
+    schema: "csscyclone-prepared-smooth-lighting-atlas@6",
     streamId: "stream",
     chunkCount: 1,
     chunkFrameCount: 4,
@@ -64,6 +64,10 @@ function fixture() {
     colorStateCount: 1,
     colorRestartCount: 0,
     tileCount: 1,
+    uniqueTileCount: 1,
+    deduplicatedTileCount: 0,
+    tileDeduplication: "exact-cross-palette-rgba8-slot-content",
+    packing: "near-square-row-major-unique-slots",
     tileBackgroundPositions: ["0 0"],
     paletteHueSlotCount: 3,
     maximumColorFamilyCount: 3,

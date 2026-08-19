@@ -1,6 +1,6 @@
 export async function loadCyclonePreparedLightingAsset(lighting, paletteFamily) {
   const variant = lighting?.variants?.find((entry) => entry?.paletteFamily === paletteFamily);
-  if (lighting?.schema !== "csscyclone-prepared-smooth-lighting-atlas@5" ||
+  if (lighting?.schema !== "csscyclone-prepared-smooth-lighting-atlas@6" ||
       lighting.maximumColorFamilyCount !== 3 ||
       lighting.paletteHueSlotCount !== 3 ||
       !Array.isArray(lighting.paletteFamilies) ||
@@ -11,7 +11,13 @@ export async function loadCyclonePreparedLightingAsset(lighting, paletteFamily) 
       !Number.isSafeInteger(variant.byteLength) || variant.byteLength < 1 ||
       variant.hueSlots?.length !== lighting.maximumColorFamilyCount ||
       !Number.isSafeInteger(lighting.width) || lighting.width < 1 ||
-      !Number.isSafeInteger(lighting.height) || lighting.height < 1) {
+      !Number.isSafeInteger(lighting.height) || lighting.height < 1 ||
+      !Number.isSafeInteger(lighting.tileCount) || lighting.tileCount < 1 ||
+      !Number.isSafeInteger(lighting.uniqueTileCount) || lighting.uniqueTileCount < 1 ||
+      lighting.uniqueTileCount > lighting.tileCount ||
+      lighting.deduplicatedTileCount !== lighting.tileCount - lighting.uniqueTileCount ||
+      lighting.tileDeduplication !== "exact-cross-palette-rgba8-slot-content" ||
+      lighting.packing !== "near-square-row-major-unique-slots") {
     throw new Error("Prepared Cyclone lighting asset contract is invalid");
   }
   const response = await fetch(variant.assetUrl, { cache: "force-cache" });

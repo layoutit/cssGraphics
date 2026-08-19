@@ -19,6 +19,7 @@ import {
 } from "../src/shared/csscyclone/preparedBlockTransport.mjs";
 import {
   CSSCYCLONE_BANKS,
+  CSSCYCLONE_PREPARED_CADENCE,
   CSSCYCLONE_PRESENTATION,
   CSSCYCLONE_SOURCE,
   buildCycloneSourceChunks,
@@ -30,7 +31,8 @@ const repositoryRoot = resolve(adapterRoot, "..", "..", "..");
 const outputRoot = join(repositoryRoot, "build/generated/public/csscyclone");
 const stagingRoot = join(repositoryRoot, `build/generated/.csscyclone-${process.pid}`);
 const sourceLock = JSON.parse(await readFile(join(adapterRoot, "notes/references/source-lock.json"), "utf8"));
-const blockFrameCount = 50;
+const blockFrameCount = CSSCYCLONE_PREPARED_CADENCE.framesPerSecond *
+  CSSCYCLONE_PREPARED_CADENCE.blockSeconds;
 const runtimeLookaheadBlockCount = 11;
 const startupMaterializedLookaheadBlockCount = 1;
 const startupPaletteFamilies = CSSCYCLONE_PRESENTATION.startupPaletteFamilies;
@@ -203,7 +205,7 @@ async function prepareProfile(profile) {
   );
   const preparedLighting = await lightingStream.finalize();
   const catalogBytes = Buffer.from(`${JSON.stringify({
-    schema: "csscyclone-prepared-stream-catalog@1",
+    schema: "csscyclone-prepared-stream-catalog@2",
     streamId: bank.id,
     modelId: profile.modelId,
     particleCount: bank.particleCount,
@@ -222,9 +224,10 @@ async function prepareProfile(profile) {
     blockCount,
     blocksPerChunk,
     blockFrameCount,
+    framesPerSecond: bank.framesPerSecond,
     frameMilliseconds: bank.frameMilliseconds,
     streamFrameCount: bank.chunkCount * bank.frameCount,
-    streamDurationMilliseconds: bank.chunkCount * bank.frameCount * bank.frameMilliseconds,
+    streamDurationMilliseconds: bank.chunkCount * bank.frameCount / bank.framesPerSecond * 1_000,
     startupPaletteFamilies,
     startupSelections,
     startupSilhouetteSampling: CSSCYCLONE_PRESENTATION.startupSilhouetteSampling,
@@ -278,8 +281,10 @@ async function prepareProfile(profile) {
         seed: bank.seed,
         chunkCount: bank.chunkCount,
         chunkFrameCount: bank.frameCount,
+        framesPerSecond: bank.framesPerSecond,
+        frameMilliseconds: bank.frameMilliseconds,
         streamFrameCount: bank.chunkCount * bank.frameCount,
-        streamDurationMilliseconds: bank.chunkCount * bank.frameCount * bank.frameMilliseconds,
+        streamDurationMilliseconds: bank.chunkCount * bank.frameCount / bank.framesPerSecond * 1_000,
         startupPaletteFamilies,
         startupSelections,
         startupSilhouetteSampling: CSSCYCLONE_PRESENTATION.startupSilhouetteSampling,
@@ -293,7 +298,7 @@ async function prepareProfile(profile) {
       productLeafCount: bank.particleCount * CSSCYCLONE_FACE_INDICES.length,
       viewDistance: CSSCYCLONE_SOURCE.viewDistance,
       fieldOfViewDegrees: CSSCYCLONE_SOURCE.fieldOfViewDegrees,
-      startupWarmupMilliseconds: bank.warmupFrames * bank.frameMilliseconds,
+      startupWarmupMilliseconds: bank.warmupFrames / bank.framesPerSecond * 1_000,
     }),
     model: Object.freeze({
       id: profile.modelId,
@@ -411,19 +416,29 @@ function buildStartupColorProfile(selectionProfiles, bank, startupSelections) {
         startupSelections.some((selection) => offset >= selection.frameCount))) {
     throw new Error("Cyclone prepared startup selection configuration is invalid");
   }
-  if (selectionProfiles.length !== startupSelections.length ||
-      selectionProfiles.some((profile, index) => {
-        const selection = startupSelections[index];
-        return profile?.id !== selection.id ||
-          profile.paletteFamily !== selection.paletteFamily ||
-          profile.chunkIndex !== selection.chunkIndex ||
-          profile.startFrameIndex !== selection.startFrameIndex ||
-          profile.frameCount !== selection.frameCount ||
-          profile.meanSaturation < CSSCYCLONE_PRESENTATION.startupMinimumMeanSaturation ||
-          profile.dominantHueSector !== selection.paletteFamily ||
-          profile.dominantHueShare < CSSCYCLONE_PRESENTATION.startupMinimumDominantHueShare;
-      })) {
-    throw new Error("Cyclone prepared startup source-palette profile drifted");
+  const invalidSelectionProfiles = startupSelections.flatMap((selection, index) => {
+    const profile = selectionProfiles[index];
+    const failures = [];
+    if (profile?.id !== selection.id) failures.push("id");
+    if (profile?.paletteFamily !== selection.paletteFamily) failures.push("paletteFamily");
+    if (profile?.chunkIndex !== selection.chunkIndex) failures.push("chunkIndex");
+    if (profile?.startFrameIndex !== selection.startFrameIndex) failures.push("startFrameIndex");
+    if (profile?.frameCount !== selection.frameCount) failures.push("frameCount");
+    if (!(profile?.meanSaturation >= CSSCYCLONE_PRESENTATION.startupMinimumMeanSaturation)) {
+      failures.push("meanSaturation");
+    }
+    if (profile?.dominantHueSector !== selection.paletteFamily) failures.push("dominantHueSector");
+    if (!(profile?.dominantHueShare >= CSSCYCLONE_PRESENTATION.startupMinimumDominantHueShare)) {
+      failures.push("dominantHueShare");
+    }
+    return failures.length === 0 ? [] : [{ selection, profile, failures }];
+  });
+  if (selectionProfiles.length !== startupSelections.length || invalidSelectionProfiles.length > 0) {
+    throw new Error(`Cyclone prepared startup source-palette profile drifted: ${JSON.stringify({
+      selectionProfileCount: selectionProfiles.length,
+      startupSelectionCount: startupSelections.length,
+      invalidSelectionProfiles,
+    })}`);
   }
   return Object.freeze({
     schema: "csscyclone-prepared-startup-color-profile@2",

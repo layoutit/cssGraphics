@@ -6,7 +6,7 @@ import {
   decodeCyclonePreparedBlockIncrementally,
 } from "../shared/csscyclone/preparedBlockTransport.mjs";
 
-const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@1";
+const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@2";
 const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@2";
 const RUNTIME_LOOKAHEAD_BLOCK_COUNT = 11;
 const STARTUP_MATERIALIZED_LOOKAHEAD_BLOCK_COUNT = 1;
@@ -449,9 +449,12 @@ function validateCatalog(catalog) {
       catalog.blockCount !== catalog.chunkCount * catalog.blocksPerChunk ||
       !Number.isSafeInteger(catalog.blockFrameCount) || catalog.blockFrameCount < 1 ||
       catalog.chunkFrameCount !== catalog.blocksPerChunk * catalog.blockFrameCount ||
-      !Number.isSafeInteger(catalog.frameMilliseconds) || catalog.frameMilliseconds < 1 ||
+      catalog.framesPerSecond !== 60 ||
+      !Number.isFinite(catalog.frameMilliseconds) ||
+      catalog.frameMilliseconds !== 1_000 / catalog.framesPerSecond ||
       catalog.streamFrameCount !== catalog.chunkCount * catalog.chunkFrameCount ||
-      catalog.streamDurationMilliseconds !== catalog.streamFrameCount * catalog.frameMilliseconds ||
+      catalog.streamDurationMilliseconds !== catalog.streamFrameCount /
+        catalog.framesPerSecond * 1_000 ||
       !Array.isArray(catalog.startupPaletteFamilies) ||
       catalog.startupPaletteFamilies.length !== STARTUP_PALETTE_FAMILIES.length ||
       catalog.startupPaletteFamilies.some((family, index) =>
@@ -564,9 +567,10 @@ function validateBlock(block, descriptor, catalog) {
       playback.blockCount !== catalog.blockCount ||
       playback.blocksPerChunk !== catalog.blocksPerChunk ||
       playback.startFrameIndex !== descriptor.startFrameIndex ||
+      playback.framesPerSecond !== catalog.framesPerSecond ||
       playback.frameMilliseconds !== catalog.frameMilliseconds ||
       playback.frameCount !== descriptor.frameCount ||
-      playback.durationMilliseconds !== descriptor.frameCount * catalog.frameMilliseconds ||
+      playback.durationMilliseconds !== descriptor.frameCount / catalog.framesPerSecond * 1_000 ||
       playback.loop !== false ||
       playback.particleCount !== catalog.particleCount ||
       playback.leafCount !== catalog.leafCount ||

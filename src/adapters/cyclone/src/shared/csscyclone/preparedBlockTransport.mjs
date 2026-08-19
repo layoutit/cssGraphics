@@ -2,7 +2,7 @@ import { formatMatrix3dValues } from "@layoutit/polycss";
 import { advanceCycloneParticleTransform } from "./particleTransform.mjs";
 
 export const CSSCYCLONE_BLOCK_ENCODING = "gzip-cyclone-source-state-float64-uint16@1";
-export const CSSCYCLONE_PLAYBACK_SCHEMA = "csscyclone-prepared-dom-playback@4";
+export const CSSCYCLONE_PLAYBACK_SCHEMA = "csscyclone-prepared-dom-playback@5";
 export const CSSCYCLONE_LIGHTING_BLOCK_SCHEMA = "csscyclone-prepared-lighting-block@2";
 
 const MAGIC = "CCST";
@@ -264,8 +264,9 @@ function* decodeCyclonePreparedBlockOperations(bytes, descriptor, catalog) {
       frameCount,
       particleCount,
       leafCount: catalog.leafCount,
+      framesPerSecond: catalog.framesPerSecond,
       frameMilliseconds: catalog.frameMilliseconds,
-      durationMilliseconds: frameCount * catalog.frameMilliseconds,
+      durationMilliseconds: frameCount / catalog.framesPerSecond * 1_000,
       loop: false,
       transforms: Object.freeze(transforms),
     }),

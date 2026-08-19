@@ -34,7 +34,7 @@ function fixture({
   const shapeElements = Array.from({ length: 2 }, () => new FakeHTMLElement());
   const leafElements = Array.from({ length: 2 }, () => new FakeHTMLElement());
   const playback = {
-    schema: "csscyclone-prepared-dom-playback@4",
+    schema: "csscyclone-prepared-dom-playback@5",
     modelId: "cyclone",
     streamId: "stream",
     streamBlockIndex: 0,
@@ -47,8 +47,9 @@ function fixture({
     frameCount: 4,
     particleCount: 2,
     leafCount: 2,
-    frameMilliseconds: 20,
-    durationMilliseconds: 80,
+    framesPerSecond: 60,
+    frameMilliseconds: 1_000 / 60,
+    durationMilliseconds: 4 / 60 * 1_000,
     loop: false,
     transforms: ["a", "b", "c", "d", "e", "f", "g", "h"],
   };
@@ -102,7 +103,7 @@ function fixture({
     };
   });
   const catalog = {
-    schema: "csscyclone-prepared-stream-catalog@1",
+    schema: "csscyclone-prepared-stream-catalog@2",
     streamId: "stream",
     chunkCount: 1,
     chunkFrameCount: blockCount * 4,
@@ -110,9 +111,11 @@ function fixture({
     entries: Array.from({ length: blockCount }, () => ({})),
     blocksPerChunk: blockCount,
     blockFrameCount: 4,
+    framesPerSecond: 60,
+    frameMilliseconds: 1_000 / 60,
     runtimeLookaheadBlockCount,
     streamFrameCount: blockCount * 4,
-    streamDurationMilliseconds: blockCount * 80,
+    streamDurationMilliseconds: blockCount * 4 / 60 * 1_000,
   };
   const mounted = {
     model: {
@@ -191,7 +194,7 @@ test("hands each prepared publication from its deadline timer to requestAnimatio
   state.player.resume();
   assert.equal(state.delays.size, 1);
   assert.equal(state.frames.size, 0);
-  assert.equal(state.fireDelay(), 16);
+  assert.equal(state.fireDelay(), 1_000 / 60 - 8);
   assert.equal(state.frames.size, 1);
   state.setNow(20);
   await state.fireFrame();
@@ -234,7 +237,7 @@ test("collapses missed prepared frames once at the next paint-aligned callback",
   const state = fixture();
   state.player.resume();
   state.fireDelay();
-  state.setNow(61);
+  state.setNow(57);
   await state.fireFrame();
   assert.deepEqual(state.shapeElements.map((element) => element.style.transform), ["g", "h"]);
   const stats = state.player.stats();

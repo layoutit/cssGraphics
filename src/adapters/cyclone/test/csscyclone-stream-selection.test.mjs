@@ -6,24 +6,24 @@ const hash = "0".repeat(64);
 const hueSectorNames = Object.freeze(["red", "yellow", "green", "cyan", "blue", "magenta"]);
 const startupPaletteFamilies = Object.freeze(["blue", "yellow", "red", "magenta", "green"]);
 const startupSelections = Object.freeze([
-  Object.freeze({ id: "blue-a", paletteFamily: "blue", chunkIndex: 0, startFrameIndex: 20, frameCount: 40 }),
-  Object.freeze({ id: "blue-b", paletteFamily: "blue", chunkIndex: 0, startFrameIndex: 190, frameCount: 40 }),
-  Object.freeze({ id: "yellow-a", paletteFamily: "yellow", chunkIndex: 1, startFrameIndex: 55, frameCount: 40 }),
-  Object.freeze({ id: "yellow-b", paletteFamily: "yellow", chunkIndex: 7, startFrameIndex: 55, frameCount: 40 }),
-  Object.freeze({ id: "red-a", paletteFamily: "red", chunkIndex: 5, startFrameIndex: 55, frameCount: 40 }),
-  Object.freeze({ id: "red-b", paletteFamily: "red", chunkIndex: 9, startFrameIndex: 55, frameCount: 40 }),
-  Object.freeze({ id: "magenta-a", paletteFamily: "magenta", chunkIndex: 4, startFrameIndex: 55, frameCount: 40 }),
-  Object.freeze({ id: "magenta-b", paletteFamily: "magenta", chunkIndex: 11, startFrameIndex: 55, frameCount: 40 }),
-  Object.freeze({ id: "green-a", paletteFamily: "green", chunkIndex: 17, startFrameIndex: 55, frameCount: 40 }),
-  Object.freeze({ id: "green-b", paletteFamily: "green", chunkIndex: 19, startFrameIndex: 55, frameCount: 40 }),
+  Object.freeze({ id: "blue-a", paletteFamily: "blue", chunkIndex: 17, startFrameIndex: 249, frameCount: 48 }),
+  Object.freeze({ id: "blue-b", paletteFamily: "blue", chunkIndex: 23, startFrameIndex: 492, frameCount: 48 }),
+  Object.freeze({ id: "yellow-a", paletteFamily: "yellow", chunkIndex: 6, startFrameIndex: 450, frameCount: 48 }),
+  Object.freeze({ id: "yellow-b", paletteFamily: "yellow", chunkIndex: 21, startFrameIndex: 162, frameCount: 48 }),
+  Object.freeze({ id: "red-a", paletteFamily: "red", chunkIndex: 19, startFrameIndex: 171, frameCount: 48 }),
+  Object.freeze({ id: "red-b", paletteFamily: "red", chunkIndex: 13, startFrameIndex: 104, frameCount: 48 }),
+  Object.freeze({ id: "magenta-a", paletteFamily: "magenta", chunkIndex: 18, startFrameIndex: 279, frameCount: 48 }),
+  Object.freeze({ id: "magenta-b", paletteFamily: "magenta", chunkIndex: 12, startFrameIndex: 414, frameCount: 48 }),
+  Object.freeze({ id: "green-a", paletteFamily: "green", chunkIndex: 7, startFrameIndex: 250, frameCount: 48 }),
+  Object.freeze({ id: "green-b", paletteFamily: "green", chunkIndex: 15, startFrameIndex: 201, frameCount: 48 }),
 ]);
 const catalog = Object.freeze({
-  schema: "csscyclone-prepared-stream-catalog@1",
+  schema: "csscyclone-prepared-stream-catalog@2",
   streamId: "desktop-stream",
   modelId: "cyclone",
   particleCount: 400,
   leafCount: 2_400,
-  playbackSchema: "csscyclone-prepared-dom-playback@4",
+  playbackSchema: "csscyclone-prepared-dom-playback@5",
   lightingBlockSchema: "csscyclone-prepared-lighting-block@2",
   sourceTransformProfile: Object.freeze({
     controlPointCount: 6,
@@ -32,17 +32,18 @@ const catalog = Object.freeze({
     particleSize: 7,
   }),
   chunkCount: 24,
-  chunkFrameCount: 450,
+  chunkFrameCount: 540,
   blockCount: 216,
   blocksPerChunk: 9,
-  blockFrameCount: 50,
-  frameMilliseconds: 20,
-  streamFrameCount: 10_800,
+  blockFrameCount: 60,
+  framesPerSecond: 60,
+  frameMilliseconds: 1_000 / 60,
+  streamFrameCount: 12_960,
   streamDurationMilliseconds: 216_000,
   startupPaletteFamilies,
   startupSelections,
   startupSilhouetteSampling: "browser-reviewed-expressive-source-windows",
-  startupSilhouetteSampleFrameOffsets: Object.freeze([0, 10, 20, 30, 39]),
+  startupSilhouetteSampleFrameOffsets: Object.freeze([0, 12, 24, 36, 47]),
   maximumColorFamilyCount: 3,
   selection: "session-crypto-shuffled-palette-family-source-window-no-immediate-repeat",
   startupColorProfile: Object.freeze({
@@ -72,8 +73,8 @@ const catalog = Object.freeze({
     index,
     chunkIndex: Math.floor(index / 9),
     blockIndex: index % 9,
-    startFrameIndex: index * 50,
-    frameCount: 50,
+    startFrameIndex: index * 60,
+    frameCount: 60,
     sourceContinuousFromPrevious: index > 0,
     encoding: "gzip-cyclone-source-state-float64-uint16@1",
     assetUrl: `/block-${index}.bin`,
@@ -90,8 +91,8 @@ test("selects a balanced prepared source-palette window once", () => {
   }), {
     selectionId: "red-b",
     paletteFamily: "red",
-    chunkIndex: 9,
-    frameIndex: 76,
+    chunkIndex: 13,
+    frameIndex: 141,
     mode: "crypto-random-balanced-source-palette",
   });
 });
@@ -103,8 +104,8 @@ test("does not immediately repeat the previous prepared window", () => {
   }), {
     selectionId: "red-a",
     paletteFamily: "red",
-    chunkIndex: 5,
-    frameIndex: 76,
+    chunkIndex: 19,
+    frameIndex: 208,
     mode: "crypto-random-balanced-source-palette-no-repeat",
   });
 });
@@ -116,8 +117,8 @@ test("uses the session-shuffled family while retaining a random curated source w
   }), {
     selectionId: "green-b",
     paletteFamily: "green",
-    chunkIndex: 19,
-    frameIndex: 76,
+    chunkIndex: 15,
+    frameIndex: 238,
     mode: "session-shuffled-palette-crypto-random-source-window",
   });
 });
@@ -140,11 +141,11 @@ test("gives each prepared three-family palette variant equal selection coverage"
 
 test("accepts an explicit chunk and frame for deterministic browser proof", () => {
   assert.deepEqual(selectInitialCyclonePosition(catalog, {
-    search: "?chunk=23&frame=449&palette=green",
+    search: "?chunk=23&frame=539&palette=green",
   }), {
     paletteFamily: "green",
     chunkIndex: 23,
-    frameIndex: 449,
+    frameIndex: 539,
     mode: "explicit",
   });
 });

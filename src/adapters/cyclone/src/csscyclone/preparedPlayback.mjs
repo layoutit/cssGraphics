@@ -5,7 +5,7 @@ import {
   CSSCYCLONE_PLAYBACK_SCHEMA,
 } from "../shared/csscyclone/preparedBlockTransport.mjs";
 
-const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@1";
+const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@2";
 const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@2";
 const LIGHTING_SCHEMA = "csscyclone-prepared-smooth-lighting-atlas@7";
 const SOURCE_FIELD_OF_VIEW_DEGREES = 80;
@@ -90,7 +90,7 @@ export function createCyclonePreparedPlayer({
   let clockOrigin = readNow() - initialFrameIndex * playback.frameMilliseconds;
   let pausedAt = initialFrameIndex * playback.frameMilliseconds;
   let frameIndex = initialFrameIndex;
-  const schedulerLeadMilliseconds = Math.min(4, playback.frameMilliseconds / 4);
+  const schedulerLeadMilliseconds = Math.min(8, playback.frameMilliseconds / 2);
   let schedulerFrameRequestCount = 0;
   let schedulerFrameCallbackCount = 0;
   let schedulerFrameCancelCount = 0;
@@ -409,6 +409,8 @@ function validateBinding(
   if (modelTransform !== STYLESHEET_MODEL_TRANSFORM ||
       catalog?.schema !== CATALOG_SCHEMA ||
       catalog.blockCount !== catalog.entries?.length ||
+      catalog.framesPerSecond !== 60 ||
+      catalog.frameMilliseconds !== 1_000 / catalog.framesPerSecond ||
       !Number.isSafeInteger(catalog.runtimeLookaheadBlockCount) ||
       catalog.runtimeLookaheadBlockCount < 1 ||
       catalog.runtimeLookaheadBlockCount > catalog.blockCount ||
@@ -463,6 +465,9 @@ function validateBlockBinding(block, catalog, model, lighting) {
       playback.blockCount !== catalog.blockCount ||
       playback.blocksPerChunk !== catalog.blocksPerChunk ||
       playback.startFrameIndex !== block.startFrameIndex ||
+      playback.framesPerSecond !== catalog.framesPerSecond ||
+      playback.frameMilliseconds !== catalog.frameMilliseconds ||
+      playback.durationMilliseconds !== block.frameCount / catalog.framesPerSecond * 1_000 ||
       playback.frameCount !== block.frameCount ||
       playback.particleCount !== model.render.shapes.length ||
       playback.leafCount !== model.render.leaves.length ||

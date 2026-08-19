@@ -115,6 +115,8 @@ export function createCyclonePreparedBlockLoader(catalog) {
   let workerMaterializationRequestCount = 0;
   let workerMaterializationCompletedBlockCount = 0;
   let workerMaterializationMaximumBlockMilliseconds = 0;
+  let workerMaterializationResponseChunkCount = 0;
+  let workerMaterializationMaximumResponseChunkBytes = 0;
   let incrementalDecodeTail = Promise.resolve();
   let destroyed = false;
 
@@ -193,9 +195,13 @@ export function createCyclonePreparedBlockLoader(catalog) {
         incrementalDecodeRequestCount += 1;
       }
       let workerDurationMilliseconds = 0;
+      let workerResponseChunkCount = 0;
+      let workerMaximumResponseChunkBytes = 0;
       const block = offMainThread && workerMaterializer !== null
         ? await workerMaterializer.materialize(decodedRecord.bytes, descriptor).then((result) => {
           workerDurationMilliseconds = result.durationMilliseconds;
+          workerResponseChunkCount = result.responseChunkCount;
+          workerMaximumResponseChunkBytes = result.maximumResponseChunkBytes;
           return result.block;
         })
         : incremental
@@ -231,6 +237,11 @@ export function createCyclonePreparedBlockLoader(catalog) {
         workerMaterializationMaximumBlockMilliseconds = Math.max(
           workerMaterializationMaximumBlockMilliseconds,
           workerDurationMilliseconds,
+        );
+        workerMaterializationResponseChunkCount += workerResponseChunkCount;
+        workerMaterializationMaximumResponseChunkBytes = Math.max(
+          workerMaterializationMaximumResponseChunkBytes,
+          workerMaximumResponseChunkBytes,
         );
       } else if (incremental) {
         incrementalDecodeCompletedBlockCount += 1;
@@ -321,6 +332,8 @@ export function createCyclonePreparedBlockLoader(catalog) {
         workerMaterializationRequestCount,
         workerMaterializationCompletedBlockCount,
         workerMaterializationMaximumBlockMilliseconds,
+        workerMaterializationResponseChunkCount,
+        workerMaterializationMaximumResponseChunkBytes,
         desiredBlockIndices: Object.freeze([...desiredBlockIndices].sort((left, right) => left - right)),
       });
     },
@@ -344,7 +357,8 @@ function createWorkerBlockMaterializer(catalog) {
     return null;
   }
   const pending = new Map();
-  let responseMaterializationTail = Promise.resolve();
+  const responseChunkQueue = [];
+  let responseFrameRequest = null;
   let nextRequestId = 0;
   let destroyed = false;
   let resolveInitialization;
@@ -358,6 +372,72 @@ function createWorkerBlockMaterializer(catalog) {
     rejectInitialization(error);
     for (const { reject } of pending.values()) reject(error);
     pending.clear();
+    responseChunkQueue.length = 0;
+    if (responseFrameRequest !== null) cancelAnimationFrame(responseFrameRequest);
+    responseFrameRequest = null;
+  }
+
+  function scheduleResponseChunk() {
+    if (responseFrameRequest !== null || responseChunkQueue.length === 0) return;
+    responseFrameRequest = requestAnimationFrame(processResponseChunk);
+  }
+
+  function processResponseChunk() {
+    responseFrameRequest = null;
+    const queued = responseChunkQueue.shift();
+    if (!queued) return;
+    const { data, request, response } = queued;
+    if (pending.get(data.requestId) !== request || request.response !== response) {
+      scheduleResponseChunk();
+      return;
+    }
+    try {
+      const isFinalChunk = data.transformChunkIndex + 1 === response.transformChunkCount;
+      const text = response.carry + response.decoder.decode(data.transformBytes, {
+        stream: !isFinalChunk,
+      });
+      const lines = text.split("\n");
+      if (isFinalChunk) {
+        response.transforms.push(...lines);
+        response.carry = "";
+      } else {
+        response.carry = lines.pop();
+        response.transforms.push(...lines);
+      }
+      response.processedTransformChunkCount += 1;
+      response.receivedTransformBytes += data.transformBytes.byteLength;
+      response.maximumResponseChunkBytes = Math.max(
+        response.maximumResponseChunkBytes,
+        data.transformBytes.byteLength,
+      );
+      if (isFinalChunk) completeWorkerResponse(data.requestId, request, response);
+    } catch (error) {
+      pending.delete(data.requestId);
+      request.reject(error);
+    }
+    scheduleResponseChunk();
+  }
+
+  function completeWorkerResponse(requestId, request, response) {
+    if (response.processedTransformChunkCount !== response.transformChunkCount ||
+        response.receivedTransformBytes !== response.transformByteLength ||
+        response.carry !== "" || response.transforms.length !== response.expectedTransformCount ||
+        response.transforms.some((transform) => !transform.startsWith("matrix3d("))) {
+      throw new Error("Prepared Cyclone worker transform response drifted");
+    }
+    const transforms = Object.freeze(response.transforms);
+    const block = Object.freeze({
+      ...response.block,
+      playback: Object.freeze({ ...response.block.playback, transforms }),
+      lighting: Object.freeze(response.block.lighting),
+    });
+    pending.delete(requestId);
+    request.resolve(Object.freeze({
+      block,
+      durationMilliseconds: response.durationMilliseconds,
+      responseChunkCount: response.transformChunkCount,
+      maximumResponseChunkBytes: response.maximumResponseChunkBytes,
+    }));
   }
 
   worker.addEventListener("message", ({ data }) => {
@@ -376,36 +456,53 @@ function createWorkerBlockMaterializer(catalog) {
       }
       return;
     }
-    if (data?.type !== "materialized" || !Number.isSafeInteger(data.requestId) ||
-        !(data.transformBytes instanceof Uint8Array) ||
-        !Number.isFinite(data.durationMilliseconds) || data.durationMilliseconds < 0) {
+    if (data?.type === "materialized-start") {
+      const request = pending.get(data.requestId);
+      const expectedTransformCount =
+        data.block?.playback?.frameCount * data.block?.playback?.particleCount;
+      if (!request || request.response !== null ||
+          !Number.isSafeInteger(data.transformByteLength) || data.transformByteLength < 1 ||
+          !Number.isSafeInteger(data.transformChunkCount) || data.transformChunkCount < 1 ||
+          !Number.isSafeInteger(expectedTransformCount) || expectedTransformCount < 1 ||
+          !Number.isFinite(data.durationMilliseconds) || data.durationMilliseconds < 0) {
+        rejectAll(new Error("Prepared Cyclone worker response drifted"));
+        return;
+      }
+      request.response = {
+        block: data.block,
+        durationMilliseconds: data.durationMilliseconds,
+        transformByteLength: data.transformByteLength,
+        transformChunkCount: data.transformChunkCount,
+        expectedTransformCount,
+        queuedTransformChunkCount: 0,
+        processedTransformChunkCount: 0,
+        receivedTransformBytes: 0,
+        maximumResponseChunkBytes: 0,
+        decoder: new TextDecoder(),
+        carry: "",
+        transforms: [],
+      };
+      return;
+    }
+    if (data?.type !== "materialized-chunk" || !Number.isSafeInteger(data.requestId) ||
+        !Number.isSafeInteger(data.transformChunkIndex) || data.transformChunkIndex < 0 ||
+        !Number.isSafeInteger(data.transformChunkCount) || data.transformChunkCount < 1 ||
+        !(data.transformBytes instanceof Uint8Array) || data.transformBytes.byteLength < 1 ||
+        data.transformBytes.byteLength > 128 * 1_024) {
       rejectAll(new Error("Prepared Cyclone worker response drifted"));
       return;
     }
     const request = pending.get(data.requestId);
-    if (!request) return;
-    responseMaterializationTail = responseMaterializationTail.then(async () => {
-      if (pending.get(data.requestId) !== request) return;
-      try {
-        const transforms = await decodeCyclonePreparedTransformsIncrementally(
-          data.transformBytes,
-          data.block?.playback?.frameCount * data.block?.playback?.particleCount,
-        );
-        const block = Object.freeze({
-          ...data.block,
-          playback: Object.freeze({ ...data.block.playback, transforms }),
-          lighting: Object.freeze(data.block.lighting),
-        });
-        pending.delete(data.requestId);
-        request.resolve(Object.freeze({
-          block,
-          durationMilliseconds: data.durationMilliseconds,
-        }));
-      } catch (error) {
-        pending.delete(data.requestId);
-        request.reject(error);
-      }
-    });
+    const response = request?.response;
+    if (!request || !response ||
+        data.transformChunkIndex !== response.queuedTransformChunkCount ||
+        data.transformChunkCount !== response.transformChunkCount) {
+      rejectAll(new Error("Prepared Cyclone worker response drifted"));
+      return;
+    }
+    response.queuedTransformChunkCount += 1;
+    responseChunkQueue.push({ data, request, response });
+    scheduleResponseChunk();
   });
   worker.addEventListener("error", (event) => {
     rejectAll(new Error(event.message || "Prepared Cyclone worker failed"));
@@ -420,7 +517,7 @@ function createWorkerBlockMaterializer(catalog) {
       nextRequestId += 1;
       const workerBytes = bytes.slice();
       const result = new Promise((resolve, reject) => {
-        pending.set(requestId, { resolve, reject });
+        pending.set(requestId, { resolve, reject, response: null });
       });
       worker.postMessage({
         type: "materialize",

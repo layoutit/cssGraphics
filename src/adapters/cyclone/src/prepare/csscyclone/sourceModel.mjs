@@ -50,7 +50,7 @@ export const CSSCYCLONE_BANKS = Object.freeze({
   desktop: Object.freeze({
     ...CSSCYCLONE_SOURCE_BANK,
     id: "desktop-stream",
-    particleCount: 360,
+    particleCount: 340,
   }),
   mobile: Object.freeze({
     ...CSSCYCLONE_SOURCE_BANK,

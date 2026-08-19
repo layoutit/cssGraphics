@@ -91,7 +91,7 @@ test("pins the current Really Slick Cyclone source profile", () => {
 
 test("prepares desktop and mobile banks as complete source-particle prefixes", () => {
   assert.equal(CSSCYCLONE_SOURCE_BANK.particleCount, 400);
-  assert.equal(CSSCYCLONE_BANKS.desktop.particleCount, 360);
+  assert.equal(CSSCYCLONE_BANKS.desktop.particleCount, 340);
   assert.equal(CSSCYCLONE_BANKS.mobile.particleCount, 166);
   const desktopBank = {
     ...CSSCYCLONE_SOURCE_BANK,
@@ -254,7 +254,7 @@ test("prepares smooth reference lighting without a runtime lighting timeline", a
   assert.equal(prepared.contract.paletteHueSlotCount, 3);
   assert.equal(prepared.contract.maximumColorFamilyCount, 3);
   assert.equal(prepared.contract.preparedMinimumSaturation, 0.55);
-  assert.equal(prepared.contract.preparedMinimumValue, 0.65);
+  assert.equal(prepared.contract.preparedMinimumValue, 0.75);
   assert.equal(prepared.contract.variants.length, 5);
   assert.ok(prepared.contract.variants.every((variant) => variant.hueSlots.length === 3));
   assert.equal(prepared.contract.sourceStreamFrameCount, 4);
@@ -269,7 +269,9 @@ test("prepares smooth reference lighting without a runtime lighting timeline", a
   assert.ok(prepared.assets.every((asset) => asset.bytes.byteLength > 0));
   assert.ok(prepared.contract.variants.every((variant) => /^[a-f0-9]{64}$/u.test(variant.assetSha256)));
   const liftedBlack = prepareCyclonePaletteColor([0, 0, 0], "yellow");
-  assert.equal(Math.max(...liftedBlack), 0.65);
+  assert.equal(Math.max(...liftedBlack), 0.75);
+  const liftedRedBlack = prepareCyclonePaletteColor([0, 0, 0], "red");
+  assert.equal(Math.max(...liftedRedBlack), 0.75);
   assert.equal(Number((1 - Math.min(...liftedBlack) / Math.max(...liftedBlack)).toFixed(2)), 0.55);
 });
 

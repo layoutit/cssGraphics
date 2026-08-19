@@ -4,7 +4,7 @@ export async function loadCyclonePreparedLightingAsset(lighting, paletteFamily) 
       lighting.maximumColorFamilyCount !== 3 ||
       lighting.paletteHueSlotCount !== 3 ||
       lighting.preparedMinimumSaturation !== 0.55 ||
-      lighting.preparedMinimumValue !== 0.65 ||
+      lighting.preparedMinimumValue !== 0.75 ||
       !Array.isArray(lighting.paletteFamilies) ||
       !lighting.paletteFamilies.includes(paletteFamily) ||
       lighting.variants?.length !== lighting.paletteFamilies.length ||

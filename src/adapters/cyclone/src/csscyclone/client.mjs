@@ -125,9 +125,9 @@ export async function mountCycloneClient(host) {
     await waitForCycloneScenePaint();
     player.seekFrame(initialBlockFrameIndex);
     await waitForCycloneScenePaint();
-    document.body.classList.replace("priming", "ready");
     await waitForCycloneScenePaint();
     state.ready = true;
+    document.body.classList.replace("priming", "ready");
     player.resume();
     return state;
   } catch (error) {

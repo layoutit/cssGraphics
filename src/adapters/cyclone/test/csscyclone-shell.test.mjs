@@ -40,9 +40,17 @@ test("uses the cssGraphics shell without product UI or alternate renderers", asy
   assert.match(playback, /deadline-setTimeout-requestAnimationFrame-prepared-publication/u);
   assert.match(client, /blockLoader\.prime\(residentBlockIndices\)/u);
   assert.match(client, /await waitForCycloneScenePaint\(\)/u);
+  assert.match(
+    client,
+    /player\.seekFrame\(initialBlockFrameIndex\);\s*await waitForCycloneScenePaint\(\);\s*await waitForCycloneScenePaint\(\);\s*state\.ready = true;\s*document\.body\.classList\.replace\("priming", "ready"\);/u,
+  );
   assert.match(styles, /body\.priming::before/u);
   assert.match(stream, /new Worker\(new URL\("\.\/preparedBlockWorker\.mjs"/u);
   assert.match(worker, /decodeCyclonePreparedBlock/u);
+  assert.match(worker, /type: "materialized-chunk"/u);
+  assert.match(worker, /TRANSFORM_RESPONSE_CHUNK_BYTES = 128 \* 1_024/u);
+  assert.match(stream, /workerMaterializationMaximumResponseChunkBytes/u);
+  assert.match(stream, /requestAnimationFrame\(processResponseChunk\)/u);
   assert.doesNotMatch(`${client}\n${playback}\n${stream}\n${worker}`, /WebGL|CanvasRenderingContext/u);
   assert.doesNotMatch(styles, /filter:\s*(?:blur|drop-shadow)|box-shadow|clip-path/u);
 });

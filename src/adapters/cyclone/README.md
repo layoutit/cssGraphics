@@ -2,8 +2,8 @@
 
 This adapter translates Really Slick Cyclone into one retained PolyCSS Morph
 graph. The source-default 400-particle simulation is prepared into prefixes of
-360 complete particles on desktop and 166 on mobile. Every retained particle
-keeps all six original solid-triangle leaves: 2,160 desktop leaves or 996 mobile
+340 complete particles on desktop and 166 on mobile. Every retained particle
+keeps all six original solid-triangle leaves: 2,040 desktop leaves or 996 mobile
 leaves. The
 selected profile plays 24 source-continuous logical chunks of 540 prepared
 16.667 ms
@@ -18,7 +18,7 @@ composed onto the existing scene node.
 There is no Canvas, SVG, WebGL, runtime random walk, geometry construction,
 lighting calculation, matrix formatting, atlas rasterization, or DOM growth.
 The prepared presentation maps the source's random saturation samples into a
-0.55-1.0 range and lifts only the dark end of prepared HSV value to 0.65. The
+0.55-1.0 range and lifts the dark end of prepared HSV value to 0.75. The
 source's uniform random hue-target timing and its rule that
 particles change color only when they restart are preserved. At preparation,
 each source hue is assigned to one of three slots in the selected session palette.
@@ -53,8 +53,9 @@ decompresses the active block plus 11 successors behind the loading indicator
 on both desktop and mobile, but expands CSS strings only for the active block
 and two successors. Those first three blocks are complete before the loading
 indicator clears. A dedicated preparation worker expands later successors
-sequentially; the main thread adopts each prepared response in bounded 128 KiB
-slices while publishing the same stable retained DOM and maintaining the
+sequentially; the worker transfers bounded 128 KiB response chunks and the main
+thread adopts at most one chunk per paint while publishing the same stable
+retained DOM and maintaining the
 12-second compact source-state window. The
 single terminal stream wrap is the only
 non-source-continuous boundary.

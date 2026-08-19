@@ -9,7 +9,7 @@ import { CSSCYCLONE_PRESENTATION } from "./sourceModel.mjs";
 const CONTENT_SIZE = 2;
 const GUTTER = 1;
 const SLOT_SIZE = CONTENT_SIZE + GUTTER * 2;
-const MAXIMUM_COLUMNS = 1_200;
+const UNPACKED_MAXIMUM_COLUMNS = 1_200;
 const MAXIMUM_TEXTURE_DIMENSION = 8_192;
 const DISPLAY_SCALE = 16;
 const PALETTE_CENTER_HUES = Object.freeze({
@@ -138,23 +138,20 @@ async function buildPreparedLightingAsset({
 }) {
   const leafCount = particleCount * CSSCYCLONE_FACE_INDICES.length;
   const tileCount = colorStates.length * CSSCYCLONE_FACE_INDICES.length;
-  const columns = Math.min(MAXIMUM_COLUMNS, tileCount);
-  const rows = Math.ceil(tileCount / columns);
-  const width = columns * SLOT_SIZE;
-  const height = rows * SLOT_SIZE;
-  if (width > MAXIMUM_TEXTURE_DIMENSION || height > MAXIMUM_TEXTURE_DIMENSION) {
-    throw new Error(`Prepared Cyclone lighting atlas ${width}x${height} exceeds the image contract`);
-  }
   if (CSSCYCLONE_PRESENTATION.preparedPaletteHueSlotCount !== 3 ||
       CSSCYCLONE_PRESENTATION.maximumColorFamilyCount !== 3 ||
       CSSCYCLONE_PRESENTATION.startupPaletteFamilies.some((family) =>
         !Object.hasOwn(PALETTE_CENTER_HUES, family))) {
     throw new Error("Cyclone prepared three-family palette configuration drifted");
   }
-  const assets = [];
+  const unpackedColumns = Math.min(UNPACKED_MAXIMUM_COLUMNS, tileCount);
+  const unpackedRows = Math.ceil(tileCount / unpackedColumns);
+  const unpackedWidth = unpackedColumns * SLOT_SIZE;
+  const unpackedHeight = unpackedRows * SLOT_SIZE;
+  const unpackedVariants = [];
   for (const paletteFamily of CSSCYCLONE_PRESENTATION.startupPaletteFamilies) {
     const hueSlots = preparedPaletteHues(paletteFamily);
-    const rgba = Buffer.alloc(width * height * 4);
+    const rgba = Buffer.alloc(unpackedWidth * unpackedHeight * 4);
     for (let stateIndex = 0; stateIndex < colorStates.length; stateIndex += 1) {
       const state = colorStates[stateIndex];
       const baseColor = preparedPaletteColor(state.baseColor, paletteFamily);
@@ -165,36 +162,61 @@ async function buildPreparedLightingAsset({
       for (let faceIndex = 0; faceIndex < CSSCYCLONE_FACE_INDICES.length; faceIndex += 1) {
         writeAffineTriangleTile({
           rgba,
-          width,
-          columns,
+          width: unpackedWidth,
+          columns: unpackedColumns,
           tileIndex: stateIndex * CSSCYCLONE_FACE_INDICES.length + faceIndex,
           vertexColors,
           vertexIndices: CSSCYCLONE_FACE_INDICES[faceIndex],
         });
       }
     }
+    unpackedVariants.push(Object.freeze({ paletteFamily, hueSlots, rgba }));
+  }
+  const deduplication = deduplicateExactCrossVariantTiles(
+    unpackedVariants.map((variant) => variant.rgba),
+    { width: unpackedWidth, columns: unpackedColumns, tileCount },
+  );
+  const uniqueTileCount = deduplication.uniqueSourceTileIndices.length;
+  const columns = Math.ceil(Math.sqrt(uniqueTileCount));
+  const rows = Math.ceil(uniqueTileCount / columns);
+  const width = columns * SLOT_SIZE;
+  const height = rows * SLOT_SIZE;
+  if (width > MAXIMUM_TEXTURE_DIMENSION || height > MAXIMUM_TEXTURE_DIMENSION) {
+    throw new Error(`Prepared Cyclone lighting atlas ${width}x${height} exceeds the image contract`);
+  }
+  const assets = [];
+  for (const variant of unpackedVariants) {
+    const rgba = packUniqueTiles(variant.rgba, {
+      sourceWidth: unpackedWidth,
+      sourceColumns: unpackedColumns,
+      uniqueSourceTileIndices: deduplication.uniqueSourceTileIndices,
+      targetWidth: width,
+      targetColumns: columns,
+      targetHeight: height,
+    });
     const bytes = await sharp(rgba, {
       raw: { width, height, channels: 4 },
       limitInputPixels: false,
     }).webp({ lossless: true, effort: 6 }).toBuffer();
     const assetSha256 = createHash("sha256").update(bytes).digest("hex");
     assets.push(Object.freeze({
-      paletteFamily,
-      assetUrl: `/csscyclone/assets/lighting-${paletteFamily}-${assetSha256}.webp`,
+      paletteFamily: variant.paletteFamily,
+      assetUrl: `/csscyclone/assets/lighting-${variant.paletteFamily}-${assetSha256}.webp`,
       assetSha256,
       byteLength: bytes.byteLength,
-      hueSlots,
+      hueSlots: variant.hueSlots,
       bytes,
     }));
   }
   const tileBackgroundPositions = Object.freeze(Array.from({ length: tileCount }, (_, tileIndex) => {
-    const contentX = tileIndex % columns * SLOT_SIZE + GUTTER;
-    const contentY = Math.floor(tileIndex / columns) * SLOT_SIZE + GUTTER;
+    const slotIndex = deduplication.tileSlotIndices[tileIndex];
+    const contentX = slotIndex % columns * SLOT_SIZE + GUTTER;
+    const contentY = Math.floor(slotIndex / columns) * SLOT_SIZE + GUTTER;
     return `${-contentX * DISPLAY_SCALE}px ${-contentY * DISPLAY_SCALE}px`;
   }));
   const contract = deepFreeze({
-    schema: "csscyclone-prepared-smooth-lighting-atlas@5",
-    technique: "prepared-session-three-family-lighting-variants-with-sparse-source-color-restarts",
+    schema: "csscyclone-prepared-smooth-lighting-atlas@6",
+    technique: "prepared-session-three-family-lighting-variants-with-sparse-source-color-restarts-and-exact-tile-deduplication",
     source: "src/cyclone/cyclone.cpp#particle::update+initSaver",
     streamId,
     encoding: "WebP-lossless-RGBA8",
@@ -215,6 +237,10 @@ async function buildPreparedLightingAsset({
     columns,
     rows,
     tileCount,
+    uniqueTileCount,
+    deduplicatedTileCount: tileCount - uniqueTileCount,
+    tileDeduplication: "exact-cross-palette-rgba8-slot-content",
+    packing: "near-square-row-major-unique-slots",
     leafCount,
     sourceFaceCount: leafCount,
     sourceFaceCoverageCount: leafCount,
@@ -267,6 +293,9 @@ async function buildPreparedLightingAsset({
       preparedLightingStreamFrameCount: sourceStreamFrameCount,
       preparedLightingColorStateCount: colorStates.length,
       preparedLightingColorRestartCount: colorRestartCount,
+      preparedLightingLogicalTileCount: tileCount,
+      preparedLightingUniqueTileCount: uniqueTileCount,
+      preparedLightingDeduplicatedTileCount: tileCount - uniqueTileCount,
       preparedLightingPaletteVariantCount: assets.length,
       preparedLightingAtlasBytes: assets.reduce((sum, asset) => sum + asset.byteLength, 0),
       preparedLightingMaximumVariantAtlasBytes: Math.max(...assets.map((asset) => asset.byteLength)),
@@ -277,6 +306,102 @@ async function buildPreparedLightingAsset({
       runtimeLightingWritesPerSample: 0,
     }),
   });
+}
+
+function deduplicateExactCrossVariantTiles(variantRgba, { width, columns, tileCount }) {
+  if (!Array.isArray(variantRgba) || variantRgba.length < 1) {
+    throw new Error("Cyclone lighting tile deduplication requires every palette variant");
+  }
+  const tileByteLength = SLOT_SIZE * SLOT_SIZE * 4;
+  const signatureBytes = Buffer.alloc(tileByteLength * variantRgba.length);
+  const slotBySignature = new Map();
+  const tileSlotIndices = new Uint32Array(tileCount);
+  const uniqueSourceTileIndices = [];
+  for (let tileIndex = 0; tileIndex < tileCount; tileIndex += 1) {
+    for (let variantIndex = 0; variantIndex < variantRgba.length; variantIndex += 1) {
+      copyTileToLinear(
+        variantRgba[variantIndex],
+        width,
+        columns,
+        tileIndex,
+        signatureBytes,
+        variantIndex * tileByteLength,
+      );
+    }
+    const signature = signatureBytes.toString("base64");
+    let slotIndex = slotBySignature.get(signature);
+    if (slotIndex === undefined) {
+      slotIndex = uniqueSourceTileIndices.length;
+      slotBySignature.set(signature, slotIndex);
+      uniqueSourceTileIndices.push(tileIndex);
+    }
+    tileSlotIndices[tileIndex] = slotIndex;
+  }
+  return Object.freeze({
+    tileSlotIndices,
+    uniqueSourceTileIndices: Object.freeze(uniqueSourceTileIndices),
+  });
+}
+
+function packUniqueTiles(source, {
+  sourceWidth,
+  sourceColumns,
+  uniqueSourceTileIndices,
+  targetWidth,
+  targetColumns,
+  targetHeight,
+}) {
+  const target = Buffer.alloc(targetWidth * targetHeight * 4);
+  for (let slotIndex = 0; slotIndex < uniqueSourceTileIndices.length; slotIndex += 1) {
+    copyAtlasTile({
+      source,
+      sourceWidth,
+      sourceColumns,
+      sourceTileIndex: uniqueSourceTileIndices[slotIndex],
+      target,
+      targetWidth,
+      targetColumns,
+      targetTileIndex: slotIndex,
+    });
+  }
+  return target;
+}
+
+function copyTileToLinear(source, sourceWidth, sourceColumns, sourceTileIndex, target, targetOffset) {
+  const sourceX = sourceTileIndex % sourceColumns * SLOT_SIZE;
+  const sourceY = Math.floor(sourceTileIndex / sourceColumns) * SLOT_SIZE;
+  const rowByteLength = SLOT_SIZE * 4;
+  for (let localY = 0; localY < SLOT_SIZE; localY += 1) {
+    const sourceOffset = ((sourceY + localY) * sourceWidth + sourceX) * 4;
+    source.copy(
+      target,
+      targetOffset + localY * rowByteLength,
+      sourceOffset,
+      sourceOffset + rowByteLength,
+    );
+  }
+}
+
+function copyAtlasTile({
+  source,
+  sourceWidth,
+  sourceColumns,
+  sourceTileIndex,
+  target,
+  targetWidth,
+  targetColumns,
+  targetTileIndex,
+}) {
+  const sourceX = sourceTileIndex % sourceColumns * SLOT_SIZE;
+  const sourceY = Math.floor(sourceTileIndex / sourceColumns) * SLOT_SIZE;
+  const targetX = targetTileIndex % targetColumns * SLOT_SIZE;
+  const targetY = Math.floor(targetTileIndex / targetColumns) * SLOT_SIZE;
+  const rowByteLength = SLOT_SIZE * 4;
+  for (let localY = 0; localY < SLOT_SIZE; localY += 1) {
+    const sourceOffset = ((sourceY + localY) * sourceWidth + sourceX) * 4;
+    const targetOffset = ((targetY + localY) * targetWidth + targetX) * 4;
+    source.copy(target, targetOffset, sourceOffset, sourceOffset + rowByteLength);
+  }
 }
 
 function validateSourceChunk(source) {

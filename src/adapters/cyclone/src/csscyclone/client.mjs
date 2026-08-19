@@ -51,10 +51,15 @@ export async function mountCycloneClient(host) {
     const initialBlockIndex = Math.floor(initialStreamFrameIndex / catalog.blockFrameCount);
     const initialBlockFrameIndex = initialStreamFrameIndex % catalog.blockFrameCount;
     const blockLoader = createCyclonePreparedBlockLoader(catalog);
-    const nextBlockIndex = (initialBlockIndex + 1) % catalog.blockCount;
-    blockLoader.retain([initialBlockIndex, nextBlockIndex]);
-    const [initialBlock, loadedLightingAsset] = await Promise.all([
+    const lookaheadBlockIndices = Array.from(
+      { length: catalog.runtimeLookaheadBlockCount },
+      (unused, offset) => (initialBlockIndex + offset + 1) % catalog.blockCount,
+    );
+    const residentBlockIndices = [initialBlockIndex, ...lookaheadBlockIndices];
+    blockLoader.retain(residentBlockIndices);
+    const [initialBlock, initialLookaheadBlocks, loadedLightingAsset] = await Promise.all([
       blockLoader.load(initialBlockIndex),
+      Promise.all(lookaheadBlockIndices.map((streamBlockIndex) => blockLoader.load(streamBlockIndex))),
       loadCyclonePreparedLightingAsset(metadata.lighting, selection.paletteFamily),
     ]);
     lightingAsset = loadedLightingAsset;
@@ -67,14 +72,15 @@ export async function mountCycloneClient(host) {
       mounted,
       catalog,
       initialBlock,
+      initialLookaheadBlocks,
       initialFrameIndex: initialBlockFrameIndex,
       lighting: metadata.lighting,
       lightingAsset,
       loadBlock(streamBlockIndex) {
         return blockLoader.load(streamBlockIndex);
       },
-      onBlockWindow(activeBlockIndex, pendingBlockIndex) {
-        blockLoader.retain([activeBlockIndex, pendingBlockIndex]);
+      onBlockWindow(streamBlockIndices) {
+        blockLoader.retain(streamBlockIndices);
       },
     });
     player.resize();

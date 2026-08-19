@@ -24,6 +24,7 @@ const outputRoot = join(repositoryRoot, "build/generated/public/csscyclone");
 const stagingRoot = join(repositoryRoot, `build/generated/.csscyclone-${process.pid}`);
 const sourceLock = JSON.parse(await readFile(join(adapterRoot, "notes/references/source-lock.json"), "utf8"));
 const blockFrameCount = 50;
+const runtimeLookaheadBlockCount = 3;
 const blocksPerChunk = CSSCYCLONE_BANK.frameCount / blockFrameCount;
 const blockCount = CSSCYCLONE_BANK.chunkCount * blocksPerChunk;
 const startupPaletteFamilies = CSSCYCLONE_PRESENTATION.startupPaletteFamilies;
@@ -48,9 +49,6 @@ let uniquePreparedTransformCount = 0;
 let shapeTransformSelections = 0;
 let preparedBlockEncodedBytes = 0;
 let preparedBlockDecodedBytes = 0;
-let maximumResidentBlockPairDecodedBytes = 0;
-let previousBlockDecodedBytes = 0;
-let firstBlockDecodedBytes = 0;
 for (const source of buildCycloneSourceChunks()) {
   if (preparedModel === null) {
     const result = buildCyclonePreparedModel({ source });
@@ -119,21 +117,16 @@ for (const source of buildCycloneSourceChunks()) {
     }));
     preparedBlockEncodedBytes += encoded.byteLength;
     preparedBlockDecodedBytes += decoded.byteLength;
-    if (streamBlockIndex === 0) firstBlockDecodedBytes = decoded.byteLength;
-    maximumResidentBlockPairDecodedBytes = Math.max(
-      maximumResidentBlockPairDecodedBytes,
-      previousBlockDecodedBytes + decoded.byteLength,
-    );
-    previousBlockDecodedBytes = decoded.byteLength;
   }
   preparedFrameCount += preparedPlayback.metrics.preparedFrameCount;
   uniquePreparedTransformCount += preparedPlayback.metrics.uniquePreparedTransformCount;
   shapeTransformSelections += preparedPlayback.metrics.shapeTransformSelections;
 }
-maximumResidentBlockPairDecodedBytes = Math.max(
-  maximumResidentBlockPairDecodedBytes,
-  previousBlockDecodedBytes + firstBlockDecodedBytes,
-);
+const residentBlockWindowCount = runtimeLookaheadBlockCount + 1;
+const maximumResidentBlockWindowDecodedBytes = Math.max(...blockEntries.map((_, startIndex) =>
+  Array.from({ length: residentBlockWindowCount }, (unused, offset) =>
+    blockEntries[(startIndex + offset) % blockEntries.length].decodedByteLength)
+    .reduce((total, byteLength) => total + byteLength, 0)));
 const startupColorProfile = buildStartupColorProfile(
   startupSelections.map((selection) => startupSelectionColorProfiles.get(selection.id)),
 );
@@ -159,7 +152,7 @@ const catalogBytes = Buffer.from(`${JSON.stringify({
   startupColorProfile,
   selection: "session-crypto-random-balanced-source-palette-window-no-immediate-repeat",
   playbackOrder: "source-continuous-ascending-chunks-with-one-terminal-stream-wrap",
-  runtimeLookaheadBlockCount: 1,
+  runtimeLookaheadBlockCount,
   entries: blockEntries,
 })}\n`);
 const catalogSha256 = sha256(catalogBytes);
@@ -230,7 +223,7 @@ await writeJson(join(stagingRoot, "prepared.json"), {
       maximumColorFamilyCount: CSSCYCLONE_PRESENTATION.maximumColorFamilyCount,
       startupColorProfile,
       startupSelection: "session-crypto-random-balanced-source-palette-window-no-immediate-repeat",
-      handoff: "source-continuous-next-block-with-one-block-lookahead",
+      handoff: "source-continuous-next-block-with-three-block-lookahead",
     },
     productParticleCount: CSSCYCLONE_BANK.particleCount,
     viewDistance: CSSCYCLONE_SOURCE.viewDistance,
@@ -253,8 +246,9 @@ await writeJson(join(stagingRoot, "prepared.json"), {
     shapeTransformSelections,
     preparedBlockEncodedBytes,
     preparedBlockDecodedBytes,
-    maximumResidentBlockPairDecodedBytes,
-    runtimeLookaheadBlockCount: 1,
+    residentBlockWindowCount,
+    maximumResidentBlockWindowDecodedBytes,
+    runtimeLookaheadBlockCount,
     runtimePreparedStateMaterialization: false,
   },
   lighting: preparedLighting.contract,
@@ -278,7 +272,8 @@ console.log(JSON.stringify({
   shapeTransformSelections,
   preparedBlockEncodedBytes,
   preparedBlockDecodedBytes,
-  maximumResidentBlockPairDecodedBytes,
+  residentBlockWindowCount,
+  maximumResidentBlockWindowDecodedBytes,
   ...preparedLighting.metrics,
 }, null, 2));
 

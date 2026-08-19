@@ -36,8 +36,8 @@ first published frame. Its 10,800 states cover 216 seconds before repeating.
 Startup uses `crypto.getRandomValues` once to select an audited palette family,
 source window, and frame, excluding the previous exact window. Playback
 then follows the original source order. Each hash-bound
-gzip block prefetches its exact successor; only the active and lookahead blocks
-remain resident. The single terminal stream wrap is the only
+gzip block maintains a three-block prepared lookahead; only the active block
+and that bounded horizon remain resident. The single terminal stream wrap is the only
 non-source-continuous boundary.
 
 Source identity is pinned in `notes/references/source-lock.json`. Preparation
@@ -56,12 +56,14 @@ pnpm build:cyclone
 pnpm dev:cyclone
 ```
 
-The first published frame qualifies the prepared smooth-light field. During
-motion the highlight orientation stays attached to each particle while source
-color restarts remain exact; this is an explicit performance approximation.
-The complete dense scene is not pixel-identical because OpenGL also resolves
-intersecting particles with a per-fragment depth buffer while the retained CSS
-scene uses planar compositor ordering. The missing non-corner-shape triangle
-fallback keeps this first slice from being a release claim.
+The retained-DOM route is publication-qualified within its documented PolyCSS
+constraints. The first published frame qualifies the prepared smooth-light
+field. During motion the highlight orientation stays attached to each particle
+while source color restarts remain exact; this is an intentional performance
+adaptation. The complete dense scene is not claimed to be pixel-identical to
+OpenGL because OpenGL resolves intersecting particles with a per-fragment depth
+buffer while the retained CSS scene uses planar compositor ordering. The
+supported Chrome path renders all six CSS triangle leaves per particle with no
+alternate renderer or geometry fallback.
 
 The adapter is GPL-2.0-or-later; see [NOTICE.md](NOTICE.md).

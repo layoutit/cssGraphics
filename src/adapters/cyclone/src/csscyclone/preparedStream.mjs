@@ -2,11 +2,10 @@ const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@1";
 const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@1";
 const PLAYBACK_SCHEMA = "csscyclone-prepared-dom-playback@3";
 const LIGHTING_BLOCK_SCHEMA = "csscyclone-prepared-lighting-block@1";
-const RUNTIME_LOOKAHEAD_BLOCK_COUNT = 3;
 const STARTUP_HUE_SECTOR_NAMES = Object.freeze(["red", "yellow", "green", "cyan", "blue", "magenta"]);
 const STARTUP_PALETTE_FAMILIES = Object.freeze(["blue", "yellow", "red", "magenta", "green"]);
 const STARTUP_SILHOUETTE_SAMPLING = "browser-reviewed-expressive-source-windows";
-const STARTUP_SELECTION = "session-crypto-random-balanced-source-palette-window-no-immediate-repeat";
+const STARTUP_SELECTION = "session-crypto-shuffled-palette-family-source-window-no-immediate-repeat";
 
 export async function loadCyclonePreparedCatalog(descriptor) {
   if (typeof descriptor?.catalogUrl !== "string" ||
@@ -24,6 +23,7 @@ export async function loadCyclonePreparedCatalog(descriptor) {
 export function selectInitialCyclonePosition(catalog, {
   search = globalThis.location?.search ?? "",
   previousSelectionId = null,
+  preferredPaletteFamily = null,
   randomUint32Pair = cryptoRandomUint32Pair,
 } = {}) {
   validateCatalog(catalog);
@@ -46,16 +46,22 @@ export function selectInitialCyclonePosition(catalog, {
         !catalog.startupSelections.some((selection) => selection.id === previousSelectionId))) {
     throw new RangeError("Previous Cyclone start selection is invalid");
   }
+  if (preferredPaletteFamily !== null &&
+      !catalog.startupPaletteFamilies.includes(preferredPaletteFamily)) {
+    throw new RangeError("Preferred Cyclone palette family is invalid");
+  }
   const values = randomUint32Pair();
   if (!Array.isArray(values) || values.length !== 2 ||
       values.some((value) => !Number.isSafeInteger(value) || value < 0 || value > 0xffffffff)) {
     throw new RangeError("Cyclone startup random values must be two uint32 values");
   }
   const paletteFamilyIndex = values[0] % catalog.startupPaletteFamilies.length;
-  const paletteFamily = catalog.startupPaletteFamilies[paletteFamilyIndex];
+  const paletteFamily = preferredPaletteFamily ?? catalog.startupPaletteFamilies[paletteFamilyIndex];
   const familySelections = catalog.startupSelections.filter((selection) =>
     selection.paletteFamily === paletteFamily);
-  let selectionIndex = Math.floor(values[0] / catalog.startupPaletteFamilies.length) % familySelections.length;
+  let selectionIndex = (preferredPaletteFamily === null
+    ? Math.floor(values[0] / catalog.startupPaletteFamilies.length)
+    : values[0]) % familySelections.length;
   if (familySelections[selectionIndex].id === previousSelectionId && familySelections.length > 1) {
     selectionIndex = (selectionIndex + 1) % familySelections.length;
   }
@@ -66,7 +72,9 @@ export function selectInitialCyclonePosition(catalog, {
     paletteFamily,
     chunkIndex: selection.chunkIndex,
     frameIndex,
-    mode: previousSelectionId === null
+    mode: preferredPaletteFamily !== null
+      ? "session-shuffled-palette-crypto-random-source-window"
+      : previousSelectionId === null
       ? "crypto-random-balanced-source-palette"
       : "crypto-random-balanced-source-palette-no-repeat",
   });
@@ -198,7 +206,7 @@ function validateCatalog(catalog) {
         !Number.isSafeInteger(frameOffset) || frameOffset < 0 ||
         catalog.startupSelections.some((selection) => frameOffset >= selection.frameCount)) ||
       catalog.selection !== STARTUP_SELECTION ||
-      catalog.runtimeLookaheadBlockCount !== RUNTIME_LOOKAHEAD_BLOCK_COUNT ||
+      catalog.runtimeLookaheadBlockCount !== 1 ||
       catalog.entries.some((entry, index) => entry?.index !== index ||
         entry.chunkIndex !== Math.floor(index / catalog.blocksPerChunk) ||
         entry.blockIndex !== index % catalog.blocksPerChunk ||

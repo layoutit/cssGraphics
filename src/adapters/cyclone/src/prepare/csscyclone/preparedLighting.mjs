@@ -12,6 +12,8 @@ const SLOT_SIZE = CONTENT_SIZE + GUTTER * 2;
 const UNPACKED_MAXIMUM_COLUMNS = 1_200;
 const MAXIMUM_TEXTURE_DIMENSION = 8_192;
 const DISPLAY_SCALE = 16;
+const PREPARED_MINIMUM_SATURATION = CSSCYCLONE_PRESENTATION.minimumSaturation;
+const PREPARED_MINIMUM_VALUE = 0.65;
 const PALETTE_CENTER_HUES = Object.freeze({
   blue: 2 / 3,
   yellow: 1 / 6,
@@ -26,7 +28,9 @@ const HALF_VECTOR = normalize([
   LIGHT_DIRECTION[2] + 1,
 ]);
 
-export function createCyclonePreparedLightingStream() {
+export function createCyclonePreparedLightingStream({
+  assetRoot = "/csscyclone/assets",
+} = {}) {
   let particleCount = null;
   let expectedChunkCount = null;
   let chunkFrameCount = null;
@@ -91,6 +95,7 @@ export function createCyclonePreparedLightingStream() {
       throw new Error(`Prepared Cyclone lighting stream has ${nextChunkIndex}/${expectedChunkCount} chunks`);
     }
     return buildPreparedLightingAsset({
+      assetRoot,
       particleCount,
       chunkCount: nextChunkIndex,
       chunkFrameCount,
@@ -119,14 +124,15 @@ export function createCyclonePreparedLightingStream() {
   return Object.freeze({ add, finalize });
 }
 
-export async function buildCyclonePreparedLighting({ source }) {
-  const stream = createCyclonePreparedLightingStream();
+export async function buildCyclonePreparedLighting({ source, assetRoot }) {
+  const stream = createCyclonePreparedLightingStream({ assetRoot });
   const chunk = stream.add(source);
   const prepared = await stream.finalize({ allowPartial: true });
   return Object.freeze({ ...prepared, chunk });
 }
 
 async function buildPreparedLightingAsset({
+  assetRoot,
   particleCount,
   chunkCount,
   chunkFrameCount,
@@ -154,7 +160,7 @@ async function buildPreparedLightingAsset({
     const rgba = Buffer.alloc(unpackedWidth * unpackedHeight * 4);
     for (let stateIndex = 0; stateIndex < colorStates.length; stateIndex += 1) {
       const state = colorStates[stateIndex];
-      const baseColor = preparedPaletteColor(state.baseColor, paletteFamily);
+      const baseColor = prepareCyclonePaletteColor(state.baseColor, paletteFamily);
       const vertexColors = frozenVertexNormals[state.particleIndex].map((normal) => shadeVertex({
         baseColor,
         normal,
@@ -201,7 +207,7 @@ async function buildPreparedLightingAsset({
     const assetSha256 = createHash("sha256").update(bytes).digest("hex");
     assets.push(Object.freeze({
       paletteFamily: variant.paletteFamily,
-      assetUrl: `/csscyclone/assets/lighting-${variant.paletteFamily}-${assetSha256}.webp`,
+      assetUrl: `${assetRoot}/lighting-${variant.paletteFamily}-${assetSha256}.webp`,
       assetSha256,
       byteLength: bytes.byteLength,
       hueSlots: variant.hueSlots,
@@ -215,8 +221,8 @@ async function buildPreparedLightingAsset({
     return `${-contentX * DISPLAY_SCALE}px ${-contentY * DISPLAY_SCALE}px`;
   }));
   const contract = deepFreeze({
-    schema: "csscyclone-prepared-smooth-lighting-atlas@6",
-    technique: "prepared-session-three-family-lighting-variants-with-sparse-source-color-restarts-and-exact-tile-deduplication",
+    schema: "csscyclone-prepared-smooth-lighting-atlas@7",
+    technique: "prepared-session-three-family-lighting-variants-with-dark-color-floor-sparse-source-color-restarts-and-exact-tile-deduplication",
     source: "src/cyclone/cyclone.cpp#particle::update+initSaver",
     streamId,
     encoding: "WebP-lossless-RGBA8",
@@ -229,6 +235,8 @@ async function buildPreparedLightingAsset({
     paletteFamilies: CSSCYCLONE_PRESENTATION.startupPaletteFamilies,
     paletteHueSlotCount: CSSCYCLONE_PRESENTATION.preparedPaletteHueSlotCount,
     paletteAssignment: CSSCYCLONE_PRESENTATION.preparedPaletteAssignment,
+    preparedMinimumSaturation: PREPARED_MINIMUM_SATURATION,
+    preparedMinimumValue: PREPARED_MINIMUM_VALUE,
     maximumColorFamilyCount: CSSCYCLONE_PRESENTATION.maximumColorFamilyCount,
     variants: Object.freeze(assets.map(({ bytes: ignored, ...asset }) => Object.freeze(asset))),
     contentSize: CONTENT_SIZE,
@@ -421,11 +429,14 @@ function preparedPaletteHues(paletteFamily) {
   }));
 }
 
-function preparedPaletteColor(baseColor, paletteFamily) {
+export function prepareCyclonePaletteColor(baseColor, paletteFamily) {
   const maximum = Math.max(...baseColor);
   const minimum = Math.min(...baseColor);
   const chroma = maximum - minimum;
-  const saturation = maximum > 0 ? chroma / maximum : 0;
+  const saturation = Math.max(
+    PREPARED_MINIMUM_SATURATION,
+    maximum > 0 ? chroma / maximum : 0,
+  );
   let hue = 0;
   if (chroma > 1e-12) {
     if (maximum === baseColor[0]) hue = ((baseColor[1] - baseColor[2]) / chroma) % 6;
@@ -437,7 +448,11 @@ function preparedPaletteColor(baseColor, paletteFamily) {
     CSSCYCLONE_PRESENTATION.preparedPaletteHueSlotCount - 1,
     Math.floor(hue * CSSCYCLONE_PRESENTATION.preparedPaletteHueSlotCount),
   );
-  return hsvToRgb(preparedPaletteHues(paletteFamily)[hueSlotIndex], saturation, maximum);
+  return hsvToRgb(
+    preparedPaletteHues(paletteFamily)[hueSlotIndex],
+    saturation,
+    Math.max(PREPARED_MINIMUM_VALUE, maximum),
+  );
 }
 
 function hsvToRgb(hue, saturation, value) {

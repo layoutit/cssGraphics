@@ -20,7 +20,7 @@ export const CSSCYCLONE_SOURCE = Object.freeze({
   stretch: true,
 });
 
-export const CSSCYCLONE_BANK = Object.freeze({
+const CSSCYCLONE_DESKTOP_BANK = Object.freeze({
   id: "desktop-stream",
   name: "Cyclone",
   seed: 1,
@@ -30,6 +30,18 @@ export const CSSCYCLONE_BANK = Object.freeze({
   frameCount: 450,
   chunkCount: 24,
 });
+
+export const CSSCYCLONE_BANKS = Object.freeze({
+  desktop: CSSCYCLONE_DESKTOP_BANK,
+  mobile: Object.freeze({
+    ...CSSCYCLONE_DESKTOP_BANK,
+    id: "mobile-stream",
+    name: "Cyclone Mobile",
+    particleCount: 266,
+  }),
+});
+
+export const CSSCYCLONE_BANK = CSSCYCLONE_BANKS.desktop;
 
 export const CSSCYCLONE_PRESENTATION = Object.freeze({
   saturationSampling: "floor-0.55-plus-0.45-sqrt-uniform",
@@ -42,6 +54,18 @@ export const CSSCYCLONE_PRESENTATION = Object.freeze({
   startupPaletteFamilies: Object.freeze(["blue", "yellow", "red", "magenta", "green"]),
   startupSelections: Object.freeze([
     Object.freeze({ id: "blue-a", paletteFamily: "blue", chunkIndex: 0, startFrameIndex: 20, frameCount: 40 }),
+    Object.freeze({ id: "blue-b", paletteFamily: "blue", chunkIndex: 0, startFrameIndex: 190, frameCount: 40 }),
+    Object.freeze({ id: "yellow-a", paletteFamily: "yellow", chunkIndex: 1, startFrameIndex: 55, frameCount: 40 }),
+    Object.freeze({ id: "yellow-b", paletteFamily: "yellow", chunkIndex: 7, startFrameIndex: 55, frameCount: 40 }),
+    Object.freeze({ id: "red-a", paletteFamily: "red", chunkIndex: 5, startFrameIndex: 55, frameCount: 40 }),
+    Object.freeze({ id: "red-b", paletteFamily: "red", chunkIndex: 9, startFrameIndex: 55, frameCount: 40 }),
+    Object.freeze({ id: "magenta-a", paletteFamily: "magenta", chunkIndex: 4, startFrameIndex: 55, frameCount: 40 }),
+    Object.freeze({ id: "magenta-b", paletteFamily: "magenta", chunkIndex: 11, startFrameIndex: 55, frameCount: 40 }),
+    Object.freeze({ id: "green-a", paletteFamily: "green", chunkIndex: 17, startFrameIndex: 55, frameCount: 40 }),
+    Object.freeze({ id: "green-b", paletteFamily: "green", chunkIndex: 19, startFrameIndex: 55, frameCount: 40 }),
+  ]),
+  mobileStartupSelections: Object.freeze([
+    Object.freeze({ id: "blue-a", paletteFamily: "blue", chunkIndex: 0, startFrameIndex: 75, frameCount: 40 }),
     Object.freeze({ id: "blue-b", paletteFamily: "blue", chunkIndex: 0, startFrameIndex: 190, frameCount: 40 }),
     Object.freeze({ id: "yellow-a", paletteFamily: "yellow", chunkIndex: 1, startFrameIndex: 55, frameCount: 40 }),
     Object.freeze({ id: "yellow-b", paletteFamily: "yellow", chunkIndex: 7, startFrameIndex: 55, frameCount: 40 }),
@@ -103,6 +127,34 @@ export function* buildCycloneSourceChunks({ bank = CSSCYCLONE_BANK } = {}) {
       streamDurationMilliseconds: bank.chunkCount * bank.frameCount * bank.frameMilliseconds,
     });
   }
+}
+
+export function selectCycloneSourceParticlePrefix(source, bank = CSSCYCLONE_BANKS.mobile) {
+  validateBank(bank);
+  if (source?.schema !== "csscyclone-source-sequence@2" ||
+      !Array.isArray(source.frames) || source.frames.length !== source.bank?.frameCount ||
+      bank.particleCount > source.bank.particleCount ||
+      bank.seed !== source.bank.seed ||
+      bank.frameMilliseconds !== source.bank.frameMilliseconds ||
+      bank.warmupFrames !== source.bank.warmupFrames ||
+      bank.frameCount !== source.bank.frameCount ||
+      bank.chunkCount !== source.bank.chunkCount) {
+    throw new Error("Cyclone mobile particle-prefix source binding drifted");
+  }
+  return deepFreeze({
+    ...source,
+    bank: Object.freeze({
+      ...bank,
+      id: source.bank.id,
+      streamId: bank.id,
+      chunkIndex: source.bank.chunkIndex,
+      startFrameIndex: source.bank.startFrameIndex,
+    }),
+    frames: Object.freeze(source.frames.map((frame) => Object.freeze({
+      ...frame,
+      particles: Object.freeze(frame.particles.slice(0, bank.particleCount)),
+    }))),
+  });
 }
 
 function validateBank(bank) {

@@ -33,7 +33,7 @@ const catalog = Object.freeze({
   startupSilhouetteSampling: "browser-reviewed-expressive-source-windows",
   startupSilhouetteSampleFrameOffsets: Object.freeze([0, 10, 20, 30, 39]),
   maximumColorFamilyCount: 3,
-  selection: "session-crypto-random-balanced-source-palette-window-no-immediate-repeat",
+  selection: "session-crypto-shuffled-palette-family-source-window-no-immediate-repeat",
   startupColorProfile: Object.freeze({
     schema: "csscyclone-prepared-startup-color-profile@2",
     metric: "prepared-source-particle-rgb-hsv-dominant-family-per-curated-window",
@@ -55,7 +55,7 @@ const catalog = Object.freeze({
       });
     })),
   }),
-  runtimeLookaheadBlockCount: 3,
+  runtimeLookaheadBlockCount: 1,
   entries: Object.freeze(Array.from({ length: 216 }, (_, index) => Object.freeze({
     index,
     chunkIndex: Math.floor(index / 9),
@@ -94,6 +94,19 @@ test("does not immediately repeat the previous prepared window", () => {
     chunkIndex: 5,
     frameIndex: 76,
     mode: "crypto-random-balanced-source-palette-no-repeat",
+  });
+});
+
+test("uses the session-shuffled family while retaining a random curated source window", () => {
+  assert.deepEqual(selectInitialCyclonePosition(catalog, {
+    preferredPaletteFamily: "green",
+    randomUint32Pair: () => [7, 901],
+  }), {
+    selectionId: "green-b",
+    paletteFamily: "green",
+    chunkIndex: 19,
+    frameIndex: 76,
+    mode: "session-shuffled-palette-crypto-random-source-window",
   });
 });
 

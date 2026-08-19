@@ -1,8 +1,10 @@
 export async function loadCyclonePreparedLightingAsset(lighting, paletteFamily) {
   const variant = lighting?.variants?.find((entry) => entry?.paletteFamily === paletteFamily);
-  if (lighting?.schema !== "csscyclone-prepared-smooth-lighting-atlas@6" ||
+  if (lighting?.schema !== "csscyclone-prepared-smooth-lighting-atlas@7" ||
       lighting.maximumColorFamilyCount !== 3 ||
       lighting.paletteHueSlotCount !== 3 ||
+      lighting.preparedMinimumSaturation !== 0.55 ||
+      lighting.preparedMinimumValue !== 0.65 ||
       !Array.isArray(lighting.paletteFamilies) ||
       !lighting.paletteFamilies.includes(paletteFamily) ||
       lighting.variants?.length !== lighting.paletteFamilies.length ||

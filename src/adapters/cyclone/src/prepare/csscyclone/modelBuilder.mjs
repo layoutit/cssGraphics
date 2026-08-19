@@ -9,7 +9,11 @@ import {
   buildCycloneSourceSequence,
 } from "./sourceModel.mjs";
 
-export const CSSCYCLONE_MODEL_ID = "cyclone";
+export const CSSCYCLONE_MODEL_IDS = Object.freeze({
+  desktop: "cyclone",
+  mobile: "cyclone-mobile",
+});
+export const CSSCYCLONE_MODEL_ID = CSSCYCLONE_MODEL_IDS.desktop;
 const PARTICLE_RADIUS = CSSCYCLONE_SOURCE.particleSize / 4;
 const EQUATOR = Object.freeze(Array.from({ length: 3 }, (_, index) => {
   const angle = index * Math.PI * 2 / 3;
@@ -29,7 +33,10 @@ export const CSSCYCLONE_FACE_INDICES = Object.freeze([
   Object.freeze([4, 1, 3]),
 ]);
 
-export function buildCyclonePreparedModel({ source = buildCycloneSourceSequence() } = {}) {
+export function buildCyclonePreparedModel({
+  source = buildCycloneSourceSequence(),
+  modelId = CSSCYCLONE_MODEL_ID,
+} = {}) {
   const vertices = [];
   const normals = [];
   const polygons = [];
@@ -70,7 +77,7 @@ export function buildCyclonePreparedModel({ source = buildCycloneSourceSequence(
   }
   const model = deepFreeze({
     schema: "polycss-morph.model@1",
-    identity: Object.freeze({ id: CSSCYCLONE_MODEL_ID, name: source.bank.name, revision: "0.1.0" }),
+    identity: Object.freeze({ id: modelId, name: source.bank.name, revision: "0.1.0" }),
     profile: "static-prepared",
     capabilities: Object.freeze(["retained-render"]),
     budgets: Object.freeze({
@@ -125,7 +132,10 @@ export function buildCyclonePreparedModel({ source = buildCycloneSourceSequence(
   });
 }
 
-export function buildCyclonePreparedPlayback({ source = buildCycloneSourceSequence() } = {}) {
+export function buildCyclonePreparedPlayback({
+  source = buildCycloneSourceSequence(),
+  modelId = CSSCYCLONE_MODEL_ID,
+} = {}) {
   const transforms = [];
   const transformIndices = new Map();
   const internTransform = (matrix) => {
@@ -156,7 +166,7 @@ export function buildCyclonePreparedPlayback({ source = buildCycloneSourceSequen
     chunkIndex: source.bank.chunkIndex,
     chunkCount: source.bank.chunkCount,
     startFrameIndex: source.bank.startFrameIndex,
-    modelId: CSSCYCLONE_MODEL_ID,
+    modelId,
     frameMilliseconds: source.bank.frameMilliseconds,
     durationMilliseconds: source.durationMilliseconds,
     frameCount: frames.length,

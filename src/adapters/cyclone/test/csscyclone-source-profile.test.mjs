@@ -2,18 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   CSSCYCLONE_BANK,
+  CSSCYCLONE_BANKS,
   CSSCYCLONE_PRESENTATION,
   CSSCYCLONE_SOURCE,
   buildCycloneSourceChunks,
   buildCycloneSourceSequence,
+  selectCycloneSourceParticlePrefix,
 } from "../src/prepare/csscyclone/sourceModel.mjs";
 import {
+  CSSCYCLONE_MODEL_IDS,
   buildCyclonePreparedModel,
   buildCyclonePreparedPlayback,
 } from "../src/prepare/csscyclone/modelBuilder.mjs";
 import {
   buildCyclonePreparedLighting,
   createCyclonePreparedLightingStream,
+  prepareCyclonePaletteColor,
 } from "../src/prepare/csscyclone/preparedLighting.mjs";
 import { resolveCyclonePerspective } from "../src/csscyclone/preparedPlayback.mjs";
 
@@ -42,6 +46,11 @@ test("pins the current Really Slick Cyclone source profile", () => {
     ["blue", "yellow", "red", "magenta", "green"],
   );
   assert.equal(CSSCYCLONE_PRESENTATION.startupSelections.length, 10);
+  assert.equal(CSSCYCLONE_PRESENTATION.mobileStartupSelections.length, 10);
+  assert.deepEqual(
+    CSSCYCLONE_PRESENTATION.mobileStartupSelections.find(({ id }) => id === "blue-a"),
+    { id: "blue-a", paletteFamily: "blue", chunkIndex: 0, startFrameIndex: 75, frameCount: 40 },
+  );
   assert.deepEqual(
     CSSCYCLONE_PRESENTATION.startupSelections.map(({ id, paletteFamily, chunkIndex }) =>
       [id, paletteFamily, chunkIndex]),
@@ -60,6 +69,40 @@ test("pins the current Really Slick Cyclone source profile", () => {
   assert.deepEqual(CSSCYCLONE_PRESENTATION.startupSilhouetteSampleFrameOffsets, [0, 10, 20, 30, 39]);
   assert.equal(CSSCYCLONE_PRESENTATION.startupMinimumMeanSaturation, 0.68);
   assert.equal(CSSCYCLONE_PRESENTATION.startupMinimumDominantHueShare, 0.25);
+});
+
+test("prepares the mobile bank with fewer complete source particles", () => {
+  assert.equal(CSSCYCLONE_BANKS.desktop.particleCount, 400);
+  assert.equal(CSSCYCLONE_BANKS.mobile.particleCount, 266);
+  const desktopBank = {
+    ...CSSCYCLONE_BANKS.desktop,
+    warmupFrames: 2,
+    frameCount: 2,
+    chunkCount: 1,
+  };
+  const mobileBank = {
+    ...CSSCYCLONE_BANKS.mobile,
+    warmupFrames: desktopBank.warmupFrames,
+    frameCount: desktopBank.frameCount,
+    chunkCount: desktopBank.chunkCount,
+  };
+  const desktopSource = buildCycloneSourceSequence({ bank: desktopBank });
+  const source = selectCycloneSourceParticlePrefix(desktopSource, mobileBank);
+  const preparedModel = buildCyclonePreparedModel({
+    source,
+    modelId: CSSCYCLONE_MODEL_IDS.mobile,
+  });
+  const preparedPlayback = buildCyclonePreparedPlayback({
+    source,
+    modelId: CSSCYCLONE_MODEL_IDS.mobile,
+  });
+  assert.equal(preparedModel.model.identity.id, "cyclone-mobile");
+  assert.equal(preparedModel.model.render.shapes.length, 266);
+  assert.equal(preparedModel.model.render.leaves.length, 1_596);
+  assert.equal(preparedModel.metrics.polygonsPerParticle, 6);
+  assert.equal(preparedPlayback.playback.particleCount, 266);
+  assert.equal(preparedPlayback.playback.leafCount, 1_596);
+  assert.deepEqual(source.frames[0].particles, desktopSource.frames[0].particles.slice(0, 266));
 });
 
 test("widens only the mobile presentation field of view", () => {
@@ -91,7 +134,7 @@ test("prepares smooth reference lighting without a runtime lighting timeline", a
   const bank = { ...CSSCYCLONE_BANK, particleCount: 3, warmupFrames: 20, frameCount: 4 };
   const source = buildCycloneSourceSequence({ bank });
   const prepared = await buildCyclonePreparedLighting({ source });
-  assert.equal(prepared.contract.schema, "csscyclone-prepared-smooth-lighting-atlas@6");
+  assert.equal(prepared.contract.schema, "csscyclone-prepared-smooth-lighting-atlas@7");
   assert.equal(prepared.contract.contentSize, 2);
   assert.equal(prepared.contract.gutterPixels, 1);
   assert.equal(prepared.contract.leafCount, 18);
@@ -109,6 +152,8 @@ test("prepares smooth reference lighting without a runtime lighting timeline", a
   assert.equal(prepared.contract.paletteFamilyCount, 5);
   assert.equal(prepared.contract.paletteHueSlotCount, 3);
   assert.equal(prepared.contract.maximumColorFamilyCount, 3);
+  assert.equal(prepared.contract.preparedMinimumSaturation, 0.55);
+  assert.equal(prepared.contract.preparedMinimumValue, 0.65);
   assert.equal(prepared.contract.variants.length, 5);
   assert.ok(prepared.contract.variants.every((variant) => variant.hueSlots.length === 3));
   assert.equal(prepared.contract.sourceStreamFrameCount, 4);
@@ -122,6 +167,9 @@ test("prepares smooth reference lighting without a runtime lighting timeline", a
   assert.equal(prepared.assets.length, 5);
   assert.ok(prepared.assets.every((asset) => asset.bytes.byteLength > 0));
   assert.ok(prepared.contract.variants.every((variant) => /^[a-f0-9]{64}$/u.test(variant.assetSha256)));
+  const liftedBlack = prepareCyclonePaletteColor([0, 0, 0], "yellow");
+  assert.equal(Math.max(...liftedBlack), 0.65);
+  assert.equal(Number((1 - Math.min(...liftedBlack) / Math.max(...liftedBlack)).toFixed(2)), 0.55);
 });
 
 test("publishes only exact source color restarts through sparse leaf addresses", async () => {

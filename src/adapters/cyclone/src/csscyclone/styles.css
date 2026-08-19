@@ -20,7 +20,8 @@ body {
   background: linear-gradient(180deg, #0b1119 0%, #000 100%);
 }
 
-body.loading::before {
+body.loading::before,
+body.priming::before {
   content: "";
   position: fixed;
   inset: 0;
@@ -28,7 +29,12 @@ body.loading::before {
   background: #000;
 }
 
-body.loading::after {
+body.priming::before {
+  background: rgb(0 0 0 / 99.8%);
+}
+
+body.loading::after,
+body.priming::after {
   content: "";
   position: fixed;
   inset: 50% auto auto 50%;
@@ -49,7 +55,8 @@ body.loading::after {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body.loading::after {
+  body.loading::after,
+  body.priming::after {
     animation: none;
   }
 }

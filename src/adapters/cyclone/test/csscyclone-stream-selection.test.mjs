@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { selectInitialCyclonePosition } from "../src/csscyclone/preparedStream.mjs";
+import {
+  decodeCyclonePreparedTransformsIncrementally,
+  selectInitialCyclonePosition,
+} from "../src/csscyclone/preparedStream.mjs";
 
 const hash = "0".repeat(64);
 const hueSectorNames = Object.freeze(["red", "yellow", "green", "cyan", "blue", "magenta"]);
@@ -18,7 +21,7 @@ const startupSelections = Object.freeze([
   Object.freeze({ id: "green-b", paletteFamily: "green", chunkIndex: 15, startFrameIndex: 201, frameCount: 48 }),
 ]);
 const catalog = Object.freeze({
-  schema: "csscyclone-prepared-stream-catalog@2",
+  schema: "csscyclone-prepared-stream-catalog@3",
   streamId: "desktop-stream",
   modelId: "cyclone",
   particleCount: 400,
@@ -68,7 +71,8 @@ const catalog = Object.freeze({
     })),
   }),
   runtimeLookaheadBlockCount: 11,
-  startupMaterializedLookaheadBlockCount: 1,
+  runtimeMaterializedLookaheadBlockCount: 2,
+  startupMaterializedLookaheadBlockCount: 2,
   entries: Object.freeze(Array.from({ length: 216 }, (_, index) => Object.freeze({
     index,
     chunkIndex: Math.floor(index / 9),
@@ -83,6 +87,24 @@ const catalog = Object.freeze({
     decodedByteLength: 1,
     decodedSha256: hash,
   }))),
+});
+
+test("slices worker transform responses before publishing a materialized block", async () => {
+  const source = ["matrix3d(1)", "matrix3d(2)", "matrix3d(3)"].join("\n");
+  let yieldCount = 0;
+  const transforms = await decodeCyclonePreparedTransformsIncrementally(
+    new TextEncoder().encode(source),
+    3,
+    {
+      chunkByteLength: 8,
+      setDelay(callback) {
+        yieldCount += 1;
+        callback();
+      },
+    },
+  );
+  assert.deepEqual(transforms, ["matrix3d(1)", "matrix3d(2)", "matrix3d(3)"]);
+  assert.ok(yieldCount > 0);
 });
 
 test("selects a balanced prepared source-palette window once", () => {

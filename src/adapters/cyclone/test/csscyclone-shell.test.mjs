@@ -39,6 +39,8 @@ test("uses the cssGraphics shell without product UI or alternate renderers", asy
   assert.doesNotMatch(playback, /sceneElement\.style\.transform|cameraElement\.style\.perspective/u);
   assert.match(playback, /deadline-setTimeout-requestAnimationFrame-prepared-publication/u);
   assert.match(client, /blockLoader\.prime\(residentBlockIndices\)/u);
+  assert.match(client, /await waitForCycloneScenePaint\(\)/u);
+  assert.match(styles, /body\.priming::before/u);
   assert.match(stream, /new Worker\(new URL\("\.\/preparedBlockWorker\.mjs"/u);
   assert.match(worker, /decodeCyclonePreparedBlock/u);
   assert.doesNotMatch(`${client}\n${playback}\n${stream}\n${worker}`, /WebGL|CanvasRenderingContext/u);

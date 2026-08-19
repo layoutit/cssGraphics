@@ -5,7 +5,7 @@ let catalog = null;
 self.addEventListener("message", ({ data }) => {
   try {
     if (data?.type === "initialize") {
-      if (catalog !== null || data.catalog?.schema !== "csscyclone-prepared-stream-catalog@2") {
+      if (catalog !== null || data.catalog?.schema !== "csscyclone-prepared-stream-catalog@3") {
         throw new Error("Prepared Cyclone worker catalog drifted");
       }
       catalog = data.catalog;

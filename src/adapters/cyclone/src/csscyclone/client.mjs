@@ -72,11 +72,18 @@ export async function mountCycloneClient(host) {
       { length: catalog.runtimeLookaheadBlockCount },
       (unused, offset) => (initialBlockIndex + offset + 1) % catalog.blockCount,
     );
-    blockLoader.retain([initialBlockIndex, ...lookaheadBlockIndices]);
+    const residentBlockIndices = [initialBlockIndex, ...lookaheadBlockIndices];
+    const startupLookaheadBlockIndices = lookaheadBlockIndices.slice(
+      0,
+      catalog.startupMaterializedLookaheadBlockCount,
+    );
+    blockLoader.retain(residentBlockIndices);
     const [initialBlock, initialLookaheadBlocks, loadedLightingAsset] = await Promise.all([
-      blockLoader.load(initialBlockIndex),
-      Promise.all(lookaheadBlockIndices.map((streamBlockIndex) => blockLoader.load(streamBlockIndex))),
+      blockLoader.load(initialBlockIndex, { offMainThread: true }),
+      Promise.all(startupLookaheadBlockIndices.map((streamBlockIndex) =>
+        blockLoader.load(streamBlockIndex, { offMainThread: true }))),
       loadCyclonePreparedLightingAsset(profile.lighting, selection.paletteFamily),
+      blockLoader.prime(residentBlockIndices),
     ]);
     lightingAsset = loadedLightingAsset;
     const mounted = mountPolyMorphModel(host, loaded.model, {
@@ -94,7 +101,7 @@ export async function mountCycloneClient(host) {
       lighting: profile.lighting,
       lightingAsset,
       loadBlock(streamBlockIndex) {
-        return blockLoader.load(streamBlockIndex, { incremental: true });
+        return blockLoader.load(streamBlockIndex, { incremental: true, offMainThread: true });
       },
       onBlockWindow(streamBlockIndices) {
         blockLoader.retain(streamBlockIndices);

@@ -9,9 +9,14 @@ import {
   CSSCYCLONE_FACE_INDICES,
   CSSCYCLONE_MODEL_IDS,
   buildCyclonePreparedModel,
-  buildCyclonePreparedPlayback,
 } from "../src/prepare/csscyclone/modelBuilder.mjs";
 import { createCyclonePreparedLightingStream } from "../src/prepare/csscyclone/preparedLighting.mjs";
+import {
+  CSSCYCLONE_BLOCK_ENCODING,
+  CSSCYCLONE_LIGHTING_BLOCK_SCHEMA,
+  CSSCYCLONE_PLAYBACK_SCHEMA,
+  encodeCyclonePreparedBlock,
+} from "../src/shared/csscyclone/preparedBlockTransport.mjs";
 import {
   CSSCYCLONE_BANKS,
   CSSCYCLONE_PRESENTATION,
@@ -26,6 +31,7 @@ const outputRoot = join(repositoryRoot, "build/generated/public/csscyclone");
 const stagingRoot = join(repositoryRoot, `build/generated/.csscyclone-${process.pid}`);
 const sourceLock = JSON.parse(await readFile(join(adapterRoot, "notes/references/source-lock.json"), "utf8"));
 const blockFrameCount = 50;
+const runtimeLookaheadBlockCount = 11;
 const startupPaletteFamilies = CSSCYCLONE_PRESENTATION.startupPaletteFamilies;
 const startupSilhouetteSampleFrameOffsets = CSSCYCLONE_PRESENTATION.startupSilhouetteSampleFrameOffsets;
 const hueSectorNames = Object.freeze(["red", "yellow", "green", "cyan", "blue", "magenta"]);
@@ -78,8 +84,9 @@ await writeJson(join(stagingRoot, "prepared.json"), {
     runtimeGeometryConstruction: false,
     runtimeAtlasRasterization: false,
     runtimeDomGrowth: false,
-    runtimePreparedStateMaterialization: false,
-    runtimeMatrixFormatting: false,
+    runtimePreparedStateMaterialization: true,
+    runtimeBlockLoadMatrixFormatting: true,
+    runtimeFrameMatrixFormatting: false,
     runtimeIdLookup: false
   },
   profileSelection: {
@@ -118,7 +125,6 @@ async function prepareProfile(profile) {
   const { bank, startupSelections } = profile;
   const blocksPerChunk = bank.frameCount / blockFrameCount;
   const blockCount = bank.chunkCount * blocksPerChunk;
-  const runtimeLookaheadBlockCount = blockCount - 1;
   if (!Number.isSafeInteger(blocksPerChunk)) {
     throw new Error(`Cyclone ${profile.id} prepared chunk must divide into exact transport blocks`);
   }
@@ -141,7 +147,6 @@ async function prepareProfile(profile) {
       const result = buildCyclonePreparedModel({ source, modelId: profile.modelId });
       preparedModel = Object.freeze({ model: result.model, metrics: result.metrics });
     }
-    const preparedPlayback = buildCyclonePreparedPlayback({ source, modelId: profile.modelId });
     const lighting = lightingStream.add(source);
     for (const selection of startupSelections.filter((entry) =>
       entry.chunkIndex === source.bank.chunkIndex)) {
@@ -151,40 +156,14 @@ async function prepareProfile(profile) {
       const streamBlockIndex = source.bank.chunkIndex * blocksPerChunk + blockIndex;
       const localStartFrameIndex = blockIndex * blockFrameCount;
       const startFrameIndex = source.bank.startFrameIndex + localStartFrameIndex;
-      const blockPlayback = slicePreparedPlayback({
-        playback: preparedPlayback.playback,
-        blockIndex,
-        streamBlockIndex,
-        startFrameIndex,
-        localStartFrameIndex,
-        blockCount,
-        blocksPerChunk,
-      });
-      const blockLighting = Object.freeze({
-        schema: "csscyclone-prepared-lighting-block@1",
-        streamId: source.bank.streamId,
-        chunkIndex: source.bank.chunkIndex,
-        blockIndex,
-        streamBlockIndex,
-        startFrameIndex,
-        frameCount: blockFrameCount,
-        particleCount: source.bank.particleCount,
-        frameParticleColorStateIndices: lighting.frameParticleColorStateIndices.slice(
+      const decoded = Buffer.from(encodeCyclonePreparedBlock({
+        frames: source.frames.slice(localStartFrameIndex, localStartFrameIndex + blockFrameCount),
+        lightingRows: lighting.frameParticleColorStateIndices.slice(
           localStartFrameIndex,
           localStartFrameIndex + blockFrameCount,
         ),
-      });
-      const decoded = Buffer.from(`${JSON.stringify({
-        schema: "csscyclone-prepared-stream-block@1",
-        streamId: source.bank.streamId,
-        chunkIndex: source.bank.chunkIndex,
-        blockIndex,
-        streamBlockIndex,
-        startFrameIndex,
-        frameCount: blockFrameCount,
-        playback: blockPlayback,
-        lighting: blockLighting,
-      })}\n`);
+        particleCount: source.bank.particleCount,
+      }));
       const encoded = gzipSync(decoded, { level: 9 });
       const encodedSha256 = sha256(encoded);
       const decodedSha256 = sha256(decoded);
@@ -198,7 +177,7 @@ async function prepareProfile(profile) {
         frameCount: blockFrameCount,
         sourceContinuousFromPrevious: streamBlockIndex > 0,
         assetUrl,
-        encoding: "gzip-newline-json",
+        encoding: CSSCYCLONE_BLOCK_ENCODING,
         byteLength: encoded.byteLength,
         sha256: encodedSha256,
         decodedByteLength: decoded.byteLength,
@@ -207,9 +186,9 @@ async function prepareProfile(profile) {
       preparedBlockEncodedBytes += encoded.byteLength;
       preparedBlockDecodedBytes += decoded.byteLength;
     }
-    preparedFrameCount += preparedPlayback.metrics.preparedFrameCount;
-    uniquePreparedTransformCount += preparedPlayback.metrics.uniquePreparedTransformCount;
-    shapeTransformSelections += preparedPlayback.metrics.shapeTransformSelections;
+    preparedFrameCount += source.frames.length;
+    uniquePreparedTransformCount += source.frames.length * source.bank.particleCount;
+    shapeTransformSelections += source.frames.length * source.bank.particleCount;
   }
   const residentBlockWindowCount = runtimeLookaheadBlockCount + 1;
   const maximumResidentBlockWindowDecodedBytes = Math.max(...blockEntries.map((unused, startIndex) =>
@@ -225,6 +204,17 @@ async function prepareProfile(profile) {
   const catalogBytes = Buffer.from(`${JSON.stringify({
     schema: "csscyclone-prepared-stream-catalog@1",
     streamId: bank.id,
+    modelId: profile.modelId,
+    particleCount: bank.particleCount,
+    leafCount: bank.particleCount * CSSCYCLONE_FACE_INDICES.length,
+    playbackSchema: CSSCYCLONE_PLAYBACK_SCHEMA,
+    lightingBlockSchema: CSSCYCLONE_LIGHTING_BLOCK_SCHEMA,
+    sourceTransformProfile: Object.freeze({
+      controlPointCount: 6,
+      speed: CSSCYCLONE_SOURCE.speed,
+      complexity: CSSCYCLONE_SOURCE.complexity,
+      particleSize: CSSCYCLONE_SOURCE.particleSize,
+    }),
     seed: bank.seed,
     chunkCount: bank.chunkCount,
     chunkFrameCount: bank.frameCount,
@@ -295,7 +285,7 @@ async function prepareProfile(profile) {
         maximumColorFamilyCount: CSSCYCLONE_PRESENTATION.maximumColorFamilyCount,
         startupColorProfile,
         startupSelection: "session-crypto-shuffled-palette-family-source-window-no-immediate-repeat",
-        handoff: "source-continuous-full-stream-decoded-before-playback",
+        handoff: "source-continuous-twelve-block-decoded-window",
       }),
       productParticleCount: bank.particleCount,
       productLeafCount: bank.particleCount * CSSCYCLONE_FACE_INDICES.length,
@@ -322,7 +312,10 @@ async function prepareProfile(profile) {
       residentBlockWindowCount,
       maximumResidentBlockWindowDecodedBytes,
       runtimeLookaheadBlockCount,
-      runtimePreparedStateMaterialization: false,
+      transportEncoding: CSSCYCLONE_BLOCK_ENCODING,
+      runtimePreparedStateMaterialization: true,
+      runtimePreparedStateMaterializationPhase: "block-load-before-publication",
+      runtimeIncrementalLookaheadMaterialization: true,
     }),
     lighting: preparedLighting.contract,
   });
@@ -342,52 +335,6 @@ async function prepareProfile(profile) {
       maximumResidentBlockWindowDecodedBytes,
       ...preparedLighting.metrics,
     }),
-  });
-}
-
-function slicePreparedPlayback({
-  playback,
-  blockIndex,
-  streamBlockIndex,
-  startFrameIndex,
-  localStartFrameIndex,
-  blockCount,
-  blocksPerChunk,
-}) {
-  const sourceRows = playback.frames.slice(
-    localStartFrameIndex,
-    localStartFrameIndex + blockFrameCount,
-  );
-  const transforms = [];
-  const remappedTransformIndices = new Map();
-  const frames = sourceRows.map((row) => Object.freeze(row.map((value, index) => {
-    if (index % 2 === 0) return value;
-    let remapped = remappedTransformIndices.get(value);
-    if (remapped === undefined) {
-      remapped = transforms.length;
-      transforms.push(playback.transforms[value]);
-      remappedTransformIndices.set(value, remapped);
-    }
-    return remapped;
-  })));
-  const shapeTransformIndices = Array(playback.particleCount);
-  for (let operation = 0; operation < frames[0].length; operation += 2) {
-    shapeTransformIndices[frames[0][operation]] = frames[0][operation + 1];
-  }
-  return Object.freeze({
-    ...playback,
-    blockIndex,
-    streamBlockIndex,
-    blockCount,
-    blocksPerChunk,
-    startFrameIndex,
-    durationMilliseconds: blockFrameCount * playback.frameMilliseconds,
-    frameCount: blockFrameCount,
-    transforms: Object.freeze(transforms),
-    mounted: Object.freeze({
-      shapeTransformIndices: Object.freeze(shapeTransformIndices),
-    }),
-    frames: Object.freeze(frames),
   });
 }
 

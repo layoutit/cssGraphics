@@ -1,7 +1,14 @@
+import {
+  CSSCYCLONE_BLOCK_ENCODING,
+  CSSCYCLONE_LIGHTING_BLOCK_SCHEMA,
+  CSSCYCLONE_PLAYBACK_SCHEMA,
+  decodeCyclonePreparedBlock,
+  decodeCyclonePreparedBlockIncrementally,
+} from "../shared/csscyclone/preparedBlockTransport.mjs";
+
 const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@1";
-const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@1";
-const PLAYBACK_SCHEMA = "csscyclone-prepared-dom-playback@3";
-const LIGHTING_BLOCK_SCHEMA = "csscyclone-prepared-lighting-block@1";
+const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@2";
+const RUNTIME_LOOKAHEAD_BLOCK_COUNT = 11;
 const STARTUP_HUE_SECTOR_NAMES = Object.freeze(["red", "yellow", "green", "cyan", "blue", "magenta"]);
 const STARTUP_PALETTE_FAMILIES = Object.freeze(["blue", "yellow", "red", "magenta", "green"]);
 const STARTUP_SILHOUETTE_SAMPLING = "browser-reviewed-expressive-source-windows";
@@ -88,9 +95,17 @@ export function createCyclonePreparedBlockLoader(catalog) {
   let releaseCount = 0;
   let residentDecodedBytes = 0;
   let peakResidentDecodedBytes = 0;
+  let residentPreparedCssStringBytes = 0;
+  let peakResidentPreparedCssStringBytes = 0;
+  let preparedMatrixExpansionCount = 0;
+  let incrementalDecodeRequestCount = 0;
+  let incrementalDecodeCompletedBlockCount = 0;
+  let incrementalDecodeSliceCount = 0;
+  let incrementalDecodeOperationCount = 0;
+  let incrementalDecodeMaximumSliceMilliseconds = 0;
   let destroyed = false;
 
-  async function load(streamBlockIndex) {
+  async function load(streamBlockIndex, { incremental = false } = {}) {
     if (destroyed) throw new Error("Prepared Cyclone block loader is destroyed");
     const descriptor = catalog.entries[streamBlockIndex];
     if (!descriptor || descriptor.index !== streamBlockIndex) {
@@ -109,13 +124,40 @@ export function createCyclonePreparedBlockLoader(catalog) {
         descriptor.decodedSha256,
         `decoded block ${streamBlockIndex}`,
       );
-      const block = JSON.parse(new TextDecoder().decode(decoded));
+      if (incremental) incrementalDecodeRequestCount += 1;
+      const block = incremental
+        ? await decodeCyclonePreparedBlockIncrementally(decoded, descriptor, catalog, {
+          isCurrent: () => !destroyed && desiredBlockIndices.has(streamBlockIndex),
+          onSlice(operationCount, durationMilliseconds) {
+            incrementalDecodeSliceCount += 1;
+            incrementalDecodeOperationCount += operationCount;
+            incrementalDecodeMaximumSliceMilliseconds = Math.max(
+              incrementalDecodeMaximumSliceMilliseconds,
+              durationMilliseconds,
+            );
+          },
+        })
+        : decodeCyclonePreparedBlock(decoded, descriptor, catalog);
+      if (block === null) {
+        throw new Error(`Prepared Cyclone block ${streamBlockIndex} incremental decode was cancelled`);
+      }
       validateBlock(block, descriptor, catalog);
-      const record = Object.freeze({ block, decodedByteLength: decoded.byteLength });
+      const record = Object.freeze({
+        block,
+        decodedByteLength: decoded.byteLength,
+        preparedCssStringByteLength: block.preparedCssStringByteLength,
+      });
       records.set(streamBlockIndex, record);
       loadCount += 1;
+      if (incremental) incrementalDecodeCompletedBlockCount += 1;
+      preparedMatrixExpansionCount += block.preparedMatrixExpansionCount;
       residentDecodedBytes += decoded.byteLength;
       peakResidentDecodedBytes = Math.max(peakResidentDecodedBytes, residentDecodedBytes);
+      residentPreparedCssStringBytes += block.preparedCssStringByteLength;
+      peakResidentPreparedCssStringBytes = Math.max(
+        peakResidentPreparedCssStringBytes,
+        residentPreparedCssStringBytes,
+      );
       if (!desiredBlockIndices.has(streamBlockIndex)) release(streamBlockIndex, record);
       return block;
     })();
@@ -143,6 +185,7 @@ export function createCyclonePreparedBlockLoader(catalog) {
     if (!record?.block || records.get(streamBlockIndex) !== record) return;
     records.delete(streamBlockIndex);
     residentDecodedBytes -= record.decodedByteLength;
+    residentPreparedCssStringBytes -= record.preparedCssStringByteLength;
     releaseCount += 1;
   }
 
@@ -157,6 +200,14 @@ export function createCyclonePreparedBlockLoader(catalog) {
         residentBlockCount: [...records.values()].filter((record) => record?.block).length,
         residentDecodedBytes,
         peakResidentDecodedBytes,
+        residentPreparedCssStringBytes,
+        peakResidentPreparedCssStringBytes,
+        preparedMatrixExpansionCount,
+        incrementalDecodeRequestCount,
+        incrementalDecodeCompletedBlockCount,
+        incrementalDecodeSliceCount,
+        incrementalDecodeOperationCount,
+        incrementalDecodeMaximumSliceMilliseconds,
         desiredBlockIndices: Object.freeze([...desiredBlockIndices].sort((left, right) => left - right)),
       });
     },
@@ -170,6 +221,17 @@ export function createCyclonePreparedBlockLoader(catalog) {
 function validateCatalog(catalog) {
   if (catalog?.schema !== CATALOG_SCHEMA ||
       typeof catalog.streamId !== "string" ||
+      typeof catalog.modelId !== "string" || catalog.modelId.length < 1 ||
+      !Number.isSafeInteger(catalog.particleCount) || catalog.particleCount < 1 ||
+      !Number.isSafeInteger(catalog.leafCount) || catalog.leafCount !== catalog.particleCount * 6 ||
+      catalog.playbackSchema !== CSSCYCLONE_PLAYBACK_SCHEMA ||
+      catalog.lightingBlockSchema !== CSSCYCLONE_LIGHTING_BLOCK_SCHEMA ||
+      catalog.sourceTransformProfile?.controlPointCount !== 6 ||
+      !Number.isFinite(catalog.sourceTransformProfile?.speed) || catalog.sourceTransformProfile.speed <= 0 ||
+      !Number.isSafeInteger(catalog.sourceTransformProfile?.complexity) ||
+      catalog.sourceTransformProfile.complexity < 1 ||
+      !Number.isFinite(catalog.sourceTransformProfile?.particleSize) ||
+      catalog.sourceTransformProfile.particleSize <= 0 ||
       catalog.chunkCount !== 24 ||
       !Number.isSafeInteger(catalog.chunkFrameCount) || catalog.chunkFrameCount < 1 ||
       !Number.isSafeInteger(catalog.blockCount) || catalog.blockCount < catalog.chunkCount ||
@@ -206,16 +268,14 @@ function validateCatalog(catalog) {
         !Number.isSafeInteger(frameOffset) || frameOffset < 0 ||
         catalog.startupSelections.some((selection) => frameOffset >= selection.frameCount)) ||
       catalog.selection !== STARTUP_SELECTION ||
-      !Number.isSafeInteger(catalog.runtimeLookaheadBlockCount) ||
-      catalog.runtimeLookaheadBlockCount < 1 ||
-      catalog.runtimeLookaheadBlockCount >= catalog.blockCount ||
+      catalog.runtimeLookaheadBlockCount !== RUNTIME_LOOKAHEAD_BLOCK_COUNT ||
       catalog.entries.some((entry, index) => entry?.index !== index ||
         entry.chunkIndex !== Math.floor(index / catalog.blocksPerChunk) ||
         entry.blockIndex !== index % catalog.blocksPerChunk ||
         entry.startFrameIndex !== index * catalog.blockFrameCount ||
         entry.frameCount !== catalog.blockFrameCount ||
         entry.sourceContinuousFromPrevious !== (index > 0) ||
-        entry.encoding !== "gzip-newline-json" ||
+        entry.encoding !== CSSCYCLONE_BLOCK_ENCODING ||
         typeof entry.assetUrl !== "string" ||
         !Number.isSafeInteger(entry.byteLength) || entry.byteLength < 1 ||
         !Number.isSafeInteger(entry.decodedByteLength) || entry.decodedByteLength < 1 ||
@@ -282,7 +342,8 @@ function validateBlock(block, descriptor, catalog) {
       block.blockIndex !== descriptor.blockIndex ||
       block.startFrameIndex !== descriptor.startFrameIndex ||
       block.frameCount !== descriptor.frameCount ||
-      playback?.schema !== PLAYBACK_SCHEMA ||
+      playback?.schema !== CSSCYCLONE_PLAYBACK_SCHEMA ||
+      playback.modelId !== catalog.modelId ||
       playback.streamId !== catalog.streamId ||
       playback.streamBlockIndex !== descriptor.index ||
       playback.chunkIndex !== descriptor.chunkIndex ||
@@ -295,10 +356,12 @@ function validateBlock(block, descriptor, catalog) {
       playback.frameCount !== descriptor.frameCount ||
       playback.durationMilliseconds !== descriptor.frameCount * catalog.frameMilliseconds ||
       playback.loop !== false ||
-      playback.frames?.length !== descriptor.frameCount ||
-      playback.mounted?.shapeTransformIndices?.length !== playback.particleCount ||
-      playback.frames.some((row) => row?.length !== playback.particleCount * 2) ||
-      lighting?.schema !== LIGHTING_BLOCK_SCHEMA ||
+      playback.particleCount !== catalog.particleCount ||
+      playback.leafCount !== catalog.leafCount ||
+      playback.transforms?.length !== descriptor.frameCount * catalog.particleCount ||
+      playback.transforms.some((transform) =>
+        typeof transform !== "string" || !transform.startsWith("matrix3d(")) ||
+      lighting?.schema !== CSSCYCLONE_LIGHTING_BLOCK_SCHEMA ||
       lighting.streamId !== catalog.streamId ||
       lighting.streamBlockIndex !== descriptor.index ||
       lighting.chunkIndex !== descriptor.chunkIndex ||
@@ -306,8 +369,11 @@ function validateBlock(block, descriptor, catalog) {
       lighting.startFrameIndex !== descriptor.startFrameIndex ||
       lighting.frameCount !== descriptor.frameCount ||
       lighting.particleCount !== playback.particleCount ||
-      lighting.frameParticleColorStateIndices?.length !== descriptor.frameCount ||
-      lighting.frameParticleColorStateIndices.some((row) => row?.length !== playback.particleCount)) {
+      !(lighting.frameParticleColorStateIndices instanceof Uint16Array) ||
+      lighting.frameParticleColorStateIndices.length !== descriptor.frameCount * playback.particleCount ||
+      block.preparedMatrixExpansionCount !== playback.transforms.length ||
+      !Number.isSafeInteger(block.preparedCssStringByteLength) ||
+      block.preparedCssStringByteLength < playback.transforms.length) {
     throw new Error(`Prepared Cyclone block ${descriptor.index} drifted`);
   }
 }

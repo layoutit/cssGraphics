@@ -44,9 +44,13 @@ Startup uses `crypto.getRandomValues` to shuffle the five-family session bag and
 to select an audited source window and frame, excluding the previous exact
 window. Playback
 then follows the original source order. Each hash-bound
-gzip transport fully fetches and decodes all 216 blocks behind the loading
-indicator before playback starts on both desktop and mobile. The single
-terminal stream wrap is the only
+gzip transport stores shared source control points and widths, one initial
+state per particle, sparse reset events, and flat `Uint16` lighting indices;
+it does not store repeated CSS transform strings. It fetches and decodes the active block plus 11 successors behind
+the loading indicator on both desktop and mobile. Playback maintains that
+12-second bounded resident window, so each replacement block starts loading
+11 seconds before use and uses the established incremental decode pattern to
+keep preparation slices bounded during playback. The single terminal stream wrap is the only
 non-source-continuous boundary.
 
 Source identity is pinned in `notes/references/source-lock.json`. Preparation

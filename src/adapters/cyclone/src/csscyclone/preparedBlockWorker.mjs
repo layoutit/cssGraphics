@@ -1,4 +1,7 @@
-import { decodeCyclonePreparedBlock } from "../shared/csscyclone/preparedBlockTransport.mjs";
+import {
+  decodeCyclonePreparedBlock,
+  decodeCyclonePreparedBlockIncrementally,
+} from "../shared/csscyclone/preparedBlockTransport.mjs";
 
 const TRANSFORM_RESPONSE_CHUNK_TRANSFORMS = 960;
 
@@ -16,6 +19,7 @@ self.addEventListener("message", ({ data }) => {
       return;
     }
     if (data?.type !== "materialize" || catalog === null ||
+        typeof data.incremental !== "boolean" ||
         !Number.isSafeInteger(data.requestId) || !(data.bytes instanceof Uint8Array)) {
       throw new Error("Prepared Cyclone worker request drifted");
     }
@@ -30,7 +34,17 @@ self.addEventListener("message", ({ data }) => {
 
 async function materializeBlock(data) {
   const startedAt = performance.now();
-  const block = decodeCyclonePreparedBlock(data.bytes, data.descriptor, catalog);
+  const block = data.incremental
+    ? await decodeCyclonePreparedBlockIncrementally(
+      data.bytes,
+      data.descriptor,
+      catalog,
+      {
+        sliceBudgetMilliseconds: 2,
+        sliceDelayMilliseconds: 0,
+      },
+    )
+    : decodeCyclonePreparedBlock(data.bytes, data.descriptor, catalog);
   const transforms = block.playback.transforms;
   const transformByteLength = transforms.reduce((total, transform) => total + transform.length, 0) +
     transforms.length - 1;

@@ -4,7 +4,8 @@ This adapter translates Really Slick Cyclone into one retained PolyCSS Morph
 graph. Desktop mounts the source-default 400 particle roots and mobile mounts a
 prepared prefix of 166 complete source particles. Every particle retains all six
 original solid-triangle leaves: 2,400 desktop leaves or 996 mobile leaves. The
-selected profile plays 24 source-continuous logical chunks of 450 prepared 20 ms
+selected profile plays 24 source-continuous logical chunks of 540 prepared
+16.667 ms
 transform states. The stream is transported as 216 one-second prepared blocks
 so decompression stays outside long animation frames. Source fixed-function
 smooth-vertex lighting is prepared at the first published frame into a verified
@@ -27,7 +28,7 @@ performs no color calculation. The same source RNG draws preserve RNG cadence,
 geometry, restart timing, and coherent color bands, but prepared hue values are
 intentionally quantized and low lightness is intentionally lifted; these are not
 exact source colors.
-Startup is prebaked to ten audited 40-frame source windows. The selector gives
+Startup is prebaked to ten audited 48-frame source windows. The selector gives
 each of the five prepared palette variants—blue, yellow, red, magenta, and
 green—exactly once per session-shuffled cycle before any family repeats, then
 chooses between two expressive browser-reviewed source windows in that family.
@@ -38,8 +39,8 @@ claim. Mobile/coarse-pointer devices and viewports below 600px select the
 field of view instead of the source-default 80 degrees. Prepared motion and each
 particle's complete six-face topology are unchanged.
 
-The stream discards the source's dark startup by preparing 24 seconds before its
-first published frame. Its 10,800 states cover 216 seconds before repeating.
+The stream discards the source's dark startup by preparing 12 seconds before its
+first published frame. Its 12,960 states cover 216 seconds before repeating.
 Startup uses `crypto.getRandomValues` to shuffle the five-family session bag and
 to select an audited source window and frame, excluding the previous exact
 window. Playback
@@ -48,10 +49,12 @@ gzip transport stores shared source control points and widths, one initial
 state per particle, sparse reset events, and flat `Uint16` lighting indices;
 it does not store repeated CSS transform strings. It downloads, verifies, and
 decompresses the active block plus 11 successors behind the loading indicator
-on both desktop and mobile, but initially expands CSS strings only for the
-active block and its immediate successor. A dedicated preparation worker
-materializes the rest sequentially while the main thread publishes the same
-stable retained DOM and maintains the 12-second source-state window. The
+on both desktop and mobile, but expands CSS strings only for the active block
+and two successors. Those first three blocks are complete before the loading
+indicator clears. A dedicated preparation worker expands later successors
+sequentially; the main thread adopts each prepared response in bounded 128 KiB
+slices while publishing the same stable retained DOM and maintaining the
+12-second compact source-state window. The
 single terminal stream wrap is the only
 non-source-continuous boundary.
 

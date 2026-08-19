@@ -105,11 +105,11 @@ export async function mountCycloneClient(host) {
       },
       onBlockWindow(streamBlockIndices) {
         blockLoader.retain(streamBlockIndices);
+        for (const streamBlockIndex of streamBlockIndices) blockLoader.prefetch(streamBlockIndex);
       },
     });
     player.resize();
     addEventListener("resize", player.resize, { passive: true });
-    state.ready = true;
     state.metadata = metadata;
     state.profile = profile;
     state.catalog = catalog;
@@ -117,17 +117,31 @@ export async function mountCycloneClient(host) {
     state.blockLoader = blockLoader;
     state.mounted = mounted;
     state.player = player;
-    document.body.classList.replace("loading", "ready");
+    document.body.classList.replace("loading", "priming");
+    const primingFrameIndex = initialBlockFrameIndex + 1 < catalog.blockFrameCount
+      ? initialBlockFrameIndex + 1
+      : initialBlockFrameIndex - 1;
+    player.seekFrame(primingFrameIndex);
+    await waitForCycloneScenePaint();
+    player.seekFrame(initialBlockFrameIndex);
+    await waitForCycloneScenePaint();
+    document.body.classList.replace("priming", "ready");
+    await waitForCycloneScenePaint();
+    state.ready = true;
     player.resume();
     return state;
   } catch (error) {
     lightingAsset?.destroy();
     state.errors.push(String(error?.stack || error));
-    document.body.classList.remove("loading");
+    document.body.classList.remove("loading", "priming");
     document.body.classList.add("error");
     console.error(error);
     throw error;
   }
+}
+
+function waitForCycloneScenePaint() {
+  return new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
 }
 
 function cleanPreparedDom(mounted) {

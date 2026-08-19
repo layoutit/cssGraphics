@@ -25,6 +25,7 @@ test.after(() => {
 function fixture({
   blockCount = 1,
   runtimeLookaheadBlockCount = 1,
+  runtimeMaterializedLookaheadBlockCount = Math.min(2, runtimeLookaheadBlockCount),
   initialLookaheadBlockCount = 0,
 } = {}) {
   let now = 0;
@@ -103,7 +104,7 @@ function fixture({
     };
   });
   const catalog = {
-    schema: "csscyclone-prepared-stream-catalog@2",
+    schema: "csscyclone-prepared-stream-catalog@3",
     streamId: "stream",
     chunkCount: 1,
     chunkFrameCount: blockCount * 4,
@@ -114,6 +115,7 @@ function fixture({
     framesPerSecond: 60,
     frameMilliseconds: 1_000 / 60,
     runtimeLookaheadBlockCount,
+    runtimeMaterializedLookaheadBlockCount,
     streamFrameCount: blockCount * 4,
     streamDurationMilliseconds: blockCount * 4 / 60 * 1_000,
   };
@@ -214,10 +216,10 @@ test("starts from one materialized successor while filling the verified horizon"
   });
   assert.deepEqual(state.player.stats().pendingBlockIndices, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
   assert.equal(state.player.stats().pendingBlockReadyCount, 1);
-  assert.deepEqual(state.loadBlockCalls, [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+  assert.deepEqual(state.loadBlockCalls, [2]);
   await Promise.resolve();
   await Promise.resolve();
-  assert.equal(state.player.stats().pendingBlockReadyCount, 11);
+  assert.equal(state.player.stats().pendingBlockReadyCount, 2);
 
   state.player.resume();
   state.fireDelay();
@@ -228,9 +230,9 @@ test("starts from one materialized successor while filling the verified horizon"
   const stats = state.player.stats();
   assert.equal(stats.activeBlockIndex, 1);
   assert.deepEqual(stats.pendingBlockIndices, [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-  assert.equal(stats.pendingBlockReadyCount, 11);
+  assert.equal(stats.pendingBlockReadyCount, 2);
   assert.equal(stats.runtimePreparedBlockWaitCount, 0);
-  assert.deepEqual(state.loadBlockCalls, [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  assert.deepEqual(state.loadBlockCalls, [2, 3]);
 });
 
 test("collapses missed prepared frames once at the next paint-aligned callback", async () => {

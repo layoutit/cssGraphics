@@ -34,7 +34,8 @@ const sourceLock = JSON.parse(await readFile(join(adapterRoot, "notes/references
 const blockFrameCount = CSSCYCLONE_PREPARED_CADENCE.framesPerSecond *
   CSSCYCLONE_PREPARED_CADENCE.blockSeconds;
 const runtimeLookaheadBlockCount = 11;
-const startupMaterializedLookaheadBlockCount = 1;
+const runtimeMaterializedLookaheadBlockCount = 2;
+const startupMaterializedLookaheadBlockCount = 2;
 const startupPaletteFamilies = CSSCYCLONE_PRESENTATION.startupPaletteFamilies;
 const startupSilhouetteSampleFrameOffsets = CSSCYCLONE_PRESENTATION.startupSilhouetteSampleFrameOffsets;
 const hueSectorNames = Object.freeze(["red", "yellow", "green", "cyan", "blue", "magenta"]);
@@ -205,7 +206,7 @@ async function prepareProfile(profile) {
   );
   const preparedLighting = await lightingStream.finalize();
   const catalogBytes = Buffer.from(`${JSON.stringify({
-    schema: "csscyclone-prepared-stream-catalog@2",
+    schema: "csscyclone-prepared-stream-catalog@3",
     streamId: bank.id,
     modelId: profile.modelId,
     particleCount: bank.particleCount,
@@ -237,6 +238,7 @@ async function prepareProfile(profile) {
     selection: "session-crypto-shuffled-palette-family-source-window-no-immediate-repeat",
     playbackOrder: "source-continuous-ascending-chunks-with-one-terminal-stream-wrap",
     runtimeLookaheadBlockCount,
+    runtimeMaterializedLookaheadBlockCount,
     startupMaterializedLookaheadBlockCount,
     entries: blockEntries,
   })}\n`);
@@ -319,6 +321,7 @@ async function prepareProfile(profile) {
       residentBlockWindowCount,
       maximumResidentBlockWindowDecodedBytes,
       runtimeLookaheadBlockCount,
+      runtimeMaterializedLookaheadBlockCount,
       startupMaterializedLookaheadBlockCount,
       transportEncoding: CSSCYCLONE_BLOCK_ENCODING,
       runtimePreparedStateMaterialization: true,
@@ -327,6 +330,7 @@ async function prepareProfile(profile) {
       runtimeOffMainThreadLookaheadMaterialization: true,
       startupVerifiedBlockCount: residentBlockWindowCount,
       startupMaterializedBlockCount: startupMaterializedLookaheadBlockCount + 1,
+      maximumRuntimeMaterializedBlockCount: runtimeMaterializedLookaheadBlockCount + 1,
     }),
     lighting: preparedLighting.contract,
   });

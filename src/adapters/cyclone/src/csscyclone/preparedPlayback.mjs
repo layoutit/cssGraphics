@@ -5,7 +5,7 @@ import {
   CSSCYCLONE_PLAYBACK_SCHEMA,
 } from "../shared/csscyclone/preparedBlockTransport.mjs";
 
-const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@2";
+const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@3";
 const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@2";
 const LIGHTING_SCHEMA = "csscyclone-prepared-smooth-lighting-atlas@7";
 const SOURCE_FIELD_OF_VIEW_DEGREES = 80;
@@ -164,12 +164,13 @@ export function createCyclonePreparedPlayer({
   function queueLookaheadBlocks() {
     if (destroyed) return;
     const indices = lookaheadBlockIndices();
-    const retainedIndices = new Set(indices);
+    const materializedIndices = indices.slice(0, catalog.runtimeMaterializedLookaheadBlockCount);
+    const retainedIndices = new Set(materializedIndices);
     onBlockWindow([activeBlockIndex, ...indices]);
     for (const index of pendingBlocks.keys()) {
       if (!retainedIndices.has(index)) pendingBlocks.delete(index);
     }
-    for (const index of indices) {
+    for (const index of materializedIndices) {
       if (pendingBlocks.has(index)) continue;
       const pending = { block: null, promise: null, error: null };
       preparedBlockPrefetchCount += 1;
@@ -414,8 +415,11 @@ function validateBinding(
       !Number.isSafeInteger(catalog.runtimeLookaheadBlockCount) ||
       catalog.runtimeLookaheadBlockCount < 1 ||
       catalog.runtimeLookaheadBlockCount > catalog.blockCount ||
+      !Number.isSafeInteger(catalog.runtimeMaterializedLookaheadBlockCount) ||
+      catalog.runtimeMaterializedLookaheadBlockCount < 1 ||
+      catalog.runtimeMaterializedLookaheadBlockCount > catalog.runtimeLookaheadBlockCount ||
       !Array.isArray(initialLookaheadBlocks) ||
-      initialLookaheadBlocks.length > catalog.runtimeLookaheadBlockCount ||
+      initialLookaheadBlocks.length > catalog.runtimeMaterializedLookaheadBlockCount ||
       new Set(initialLookaheadBlocks.map((block) => block?.streamBlockIndex)).size !==
         initialLookaheadBlocks.length ||
       initialLookaheadBlocks.some((block, index) =>

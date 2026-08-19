@@ -6,10 +6,11 @@ import {
   decodeCyclonePreparedBlockIncrementally,
 } from "../shared/csscyclone/preparedBlockTransport.mjs";
 
-const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@2";
+const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@3";
 const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@2";
 const RUNTIME_LOOKAHEAD_BLOCK_COUNT = 11;
-const STARTUP_MATERIALIZED_LOOKAHEAD_BLOCK_COUNT = 1;
+const RUNTIME_MATERIALIZED_LOOKAHEAD_BLOCK_COUNT = 2;
+const STARTUP_MATERIALIZED_LOOKAHEAD_BLOCK_COUNT = 2;
 const STARTUP_HUE_SECTOR_NAMES = Object.freeze(["red", "yellow", "green", "cyan", "blue", "magenta"]);
 const STARTUP_PALETTE_FAMILIES = Object.freeze(["blue", "yellow", "red", "magenta", "green"]);
 const STARTUP_SILHOUETTE_SAMPLING = "browser-reviewed-expressive-source-windows";
@@ -343,7 +344,7 @@ function createWorkerBlockMaterializer(catalog) {
     return null;
   }
   const pending = new Map();
-  const transformDecoder = new TextDecoder();
+  let responseMaterializationTail = Promise.resolve();
   let nextRequestId = 0;
   let destroyed = false;
   let resolveInitialization;
@@ -383,17 +384,28 @@ function createWorkerBlockMaterializer(catalog) {
     }
     const request = pending.get(data.requestId);
     if (!request) return;
-    pending.delete(data.requestId);
-    const transforms = Object.freeze(transformDecoder.decode(data.transformBytes).split("\n"));
-    const block = Object.freeze({
-      ...data.block,
-      playback: Object.freeze({ ...data.block.playback, transforms }),
-      lighting: Object.freeze(data.block.lighting),
+    responseMaterializationTail = responseMaterializationTail.then(async () => {
+      if (pending.get(data.requestId) !== request) return;
+      try {
+        const transforms = await decodeCyclonePreparedTransformsIncrementally(
+          data.transformBytes,
+          data.block?.playback?.frameCount * data.block?.playback?.particleCount,
+        );
+        const block = Object.freeze({
+          ...data.block,
+          playback: Object.freeze({ ...data.block.playback, transforms }),
+          lighting: Object.freeze(data.block.lighting),
+        });
+        pending.delete(data.requestId);
+        request.resolve(Object.freeze({
+          block,
+          durationMilliseconds: data.durationMilliseconds,
+        }));
+      } catch (error) {
+        pending.delete(data.requestId);
+        request.reject(error);
+      }
     });
-    request.resolve(Object.freeze({
-      block,
-      durationMilliseconds: data.durationMilliseconds,
-    }));
   });
   worker.addEventListener("error", (event) => {
     rejectAll(new Error(event.message || "Prepared Cyclone worker failed"));
@@ -425,6 +437,44 @@ function createWorkerBlockMaterializer(catalog) {
       worker.terminate();
     },
   });
+}
+
+export async function decodeCyclonePreparedTransformsIncrementally(
+  bytes,
+  expectedTransformCount,
+  {
+    chunkByteLength = 128 * 1_024,
+    setDelay = globalThis.setTimeout.bind(globalThis),
+  } = {},
+) {
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength < 1 ||
+      !Number.isSafeInteger(expectedTransformCount) || expectedTransformCount < 1 ||
+      !Number.isSafeInteger(chunkByteLength) || chunkByteLength < 1 ||
+      chunkByteLength > 128 * 1_024 || typeof setDelay !== "function") {
+    throw new TypeError("Prepared Cyclone transform response slicing is invalid");
+  }
+  const decoder = new TextDecoder();
+  const transforms = [];
+  let carry = "";
+  for (let offset = 0; offset < bytes.byteLength; offset += chunkByteLength) {
+    if (offset > 0) await new Promise((resolve) => setDelay(resolve, 0));
+    const end = Math.min(bytes.byteLength, offset + chunkByteLength);
+    const isFinalChunk = end === bytes.byteLength;
+    const text = carry + decoder.decode(bytes.subarray(offset, end), { stream: !isFinalChunk });
+    const lines = text.split("\n");
+    if (isFinalChunk) {
+      transforms.push(...lines);
+      carry = "";
+    } else {
+      carry = lines.pop();
+      transforms.push(...lines);
+    }
+  }
+  if (carry !== "" || transforms.length !== expectedTransformCount ||
+      transforms.some((transform) => !transform.startsWith("matrix3d("))) {
+    throw new Error("Prepared Cyclone worker transform response drifted");
+  }
+  return Object.freeze(transforms);
 }
 
 function validateCatalog(catalog) {
@@ -481,9 +531,13 @@ function validateCatalog(catalog) {
         catalog.startupSelections.some((selection) => frameOffset >= selection.frameCount)) ||
       catalog.selection !== STARTUP_SELECTION ||
       catalog.runtimeLookaheadBlockCount !== RUNTIME_LOOKAHEAD_BLOCK_COUNT ||
+      catalog.runtimeMaterializedLookaheadBlockCount !==
+        RUNTIME_MATERIALIZED_LOOKAHEAD_BLOCK_COUNT ||
       catalog.startupMaterializedLookaheadBlockCount !==
         STARTUP_MATERIALIZED_LOOKAHEAD_BLOCK_COUNT ||
-      catalog.startupMaterializedLookaheadBlockCount >= catalog.runtimeLookaheadBlockCount ||
+      catalog.startupMaterializedLookaheadBlockCount >
+        catalog.runtimeMaterializedLookaheadBlockCount ||
+      catalog.runtimeMaterializedLookaheadBlockCount > catalog.runtimeLookaheadBlockCount ||
       catalog.entries.some((entry, index) => entry?.index !== index ||
         entry.chunkIndex !== Math.floor(index / catalog.blocksPerChunk) ||
         entry.blockIndex !== index % catalog.blocksPerChunk ||

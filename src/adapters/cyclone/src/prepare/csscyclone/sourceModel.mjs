@@ -37,7 +37,7 @@ export const CSSCYCLONE_BANKS = Object.freeze({
     ...CSSCYCLONE_DESKTOP_BANK,
     id: "mobile-stream",
     name: "Cyclone Mobile",
-    particleCount: 266,
+    particleCount: 166,
   }),
 });
 

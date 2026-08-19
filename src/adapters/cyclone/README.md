@@ -2,8 +2,8 @@
 
 This adapter translates Really Slick Cyclone into one retained PolyCSS Morph
 graph. Desktop mounts the source-default 400 particle roots and mobile mounts a
-prepared prefix of 266 complete source particles. Every particle retains all six
-original solid-triangle leaves: 2,400 desktop leaves or 1,596 mobile leaves. The
+prepared prefix of 166 complete source particles. Every particle retains all six
+original solid-triangle leaves: 2,400 desktop leaves or 996 mobile leaves. The
 selected profile plays 24 source-continuous logical chunks of 450 prepared 20 ms
 transform states. The stream is transported as 216 one-second prepared blocks
 so decompression stays outside long animation frames. Source fixed-function
@@ -34,7 +34,7 @@ chooses between two expressive browser-reviewed source windows in that family.
 It never phases individual particles around a full hue wheel. This is an
 intentional presentation rather than an exact native-color or random-start
 claim. Mobile/coarse-pointer devices and viewports below 600px select the
-266-particle prepared profile before mount and use a 90-degree presentation
+166-particle prepared profile before mount and use a 90-degree presentation
 field of view instead of the source-default 80 degrees. Prepared motion and each
 particle's complete six-face topology are unchanged.
 

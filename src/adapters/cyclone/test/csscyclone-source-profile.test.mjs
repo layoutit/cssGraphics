@@ -73,7 +73,7 @@ test("pins the current Really Slick Cyclone source profile", () => {
 
 test("prepares the mobile bank with fewer complete source particles", () => {
   assert.equal(CSSCYCLONE_BANKS.desktop.particleCount, 400);
-  assert.equal(CSSCYCLONE_BANKS.mobile.particleCount, 266);
+  assert.equal(CSSCYCLONE_BANKS.mobile.particleCount, 166);
   const desktopBank = {
     ...CSSCYCLONE_BANKS.desktop,
     warmupFrames: 2,
@@ -97,12 +97,12 @@ test("prepares the mobile bank with fewer complete source particles", () => {
     modelId: CSSCYCLONE_MODEL_IDS.mobile,
   });
   assert.equal(preparedModel.model.identity.id, "cyclone-mobile");
-  assert.equal(preparedModel.model.render.shapes.length, 266);
-  assert.equal(preparedModel.model.render.leaves.length, 1_596);
+  assert.equal(preparedModel.model.render.shapes.length, 166);
+  assert.equal(preparedModel.model.render.leaves.length, 996);
   assert.equal(preparedModel.metrics.polygonsPerParticle, 6);
-  assert.equal(preparedPlayback.playback.particleCount, 266);
-  assert.equal(preparedPlayback.playback.leafCount, 1_596);
-  assert.deepEqual(source.frames[0].particles, desktopSource.frames[0].particles.slice(0, 266));
+  assert.equal(preparedPlayback.playback.particleCount, 166);
+  assert.equal(preparedPlayback.playback.leafCount, 996);
+  assert.deepEqual(source.frames[0].particles, desktopSource.frames[0].particles.slice(0, 166));
 });
 
 test("widens only the mobile presentation field of view", () => {

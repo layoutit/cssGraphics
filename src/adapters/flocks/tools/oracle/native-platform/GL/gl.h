@@ -1,0 +1,4 @@
+#ifndef CSSFLOCKS_NATIVE_PLATFORM_GL_H
+#define CSSFLOCKS_NATIVE_PLATFORM_GL_H
+#include <OpenGL/gl.h>
+#endif

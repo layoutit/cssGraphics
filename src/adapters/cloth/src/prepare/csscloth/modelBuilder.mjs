@@ -147,6 +147,7 @@ export function buildClothPreparedModel({ profile = "desktop" } = {}) {
   }
 
   const playbackBanks = buildPreparedPlaybackBanks(
+    profile,
     source,
     clothShadow,
     lighting.frameRows,
@@ -246,7 +247,7 @@ export function buildClothPreparedModel({ profile = "desktop" } = {}) {
       maximumShapeWritesPerFrame: firstFrame.triangles.length,
       maximumShadowLeafWritesPerFrame: clothShadow.leafCount,
       averageAtlasRowWritesPerFrame: averageLightingWrites(playbackBanks),
-      runtimeGeometryConstructionCount: 0,
+      mainThreadRuntimeGeometryConstructionCount: 0,
       runtimeDomGrowth: false,
     }),
   });
@@ -300,11 +301,15 @@ export function applyClothRasterPlan(prepared, raster) {
   return deepFreeze({ ...prepared, model, playbackBanks, metrics });
 }
 
-function buildPreparedPlaybackBanks(source, clothShadow, lightingRows, atlasStateSlots) {
+function buildPreparedPlaybackBanks(profile, source, clothShadow, lightingRows, atlasStateSlots) {
   if (source.frames.length !== CSSCLOTH_STREAM_FRAME_COUNT ||
       clothShadow.frames.length !== CSSCLOTH_STREAM_FRAME_COUNT ||
       lightingRows.length !== CSSCLOTH_STREAM_FRAME_COUNT) {
     throw new Error("Cloth prepared bank stream is incomplete");
+  }
+  if (!Array.isArray(source.bankCheckpoints) ||
+      source.bankCheckpoints.length !== CSSCLOTH_BANK_COUNT) {
+    throw new Error("Cloth simulation checkpoint bank is incomplete");
   }
   return Object.freeze(Array.from({ length: CSSCLOTH_BANK_COUNT }, (_, bankIndex) => {
     const frameOffset = bankIndex * CSSCLOTH_BANK_FRAME_COUNT;
@@ -320,6 +325,7 @@ function buildPreparedPlaybackBanks(source, clothShadow, lightingRows, atlasStat
     }));
     return Object.freeze({
       schema: "csscloth-prepared-playback-bank-source@1",
+      profile,
       bankIndex,
       streamFrameOffset: frameOffset,
       frameCount: frames.length,
@@ -329,6 +335,7 @@ function buildPreparedPlaybackBanks(source, clothShadow, lightingRows, atlasStat
       frameMilliseconds: CSSCLOTH_OUTPUT_FRAME_MILLISECONDS,
       durationMilliseconds: frames.length * CSSCLOTH_OUTPUT_FRAME_MILLISECONDS,
       atlasStateSlots,
+      checkpoint: source.bankCheckpoints[bankIndex],
       frames,
     });
   }));

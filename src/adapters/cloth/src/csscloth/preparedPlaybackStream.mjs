@@ -1,7 +1,7 @@
 import {
   completeClothPreparedPlaybackMaterialization,
   loadClothPreparedPlayback,
-} from "../shared/csscloth/preparedPlaybackTransport.mjs";
+} from "../shared/csscloth/preparedCheckpointTransport.mjs";
 
 const RESPONSE_CHUNK_TRANSFORM_COUNT = 480;
 const INITIAL_BUFFER_FRAME_COUNT = 240;

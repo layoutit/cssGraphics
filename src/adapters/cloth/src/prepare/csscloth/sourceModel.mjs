@@ -95,8 +95,18 @@ export function buildClothSourceFrames({
   const particles = buildParticles();
   let normals = Array.from({ length: CSSCLOTH_PARTICLE_COUNT }, () => [0, 0, 1]);
   const frames = [];
+  const bankCheckpoints = [];
   for (let step = 0; step < warmupFrameCount + frameCount; step += 1) {
     const now = windPhaseMilliseconds + (step + 1) * CSSCLOTH_SIMULATION_FRAME_MILLISECONDS;
+    if (step >= warmupFrameCount &&
+        (step - warmupFrameCount) % CSSCLOTH_BANK_FRAME_COUNT === 0) {
+      bankCheckpoints.push(captureSimulationCheckpoint(
+        particles,
+        step - warmupFrameCount,
+        windPhaseMilliseconds,
+        step + 1,
+      ));
+    }
     simulateStep(particles, constraints, triangles, normals, now);
     normals = computeSmoothNormals(particles, triangles);
     if (step >= warmupFrameCount) {
@@ -107,6 +117,53 @@ export function buildClothSourceFrames({
     schema: "csscloth-source-frames@1",
     frameMilliseconds: CSSCLOTH_OUTPUT_FRAME_MILLISECONDS,
     windPhaseMilliseconds,
+    frames,
+    triangles,
+    bankCheckpoints,
+  });
+}
+
+export function buildClothSourceFramesFromCheckpoint(checkpoint, frameCount) {
+  if (!Number.isSafeInteger(frameCount) || frameCount < 1 ||
+      !Number.isSafeInteger(checkpoint?.streamFrameOffset) || checkpoint.streamFrameOffset < 0 ||
+      !Number.isFinite(checkpoint?.windPhaseMilliseconds) ||
+      !Number.isSafeInteger(checkpoint?.nextSimulationStepIndex) ||
+      checkpoint.nextSimulationStepIndex < 1 ||
+      !Array.isArray(checkpoint?.positions) || checkpoint.positions.length !== CSSCLOTH_PARTICLE_COUNT ||
+      !Array.isArray(checkpoint?.previousPositions) ||
+      checkpoint.previousPositions.length !== CSSCLOTH_PARTICLE_COUNT) {
+    throw new TypeError("Complete Cloth simulation checkpoint is required");
+  }
+  const triangles = buildClothTriangles();
+  const constraints = buildConstraints();
+  const particles = buildParticles();
+  for (let index = 0; index < particles.length; index += 1) {
+    const position = checkpoint.positions[index];
+    const previous = checkpoint.previousPositions[index];
+    if (!validPoint(position) || !validPoint(previous)) {
+      throw new TypeError("Cloth simulation checkpoint contains an invalid particle");
+    }
+    particles[index].position = [...position];
+    particles[index].previous = [...previous];
+  }
+  let normals = computeSmoothNormals(particles, triangles);
+  const frames = [];
+  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+    const now = checkpoint.windPhaseMilliseconds +
+      (checkpoint.nextSimulationStepIndex + frameIndex) *
+        CSSCLOTH_SIMULATION_FRAME_MILLISECONDS;
+    simulateStep(particles, constraints, triangles, normals, now);
+    normals = computeSmoothNormals(particles, triangles);
+    frames.push(captureFrame(
+      particles,
+      normals,
+      triangles,
+      checkpoint.streamFrameOffset + frameIndex,
+    ));
+  }
+  return deepFreeze({
+    schema: "csscloth-checkpoint-source-frames@1",
+    frameMilliseconds: CSSCLOTH_OUTPUT_FRAME_MILLISECONDS,
     frames,
     triangles,
   });
@@ -399,6 +456,28 @@ function captureFrame(particles, normals, triangles, frameIndex) {
       normals: Object.freeze(triangle.particleIndices.map((index) => particleNormals[index])),
     }))),
   });
+}
+
+function captureSimulationCheckpoint(
+  particles,
+  streamFrameOffset,
+  windPhaseMilliseconds,
+  nextSimulationStepIndex,
+) {
+  return Object.freeze({
+    schema: "csscloth-simulation-checkpoint@1",
+    streamFrameOffset,
+    windPhaseMilliseconds,
+    nextSimulationStepIndex,
+    positions: Object.freeze(particles.map((particle) =>
+      Object.freeze([...particle.position]))),
+    previousPositions: Object.freeze(particles.map((particle) =>
+      Object.freeze([...particle.previous]))),
+  });
+}
+
+function validPoint(point) {
+  return Array.isArray(point) && point.length === 3 && point.every(Number.isFinite);
 }
 
 function buildParticles() {

@@ -22,6 +22,7 @@ export async function inspectCssclothProductBank(root) {
     logoAtlasWidth: 420,
     logoAtlasHeight: 420,
     logoTileCount: 43,
+    maximumPlaybackCompressedBytes: 700_000,
   });
   assert(desktop.prepared.presentation?.responsiveProfile?.media === "(max-width: 600px)",
     "mobile media query");
@@ -34,6 +35,7 @@ export async function inspectCssclothProductBank(root) {
     particleCount: 49,
     shadowTriangleCount: 25,
     retainedLeafCount: 158,
+    maximumPlaybackCompressedBytes: 350_000,
   });
 
   const paths = await listFiles(productRoot);
@@ -57,6 +59,8 @@ export async function inspectCssclothProductBank(root) {
     retainedLeafCount: desktop.prepared.metrics.retainedLeafCount,
     mobileRetainedLeafCount: mobile.prepared.metrics.retainedLeafCount,
     mobileClothTriangleCount: mobile.prepared.metrics.clothTriangleCount,
+    playbackCompressedBytes: desktop.playbackCompressedBytes,
+    mobilePlaybackCompressedBytes: mobile.playbackCompressedBytes,
     fileCount: paths.length,
     closureBytes,
     closureSha256: closure.digest("hex"),
@@ -90,8 +94,8 @@ async function inspectProfile(productRoot, prefix, expectedPaths, expected) {
     `${expected.profile} cloth triangles`);
   assert(prepared.metrics.retainedLeafCount === expected.retainedLeafCount,
     `${expected.profile} retained leaves`);
-  assert(prepared.renderer.runtimeGeometryConstruction === false,
-    `${expected.profile} runtime geometry contract`);
+  assert(prepared.renderer.mainThreadRuntimeGeometryConstruction === false,
+    `${expected.profile} main-thread runtime geometry contract`);
   assert(prepared.renderer.runtimeDomGrowth === false,
     `${expected.profile} runtime DOM contract`);
   assert(prepared.renderer.runtimeAtlasRasterization === false,
@@ -133,10 +137,12 @@ async function inspectProfile(productRoot, prefix, expectedPaths, expected) {
       `${expected.profile} bank ${bankIndex} counts`);
     assert(bank.shadowTriangleCount === expected.shadowTriangleCount,
       `${expected.profile} bank ${bankIndex} shadow count`);
-    assert(bank.schema === "csscloth-prepared-playback@7",
+    assert(bank.profile === expected.profile && bank.streamFrameOffset === bankIndex * 1440,
+      `${expected.profile} bank ${bankIndex} checkpoint binding`);
+    assert(bank.schema === "csscloth-prepared-playback@8",
       `${expected.profile} bank ${bankIndex} schema`);
     assert(bank.encoding ===
-      "gzip-third-order-zigzag-varint-fixed7-particles-corrected-fixed4-shadow-affine12-sparse-u16-lighting-shadow@7",
+      "gzip-float64-simulation-checkpoint-sparse-u16-lighting-worker-derived-cloth-shadow@8",
       `${expected.profile} bank ${bankIndex} encoding`);
     const path = productPath(bank.path);
     const bytes = await readFile(join(productRoot, path));
@@ -145,6 +151,12 @@ async function inspectProfile(productRoot, prefix, expectedPaths, expected) {
     assert(sha256(bytes) === bank.sha256, `${expected.profile} bank ${bankIndex} hash`);
     expectedPaths.add(path);
   }
+  const playbackCompressedBytes = banks.reduce(
+    (total, bank) => total + bank.compressedByteLength,
+    0,
+  );
+  assert(playbackCompressedBytes <= expected.maximumPlaybackCompressedBytes,
+    `${expected.profile} checkpoint payload budget`);
 
   const catalogPath = `${prefix}model/catalog.json`;
   const catalogBytes = await readFile(join(productRoot, catalogPath));
@@ -169,7 +181,7 @@ async function inspectProfile(productRoot, prefix, expectedPaths, expected) {
     assert(sha256(bytes) === resource.sha256, `resource ${path} hash`);
     expectedPaths.add(path);
   }
-  return Object.freeze({ prepared, preparedBytes, banks });
+  return Object.freeze({ prepared, preparedBytes, banks, playbackCompressedBytes });
 }
 
 function productPath(url) {

@@ -6,6 +6,10 @@ import {
 import { createPolyPerspectiveCamera } from "@layoutit/polycss";
 import { createPolyMorphPreparedShadowTarget } from "../shared/csscloth/morphShadowPatch.mjs";
 import { createPolyMorphPreparedCornerTextureTarget } from "../shared/csscloth/morphTexturePatch.mjs";
+import {
+  CSSCLOTH_PLAYBACK_ENCODING,
+  CSSCLOTH_PLAYBACK_SCHEMA,
+} from "../shared/csscloth/preparedCheckpointTransport.mjs";
 import { selectClothStartingBank } from "../shared/csscloth/bankSelection.mjs";
 import { createClothPreparedPlaybackStream } from "./preparedPlaybackStream.mjs";
 
@@ -487,6 +491,10 @@ function validatePlaybackCatalog(metadata) {
       presentation.bankFrameCount !== catalog.bankFrameCount ||
       presentation.frameCount !== catalog.bankCount * catalog.bankFrameCount ||
       banks.some((descriptor, bankIndex) => descriptor?.bankIndex !== bankIndex ||
+        descriptor.schema !== CSSCLOTH_PLAYBACK_SCHEMA ||
+        descriptor.encoding !== CSSCLOTH_PLAYBACK_ENCODING ||
+        descriptor.profile !== metadata.renderer.profileId ||
+        descriptor.streamFrameOffset !== bankIndex * catalog.bankFrameCount ||
         descriptor.frameCount !== catalog.bankFrameCount)) {
     throw new Error("Cloth prepared playback bank catalog drifted");
   }
@@ -599,7 +607,7 @@ function installDebugApi(state) {
           retainedShapeCount: state.mounted.shapeElements.size,
           retainedLeafCount: state.mounted.leafHandles.size,
           retainedDomStable: state.player.assertStableDomIdentity(),
-          runtimeGeometryConstructionCount: 0,
+          mainThreadRuntimeGeometryConstructionCount: 0,
           runtimeDomGrowth: false,
           ...state.player.snapshot(),
         });

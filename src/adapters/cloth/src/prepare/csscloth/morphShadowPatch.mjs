@@ -16,11 +16,76 @@ export function preparePolyMorphParametricShadow({
   atlas,
   definition = 16,
 }) {
+  const preparedFrames = preparePolyMorphParametricShadowFrames({
+    frames,
+    worldVertices,
+    worldTriangles,
+    lightDirection,
+    projectPoint,
+    triangleMatrix,
+    definition,
+  });
+  const { shadowFrames, leafCount } = preparedFrames;
+  if (!/^[a-z][a-z0-9-]*$/u.test(id ?? "") || !atlas) {
+    throw new TypeError("Complete prepared Morph shadow input is required");
+  }
+  const vertices = [];
+  const normals = [];
+  const polygons = [];
+  const leaves = [];
+  for (let index = 0; index < leafCount; index += 1) {
+    const suffix = String(index).padStart(2, "0");
+    const polygonId = `${id}-${suffix}`;
+    const vertexOffset = vertices.length;
+    vertices.push(
+      Object.freeze([0, 0, 0]),
+      Object.freeze([atlas.width, 0, 0]),
+      Object.freeze([0, atlas.height, 0]),
+    );
+    const normalIndex = normals.length;
+    normals.push(Object.freeze([0, 0, 1]));
+    polygons.push(Object.freeze({
+      id: polygonId,
+      vertexIndices: Object.freeze([vertexOffset, vertexOffset + 1, vertexOffset + 2]),
+      normalIndices: Object.freeze([normalIndex, normalIndex, normalIndex]),
+    }));
+    leaves.push(Object.freeze({
+      id: `leaf-${polygonId}`,
+      polygonId,
+      shapeId: id,
+      materialId: "material-shadow",
+      strategy: "atlas-slice",
+      width: atlas.width,
+      height: atlas.height,
+      matrix: shadowFrames[0].matrices[index],
+      atlas,
+      fallback: null,
+    }));
+  }
+  return deepFreeze({
+    shape: { id, matrix: IDENTITY },
+    material: { id: "material-shadow", color: [1, 1, 1, 1] },
+    topology: { vertices, normals, polygons },
+    leaves,
+    frames: shadowFrames,
+    leafCount,
+  });
+}
+
+export function preparePolyMorphParametricShadowFrames({
+  frames,
+  worldVertices,
+  worldTriangles,
+  lightDirection,
+  projectPoint,
+  triangleMatrix,
+  definition = 16,
+}) {
   const usesCoverage = typeof worldTriangles === "function";
-  if (!/^[a-z][a-z0-9-]*$/u.test(id ?? "") || !Array.isArray(frames) || frames.length === 0 ||
+  if (!Array.isArray(frames) || frames.length === 0 ||
       (!usesCoverage && typeof worldVertices !== "function") || typeof projectPoint !== "function" ||
       typeof triangleMatrix !== "function" || !Array.isArray(lightDirection) || lightDirection.length !== 3 ||
-      !Number.isSafeInteger(definition) || definition < 3 || !atlas) {
+      !Number.isSafeInteger(definition) || definition < 3) {
     throw new TypeError("Complete prepared Morph shadow input is required");
   }
   const trianglesByFrame = frames.map((frame, frameIndex) => {
@@ -66,47 +131,7 @@ export function preparePolyMorphParametricShadow({
       )),
     });
   }));
-  const vertices = [];
-  const normals = [];
-  const polygons = [];
-  const leaves = [];
-  for (let index = 0; index < leafCount; index += 1) {
-    const suffix = String(index).padStart(2, "0");
-    const polygonId = `${id}-${suffix}`;
-    const vertexOffset = vertices.length;
-    vertices.push(
-      Object.freeze([0, 0, 0]),
-      Object.freeze([atlas.width, 0, 0]),
-      Object.freeze([0, atlas.height, 0]),
-    );
-    const normalIndex = normals.length;
-    normals.push(Object.freeze([0, 0, 1]));
-    polygons.push(Object.freeze({
-      id: polygonId,
-      vertexIndices: Object.freeze([vertexOffset, vertexOffset + 1, vertexOffset + 2]),
-      normalIndices: Object.freeze([normalIndex, normalIndex, normalIndex]),
-    }));
-    leaves.push(Object.freeze({
-      id: `leaf-${polygonId}`,
-      polygonId,
-      shapeId: id,
-      materialId: "material-shadow",
-      strategy: "atlas-slice",
-      width: atlas.width,
-      height: atlas.height,
-      matrix: shadowFrames[0].matrices[index],
-      atlas,
-      fallback: null,
-    }));
-  }
-  return deepFreeze({
-    shape: { id, matrix: IDENTITY },
-    material: { id: "material-shadow", color: [1, 1, 1, 1] },
-    topology: { vertices, normals, polygons },
-    leaves,
-    frames: shadowFrames,
-    leafCount,
-  });
+  return deepFreeze({ shadowFrames, leafCount });
 }
 
 function triangulateCoverageContours(contours, projectPoint, frameIndex) {

@@ -12,10 +12,6 @@ export function createPolyMorphPreparedCornerTextureTarget(
   if (handles.some((handle) => !handle || handle.element.localName !== "u")) {
     throw new Error("Cloth requires PolyCSS corner-shape triangle leaves");
   }
-  if (!CSS.supports("corner-top-left-shape", "bevel") ||
-      !CSS.supports("corner-top-right-shape", "bevel")) {
-    throw new Error("Cloth requires CSS corner-shape support");
-  }
   const atlases = handles.map((handle) => handle.plan.fallback?.atlas);
   const resourcePath = atlases[0]?.resourcePath;
   if (!resourcePath || atlases.some((atlas) => !atlas || atlas.resourcePath !== resourcePath)) {

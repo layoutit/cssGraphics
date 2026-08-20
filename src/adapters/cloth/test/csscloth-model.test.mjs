@@ -5,8 +5,10 @@ import { groundImageSlice, shadowImageSlice } from "../src/prepare/csscloth/rast
 import {
   CSSCLOTH_PLAYBACK_ENCODING,
   CSSCLOTH_PLAYBACK_SCHEMA,
+  createClothPreparedPlaybackMaterialization,
   decodeClothPreparedPlayback,
   encodeClothPreparedPlayback,
+  materializeClothPreparedMatrixRange,
 } from "../src/shared/csscloth/preparedPlaybackTransport.mjs";
 
 const prepared = buildClothPreparedModel();
@@ -73,6 +75,14 @@ test("prepared playback uses compact fixed-point transport", () => {
     shadowTriangleCount: playback.shadowTriangleCount,
     frameMilliseconds: playback.frameMilliseconds,
   });
+  const materialization = createClothPreparedPlaybackMaterialization(bytes, {
+    schema: CSSCLOTH_PLAYBACK_SCHEMA,
+    encoding: CSSCLOTH_PLAYBACK_ENCODING,
+    frameCount: playback.frameCount,
+    triangleCount: playback.triangleCount,
+    shadowTriangleCount: playback.shadowTriangleCount,
+    frameMilliseconds: playback.frameMilliseconds,
+  });
   assert.equal(decoded.transforms.length, 1440 * 200);
   assert.equal(decoded.lightingRows.length, 1440 * 200);
   assert.equal(decoded.atlasStateOffsets.length, 201);
@@ -83,6 +93,28 @@ test("prepared playback uses compact fixed-point transport", () => {
   assert.equal(decoded.shadowVisibilityOffsets[1], prepared.metrics.clothShadowLeafCount);
   assert.ok(decoded.shadowTransformValues.length < 1440 * prepared.metrics.clothShadowLeafCount);
   assert.ok(decoded.shadowVisibilityValues.length < 1440 * prepared.metrics.clothShadowLeafCount);
+  assert.deepEqual(
+    [...materialization.playback.shadowTransformOffsets],
+    [...decoded.shadowTransformOffsets],
+  );
+  assert.deepEqual(
+    [...materialization.playback.shadowTransformIndices],
+    [...decoded.shadowTransformIndices],
+  );
+  const sampledTransformIndex = 137 * 200 + 47;
+  assert.deepEqual(
+    materializeClothPreparedMatrixRange(
+      materialization,
+      "cloth",
+      sampledTransformIndex,
+      sampledTransformIndex + 1,
+    ),
+    [decoded.transforms[sampledTransformIndex]],
+  );
+  assert.deepEqual(
+    materializeClothPreparedMatrixRange(materialization, "shadow", 0, 480),
+    decoded.shadowTransformValues.slice(0, 480),
+  );
   const actual = decoded.transforms[137 * 200 + 47].match(/matrix3d\(([^)]+)\)/u)[1].split(",").map(Number);
   const expected = playback.frames[137].matrices[47];
   assert.ok(actual.every((value, index) => Math.abs(value - expected[index]) <= 0.000051));

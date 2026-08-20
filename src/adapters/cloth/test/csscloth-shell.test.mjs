@@ -14,6 +14,8 @@ test("cloth uses the cssGraphics shell without source controls", async () => {
 
 test("runtime has no per-frame geometry or raster construction", async () => {
   const client = await readFile(new URL("src/csscloth/client.mjs", root), "utf8");
+  const playbackStream = await readFile(new URL("src/csscloth/preparedPlaybackStream.mjs", root), "utf8");
+  const playbackWorker = await readFile(new URL("src/csscloth/preparedPlaybackWorker.mjs", root), "utf8");
   const shadowTarget = await readFile(new URL("src/shared/csscloth/morphShadowPatch.mjs", root), "utf8");
   const textureTarget = await readFile(new URL("src/shared/csscloth/morphTexturePatch.mjs", root), "utf8");
   const styles = await readFile(new URL("src/csscloth/styles.css", root), "utf8");
@@ -36,7 +38,14 @@ test("runtime has no per-frame geometry or raster construction", async () => {
   assert.match(client, /createPolyMorphPreparedDomTarget/);
   assert.match(client, /mounted\.modelElement\.remove\(\)/u);
   assert.match(client, /cleanPreparedDom\(mounted, playback\.triangleCount\)/u);
-  assert.match(client, /loadClothPreparedPlayback/);
+  assert.match(client, /createClothPreparedPlaybackStream/);
+  assert.match(client, /loadPlayback: playbackStream\.loadFuture/u);
+  assert.match(playbackStream, /new Worker/u);
+  assert.match(playbackStream, /requestIdleCallback/u);
+  assert.match(playbackStream, /RESPONSE_CHUNK_TRANSFORM_COUNT = 480/u);
+  assert.match(playbackWorker, /materializeClothPreparedMatrixRange/u);
+  assert.match(playbackWorker, /setTimeout\(resolve, materialization\.playback\.frameMilliseconds\)/u);
+  assert.doesNotMatch(playbackWorker, /canvas|getContext|createElement|requestAnimationFrame/u);
   assert.match(client, /textureLeafSizing !== "raster"/);
   assert.doesNotMatch(client, /backgroundRepeat|backgroundSize/);
   assert.match(client, /runtimeGeometryConstructionCount: 0/);

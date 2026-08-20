@@ -87,6 +87,26 @@ export function encodeClothPreparedPlayback(playback) {
 }
 
 export function decodeClothPreparedPlayback(bytes, descriptor) {
+  const materialization = createClothPreparedPlaybackMaterialization(bytes, descriptor);
+  return completeClothPreparedPlaybackMaterialization(
+    materialization.playback,
+    materializeClothPreparedMatrixRange(
+      materialization,
+      "cloth",
+      0,
+      materialization.clothTransformCount,
+    ),
+    materializeClothPreparedMatrixRange(
+      materialization,
+      "shadow",
+      0,
+      materialization.shadowTransformValueCount,
+    ),
+    true,
+  );
+}
+
+export function createClothPreparedPlaybackMaterialization(bytes, descriptor) {
   if (!(bytes instanceof Uint8Array) || bytes.byteLength < HEADER_BYTES ||
       descriptor?.schema !== CSSCLOTH_PLAYBACK_SCHEMA ||
       descriptor?.encoding !== CSSCLOTH_PLAYBACK_ENCODING ||
@@ -134,29 +154,6 @@ export function decodeClothPreparedPlayback(bytes, descriptor) {
     }
   }
   if (stream.offset !== stream.end) throw new Error("Prepared Cloth matrix stream has trailing bytes");
-  const allTransforms = new Array(frameCount * transformCount);
-  const matrix = new Array(16).fill(0);
-  matrix[15] = 1;
-  for (let transformIndex = 0; transformIndex < allTransforms.length; transformIndex += 1) {
-    const valueOffset = transformIndex * MATRIX_COMPONENTS.length;
-    for (let componentIndex = 0; componentIndex < MATRIX_COMPONENTS.length; componentIndex += 1) {
-      matrix[MATRIX_COMPONENTS[componentIndex]] = quantized[valueOffset + componentIndex] / MATRIX_SCALE;
-    }
-    allTransforms[transformIndex] = `matrix3d(${formatMatrix3dValues(matrix, MATRIX_DECIMALS)})`;
-  }
-  const transforms = new Array(frameCount * triangleCount);
-  const shadowTransforms = new Array(frameCount * shadowTriangleCount);
-  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
-    const combinedOffset = frameIndex * transformCount;
-    const clothOffset = frameIndex * triangleCount;
-    const shadowOffset = frameIndex * shadowTriangleCount;
-    for (let index = 0; index < triangleCount; index += 1) {
-      transforms[clothOffset + index] = allTransforms[combinedOffset + index];
-    }
-    for (let index = 0; index < shadowTriangleCount; index += 1) {
-      shadowTransforms[shadowOffset + index] = allTransforms[combinedOffset + triangleCount + index];
-    }
-  }
   const lightingStart = stream.end;
   const shadowVisibilityStart = lightingStart + lightingByteLength;
   const atlasMappingStart = shadowVisibilityStart + shadowVisibilityByteLength;
@@ -178,9 +175,10 @@ export function decodeClothPreparedPlayback(bytes, descriptor) {
     atlasOffset += 2;
   }
   const shadowSchedule = buildSparseShadowSchedule(
-    shadowTransforms,
+    quantized,
     bytes.subarray(shadowVisibilityStart, atlasMappingStart),
     frameCount,
+    triangleCount,
     shadowTriangleCount,
   );
   const lightingRows = new Uint16Array(frameCount * triangleCount);
@@ -189,48 +187,137 @@ export function decodeClothPreparedPlayback(bytes, descriptor) {
   }
   if (atlasOffset !== bytes.byteLength) throw new Error("Prepared Cloth atlas mapping has trailing bytes");
   return Object.freeze({
-    schema: CSSCLOTH_PLAYBACK_SCHEMA,
-    frameCount,
-    triangleCount,
-    shadowTriangleCount,
-    frameMilliseconds,
-    durationMilliseconds: frameCount * frameMilliseconds,
-    transforms: Object.freeze(transforms),
-    lightingRows,
-    shadowTransformOffsets: shadowSchedule.transformOffsets,
-    shadowTransformIndices: shadowSchedule.transformIndices,
-    shadowTransformValues: Object.freeze(shadowSchedule.transformValues),
-    shadowVisibilityOffsets: shadowSchedule.visibilityOffsets,
-    shadowVisibilityIndices: shadowSchedule.visibilityIndices,
-    shadowVisibilityValues: shadowSchedule.visibilityValues,
-    atlasStateOffsets,
-    atlasSlots,
-    decodedByteLength: bytes.byteLength,
+    playback: Object.freeze({
+      schema: CSSCLOTH_PLAYBACK_SCHEMA,
+      frameCount,
+      triangleCount,
+      shadowTriangleCount,
+      frameMilliseconds,
+      durationMilliseconds: frameCount * frameMilliseconds,
+      transforms: null,
+      lightingRows,
+      shadowTransformOffsets: shadowSchedule.transformOffsets,
+      shadowTransformIndices: shadowSchedule.transformIndices,
+      shadowTransformValues: null,
+      shadowVisibilityOffsets: shadowSchedule.visibilityOffsets,
+      shadowVisibilityIndices: shadowSchedule.visibilityIndices,
+      shadowVisibilityValues: shadowSchedule.visibilityValues,
+      atlasStateOffsets,
+      atlasSlots,
+      decodedByteLength: bytes.byteLength,
+    }),
+    quantized,
+    transformCount,
+    clothTransformCount: frameCount * triangleCount,
+    shadowTransformSourceIndices: shadowSchedule.transformSourceIndices,
+    shadowTransformValueCount: shadowSchedule.transformSourceIndices.length,
   });
 }
 
-function buildSparseShadowSchedule(transforms, visibility, frameCount, triangleCount) {
+export function materializeClothPreparedMatrixRange(materialization, kind, start, end) {
+  const sourceIndices = kind === "cloth"
+    ? null
+    : kind === "shadow"
+    ? materialization?.shadowTransformSourceIndices
+    : undefined;
+  const count = kind === "cloth"
+    ? materialization?.clothTransformCount
+    : sourceIndices?.length;
+  if (!(materialization?.quantized instanceof Float64Array) ||
+      !Number.isSafeInteger(materialization.transformCount) || materialization.transformCount < 1 ||
+      !Number.isSafeInteger(count) || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) ||
+      start < 0 || end < start || end > count || sourceIndices === undefined) {
+    throw new TypeError("Prepared Cloth matrix materialization range is invalid");
+  }
+  const playback = materialization.playback;
+  const output = new Array(end - start);
+  const matrix = new Array(16).fill(0);
+  matrix[15] = 1;
+  for (let outputIndex = 0; outputIndex < output.length; outputIndex += 1) {
+    const matrixIndex = kind === "cloth"
+      ? clothCombinedTransformIndex(
+        start + outputIndex,
+        playback.triangleCount,
+        materialization.transformCount,
+      )
+      : sourceIndices[start + outputIndex];
+    const valueOffset = matrixIndex * MATRIX_COMPONENTS.length;
+    for (let componentIndex = 0; componentIndex < MATRIX_COMPONENTS.length; componentIndex += 1) {
+      matrix[MATRIX_COMPONENTS[componentIndex]] =
+        materialization.quantized[valueOffset + componentIndex] / MATRIX_SCALE;
+    }
+    output[outputIndex] = `matrix3d(${formatMatrix3dValues(matrix, MATRIX_DECIMALS)})`;
+  }
+  return output;
+}
+
+export function completeClothPreparedPlaybackMaterialization(
+  playback,
+  transforms,
+  shadowTransformValues,
+  freezeTransformArrays = false,
+) {
+  if (playback?.schema !== CSSCLOTH_PLAYBACK_SCHEMA ||
+      playback.transforms !== null || playback.shadowTransformValues !== null ||
+      !Array.isArray(transforms) ||
+      transforms.length !== playback.frameCount * playback.triangleCount ||
+      !Array.isArray(shadowTransformValues) ||
+      shadowTransformValues.length !== playback.shadowTransformIndices.length ||
+      !transforms[0]?.startsWith("matrix3d(") ||
+      !transforms.at(-1)?.startsWith("matrix3d(") ||
+      !shadowTransformValues[0]?.startsWith("matrix3d(") ||
+      !shadowTransformValues.at(-1)?.startsWith("matrix3d(")) {
+    throw new Error("Prepared Cloth matrix materialization drifted");
+  }
+  return Object.freeze({
+    ...playback,
+    transforms: freezeTransformArrays ? Object.freeze(transforms) : transforms,
+    shadowTransformValues: freezeTransformArrays
+      ? Object.freeze(shadowTransformValues)
+      : shadowTransformValues,
+  });
+}
+
+function clothCombinedTransformIndex(clothTransformIndex, triangleCount, transformCount) {
+  const frameIndex = Math.floor(clothTransformIndex / triangleCount);
+  return frameIndex * transformCount + clothTransformIndex % triangleCount;
+}
+
+function buildSparseShadowSchedule(
+  quantized,
+  visibility,
+  frameCount,
+  triangleCount,
+  shadowTriangleCount,
+) {
   const transformOffsets = new Uint32Array(frameCount + 1);
   const transformIndices = [];
-  const transformValues = [];
+  const transformSourceIndices = [];
   const visibilityOffsets = new Uint32Array(frameCount + 1);
   const visibilityIndices = [];
   const visibilityValues = [];
+  const transformCount = triangleCount + shadowTriangleCount;
   for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
     transformOffsets[frameIndex] = transformIndices.length;
     visibilityOffsets[frameIndex] = visibilityIndices.length;
-    const offset = frameIndex * triangleCount;
-    const previousOffset = (frameIndex - 1) * triangleCount;
-    for (let triangleIndex = 0; triangleIndex < triangleCount; triangleIndex += 1) {
-      if (frameIndex === 0 || transforms[offset + triangleIndex] !==
-          transforms[previousOffset + triangleIndex]) {
+    const visibilityOffset = frameIndex * shadowTriangleCount;
+    const previousVisibilityOffset = (frameIndex - 1) * shadowTriangleCount;
+    const transformOffset = frameIndex * transformCount + triangleCount;
+    const previousTransformOffset = (frameIndex - 1) * transformCount + triangleCount;
+    for (let triangleIndex = 0; triangleIndex < shadowTriangleCount; triangleIndex += 1) {
+      const sourceTransformIndex = transformOffset + triangleIndex;
+      if (frameIndex === 0 || !sameQuantizedMatrix(
+        quantized,
+        sourceTransformIndex,
+        previousTransformOffset + triangleIndex,
+      )) {
         transformIndices.push(triangleIndex);
-        transformValues.push(transforms[offset + triangleIndex]);
+        transformSourceIndices.push(sourceTransformIndex);
       }
-      if (frameIndex === 0 || visibility[offset + triangleIndex] !==
-          visibility[previousOffset + triangleIndex]) {
+      if (frameIndex === 0 || visibility[visibilityOffset + triangleIndex] !==
+          visibility[previousVisibilityOffset + triangleIndex]) {
         visibilityIndices.push(triangleIndex);
-        visibilityValues.push(visibility[offset + triangleIndex]);
+        visibilityValues.push(visibility[visibilityOffset + triangleIndex]);
       }
     }
   }
@@ -239,14 +326,28 @@ function buildSparseShadowSchedule(transforms, visibility, frameCount, triangleC
   return {
     transformOffsets,
     transformIndices: Uint16Array.from(transformIndices),
-    transformValues,
+    transformSourceIndices: Uint32Array.from(transformSourceIndices),
     visibilityOffsets,
     visibilityIndices: Uint16Array.from(visibilityIndices),
     visibilityValues: Uint8Array.from(visibilityValues),
   };
 }
 
+function sameQuantizedMatrix(quantized, leftMatrixIndex, rightMatrixIndex) {
+  const leftOffset = leftMatrixIndex * MATRIX_COMPONENTS.length;
+  const rightOffset = rightMatrixIndex * MATRIX_COMPONENTS.length;
+  for (let componentIndex = 0; componentIndex < MATRIX_COMPONENTS.length; componentIndex += 1) {
+    if (quantized[leftOffset + componentIndex] !== quantized[rightOffset + componentIndex]) return false;
+  }
+  return true;
+}
+
 export async function loadClothPreparedPlayback(descriptor) {
+  const bytes = await loadClothPreparedPlaybackBytes(descriptor);
+  return decodeClothPreparedPlayback(bytes, descriptor);
+}
+
+export async function loadClothPreparedPlaybackBytes(descriptor) {
   if (descriptor?.schema !== CSSCLOTH_PLAYBACK_SCHEMA ||
       descriptor?.encoding !== CSSCLOTH_PLAYBACK_ENCODING ||
       typeof descriptor.path !== "string" || !descriptor.path.startsWith("/csscloth/") ||
@@ -273,7 +374,7 @@ export async function loadClothPreparedPlayback(descriptor) {
       actualUncompressedSha256 !== descriptor.uncompressedSha256) {
     throw new Error("Prepared Cloth playback decoded identity drifted");
   }
-  return decodeClothPreparedPlayback(bytes, descriptor);
+  return bytes;
 }
 
 function validatePlayback(playback) {

@@ -9,6 +9,26 @@ import { createPolyMorphPreparedCornerTextureTarget } from "../shared/csscloth/m
 import { selectClothStartingBank } from "../shared/csscloth/bankSelection.mjs";
 import { createClothPreparedPlaybackStream } from "./preparedPlaybackStream.mjs";
 
+const CLOTH_PREPARED_PROFILES = Object.freeze({
+  desktop: Object.freeze({
+    preparedPath: "/csscloth/prepared.json",
+    modelRoot: "/csscloth/model/",
+    modelId: "cloth",
+  }),
+  mobile: Object.freeze({
+    preparedPath: "/csscloth/mobile/prepared.json",
+    modelRoot: "/csscloth/mobile/model/",
+    modelId: "cloth-mobile",
+  }),
+});
+const CLOTH_PACKAGE_RESOURCE_PATHS = Object.freeze([
+  "assets/cloth-0.png",
+  "assets/cloth-logo-0.png",
+  "assets/ground.webp",
+  "assets/shadow.png",
+  "model.json",
+]);
+
 export function mountClothClient(host) {
   const state = { ready: false, errors: [], mounted: null, player: null, metadata: null };
   installDebugApi(state);
@@ -20,19 +40,36 @@ export function mountClothClient(host) {
   async function main() {
     if (!(host instanceof HTMLElement)) throw new Error("Missing Cloth host");
     setStatus("loading");
-    const preparedPath = matchMedia("(max-width: 600px)").matches
-      ? "/csscloth/mobile/prepared.json"
-      : "/csscloth/prepared.json";
-    const metadata = await fetch(preparedPath, { cache: "no-store" })
-      .then(assertResponse)
-      .then((response) => response.json());
-    const bankDescriptors = validatePlaybackCatalog(metadata);
-    const startingBankIndex = selectClothStartingBank(bankDescriptors.length);
+    const profile = CLOTH_PREPARED_PROFILES[
+      matchMedia("(max-width: 600px)").matches ? "mobile" : "desktop"
+    ];
     const playbackStream = createClothPreparedPlaybackStream({ recordError });
     const loadStartedAt = performance.now();
-    const [loaded, playback] = await Promise.all([
-      loadPolyMorphPackage(metadata.renderer.modelRoot, { modelId: metadata.renderer.modelId }),
-      playbackStream.loadInitial(bankDescriptors[startingBankIndex]),
+    const metadataPromise = fetch(profile.preparedPath, { cache: "no-store" })
+      .then(assertResponse)
+      .then((response) => response.json())
+      .then((metadata) => {
+        const bankDescriptors = validatePlaybackCatalog(metadata);
+        if (metadata.renderer.modelRoot !== profile.modelRoot ||
+            metadata.renderer.modelId !== profile.modelId) {
+          throw new Error("Cloth prepared profile binding drifted");
+        }
+        return {
+          metadata,
+          bankDescriptors,
+          startingBankIndex: selectClothStartingBank(bankDescriptors.length),
+        };
+      });
+    const loadedPromise = loadPolyMorphPackage(profile.modelRoot, {
+      modelId: profile.modelId,
+      fetchImpl: createClothPackageFetch(profile),
+    });
+    const playbackPromise = metadataPromise.then(({ bankDescriptors, startingBankIndex }) =>
+      playbackStream.loadInitial(bankDescriptors[startingBankIndex]));
+    const [{ metadata, bankDescriptors, startingBankIndex }, loaded, playback] = await Promise.all([
+      metadataPromise,
+      loadedPromise,
+      playbackPromise,
     ]);
     const loadMilliseconds = performance.now() - loadStartedAt;
     if (loaded.model.identity.id !== metadata.renderer.modelId ||
@@ -86,6 +123,28 @@ export function mountClothClient(host) {
     output.textContent = message;
     host.append(output);
   }
+}
+
+function createClothPackageFetch(profile) {
+  const modelRoot = new URL(profile.modelRoot, location.href);
+  const packageRoot = new URL(`${profile.modelId}/`, modelRoot);
+  const urls = [
+    new URL("catalog.json", modelRoot),
+    new URL("manifest.json", packageRoot),
+    ...CLOTH_PACKAGE_RESOURCE_PATHS.map((path) => new URL(path, packageRoot)),
+  ];
+  const prefetched = new Map(urls.map((url) => {
+    const response = fetch(url);
+    response.catch(() => {});
+    return [url.href, response];
+  }));
+  return (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input), location.href);
+    const response = prefetched.get(url.href);
+    if (!response) return fetch(input, init);
+    prefetched.delete(url.href);
+    return response;
+  };
 }
 
 function createPlayer(mounted, model, initialPlayback, clothTexture, transport) {

@@ -24,7 +24,7 @@ test("runtime has no per-frame geometry or raster construction", async () => {
   assert.doesNotMatch(client, /Math\.random/u);
   assert.match(client, /matchMedia\("\(max-width: 600px\)"\)/u);
   assert.match(client, /"\/csscloth\/mobile\/prepared\.json"/u);
-  assert.match(client, /fetch\(preparedPath, \{ cache: "no-store" \}\)/u);
+  assert.match(client, /fetch\(profile\.preparedPath, \{ cache: "no-store" \}\)/u);
   assert.match(client, /selectClothStartingBank/u);
   assert.match(client, /player\.seekFrame\(0\)/u);
   assert.match(client, /requestAnimationFrame/u);
@@ -39,6 +39,8 @@ test("runtime has no per-frame geometry or raster construction", async () => {
   assert.match(client, /mounted\.modelElement\.remove\(\)/u);
   assert.match(client, /cleanPreparedDom\(mounted, playback\.triangleCount\)/u);
   assert.match(client, /createClothPreparedPlaybackStream/);
+  assert.match(client, /createClothPackageFetch/);
+  assert.match(client, /fetchImpl: createClothPackageFetch\(profile\)/u);
   assert.match(client, /loadPlayback: playbackStream\.loadFuture/u);
   assert.match(client, /playbackStream\.resumeInitial\(\)/u);
   assert.match(client, /isFrameAvailable\(playback, lastFrameIndex \+ 1\)/u);

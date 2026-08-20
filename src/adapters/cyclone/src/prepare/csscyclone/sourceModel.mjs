@@ -63,7 +63,7 @@ export const CSSCYCLONE_BANKS = Object.freeze({
 export const CSSCYCLONE_BANK = CSSCYCLONE_BANKS.desktop;
 
 export const CSSCYCLONE_PRESENTATION = Object.freeze({
-  radialOrbitScale: 0.85,
+  radialOrbitScale: 0.75,
   saturationSampling: "floor-0.55-plus-0.45-sqrt-uniform",
   minimumSaturation: 0.55,
   hueSampling: "source-uniform-random-targets",

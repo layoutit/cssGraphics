@@ -44,7 +44,7 @@ particle's prepared six-face topology are unchanged during playback. The
 bipyramid's forward tip follows local -Z, the source transform's stretched
 orbital travel axis. Its unstretched tip-to-tip depth equals its equator
 diameter, so the source transform alone controls elongation. The prepared radial
-orbit is scaled to 0.85 of the source width around the unchanged spline, packing
+orbit is scaled to 0.75 of the source width around the unchanged spline, packing
 the reduced particle budget into tighter cyclone bands without runtime layout.
 
 The stream discards the source's dark startup by preparing 12 seconds before its

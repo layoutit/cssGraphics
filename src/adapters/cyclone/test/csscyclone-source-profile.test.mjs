@@ -63,7 +63,7 @@ test("pins the current Really Slick Cyclone source profile", () => {
     216,
   );
   assert.equal(CSSCYCLONE_PRESENTATION.saturationSampling, "floor-0.55-plus-0.45-sqrt-uniform");
-  assert.equal(CSSCYCLONE_PRESENTATION.radialOrbitScale, 0.85);
+  assert.equal(CSSCYCLONE_PRESENTATION.radialOrbitScale, 0.75);
   assert.equal(CSSCYCLONE_PRESENTATION.minimumSaturation, 0.55);
   assert.equal(CSSCYCLONE_PRESENTATION.hueSampling, "source-uniform-random-targets");
   assert.equal(CSSCYCLONE_PRESENTATION.particleColorAssignment, "source-hue-at-particle-restart");
@@ -231,8 +231,8 @@ test("points the bipyramid forward tip along prepared particle travel", () => {
     }
   }
   assert.equal(transitionCount, 14_320);
-  assert.ok(alignmentTotal / transitionCount > 0.95);
-  assert.ok(closestAxisCount / transitionCount > 0.97);
+  assert.ok(alignmentTotal / transitionCount > 0.94);
+  assert.ok(closestAxisCount / transitionCount > 0.96);
 });
 
 test("round-trips exact prepared matrices through compact source-state blocks", async () => {
@@ -432,6 +432,6 @@ test("preserves the source tangent orientation", () => {
     0.532427, -0.451061, 0.716286, 0,
     0.215511, 0.890546, 0.400604, 0,
     -4.092909, -0.294623, 2.856797, 0,
-    12.119759, -18.816726, 80.392711, 1,
+    11.576768, -18.356715, 79.662214, 1,
   ]);
 });

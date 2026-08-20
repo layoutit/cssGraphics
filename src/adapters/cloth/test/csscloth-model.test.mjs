@@ -211,7 +211,7 @@ test("the prepared shadow leaves share one small raster triangle", () => {
 
 test("the ground direct-image leaf uses the complete pinned source image", () => {
   assert.deepEqual(groundImageSlice(), {
-    resourcePath: "assets/ground.webp",
+    resourcePath: "assets/ground.avif",
     x: 0,
     y: 0,
     width: 3072,

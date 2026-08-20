@@ -1,0 +1,15 @@
+{
+  "schema": "csscloth-prepared-bank-lock@1",
+  "tag": "csscloth-product-bank-v1",
+  "asset": "csscloth-product-bank-v1.tar.gz",
+  "url": "https://github.com/layoutit/cssGraphics/releases/download/csscloth-product-bank-v1/csscloth-product-bank-v1.tar.gz",
+  "archiveByteLength": 41231661,
+  "archiveSha256": "5f4d1a137294086adbbf0c62038c8c4fbe73f4aa934c5949e40f7a4ebd802ad6",
+  "bankCount": 8,
+  "bankFrameCount": 1440,
+  "durationMilliseconds": 192000,
+  "retainedLeafCount": 312,
+  "fileCount": 16,
+  "closureBytes": 41427020,
+  "closureSha256": "8e50a2635e05439c9b3c146fbc02c936e38b961cbab95161fdd79cf272ed622a"
+}

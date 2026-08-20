@@ -7,7 +7,7 @@ import { createPolyPerspectiveCamera } from "@layoutit/polycss";
 import { createPolyMorphPreparedShadowTarget } from "../shared/csscloth/morphShadowPatch.mjs";
 import { createPolyMorphPreparedCornerTextureTarget } from "../shared/csscloth/morphTexturePatch.mjs";
 import { selectClothStartingBank } from "../shared/csscloth/bankSelection.mjs";
-import { loadClothPreparedPlayback } from "../shared/csscloth/preparedPlaybackTransport.mjs";
+import { createClothPreparedPlaybackStream } from "./preparedPlaybackStream.mjs";
 
 export function mountClothClient(host) {
   const state = { ready: false, errors: [], mounted: null, player: null, metadata: null };
@@ -28,10 +28,11 @@ export function mountClothClient(host) {
       .then((response) => response.json());
     const bankDescriptors = validatePlaybackCatalog(metadata);
     const startingBankIndex = selectClothStartingBank(bankDescriptors.length);
+    const playbackStream = createClothPreparedPlaybackStream();
     const loadStartedAt = performance.now();
     const [loaded, playback] = await Promise.all([
       loadPolyMorphPackage(metadata.renderer.modelRoot, { modelId: metadata.renderer.modelId }),
-      loadClothPreparedPlayback(bankDescriptors[startingBankIndex]),
+      playbackStream.loadInitial(bankDescriptors[startingBankIndex]),
     ]);
     const loadMilliseconds = performance.now() - loadStartedAt;
     if (loaded.model.identity.id !== metadata.renderer.modelId ||
@@ -61,7 +62,8 @@ export function mountClothClient(host) {
       bankDescriptors,
       startingBankIndex,
       loadMilliseconds,
-      loadPlayback: loadClothPreparedPlayback,
+      loadPlayback: playbackStream.loadFuture,
+      playbackStream,
       recordError,
     });
     player.seekFrame(0);
@@ -164,6 +166,7 @@ function createPlayer(mounted, model, initialPlayback, clothTexture, transport) 
     const descriptor = bankDescriptors[bankIndex];
     const startedAt = performance.now();
     prefetchingBankIndex = bankIndex;
+    performance.mark("csscloth-bank-prefetch-start");
     prefetchPromise = transport.loadPlayback(descriptor)
       .then((nextPlayback) => {
         validatePlaybackBank(nextPlayback, descriptor, playback);
@@ -174,6 +177,7 @@ function createPlayer(mounted, model, initialPlayback, clothTexture, transport) 
         preparedPlaybackCompressedBytes += descriptor.compressedByteLength;
         preparedPlaybackDecodedBytes += nextPlayback.decodedByteLength;
         preparedPlaybackLoadMilliseconds += performance.now() - startedAt;
+        performance.mark("csscloth-bank-prefetch-complete");
       })
       .catch((error) => {
         if (!destroyed && prefetchingBankIndex === bankIndex) {
@@ -202,6 +206,7 @@ function createPlayer(mounted, model, initialPlayback, clothTexture, transport) 
     lastFrameIndex = -1;
     publish(0);
     bankHandoffCount += 1;
+    performance.mark("csscloth-bank-handoff");
     prefetchNextBank();
     return true;
   }
@@ -316,6 +321,7 @@ function createPlayer(mounted, model, initialPlayback, clothTexture, transport) 
         (sum, descriptor) => sum + descriptor.compressedByteLength,
         0,
       ),
+      ...transport.playbackStream.stats(),
     });
   }
 
@@ -339,6 +345,7 @@ function createPlayer(mounted, model, initialPlayback, clothTexture, transport) 
       shadowTarget.destroy();
       target.destroy();
       mounted.destroy();
+      transport.playbackStream.destroy();
     },
   });
 }

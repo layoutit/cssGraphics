@@ -53,9 +53,9 @@
     Cache-Control = "public, max-age=31536000, immutable"
 
 [[headers]]
-  for = "/csscloth/model/cloth/assets/*"
+  for = "/csscloth/*"
   [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 [[headers]]
   for = "/csscloth/playback-bank-*"
@@ -63,9 +63,9 @@
     Cache-Control = "public, max-age=31536000, immutable"
 
 [[headers]]
-  for = "/csscloth/*"
+  for = "/csscloth/model/cloth/assets/*"
   [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
+    Cache-Control = "public, max-age=31536000, immutable"
 
 [[headers]]
   for = "/cssmenger/assets/*"

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { computeSolidTrianglePlanFromCssPoints } from "@layoutit/polycss";
 import {
   fitGroundRasterPhase,
   groundRasterFilterPlan,
@@ -15,6 +16,7 @@ import {
   clothFogFactor,
   buildClothLightingBank,
   clothTriangleFogState,
+  clothTriangleBasis,
   clothTriangleLightState,
   clothTriangleMatrix,
   CSSCLOTH_GROUND_RASTER_HEIGHT,
@@ -25,6 +27,8 @@ import {
   CSSCLOTH_TRIANGLE_COUNT,
   CSSCLOTH_MOBILE_PARTICLE_COUNT,
   CSSCLOTH_MOBILE_TRIANGLE_COUNT,
+  CSSCLOTH_RASTER_LEAF_SIZE,
+  sourceWorldToCssView,
 } from "../src/prepare/csscloth/sourceModel.mjs";
 
 test("the pinned source topology keeps 121 particles and 200 triangles", () => {
@@ -92,6 +96,19 @@ test("prepared simulation is deterministic and keeps the full top row pinned", (
   assert.ok(lighting.states.flat().every((state) => state.length === 6));
 });
 
+test("specialized particle matrices match the general PolyCSS triangle planner", () => {
+  const source = buildClothSourceFrames({ frameCount: 8 });
+  const seams = buildClothSeamEdges(source.triangles);
+  for (const frame of source.frames) {
+    for (let triangleIndex = 0; triangleIndex < source.triangles.length; triangleIndex += 1) {
+      assert.deepEqual(
+        clothTriangleMatrix(frame, triangleIndex, seams),
+        referenceClothTriangleMatrix(frame, triangleIndex, seams),
+      );
+    }
+  }
+});
+
 test("prepared scene geometry is finite and source-sized", () => {
   const source = buildClothSourceFrames({ frameCount: 2 });
   const matrix = clothTriangleMatrix(source.frames[1], 47);
@@ -122,3 +139,32 @@ test("prepared scene geometry is finite and source-sized", () => {
   assert.ok(ground.matrix[3] !== 0 || ground.matrix[7] !== 0);
   assert.ok(ground.matrix.every(Number.isFinite));
 });
+
+function referenceClothTriangleMatrix(frame, triangleIndex, seamEdges) {
+  const points = frame.triangles[triangleIndex].positions.map(sourceWorldToCssView);
+  const plan = computeSolidTrianglePlanFromCssPoints(
+    { vertices: [[0, 0, 0], [1, 0, 0], [0, 1, 0]] },
+    triangleIndex,
+    {
+      tileSize: 1,
+      layerElevation: 1,
+      bleedRatio: 1,
+      seamBleed: 0.3,
+      seamEdges: new Set(seamEdges[triangleIndex] ?? []),
+    },
+    {
+      basis: clothTriangleBasis(triangleIndex),
+      matrixDecimals: 7,
+      primitive: "corner-bevel",
+      includeColor: false,
+    },
+    ...points.flat(),
+  );
+  const matrix = plan.transformText.slice(9, -1).split(",").map(Number);
+  const rasterScale = 32 / CSSCLOTH_RASTER_LEAF_SIZE;
+  for (const index of [0, 1, 2, 4, 5, 6]) matrix[index] *= rasterScale;
+  return matrix.map((value) => {
+    const rounded = Number(value.toFixed(7));
+    return Object.is(rounded, -0) ? 0 : rounded;
+  });
+}

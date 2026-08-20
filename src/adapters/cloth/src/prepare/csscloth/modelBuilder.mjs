@@ -151,7 +151,6 @@ export function buildClothPreparedModel({ profile = "desktop" } = {}) {
     clothShadow,
     lighting.frameRows,
     rasterLayout.stateSlots,
-    seamEdges,
   );
   const modelId = profile === "mobile" ? "cloth-mobile" : "cloth";
   const model = deepFreeze({
@@ -301,7 +300,7 @@ export function applyClothRasterPlan(prepared, raster) {
   return deepFreeze({ ...prepared, model, playbackBanks, metrics });
 }
 
-function buildPreparedPlaybackBanks(source, clothShadow, lightingRows, atlasStateSlots, seamEdges) {
+function buildPreparedPlaybackBanks(source, clothShadow, lightingRows, atlasStateSlots) {
   if (source.frames.length !== CSSCLOTH_STREAM_FRAME_COUNT ||
       clothShadow.frames.length !== CSSCLOTH_STREAM_FRAME_COUNT ||
       lightingRows.length !== CSSCLOTH_STREAM_FRAME_COUNT) {
@@ -313,8 +312,7 @@ function buildPreparedPlaybackBanks(source, clothShadow, lightingRows, atlasStat
       const streamFrameIndex = frameOffset + frameIndex;
       const frame = source.frames[streamFrameIndex];
       return Object.freeze({
-        matrices: Object.freeze(frame.triangles.map((_, triangleIndex) =>
-          clothTriangleMatrix(frame, triangleIndex, seamEdges))),
+        particlePositions: frame.particlePositions,
         lightingRows: lightingRows[streamFrameIndex],
         shadowMatrices: clothShadow.frames[streamFrameIndex].matrices,
         shadowVisibility: clothShadow.frames[streamFrameIndex].visibility,
@@ -325,6 +323,7 @@ function buildPreparedPlaybackBanks(source, clothShadow, lightingRows, atlasStat
       bankIndex,
       streamFrameOffset: frameOffset,
       frameCount: frames.length,
+      particleCount: source.frames[0].particlePositions.length,
       triangleCount: source.triangles.length,
       shadowTriangleCount: clothShadow.leafCount,
       frameMilliseconds: CSSCLOTH_OUTPUT_FRAME_MILLISECONDS,

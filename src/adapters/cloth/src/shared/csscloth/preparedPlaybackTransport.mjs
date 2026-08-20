@@ -1,64 +1,73 @@
-import { formatMatrix3dValues } from "@layoutit/polycss";
+import {
+  buildClothTriangleSeamEdges,
+  buildClothTriangleTopology,
+  clothTriangleMatrixFromWorldPoints,
+} from "./clothTriangleTransform.mjs";
 
-export const CSSCLOTH_PLAYBACK_SCHEMA = "csscloth-prepared-playback@6";
+export const CSSCLOTH_PLAYBACK_SCHEMA = "csscloth-prepared-playback@7";
 export const CSSCLOTH_PLAYBACK_ENCODING =
-  "gzip-third-order-zigzag-varint-fixed4-affine12-sparse-u16-lighting-shadow@6";
+  "gzip-third-order-zigzag-varint-fixed7-particles-corrected-fixed4-shadow-affine12-sparse-u16-lighting-shadow@7";
 
 const MAGIC = "CCLT";
-const VERSION = 6;
-const HEADER_BYTES = 36;
+const VERSION = 7;
+const HEADER_BYTES = 52;
 const PREDICTION_ORDER = 3;
+const PARTICLE_COMPONENT_COUNT = 3;
+const PARTICLE_DECIMALS = 7;
+const PARTICLE_SCALE = 10 ** PARTICLE_DECIMALS;
 const MATRIX_DECIMALS = 4;
 const MATRIX_SCALE = 10 ** MATRIX_DECIMALS;
 const MATRIX_COMPONENTS = Object.freeze([0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14]);
 
 export function encodeClothPreparedPlayback(playback) {
   validatePlayback(playback);
-  const matrixBytes = [];
-  const transformCount = playback.triangleCount + playback.shadowTriangleCount;
+  const particleBytes = [];
+  for (let componentIndex = 0; componentIndex < PARTICLE_COMPONENT_COUNT; componentIndex += 1) {
+    for (let particleIndex = 0; particleIndex < playback.particleCount; particleIndex += 1) {
+      appendPredictedValues(particleBytes, playback.frames, (frame) =>
+        Math.round(frame.particlePositions[particleIndex][componentIndex] * PARTICLE_SCALE));
+    }
+  }
+  const shadowMatrixBytes = [];
   for (const matrixIndex of MATRIX_COMPONENTS) {
-    for (let transformIndex = 0; transformIndex < transformCount; transformIndex += 1) {
-      let value = 0;
-      let firstDifference = 0;
-      let secondDifference = 0;
-      for (const frame of playback.frames) {
-        const matrix = transformIndex < playback.triangleCount
-          ? frame.matrices[transformIndex]
-          : frame.shadowMatrices[transformIndex - playback.triangleCount];
-        const nextValue = Math.round(matrix[matrixIndex] * MATRIX_SCALE);
-        const nextFirstDifference = nextValue - value;
-        const nextSecondDifference = nextFirstDifference - firstDifference;
-        const residual = nextSecondDifference - secondDifference;
-        appendSignedVarint(matrixBytes, residual);
-        value = nextValue;
-        firstDifference = nextFirstDifference;
-        secondDifference = nextSecondDifference;
-      }
+    for (let shadowIndex = 0; shadowIndex < playback.shadowTriangleCount; shadowIndex += 1) {
+      appendPredictedValues(shadowMatrixBytes, playback.frames, (frame) =>
+        Math.round(frame.shadowMatrices[shadowIndex][matrixIndex] * MATRIX_SCALE));
     }
   }
   const lightingSchedule = buildSparseLightingSchedule(playback);
+  const particleMatrixCorrections = buildParticleMatrixCorrections(playback);
   const lightingByteLength = lightingSchedule.offsets.byteLength +
     lightingSchedule.indices.byteLength + lightingSchedule.slots.byteLength;
+  const correctionByteLength = particleMatrixCorrections.length * 9;
   const shadowVisibilityByteLength = playback.frameCount * playback.shadowTriangleCount;
   const bytes = new Uint8Array(
-    HEADER_BYTES + matrixBytes.length + lightingByteLength + shadowVisibilityByteLength,
+    HEADER_BYTES + particleBytes.length + shadowMatrixBytes.length +
+      lightingByteLength + correctionByteLength + shadowVisibilityByteLength,
   );
   const view = new DataView(bytes.buffer);
   for (let index = 0; index < MAGIC.length; index += 1) bytes[index] = MAGIC.charCodeAt(index);
   bytes[4] = VERSION;
   bytes[5] = PREDICTION_ORDER;
-  bytes[6] = MATRIX_COMPONENTS.length;
-  bytes[7] = MATRIX_DECIMALS;
+  bytes[6] = PARTICLE_COMPONENT_COUNT;
+  bytes[7] = PARTICLE_DECIMALS;
   view.setUint16(8, playback.frameCount, true);
   view.setUint16(10, playback.triangleCount, true);
   view.setFloat64(12, playback.frameMilliseconds, true);
-  view.setUint32(20, matrixBytes.length, true);
-  view.setUint32(24, lightingByteLength, true);
-  view.setUint16(28, playback.shadowTriangleCount, true);
-  view.setUint32(30, lightingSchedule.indices.length, true);
-  view.setUint16(34, 0, true);
-  bytes.set(matrixBytes, HEADER_BYTES);
-  let offset = HEADER_BYTES + matrixBytes.length;
+  view.setUint32(20, particleBytes.length, true);
+  view.setUint32(24, shadowMatrixBytes.length, true);
+  view.setUint32(28, lightingByteLength, true);
+  view.setUint16(32, playback.particleCount, true);
+  view.setUint16(34, playback.shadowTriangleCount, true);
+  view.setUint32(36, lightingSchedule.indices.length, true);
+  bytes[40] = MATRIX_COMPONENTS.length;
+  bytes[41] = MATRIX_DECIMALS;
+  view.setUint16(42, 0, true);
+  view.setUint32(44, correctionByteLength, true);
+  view.setUint32(48, particleMatrixCorrections.length, true);
+  bytes.set(particleBytes, HEADER_BYTES);
+  bytes.set(shadowMatrixBytes, HEADER_BYTES + particleBytes.length);
+  let offset = HEADER_BYTES + particleBytes.length + shadowMatrixBytes.length;
   for (const value of lightingSchedule.offsets) {
     view.setUint32(offset, value, true);
     offset += 4;
@@ -70,6 +79,12 @@ export function encodeClothPreparedPlayback(playback) {
   for (const value of lightingSchedule.slots) {
     view.setUint16(offset, value, true);
     offset += 2;
+  }
+  for (const correction of particleMatrixCorrections) {
+    view.setUint32(offset, correction.transformIndex, true);
+    bytes[offset + 4] = correction.componentIndex;
+    view.setInt32(offset + 5, correction.value, true);
+    offset += 9;
   }
   for (const frame of playback.frames) {
     bytes.set(frame.shadowVisibility, offset);
@@ -104,52 +119,77 @@ export function createClothPreparedPlaybackMaterialization(bytes, descriptor) {
       descriptor?.encoding !== CSSCLOTH_PLAYBACK_ENCODING ||
       String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]) !== MAGIC ||
       bytes[4] !== VERSION || bytes[5] !== PREDICTION_ORDER ||
-      bytes[6] !== MATRIX_COMPONENTS.length || bytes[7] !== MATRIX_DECIMALS) {
+      bytes[6] !== PARTICLE_COMPONENT_COUNT || bytes[7] !== PARTICLE_DECIMALS ||
+      bytes[40] !== MATRIX_COMPONENTS.length || bytes[41] !== MATRIX_DECIMALS) {
     throw new Error("Prepared Cloth playback header drifted");
   }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const frameCount = view.getUint16(8, true);
   const triangleCount = view.getUint16(10, true);
-  const shadowTriangleCount = view.getUint16(28, true);
+  const particleCount = view.getUint16(32, true);
+  const shadowTriangleCount = view.getUint16(34, true);
   const frameMilliseconds = view.getFloat64(12, true);
-  const matrixByteLength = view.getUint32(20, true);
-  const lightingByteLength = view.getUint32(24, true);
-  const lightingAssignmentCount = view.getUint32(30, true);
+  const particleByteLength = view.getUint32(20, true);
+  const shadowMatrixByteLength = view.getUint32(24, true);
+  const lightingByteLength = view.getUint32(28, true);
+  const lightingAssignmentCount = view.getUint32(36, true);
+  const correctionByteLength = view.getUint32(44, true);
+  const correctionAssignmentCount = view.getUint32(48, true);
   const shadowVisibilityByteLength = frameCount * shadowTriangleCount;
   const expectedLightingByteLength = (frameCount + 1) * Uint32Array.BYTES_PER_ELEMENT +
     lightingAssignmentCount * Uint16Array.BYTES_PER_ELEMENT * 2;
-  if (view.getUint16(34, true) !== 0 || frameCount !== descriptor.frameCount ||
+  if (view.getUint16(42, true) !== 0 || frameCount !== descriptor.frameCount ||
       triangleCount !== descriptor.triangleCount ||
+      particleCount !== descriptor.particleCount ||
       shadowTriangleCount !== descriptor.shadowTriangleCount ||
       frameMilliseconds !== descriptor.frameMilliseconds ||
       lightingByteLength !== expectedLightingByteLength ||
-      HEADER_BYTES + matrixByteLength + lightingByteLength + shadowVisibilityByteLength !==
+      correctionByteLength !== correctionAssignmentCount * 9 ||
+      HEADER_BYTES + particleByteLength + shadowMatrixByteLength +
+        lightingByteLength + correctionByteLength + shadowVisibilityByteLength !==
         bytes.byteLength) {
     throw new Error("Prepared Cloth playback counts drifted");
   }
-  const transformCount = triangleCount + shadowTriangleCount;
-  const quantized = new Float64Array(frameCount * transformCount * MATRIX_COMPONENTS.length);
-  const stream = { offset: HEADER_BYTES, end: HEADER_BYTES + matrixByteLength };
-  for (let componentIndex = 0; componentIndex < MATRIX_COMPONENTS.length; componentIndex += 1) {
-    for (let transformIndex = 0; transformIndex < transformCount; transformIndex += 1) {
-      let value = 0;
-      let firstDifference = 0;
-      let secondDifference = 0;
-      for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
-        const residual = readSignedVarint(bytes, stream);
-        secondDifference += residual;
-        firstDifference += secondDifference;
-        value += firstDifference;
-        if (!Number.isSafeInteger(value)) {
-          throw new Error("Prepared Cloth matrix value overflowed");
-        }
-        quantized[(frameIndex * transformCount + transformIndex) * MATRIX_COMPONENTS.length + componentIndex] = value;
-      }
-    }
+  const particleQuantized = new Float64Array(
+    frameCount * particleCount * PARTICLE_COMPONENT_COUNT,
+  );
+  const particleStream = { offset: HEADER_BYTES, end: HEADER_BYTES + particleByteLength };
+  decodePredictedValues(
+    bytes,
+    particleStream,
+    PARTICLE_COMPONENT_COUNT,
+    particleCount,
+    frameCount,
+    particleQuantized,
+    PARTICLE_COMPONENT_COUNT,
+    "particle",
+  );
+  if (particleStream.offset !== particleStream.end) {
+    throw new Error("Prepared Cloth particle stream has trailing bytes");
   }
-  if (stream.offset !== stream.end) throw new Error("Prepared Cloth matrix stream has trailing bytes");
-  const lightingStart = stream.end;
-  const shadowVisibilityStart = lightingStart + lightingByteLength;
+  const shadowQuantized = new Float64Array(
+    frameCount * shadowTriangleCount * MATRIX_COMPONENTS.length,
+  );
+  const shadowStream = {
+    offset: particleStream.end,
+    end: particleStream.end + shadowMatrixByteLength,
+  };
+  decodePredictedValues(
+    bytes,
+    shadowStream,
+    MATRIX_COMPONENTS.length,
+    shadowTriangleCount,
+    frameCount,
+    shadowQuantized,
+    MATRIX_COMPONENTS.length,
+    "shadow matrix",
+  );
+  if (shadowStream.offset !== shadowStream.end) {
+    throw new Error("Prepared Cloth shadow matrix stream has trailing bytes");
+  }
+  const lightingStart = shadowStream.end;
+  const correctionStart = lightingStart + lightingByteLength;
+  const shadowVisibilityStart = correctionStart + correctionByteLength;
   const lightingOffsets = new Uint32Array(frameCount + 1);
   let lightingOffset = lightingStart;
   for (let index = 0; index < lightingOffsets.length; index += 1) {
@@ -174,20 +214,39 @@ export function createClothPreparedPlaybackMaterialization(bytes, descriptor) {
     lightingSlots[index] = view.getUint16(lightingOffset, true);
     lightingOffset += 2;
   }
+  const particleMatrixCorrections = new Map();
+  let correctionOffset = correctionStart;
+  for (let index = 0; index < correctionAssignmentCount; index += 1) {
+    const transformIndex = view.getUint32(correctionOffset, true);
+    const componentIndex = bytes[correctionOffset + 4];
+    const value = view.getInt32(correctionOffset + 5, true);
+    if (transformIndex >= frameCount * triangleCount ||
+        componentIndex >= MATRIX_COMPONENTS.length) {
+      throw new Error("Prepared Cloth particle matrix correction drifted");
+    }
+    const corrections = particleMatrixCorrections.get(transformIndex) ?? [];
+    corrections.push(componentIndex, value);
+    particleMatrixCorrections.set(transformIndex, corrections);
+    correctionOffset += 9;
+  }
   const shadowSchedule = buildSparseShadowSchedule(
-    quantized,
+    shadowQuantized,
     bytes.subarray(shadowVisibilityStart),
     frameCount,
-    triangleCount,
     shadowTriangleCount,
   );
-  if (lightingOffset !== shadowVisibilityStart) {
+  if (lightingOffset !== correctionStart || correctionOffset !== shadowVisibilityStart) {
     throw new Error("Prepared Cloth lighting schedule has trailing bytes");
+  }
+  const triangleTopology = buildClothTriangleTopology(particleCount);
+  if (triangleTopology.length !== triangleCount) {
+    throw new Error("Prepared Cloth particle topology drifted");
   }
   return Object.freeze({
     playback: Object.freeze({
       schema: CSSCLOTH_PLAYBACK_SCHEMA,
       frameCount,
+      particleCount,
       triangleCount,
       shadowTriangleCount,
       frameMilliseconds,
@@ -204,8 +263,11 @@ export function createClothPreparedPlaybackMaterialization(bytes, descriptor) {
       shadowVisibilityValues: shadowSchedule.visibilityValues,
       decodedByteLength: bytes.byteLength,
     }),
-    quantized,
-    transformCount,
+    particleQuantized,
+    shadowQuantized,
+    triangleTopology,
+    triangleSeamEdges: buildClothTriangleSeamEdges(triangleTopology),
+    particleMatrixCorrections,
     clothTransformCount: frameCount * triangleCount,
     shadowTransformSourceIndices: shadowSchedule.transformSourceIndices,
     shadowTransformValueCount: shadowSchedule.transformSourceIndices.length,
@@ -221,8 +283,11 @@ export function materializeClothPreparedMatrixRange(materialization, kind, start
   const count = kind === "cloth"
     ? materialization?.clothTransformCount
     : sourceIndices?.length;
-  if (!(materialization?.quantized instanceof Float64Array) ||
-      !Number.isSafeInteger(materialization.transformCount) || materialization.transformCount < 1 ||
+  if (!(materialization?.particleQuantized instanceof Float64Array) ||
+      !(materialization?.shadowQuantized instanceof Float64Array) ||
+      !Array.isArray(materialization.triangleTopology) ||
+      !Array.isArray(materialization.triangleSeamEdges) ||
+      !(materialization.particleMatrixCorrections instanceof Map) ||
       !Number.isSafeInteger(count) || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) ||
       start < 0 || end < start || end > count || sourceIndices === undefined) {
     throw new TypeError("Prepared Cloth matrix materialization range is invalid");
@@ -232,19 +297,50 @@ export function materializeClothPreparedMatrixRange(materialization, kind, start
   const matrix = new Array(16).fill(0);
   matrix[15] = 1;
   for (let outputIndex = 0; outputIndex < output.length; outputIndex += 1) {
-    const matrixIndex = kind === "cloth"
-      ? clothCombinedTransformIndex(
-        start + outputIndex,
-        playback.triangleCount,
-        materialization.transformCount,
-      )
-      : sourceIndices[start + outputIndex];
+    if (kind === "cloth") {
+      const transformIndex = start + outputIndex;
+      const frameIndex = Math.floor(transformIndex / playback.triangleCount);
+      const triangleIndex = transformIndex % playback.triangleCount;
+      const points = materialization.triangleTopology[triangleIndex].map((particleIndex) => {
+        const offset = (frameIndex * playback.particleCount + particleIndex) *
+          PARTICLE_COMPONENT_COUNT;
+        return [
+          materialization.particleQuantized[offset] / PARTICLE_SCALE,
+          materialization.particleQuantized[offset + 1] / PARTICLE_SCALE,
+          materialization.particleQuantized[offset + 2] / PARTICLE_SCALE,
+        ];
+      });
+      const values = clothTriangleMatrixFromWorldPoints(
+        points,
+        triangleIndex,
+        materialization.triangleSeamEdges,
+      );
+      const corrections = materialization.particleMatrixCorrections.get(transformIndex);
+      if (corrections) {
+        for (let correctionIndex = 0; correctionIndex < corrections.length; correctionIndex += 2) {
+          values[MATRIX_COMPONENTS[corrections[correctionIndex]]] =
+            corrections[correctionIndex + 1] / MATRIX_SCALE;
+        }
+      }
+      output[outputIndex] = `matrix3d(${formatFixed4Matrix(values)})`;
+      continue;
+    }
+    const matrixIndex = sourceIndices[start + outputIndex];
     const valueOffset = matrixIndex * MATRIX_COMPONENTS.length;
     for (let componentIndex = 0; componentIndex < MATRIX_COMPONENTS.length; componentIndex += 1) {
       matrix[MATRIX_COMPONENTS[componentIndex]] =
-        materialization.quantized[valueOffset + componentIndex] / MATRIX_SCALE;
+        materialization.shadowQuantized[valueOffset + componentIndex] / MATRIX_SCALE;
     }
-    output[outputIndex] = `matrix3d(${formatMatrix3dValues(matrix, MATRIX_DECIMALS)})`;
+    output[outputIndex] = `matrix3d(${formatFixed4Matrix(matrix)})`;
+  }
+  return output;
+}
+
+function formatFixed4Matrix(values) {
+  let output = "";
+  for (let index = 0; index < values.length; index += 1) {
+    const rounded = Math.round(values[index] * MATRIX_SCALE) / MATRIX_SCALE;
+    output += `${index === 0 ? "" : ","}${Object.is(rounded, -0) ? 0 : rounded}`;
   }
   return output;
 }
@@ -276,11 +372,6 @@ export function completeClothPreparedPlaybackMaterialization(
   });
 }
 
-function clothCombinedTransformIndex(clothTransformIndex, triangleCount, transformCount) {
-  const frameIndex = Math.floor(clothTransformIndex / triangleCount);
-  return frameIndex * transformCount + clothTransformIndex % triangleCount;
-}
-
 function buildSparseLightingSchedule(playback) {
   const offsets = new Uint32Array(playback.frameCount + 1);
   const indices = [];
@@ -306,11 +397,43 @@ function buildSparseLightingSchedule(playback) {
   };
 }
 
+function buildParticleMatrixCorrections(playback) {
+  const topology = buildClothTriangleTopology(playback.particleCount);
+  const seamEdges = buildClothTriangleSeamEdges(topology);
+  const corrections = [];
+  for (let frameIndex = 0; frameIndex < playback.frameCount; frameIndex += 1) {
+    const frame = playback.frames[frameIndex];
+    for (let triangleIndex = 0; triangleIndex < playback.triangleCount; triangleIndex += 1) {
+      const points = topology[triangleIndex].map((particleIndex) =>
+        frame.particlePositions[particleIndex]);
+      const reconstructedPoints = points.map((point) => point.map((value) =>
+        Math.round(value * PARTICLE_SCALE) / PARTICLE_SCALE));
+      const expected = clothTriangleMatrixFromWorldPoints(points, triangleIndex, seamEdges);
+      const reconstructed = clothTriangleMatrixFromWorldPoints(
+        reconstructedPoints,
+        triangleIndex,
+        seamEdges,
+      );
+      const transformIndex = frameIndex * playback.triangleCount + triangleIndex;
+      for (let componentIndex = 0; componentIndex < MATRIX_COMPONENTS.length; componentIndex += 1) {
+        const matrixIndex = MATRIX_COMPONENTS[componentIndex];
+        const expectedValue = Math.round(expected[matrixIndex] * MATRIX_SCALE);
+        const reconstructedValue = Math.round(reconstructed[matrixIndex] * MATRIX_SCALE);
+        if (expectedValue === reconstructedValue) continue;
+        if (expectedValue < -0x8000_0000 || expectedValue > 0x7fff_ffff) {
+          throw new RangeError("Prepared Cloth particle matrix correction overflowed");
+        }
+        corrections.push(Object.freeze({ transformIndex, componentIndex, value: expectedValue }));
+      }
+    }
+  }
+  return Object.freeze(corrections);
+}
+
 function buildSparseShadowSchedule(
   quantized,
   visibility,
   frameCount,
-  triangleCount,
   shadowTriangleCount,
 ) {
   const transformOffsets = new Uint32Array(frameCount + 1);
@@ -319,14 +442,13 @@ function buildSparseShadowSchedule(
   const visibilityOffsets = new Uint32Array(frameCount + 1);
   const visibilityIndices = [];
   const visibilityValues = [];
-  const transformCount = triangleCount + shadowTriangleCount;
   for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
     transformOffsets[frameIndex] = transformIndices.length;
     visibilityOffsets[frameIndex] = visibilityIndices.length;
     const visibilityOffset = frameIndex * shadowTriangleCount;
     const previousVisibilityOffset = (frameIndex - 1) * shadowTriangleCount;
-    const transformOffset = frameIndex * transformCount + triangleCount;
-    const previousTransformOffset = (frameIndex - 1) * transformCount + triangleCount;
+    const transformOffset = frameIndex * shadowTriangleCount;
+    const previousTransformOffset = (frameIndex - 1) * shadowTriangleCount;
     for (let triangleIndex = 0; triangleIndex < shadowTriangleCount; triangleIndex += 1) {
       const sourceTransformIndex = transformOffset + triangleIndex;
       if (frameIndex === 0 || !sameQuantizedMatrix(
@@ -374,6 +496,7 @@ export async function loadClothPreparedPlaybackBytes(descriptor) {
   if (descriptor?.schema !== CSSCLOTH_PLAYBACK_SCHEMA ||
       descriptor?.encoding !== CSSCLOTH_PLAYBACK_ENCODING ||
       typeof descriptor.path !== "string" || !descriptor.path.startsWith("/csscloth/") ||
+      !Number.isSafeInteger(descriptor.particleCount) || descriptor.particleCount < 4 ||
       !Number.isSafeInteger(descriptor.shadowTriangleCount) || descriptor.shadowTriangleCount < 3 ||
       !/^[a-f0-9]{64}$/u.test(descriptor.sha256 ?? "") ||
       !/^[a-f0-9]{64}$/u.test(descriptor.uncompressedSha256 ?? "")) {
@@ -402,14 +525,16 @@ export async function loadClothPreparedPlaybackBytes(descriptor) {
 
 function validatePlayback(playback) {
   if (!playback || !Number.isSafeInteger(playback.frameCount) || playback.frameCount < 2 ||
+      !Number.isSafeInteger(playback.particleCount) || playback.particleCount < 4 ||
       !Number.isSafeInteger(playback.triangleCount) || playback.triangleCount < 1 ||
       !Number.isSafeInteger(playback.shadowTriangleCount) || playback.shadowTriangleCount < 3 ||
       !Number.isFinite(playback.frameMilliseconds) || playback.frameMilliseconds <= 0 ||
       !Array.isArray(playback.frames) || playback.frames.length !== playback.frameCount ||
-      playback.frames.some((frame) => !Array.isArray(frame?.matrices) ||
-        frame.matrices.length !== playback.triangleCount ||
-        frame.matrices.some((matrix) => !Array.isArray(matrix) || matrix.length !== 16 ||
-          matrix.some((value) => !Number.isFinite(value))) ||
+      playback.frames.some((frame) => !Array.isArray(frame?.particlePositions) ||
+        frame.particlePositions.length !== playback.particleCount ||
+        frame.particlePositions.some((position) => !Array.isArray(position) ||
+          position.length !== PARTICLE_COMPONENT_COUNT ||
+          position.some((value) => !Number.isFinite(value))) ||
         !Array.isArray(frame?.shadowMatrices) ||
         frame.shadowMatrices.length !== playback.shadowTriangleCount ||
         frame.shadowMatrices.some((matrix) => !Array.isArray(matrix) || matrix.length !== 16 ||
@@ -432,9 +557,52 @@ function validatePlayback(playback) {
   }
 }
 
+function appendPredictedValues(target, frames, resolveValue) {
+  let value = 0;
+  let firstDifference = 0;
+  let secondDifference = 0;
+  for (const frame of frames) {
+    const nextValue = resolveValue(frame);
+    const nextFirstDifference = nextValue - value;
+    const nextSecondDifference = nextFirstDifference - firstDifference;
+    appendSignedVarint(target, nextSecondDifference - secondDifference);
+    value = nextValue;
+    firstDifference = nextFirstDifference;
+    secondDifference = nextSecondDifference;
+  }
+}
+
+function decodePredictedValues(
+  bytes,
+  stream,
+  componentCount,
+  itemCount,
+  frameCount,
+  output,
+  outputStride,
+  label,
+) {
+  for (let componentIndex = 0; componentIndex < componentCount; componentIndex += 1) {
+    for (let itemIndex = 0; itemIndex < itemCount; itemIndex += 1) {
+      let value = 0;
+      let firstDifference = 0;
+      let secondDifference = 0;
+      for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+        secondDifference += readSignedVarint(bytes, stream);
+        firstDifference += secondDifference;
+        value += firstDifference;
+        if (!Number.isSafeInteger(value)) {
+          throw new Error(`Prepared Cloth ${label} value overflowed`);
+        }
+        output[(frameIndex * itemCount + itemIndex) * outputStride + componentIndex] = value;
+      }
+    }
+  }
+}
+
 function appendSignedVarint(target, value) {
   if (!Number.isSafeInteger(value)) {
-    throw new RangeError("Prepared Cloth matrix residual is unsafe");
+    throw new RangeError("Prepared Cloth residual is unsafe");
   }
   let encoded = value >= 0 ? value * 2 : -value * 2 - 1;
   while (encoded >= 0x80) {
@@ -448,14 +616,14 @@ function readSignedVarint(bytes, stream) {
   let encoded = 0;
   let multiplier = 1;
   for (let byteIndex = 0; byteIndex < 8; byteIndex += 1) {
-    if (stream.offset >= stream.end) throw new Error("Prepared Cloth matrix varint is truncated");
+    if (stream.offset >= stream.end) throw new Error("Prepared Cloth varint is truncated");
     const byte = bytes[stream.offset];
     stream.offset += 1;
     encoded += (byte & 0x7f) * multiplier;
     if ((byte & 0x80) === 0) return encoded % 2 === 0 ? encoded / 2 : -(encoded + 1) / 2;
     multiplier *= 0x80;
   }
-  throw new Error("Prepared Cloth matrix varint exceeds the safe range");
+  throw new Error("Prepared Cloth varint exceeds the safe range");
 }
 
 async function gunzip(bytes) {

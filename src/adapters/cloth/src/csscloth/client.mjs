@@ -9,6 +9,26 @@ import { createPolyMorphPreparedCornerTextureTarget } from "../shared/csscloth/m
 import { selectClothStartingBank } from "../shared/csscloth/bankSelection.mjs";
 import { createClothPreparedPlaybackStream } from "./preparedPlaybackStream.mjs";
 
+const CLOTH_PREPARED_PROFILES = Object.freeze({
+  desktop: Object.freeze({
+    preparedPath: "/csscloth/prepared.json",
+    modelRoot: "/csscloth/model/",
+    modelId: "cloth",
+  }),
+  mobile: Object.freeze({
+    preparedPath: "/csscloth/mobile/prepared.json",
+    modelRoot: "/csscloth/mobile/model/",
+    modelId: "cloth-mobile",
+  }),
+});
+const CLOTH_PACKAGE_RESOURCE_PATHS = Object.freeze([
+  "assets/cloth-0.png",
+  "assets/cloth-logo-0.png",
+  "assets/ground.webp",
+  "assets/shadow.png",
+  "model.json",
+]);
+
 export function mountClothClient(host) {
   const state = { ready: false, errors: [], mounted: null, player: null, metadata: null };
   installDebugApi(state);
@@ -20,19 +40,36 @@ export function mountClothClient(host) {
   async function main() {
     if (!(host instanceof HTMLElement)) throw new Error("Missing Cloth host");
     setStatus("loading");
-    const preparedPath = matchMedia("(max-width: 600px)").matches
-      ? "/csscloth/mobile/prepared.json"
-      : "/csscloth/prepared.json";
-    const metadata = await fetch(preparedPath, { cache: "no-store" })
-      .then(assertResponse)
-      .then((response) => response.json());
-    const bankDescriptors = validatePlaybackCatalog(metadata);
-    const startingBankIndex = selectClothStartingBank(bankDescriptors.length);
-    const playbackStream = createClothPreparedPlaybackStream();
+    const profile = CLOTH_PREPARED_PROFILES[
+      matchMedia("(max-width: 600px)").matches ? "mobile" : "desktop"
+    ];
+    const playbackStream = createClothPreparedPlaybackStream({ recordError });
     const loadStartedAt = performance.now();
-    const [loaded, playback] = await Promise.all([
-      loadPolyMorphPackage(metadata.renderer.modelRoot, { modelId: metadata.renderer.modelId }),
-      playbackStream.loadInitial(bankDescriptors[startingBankIndex]),
+    const metadataPromise = fetch(profile.preparedPath, { cache: "no-store" })
+      .then(assertResponse)
+      .then((response) => response.json())
+      .then((metadata) => {
+        const bankDescriptors = validatePlaybackCatalog(metadata);
+        if (metadata.renderer.modelRoot !== profile.modelRoot ||
+            metadata.renderer.modelId !== profile.modelId) {
+          throw new Error("Cloth prepared profile binding drifted");
+        }
+        return {
+          metadata,
+          bankDescriptors,
+          startingBankIndex: selectClothStartingBank(bankDescriptors.length),
+        };
+      });
+    const loadedPromise = loadPolyMorphPackage(profile.modelRoot, {
+      modelId: profile.modelId,
+      fetchImpl: createClothPackageFetch(profile),
+    });
+    const playbackPromise = metadataPromise.then(({ bankDescriptors, startingBankIndex }) =>
+      playbackStream.loadInitial(bankDescriptors[startingBankIndex]));
+    const [{ metadata, bankDescriptors, startingBankIndex }, loaded, playback] = await Promise.all([
+      metadataPromise,
+      loadedPromise,
+      playbackPromise,
     ]);
     const loadMilliseconds = performance.now() - loadStartedAt;
     if (loaded.model.identity.id !== metadata.renderer.modelId ||
@@ -73,6 +110,7 @@ export function mountClothClient(host) {
     state.metadata = metadata;
     state.ready = true;
     setStatus("ready");
+    playbackStream.resumeInitial();
     player.resume();
   }
 
@@ -85,6 +123,28 @@ export function mountClothClient(host) {
     output.textContent = message;
     host.append(output);
   }
+}
+
+function createClothPackageFetch(profile) {
+  const modelRoot = new URL(profile.modelRoot, location.href);
+  const packageRoot = new URL(`${profile.modelId}/`, modelRoot);
+  const urls = [
+    new URL("catalog.json", modelRoot),
+    new URL("manifest.json", packageRoot),
+    ...CLOTH_PACKAGE_RESOURCE_PATHS.map((path) => new URL(path, packageRoot)),
+  ];
+  const prefetched = new Map(urls.map((url) => {
+    const response = fetch(url);
+    response.catch(() => {});
+    return [url.href, response];
+  }));
+  return (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input), location.href);
+    const response = prefetched.get(url.href);
+    if (!response) return fetch(input, init);
+    prefetched.delete(url.href);
+    return response;
+  };
 }
 
 function createPlayer(mounted, model, initialPlayback, clothTexture, transport) {
@@ -136,6 +196,7 @@ function createPlayer(mounted, model, initialPlayback, clothTexture, transport) 
   let lightingAbsoluteSeekCount = 0;
   let bankHandoffCount = 0;
   let bankBoundaryWaitCount = 0;
+  let initialMaterializationWaitCount = 0;
   let preparedPlaybackLoadCount = 1;
   let preparedPlaybackCompressedBytes = startingDescriptor.compressedByteLength;
   let preparedPlaybackDecodedBytes = initialPlayback.decodedByteLength;
@@ -216,6 +277,10 @@ function createPlayer(mounted, model, initialPlayback, clothTexture, transport) 
 
   function advancePlayback() {
     if (lastFrameIndex + 1 < playback.frameCount) {
+      if (!isFrameAvailable(playback, lastFrameIndex + 1)) {
+        initialMaterializationWaitCount += 1;
+        return false;
+      }
       publish(lastFrameIndex + 1);
       return true;
     }
@@ -295,6 +360,24 @@ function createPlayer(mounted, model, initialPlayback, clothTexture, transport) 
     if (!Number.isSafeInteger(frameIndex) || frameIndex < 0 || frameIndex >= playback.frameCount) {
       throw new RangeError("Cloth prepared frame is out of range");
     }
+    if (isFrameAvailable(playback, frameIndex)) return applySeek(frameIndex);
+    const requestedPlayback = playback;
+    const wasPaused = paused;
+    if (!wasPaused) pause();
+    return requestedPlayback.materialization.completion.then(() => {
+      if (destroyed || playback !== requestedPlayback) {
+        throw new Error("Cloth prepared seek target changed during materialization");
+      }
+      publish(frameIndex);
+      if (!wasPaused) resume();
+      return snapshot();
+    }, (error) => {
+      if (!wasPaused) resume();
+      throw error;
+    });
+  }
+
+  function applySeek(frameIndex) {
     const wasPaused = paused;
     if (!wasPaused) pause();
     publish(frameIndex);
@@ -326,6 +409,7 @@ function createPlayer(mounted, model, initialPlayback, clothTexture, transport) 
       prefetchingBankIndex,
       bankHandoffCount,
       bankBoundaryWaitCount,
+      initialMaterializationWaitCount,
       applyCount,
       runtimeSchedulerTransport: "continuous-requestAnimationFrame-prepared-bank-publication",
       schedulerFrameRequestCount,
@@ -380,6 +464,13 @@ function createPlayer(mounted, model, initialPlayback, clothTexture, transport) 
   });
 }
 
+function isFrameAvailable(playback, frameIndex) {
+  const materialization = playback.materialization;
+  return !materialization || materialization.complete ||
+    materialization.clothTransformCount >= (frameIndex + 1) * playback.triangleCount &&
+    materialization.shadowTransformValueCount >= playback.shadowTransformOffsets[frameIndex + 1];
+}
+
 function validatePlaybackCatalog(metadata) {
   const catalog = metadata?.playback;
   const presentation = metadata?.presentation;
@@ -406,8 +497,10 @@ function validatePlaybackBank(playback, descriptor, currentPlayback = playback) 
   if (!Number.isSafeInteger(playback?.triangleCount) || playback.triangleCount < 1 ||
       playback.frameCount !== 1440 ||
       playback.frameMilliseconds !== 1000 / 60 || playback.frameCount !== descriptor?.frameCount ||
+      playback.particleCount !== descriptor.particleCount ||
       playback.triangleCount !== descriptor.triangleCount ||
       playback.shadowTriangleCount !== descriptor.shadowTriangleCount ||
+      playback.particleCount !== currentPlayback.particleCount ||
       playback.triangleCount !== currentPlayback.triangleCount ||
       playback.shadowTriangleCount !== currentPlayback.shadowTriangleCount ||
       playback.frameMilliseconds !== currentPlayback.frameMilliseconds ||
@@ -418,7 +511,21 @@ function validatePlaybackBank(playback, descriptor, currentPlayback = playback) 
       !(playback.lightingIndices instanceof Uint16Array) ||
       !(playback.lightingSlots instanceof Uint16Array) ||
       playback.lightingIndices.length !== playback.lightingSlots.length ||
-      playback.lightingOffsets[playback.frameCount] !== playback.lightingIndices.length) {
+      playback.lightingOffsets[playback.frameCount] !== playback.lightingIndices.length ||
+      !Array.isArray(playback.transforms) ||
+      playback.transforms.length !== playback.frameCount * playback.triangleCount ||
+      !playback.transforms[0]?.startsWith("matrix3d(") ||
+      !Array.isArray(playback.shadowTransformValues) ||
+      playback.shadowTransformValues.length !== playback.shadowTransformIndices.length ||
+      (playback.shadowTransformOffsets[1] > 0 &&
+        !playback.shadowTransformValues[0]?.startsWith("matrix3d(")) ||
+      (playback.materialization &&
+        (!Number.isSafeInteger(playback.materialization.readyFrameCount) ||
+          playback.materialization.readyFrameCount < 1 ||
+          playback.materialization.clothTransformCount < playback.triangleCount ||
+          playback.materialization.shadowTransformValueCount < playback.shadowTransformOffsets[1] ||
+          typeof playback.materialization.complete !== "boolean" ||
+          typeof playback.materialization.completion?.then !== "function"))) {
     throw new Error("Cloth prepared playback bank binding drifted");
   }
 }

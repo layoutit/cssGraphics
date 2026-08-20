@@ -7,9 +7,17 @@ import {
 const RESPONSE_CHUNK_TRANSFORM_COUNT = 480;
 
 let materializationTail = Promise.resolve();
+const continuations = new Map();
 
 self.addEventListener("message", ({ data }) => {
-  if (data?.type !== "materialize" || !Number.isSafeInteger(data.requestId)) {
+  if (data?.type === "continue" && Number.isSafeInteger(data.requestId)) {
+    continuations.get(data.requestId)?.();
+    continuations.delete(data.requestId);
+    return;
+  }
+  if (data?.type !== "materialize" || !Number.isSafeInteger(data.requestId) ||
+      typeof data.paced !== "boolean" || !Number.isSafeInteger(data.readyFrameCount) ||
+      data.readyFrameCount < 0 || data.readyFrameCount > data.descriptor?.frameCount) {
     postWorkerError(new Error("Prepared Cloth worker request drifted"), null);
     return;
   }
@@ -19,7 +27,7 @@ self.addEventListener("message", ({ data }) => {
   ).catch((error) => postWorkerError(error, data.requestId));
 });
 
-async function materializePlayback({ requestId, descriptor }) {
+async function materializePlayback({ requestId, descriptor, paced, readyFrameCount }) {
   const startedAt = performance.now();
   const bytes = await loadClothPreparedPlaybackBytes(descriptor);
   const materialization = createClothPreparedPlaybackMaterialization(bytes, descriptor);
@@ -38,22 +46,94 @@ async function materializePlayback({ requestId, descriptor }) {
     shadowTransformValueCount: materialization.shadowTransformValueCount,
     clothChunkCount,
     shadowChunkCount,
+    paced,
+    readyFrameCount,
     preparationMilliseconds: performance.now() - startedAt,
   }, playbackTransferables(playback));
-  await streamMatrixKind(
-    requestId,
-    materialization,
-    "cloth",
-    materialization.clothTransformCount,
-    clothChunkCount,
-  );
-  await streamMatrixKind(
-    requestId,
-    materialization,
-    "shadow",
-    materialization.shadowTransformValueCount,
-    shadowChunkCount,
-  );
+  if (readyFrameCount > 0) {
+    const readyClothChunkCount = Math.ceil(
+      Math.min(materialization.clothTransformCount, readyFrameCount * playback.triangleCount) /
+        RESPONSE_CHUNK_TRANSFORM_COUNT,
+    );
+    const shadowTransformLimit = readyFrameCount * playback.shadowTriangleCount;
+    const readyShadowTransformCount = materialization.shadowTransformSourceIndices.findIndex(
+      (sourceIndex) => sourceIndex >= shadowTransformLimit,
+    );
+    const readyShadowChunkCount = Math.ceil(
+      (readyShadowTransformCount < 0
+        ? materialization.shadowTransformValueCount
+        : readyShadowTransformCount) / RESPONSE_CHUNK_TRANSFORM_COUNT,
+    );
+    await streamMatrixKind(
+      requestId,
+      materialization,
+      "cloth",
+      materialization.clothTransformCount,
+      clothChunkCount,
+      0,
+      readyClothChunkCount,
+      false,
+    );
+    await streamMatrixKind(
+      requestId,
+      materialization,
+      "shadow",
+      materialization.shadowTransformValueCount,
+      shadowChunkCount,
+      0,
+      readyShadowChunkCount,
+      false,
+    );
+    self.postMessage({
+      type: "materialized-ready",
+      requestId,
+      readyFrameCount,
+      readyClothChunkCount,
+      readyShadowChunkCount,
+    });
+    await waitForContinuation(requestId);
+    await streamMatrixKind(
+      requestId,
+      materialization,
+      "cloth",
+      materialization.clothTransformCount,
+      clothChunkCount,
+      readyClothChunkCount,
+      clothChunkCount,
+      false,
+    );
+    await streamMatrixKind(
+      requestId,
+      materialization,
+      "shadow",
+      materialization.shadowTransformValueCount,
+      shadowChunkCount,
+      readyShadowChunkCount,
+      shadowChunkCount,
+      false,
+    );
+  } else {
+    await streamMatrixKind(
+      requestId,
+      materialization,
+      "cloth",
+      materialization.clothTransformCount,
+      clothChunkCount,
+      0,
+      clothChunkCount,
+      paced,
+    );
+    await streamMatrixKind(
+      requestId,
+      materialization,
+      "shadow",
+      materialization.shadowTransformValueCount,
+      shadowChunkCount,
+      0,
+      shadowChunkCount,
+      paced,
+    );
+  }
   self.postMessage({
     type: "materialized-complete",
     requestId,
@@ -61,8 +141,17 @@ async function materializePlayback({ requestId, descriptor }) {
   });
 }
 
-async function streamMatrixKind(requestId, materialization, kind, count, chunkCount) {
-  for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
+async function streamMatrixKind(
+  requestId,
+  materialization,
+  kind,
+  count,
+  chunkCount,
+  startChunkIndex,
+  endChunkIndex,
+  paced,
+) {
+  for (let chunkIndex = startChunkIndex; chunkIndex < endChunkIndex; chunkIndex += 1) {
     const start = chunkIndex * RESPONSE_CHUNK_TRANSFORM_COUNT;
     const end = Math.min(count, start + RESPONSE_CHUNK_TRANSFORM_COUNT);
     const transforms = materializeClothPreparedMatrixRange(materialization, kind, start, end);
@@ -80,10 +169,14 @@ async function streamMatrixKind(requestId, materialization, kind, count, chunkCo
       transforms,
       transformByteLength,
     });
-    if (kind !== "shadow" || chunkIndex + 1 < chunkCount) {
+    if (paced && (kind !== "shadow" || chunkIndex + 1 < chunkCount)) {
       await new Promise((resolve) => setTimeout(resolve, materialization.playback.frameMilliseconds));
     }
   }
+}
+
+function waitForContinuation(requestId) {
+  return new Promise((resolve) => continuations.set(requestId, resolve));
 }
 
 function playbackTransferables(playback) {

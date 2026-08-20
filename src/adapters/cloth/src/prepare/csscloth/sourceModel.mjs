@@ -1,9 +1,15 @@
 import {
-  computeSolidTrianglePlanFromCssPoints,
   computeTextureAtlasPlanPublic,
   resolvePolyTextureLeafGeometry,
   resolveProjectiveQuadGuards,
 } from "@layoutit/polycss";
+import {
+  clothTriangleMatrixFromWorldPoints,
+  CSSCLOTH_CAMERA_POSITION,
+  CSSCLOTH_VIEW_BASIS,
+  resolveClothTriangleBasis,
+  sourceWorldToCssView as transformSourceWorldToCssView,
+} from "../../shared/csscloth/clothTriangleTransform.mjs";
 
 export const CSSCLOTH_SOURCE = Object.freeze({
   repository: "https://github.com/mrdoob/three.js",
@@ -52,10 +58,8 @@ const TIMESTEP_SQUARED = TIMESTEP * TIMESTEP;
 const WIND_PHASE_MILLISECONDS = 12_345;
 const GRAVITY_FORCE = Object.freeze([0, -GRAVITY * MASS, 0]);
 const LIGHT_DIRECTION = normalize([50, 200, 100]);
-const CAMERA_POSITION = Object.freeze([1000, 50, 1500]);
-const CAMERA_TARGET = Object.freeze([0, 0, 0]);
-const CAMERA_UP = Object.freeze([0, 1, 0]);
-const VIEW_BASIS = createViewBasis(CAMERA_POSITION, CAMERA_TARGET, CAMERA_UP);
+const CAMERA_POSITION = CSSCLOTH_CAMERA_POSITION;
+const VIEW_BASIS = CSSCLOTH_VIEW_BASIS;
 const GROUND_WORLD_Y = -250;
 const GROUND_FAR_VIEW_Z = -16_000;
 const GROUND_NEAR_VIEW_Z = -1_000;
@@ -63,17 +67,6 @@ const GROUND_HALF_FOV_RADIANS = Math.PI / 12;
 const GROUND_ASPECT_COVERAGE = 3;
 const FOG_NEAR = 500;
 const FOG_FAR = 10_000;
-const CLOTH_SEAM_BLEED = 0.3;
-const CORNER_TRIANGLE_CANONICAL_SIZE = 32;
-const EVEN_TRIANGLE_BASIS = Object.freeze({ a: 1, b: 2, c: 0 });
-const ODD_TRIANGLE_BASIS = Object.freeze({ a: 2, b: 0, c: 1 });
-const CORNER_TRIANGLE_POLYGON = Object.freeze({
-  vertices: Object.freeze([
-    Object.freeze([0, 0, 0]),
-    Object.freeze([1, 0, 0]),
-    Object.freeze([0, 1, 0]),
-  ]),
-});
 const CLOTH_SEAM_EDGES = buildClothSeamEdges();
 const FIXTURE_BOXES = deepFreeze([
   { id: "pole-left", center: [-125, -62, 0], size: [5, 375, 5] },
@@ -149,6 +142,7 @@ export function buildClothMobileSourceFrames(source) {
     }
     return Object.freeze({
       frameIndex: frame.frameIndex,
+      particlePositions: Object.freeze(mobilePositions),
       triangles: Object.freeze(triangles.map((triangle) => Object.freeze({
         positions: Object.freeze(triangle.particleIndices.map((index) => mobilePositions[index])),
         normals: Object.freeze(triangle.particleIndices.map((index) => mobileNormals[index])),
@@ -204,42 +198,15 @@ export function buildClothTriangles({
 export function clothTriangleMatrix(frame, triangleIndex, seamEdges = CLOTH_SEAM_EDGES) {
   const triangle = frame.triangles[triangleIndex];
   if (!triangle) throw new RangeError("Cloth triangle index is out of range");
-  const points = triangle.positions.map(sourceWorldToCssView);
-  const plan = computeSolidTrianglePlanFromCssPoints(
-    CORNER_TRIANGLE_POLYGON,
+  return Object.freeze(clothTriangleMatrixFromWorldPoints(
+    triangle.positions,
     triangleIndex,
-    {
-      tileSize: 1,
-      layerElevation: 1,
-      bleedRatio: 1,
-      seamBleed: CLOTH_SEAM_BLEED,
-      seamEdges: new Set(seamEdges[triangleIndex] ?? []),
-    },
-    {
-      basis: clothTriangleBasis(triangleIndex),
-      matrixDecimals: 7,
-      primitive: "corner-bevel",
-      includeColor: false,
-    },
-    ...points.flat(),
-  );
-  if (!plan) throw new Error(`Cloth triangle ${triangleIndex} is degenerate`);
-  const matrix = plan.transformText.match(/^matrix3d\(([^)]+)\)$/u)?.[1]
-    .split(",")
-    .map(Number);
-  if (!matrix || matrix.length !== 16 || matrix.some((value) => !Number.isFinite(value))) {
-    throw new Error(`Cloth triangle ${triangleIndex} has no prepared corner matrix`);
-  }
-  const rasterScale = CORNER_TRIANGLE_CANONICAL_SIZE / CSSCLOTH_RASTER_LEAF_SIZE;
-  for (const index of [0, 1, 2, 4, 5, 6]) matrix[index] *= rasterScale;
-  return Object.freeze(matrix.map(roundMatrix));
+    seamEdges,
+  ));
 }
 
 export function clothTriangleBasis(triangleIndex) {
-  if (!Number.isSafeInteger(triangleIndex) || triangleIndex < 0) {
-    throw new RangeError("Cloth triangle index is out of range");
-  }
-  return triangleIndex % 2 === 0 ? EVEN_TRIANGLE_BASIS : ODD_TRIANGLE_BASIS;
+  return resolveClothTriangleBasis(triangleIndex);
 }
 
 export function clothTriangleSeamEdges(triangleIndex) {
@@ -323,12 +290,7 @@ export function clothFogFactor(viewDepth) {
 }
 
 export function sourceWorldToCssView(point) {
-  const relative = subtract(point, CAMERA_POSITION);
-  return Object.freeze([
-    dot3(VIEW_BASIS.x, relative),
-    -dot3(VIEW_BASIS.y, relative),
-    dot3(VIEW_BASIS.z, relative),
-  ]);
+  return Object.freeze(transformSourceWorldToCssView(point));
 }
 
 export function projectClothShadowPoint(point) {
@@ -425,11 +387,16 @@ function simulateStep(particles, constraints, triangles, normals, now) {
 }
 
 function captureFrame(particles, normals, triangles, frameIndex) {
+  const particlePositions = Object.freeze(particles.map((particle) =>
+    Object.freeze(particle.position.map(Math.fround))));
+  const particleNormals = Object.freeze(normals.map((normal) =>
+    Object.freeze(normal.map(Math.fround))));
   return Object.freeze({
     frameIndex,
+    particlePositions,
     triangles: Object.freeze(triangles.map((triangle) => Object.freeze({
-      positions: Object.freeze(triangle.particleIndices.map((index) => Object.freeze(particles[index].position.map(Math.fround)))),
-      normals: Object.freeze(triangle.particleIndices.map((index) => Object.freeze(normals[index].map(Math.fround)))),
+      positions: Object.freeze(triangle.particleIndices.map((index) => particlePositions[index])),
+      normals: Object.freeze(triangle.particleIndices.map((index) => particleNormals[index])),
     }))),
   });
 }
@@ -581,12 +548,6 @@ export function buildClothSeamEdges(triangles = buildClothTriangles()) {
     for (const [triangleIndex, edgeIndex] of owners) seamEdges[triangleIndex].add(edgeIndex);
   }
   return Object.freeze(seamEdges.map((edges) => Object.freeze([...edges])));
-}
-
-function createViewBasis(position, target, up) {
-  const z = normalize(subtract(position, target));
-  const x = normalize(cross(up, z));
-  return Object.freeze({ x: Object.freeze(x), y: Object.freeze(cross(z, x)), z: Object.freeze(z) });
 }
 
 function particleIndex(u, v) {

@@ -109,6 +109,7 @@ async function prepareProfile(profile, profileRoot, publicRoot) {
         compressedByteLength: compressedBytes.byteLength,
         uncompressedByteLength: bytes.byteLength,
         frameCount: playback.frameCount,
+        particleCount: playback.particleCount,
         triangleCount: playback.triangleCount,
         shadowTriangleCount: playback.shadowTriangleCount,
         frameMilliseconds: playback.frameMilliseconds,
@@ -152,7 +153,7 @@ async function prepareProfile(profile, profileRoot, publicRoot) {
       profileId: profile,
       modelId: prepared.model.identity.id,
       modelRoot: `${publicRoot}model/`,
-      representation: "retained-cloth-and-shadow-triangles-with-compact-prepared-raster-playback",
+      representation: "retained-cloth-and-shadow-triangles-with-corrected-particle-bank-playback",
       textureLeafSizing: "raster",
       logoAtlas,
       lightingAtlas: {

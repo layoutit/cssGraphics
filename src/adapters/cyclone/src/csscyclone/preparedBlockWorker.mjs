@@ -83,7 +83,7 @@ async function materializeBlock(data) {
       transforms: transformChunk,
       transformChunkByteLength,
     });
-    if (transformChunkIndex + 1 < transformChunkCount) {
+    if (data.incremental && transformChunkIndex + 1 < transformChunkCount) {
       await new Promise((resolve) => setTimeout(resolve, catalog.frameMilliseconds));
     }
   }

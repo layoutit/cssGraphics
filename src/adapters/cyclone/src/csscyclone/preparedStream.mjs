@@ -404,11 +404,16 @@ function createWorkerBlockMaterializer(catalog) {
       scheduleResponseChunk();
       return;
     }
+    acceptResponseChunk(data, request, response, true);
+    scheduleResponseChunk();
+  }
+
+  function acceptResponseChunk(data, request, response, idleSlice) {
     try {
       const isFinalChunk = data.transformChunkIndex + 1 === response.transformChunkCount;
       response.transforms.push(...data.transforms);
       response.processedTransformChunkCount += 1;
-      response.idleSliceCount += 1;
+      response.idleSliceCount += Number(idleSlice);
       response.receivedTransformBytes += data.transformChunkByteLength;
       response.maximumResponseChunkBytes = Math.max(
         response.maximumResponseChunkBytes,
@@ -419,7 +424,6 @@ function createWorkerBlockMaterializer(catalog) {
       pending.delete(data.requestId);
       request.reject(error);
     }
-    scheduleResponseChunk();
   }
 
   function completeWorkerResponse(requestId, request, response) {
@@ -507,8 +511,12 @@ function createWorkerBlockMaterializer(catalog) {
       return;
     }
     response.queuedTransformChunkCount += 1;
-    responseChunkQueue.push({ data, request, response });
-    scheduleResponseChunk();
+    if (request.incremental) {
+      responseChunkQueue.push({ data, request, response });
+      scheduleResponseChunk();
+    } else {
+      acceptResponseChunk(data, request, response, false);
+    }
   });
   worker.addEventListener("error", (event) => {
     rejectAll(new Error(event.message || "Prepared Cyclone worker failed"));
@@ -526,7 +534,7 @@ function createWorkerBlockMaterializer(catalog) {
       nextRequestId += 1;
       const workerBytes = bytes.slice();
       const result = new Promise((resolve, reject) => {
-        pending.set(requestId, { resolve, reject, response: null });
+        pending.set(requestId, { resolve, reject, response: null, incremental });
       });
       worker.postMessage({
         type: "materialize",

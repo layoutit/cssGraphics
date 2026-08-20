@@ -13,13 +13,18 @@ export function createClothPreparedPlaybackStream() {
   let workerMaterializationMaximumMilliseconds = 0;
   let responseChunkCount = 0;
   let responseIdleSliceCount = 0;
+  let responseDirectChunkCount = 0;
   let responseMaximumChunkBytes = 0;
   let responseMaximumIdleSliceMilliseconds = 0;
+  let responseMaximumDirectMilliseconds = 0;
 
   async function loadInitial(descriptor) {
-    const playback = await loadClothPreparedPlayback(descriptor);
-    loadCount += 1;
-    return playback;
+    if (workerMaterializer === null) {
+      const playback = await loadClothPreparedPlayback(descriptor);
+      loadCount += 1;
+      return playback;
+    }
+    return recordWorkerResult(await workerMaterializer.materialize(descriptor, { paced: false }));
   }
 
   async function loadFuture(descriptor) {
@@ -28,7 +33,11 @@ export function createClothPreparedPlaybackStream() {
       loadCount += 1;
       return playback;
     }
-    const result = await workerMaterializer.materialize(descriptor);
+    const result = await workerMaterializer.materialize(descriptor, { paced: true });
+    return recordWorkerResult(result);
+  }
+
+  function recordWorkerResult(result) {
     loadCount += 1;
     workerLoadCount += 1;
     workerPreparationMaximumMilliseconds = Math.max(
@@ -41,6 +50,7 @@ export function createClothPreparedPlaybackStream() {
     );
     responseChunkCount += result.responseChunkCount;
     responseIdleSliceCount += result.responseIdleSliceCount;
+    responseDirectChunkCount += result.responseDirectChunkCount;
     responseMaximumChunkBytes = Math.max(
       responseMaximumChunkBytes,
       result.maximumResponseChunkBytes,
@@ -48,6 +58,10 @@ export function createClothPreparedPlaybackStream() {
     responseMaximumIdleSliceMilliseconds = Math.max(
       responseMaximumIdleSliceMilliseconds,
       result.maximumResponseIdleSliceMilliseconds,
+    );
+    responseMaximumDirectMilliseconds = Math.max(
+      responseMaximumDirectMilliseconds,
+      result.maximumResponseDirectMilliseconds,
     );
     return result.playback;
   }
@@ -66,9 +80,12 @@ export function createClothPreparedPlaybackStream() {
           Number(workerMaterializationMaximumMilliseconds.toFixed(2)),
         preparedPlaybackResponseChunkCount: responseChunkCount,
         preparedPlaybackResponseIdleSliceCount: responseIdleSliceCount,
+        preparedPlaybackResponseDirectChunkCount: responseDirectChunkCount,
         preparedPlaybackResponseMaximumChunkBytes: responseMaximumChunkBytes,
         preparedPlaybackResponseMaximumIdleSliceMilliseconds:
           Number(responseMaximumIdleSliceMilliseconds.toFixed(3)),
+        preparedPlaybackResponseMaximumDirectMilliseconds:
+          Number(responseMaximumDirectMilliseconds.toFixed(3)),
       });
     },
     destroy() {
@@ -114,9 +131,12 @@ function createWorkerMaterializer() {
     idleRequest = null;
     const queued = responseQueue.shift();
     if (!queued) return;
-    const { data, request } = queued;
+    processResponseChunk(queued.data, queued.request, true);
+    scheduleResponseSlice();
+  }
+
+  function processResponseChunk(data, request, idle) {
     if (pending.get(data.requestId) !== request) {
-      scheduleResponseSlice();
       return;
     }
     const startedAt = performance.now();
@@ -133,22 +153,30 @@ function createWorkerMaterializer() {
       if (data.kind === "cloth") response.processedClothChunkCount += 1;
       else response.processedShadowChunkCount += 1;
       response.responseChunkCount += 1;
-      response.responseIdleSliceCount += 1;
+      if (idle) response.responseIdleSliceCount += 1;
+      else response.responseDirectChunkCount += 1;
       response.receivedTransformBytes += data.transformByteLength;
       response.maximumResponseChunkBytes = Math.max(
         response.maximumResponseChunkBytes,
         data.transformByteLength,
       );
-      response.maximumResponseIdleSliceMilliseconds = Math.max(
-        response.maximumResponseIdleSliceMilliseconds,
-        performance.now() - startedAt,
-      );
+      const duration = performance.now() - startedAt;
+      if (idle) {
+        response.maximumResponseIdleSliceMilliseconds = Math.max(
+          response.maximumResponseIdleSliceMilliseconds,
+          duration,
+        );
+      } else {
+        response.maximumResponseDirectMilliseconds = Math.max(
+          response.maximumResponseDirectMilliseconds,
+          duration,
+        );
+      }
       maybeComplete(data.requestId, request);
     } catch (error) {
       pending.delete(data.requestId);
       request.reject(error);
     }
-    scheduleResponseSlice();
   }
 
   function maybeComplete(requestId, request) {
@@ -172,8 +200,10 @@ function createWorkerMaterializer() {
       durationMilliseconds: response.durationMilliseconds,
       responseChunkCount: response.responseChunkCount,
       responseIdleSliceCount: response.responseIdleSliceCount,
+      responseDirectChunkCount: response.responseDirectChunkCount,
       maximumResponseChunkBytes: response.maximumResponseChunkBytes,
       maximumResponseIdleSliceMilliseconds: response.maximumResponseIdleSliceMilliseconds,
+      maximumResponseDirectMilliseconds: response.maximumResponseDirectMilliseconds,
     }));
   }
 
@@ -198,6 +228,7 @@ function createWorkerMaterializer() {
           !Number.isSafeInteger(data.shadowTransformValueCount) || data.shadowTransformValueCount < 1 ||
           !Number.isSafeInteger(data.clothChunkCount) || data.clothChunkCount < 1 ||
           !Number.isSafeInteger(data.shadowChunkCount) || data.shadowChunkCount < 1 ||
+          typeof data.paced !== "boolean" ||
           !Number.isFinite(data.preparationMilliseconds) || data.preparationMilliseconds < 0) {
         rejectAll(new Error("Prepared Cloth worker response drifted"));
         return;
@@ -208,15 +239,18 @@ function createWorkerMaterializer() {
         shadowTransformValueCount: data.shadowTransformValueCount,
         clothChunkCount: data.clothChunkCount,
         shadowChunkCount: data.shadowChunkCount,
+        paced: data.paced,
         preparationMilliseconds: data.preparationMilliseconds,
         durationMilliseconds: 0,
         processedClothChunkCount: 0,
         processedShadowChunkCount: 0,
         responseChunkCount: 0,
         responseIdleSliceCount: 0,
+        responseDirectChunkCount: 0,
         receivedTransformBytes: 0,
         maximumResponseChunkBytes: 0,
         maximumResponseIdleSliceMilliseconds: 0,
+        maximumResponseDirectMilliseconds: 0,
         workerComplete: false,
         transforms: [],
         shadowTransformValues: [],
@@ -254,22 +288,29 @@ function createWorkerMaterializer() {
       rejectAll(new Error("Prepared Cloth worker chunk count drifted"));
       return;
     }
-    responseQueue.push({ data, request });
-    scheduleResponseSlice();
+    if (request.response.paced) {
+      responseQueue.push({ data, request });
+      scheduleResponseSlice();
+    } else {
+      processResponseChunk(data, request, false);
+    }
   });
   worker.addEventListener("error", (event) => {
     rejectAll(new Error(event.message || "Prepared Cloth worker failed"));
   });
 
   return Object.freeze({
-    materialize(descriptor) {
+    materialize(descriptor, { paced }) {
       if (destroyed) throw new Error("Prepared Cloth worker is destroyed");
+      if (typeof paced !== "boolean") {
+        throw new TypeError("Prepared Cloth worker pacing must be explicit");
+      }
       const requestId = nextRequestId;
       nextRequestId += 1;
       const result = new Promise((resolve, reject) => {
         pending.set(requestId, { resolve, reject, response: null });
       });
-      worker.postMessage({ type: "materialize", requestId, descriptor });
+      worker.postMessage({ type: "materialize", requestId, descriptor, paced });
       return result;
     },
     destroy() {

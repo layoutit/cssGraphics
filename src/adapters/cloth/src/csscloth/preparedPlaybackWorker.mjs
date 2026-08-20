@@ -9,7 +9,8 @@ const RESPONSE_CHUNK_TRANSFORM_COUNT = 480;
 let materializationTail = Promise.resolve();
 
 self.addEventListener("message", ({ data }) => {
-  if (data?.type !== "materialize" || !Number.isSafeInteger(data.requestId)) {
+  if (data?.type !== "materialize" || !Number.isSafeInteger(data.requestId) ||
+      typeof data.paced !== "boolean") {
     postWorkerError(new Error("Prepared Cloth worker request drifted"), null);
     return;
   }
@@ -19,7 +20,7 @@ self.addEventListener("message", ({ data }) => {
   ).catch((error) => postWorkerError(error, data.requestId));
 });
 
-async function materializePlayback({ requestId, descriptor }) {
+async function materializePlayback({ requestId, descriptor, paced }) {
   const startedAt = performance.now();
   const bytes = await loadClothPreparedPlaybackBytes(descriptor);
   const materialization = createClothPreparedPlaybackMaterialization(bytes, descriptor);
@@ -38,6 +39,7 @@ async function materializePlayback({ requestId, descriptor }) {
     shadowTransformValueCount: materialization.shadowTransformValueCount,
     clothChunkCount,
     shadowChunkCount,
+    paced,
     preparationMilliseconds: performance.now() - startedAt,
   }, playbackTransferables(playback));
   await streamMatrixKind(
@@ -46,6 +48,7 @@ async function materializePlayback({ requestId, descriptor }) {
     "cloth",
     materialization.clothTransformCount,
     clothChunkCount,
+    paced,
   );
   await streamMatrixKind(
     requestId,
@@ -53,6 +56,7 @@ async function materializePlayback({ requestId, descriptor }) {
     "shadow",
     materialization.shadowTransformValueCount,
     shadowChunkCount,
+    paced,
   );
   self.postMessage({
     type: "materialized-complete",
@@ -61,7 +65,7 @@ async function materializePlayback({ requestId, descriptor }) {
   });
 }
 
-async function streamMatrixKind(requestId, materialization, kind, count, chunkCount) {
+async function streamMatrixKind(requestId, materialization, kind, count, chunkCount, paced) {
   for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
     const start = chunkIndex * RESPONSE_CHUNK_TRANSFORM_COUNT;
     const end = Math.min(count, start + RESPONSE_CHUNK_TRANSFORM_COUNT);
@@ -80,7 +84,7 @@ async function streamMatrixKind(requestId, materialization, kind, count, chunkCo
       transforms,
       transformByteLength,
     });
-    if (kind !== "shadow" || chunkIndex + 1 < chunkCount) {
+    if (paced && (kind !== "shadow" || chunkIndex + 1 < chunkCount)) {
       await new Promise((resolve) => setTimeout(resolve, materialization.playback.frameMilliseconds));
     }
   }

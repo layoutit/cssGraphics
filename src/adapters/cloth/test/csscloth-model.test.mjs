@@ -3,6 +3,10 @@ import test from "node:test";
 import { buildClothPreparedModel } from "../src/prepare/csscloth/modelBuilder.mjs";
 import { groundImageSlice, shadowImageSlice } from "../src/prepare/csscloth/rasterAtlas.mjs";
 import {
+  buildClothTriangleSeamEdges,
+  clothTriangleMatrixFromWorldPoints,
+} from "../src/shared/csscloth/clothTriangleTransform.mjs";
+import {
   CSSCLOTH_PLAYBACK_ENCODING,
   CSSCLOTH_PLAYBACK_SCHEMA,
   createClothPreparedPlaybackMaterialization,
@@ -67,11 +71,12 @@ test("prepared model keeps one retained triangle root per cloth face", () => {
 test("prepared playback uses compact fixed-point transport", () => {
   const playback = prepared.playbackBanks[0];
   const bytes = encodeClothPreparedPlayback(playback);
-  assert.ok(bytes.byteLength < 9_750_000);
+  assert.ok(bytes.byteLength < 3_500_000);
   const decoded = decodeClothPreparedPlayback(bytes, {
     schema: CSSCLOTH_PLAYBACK_SCHEMA,
     encoding: CSSCLOTH_PLAYBACK_ENCODING,
     frameCount: playback.frameCount,
+    particleCount: playback.particleCount,
     triangleCount: playback.triangleCount,
     shadowTriangleCount: playback.shadowTriangleCount,
     frameMilliseconds: playback.frameMilliseconds,
@@ -80,6 +85,7 @@ test("prepared playback uses compact fixed-point transport", () => {
     schema: CSSCLOTH_PLAYBACK_SCHEMA,
     encoding: CSSCLOTH_PLAYBACK_ENCODING,
     frameCount: playback.frameCount,
+    particleCount: playback.particleCount,
     triangleCount: playback.triangleCount,
     shadowTriangleCount: playback.shadowTriangleCount,
     frameMilliseconds: playback.frameMilliseconds,
@@ -122,7 +128,12 @@ test("prepared playback uses compact fixed-point transport", () => {
     decoded.shadowTransformValues.slice(0, 480),
   );
   const actual = decoded.transforms[137 * 200 + 47].match(/matrix3d\(([^)]+)\)/u)[1].split(",").map(Number);
-  const expected = playback.frames[137].matrices[47];
+  const topology = prepared.triangles.map((triangle) => triangle.particleIndices);
+  const expected = clothTriangleMatrixFromWorldPoints(
+    topology[47].map((particleIndex) => playback.frames[137].particlePositions[particleIndex]),
+    47,
+    buildClothTriangleSeamEdges(topology),
+  );
   assert.ok(actual.every((value, index) => Math.abs(value - expected[index]) <= 0.000051));
   const shadowState = reconstructShadowState(decoded, 137);
   const shadowActual = shadowState.transforms[7].match(/matrix3d\(([^)]+)\)/u)[1].split(",").map(Number);
@@ -148,8 +159,8 @@ test("prepared playback banks form one continuous 192-second stream", () => {
   assert.ok(prepared.playbackBanks.every((bank, bankIndex) =>
     bank.bankIndex === bankIndex && bank.frameCount === 1440 && bank.durationMilliseconds === 24_000));
   assert.notDeepEqual(
-    prepared.playbackBanks[0].frames.at(-1).matrices,
-    prepared.playbackBanks[1].frames[0].matrices,
+    prepared.playbackBanks[0].frames.at(-1).particlePositions,
+    prepared.playbackBanks[1].frames[0].particlePositions,
   );
 });
 

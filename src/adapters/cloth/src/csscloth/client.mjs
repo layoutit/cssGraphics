@@ -406,8 +406,10 @@ function validatePlaybackBank(playback, descriptor, currentPlayback = playback) 
   if (!Number.isSafeInteger(playback?.triangleCount) || playback.triangleCount < 1 ||
       playback.frameCount !== 1440 ||
       playback.frameMilliseconds !== 1000 / 60 || playback.frameCount !== descriptor?.frameCount ||
+      playback.particleCount !== descriptor.particleCount ||
       playback.triangleCount !== descriptor.triangleCount ||
       playback.shadowTriangleCount !== descriptor.shadowTriangleCount ||
+      playback.particleCount !== currentPlayback.particleCount ||
       playback.triangleCount !== currentPlayback.triangleCount ||
       playback.shadowTriangleCount !== currentPlayback.shadowTriangleCount ||
       playback.frameMilliseconds !== currentPlayback.frameMilliseconds ||

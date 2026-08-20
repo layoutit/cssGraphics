@@ -11,6 +11,7 @@ export async function inspectCssclothProductBank(root) {
     profile: "desktop",
     modelId: "cloth",
     triangleCount: 200,
+    particleCount: 121,
     shadowTriangleCount: 51,
     retainedLeafCount: 312,
     lightingStateCount: 60_269,
@@ -30,6 +31,7 @@ export async function inspectCssclothProductBank(root) {
     profile: "mobile",
     modelId: "cloth-mobile",
     triangleCount: 72,
+    particleCount: 49,
     shadowTriangleCount: 25,
     retainedLeafCount: 158,
   });
@@ -126,14 +128,15 @@ async function inspectProfile(productRoot, prefix, expectedPaths, expected) {
 
   for (const [bankIndex, bank] of banks.entries()) {
     assert(bank?.bankIndex === bankIndex, `${expected.profile} bank ${bankIndex} index`);
-    assert(bank.frameCount === 1440 && bank.triangleCount === expected.triangleCount,
+    assert(bank.frameCount === 1440 && bank.triangleCount === expected.triangleCount &&
+      bank.particleCount === expected.particleCount,
       `${expected.profile} bank ${bankIndex} counts`);
     assert(bank.shadowTriangleCount === expected.shadowTriangleCount,
       `${expected.profile} bank ${bankIndex} shadow count`);
-    assert(bank.schema === "csscloth-prepared-playback@6",
+    assert(bank.schema === "csscloth-prepared-playback@7",
       `${expected.profile} bank ${bankIndex} schema`);
     assert(bank.encoding ===
-      "gzip-third-order-zigzag-varint-fixed4-affine12-sparse-u16-lighting-shadow@6",
+      "gzip-third-order-zigzag-varint-fixed7-particles-corrected-fixed4-shadow-affine12-sparse-u16-lighting-shadow@7",
       `${expected.profile} bank ${bankIndex} encoding`);
     const path = productPath(bank.path);
     const bytes = await readFile(join(productRoot, path));

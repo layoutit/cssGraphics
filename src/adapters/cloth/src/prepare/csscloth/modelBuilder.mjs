@@ -1,6 +1,8 @@
 import {
   buildClothSourceFrames,
+  buildClothMobileSourceFrames,
   buildClothLightingBank,
+  buildClothSeamEdges,
   buildFixtureFaces,
   buildFixtureShadowCasters,
   buildGroundPlane,
@@ -29,11 +31,18 @@ import { preparePolyMorphParametricShadow } from "./morphShadowPatch.mjs";
 
 const IDENTITY = Object.freeze([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 
-export function buildClothPreparedModel() {
-  const source = buildClothSourceFrames({
+export function buildClothPreparedModel({ profile = "desktop" } = {}) {
+  if (profile !== "desktop" && profile !== "mobile") {
+    throw new RangeError("Cloth preparation profile must be desktop or mobile");
+  }
+  const desktopSource = buildClothSourceFrames({
     frameCount: CSSCLOTH_STREAM_FRAME_COUNT,
     warmupFrameCount: CSSCLOTH_WARMUP_FRAME_COUNT,
   });
+  const source = profile === "mobile"
+    ? buildClothMobileSourceFrames(desktopSource)
+    : desktopSource;
+  const seamEdges = buildClothSeamEdges(source.triangles);
   const lighting = buildClothLightingBank(source);
   const rasterBoxes = Object.freeze(Array.from(
     { length: source.triangles.length },
@@ -48,7 +57,7 @@ export function buildClothPreparedModel() {
     projectPoint: projectClothShadowPoint,
     triangleMatrix: clothShadowTriangleMatrix,
     atlas: shadowImageSlice(),
-    definition: 32,
+    definition: profile === "mobile" ? 16 : 32,
   });
   const fixtureShadows = buildFixtureShadowCasters().map((caster) =>
     preparePolyMorphParametricShadow({
@@ -84,7 +93,7 @@ export function buildClothPreparedModel() {
       strategy: "solid-triangle",
       width: rasterBox.width,
       height: rasterBox.height,
-      matrix: clothTriangleMatrix(firstFrame, triangleIndex),
+      matrix: clothTriangleMatrix(firstFrame, triangleIndex, seamEdges),
       atlas: null,
       fallback: Object.freeze({
         width: atlas.width,
@@ -142,10 +151,12 @@ export function buildClothPreparedModel() {
     clothShadow,
     lighting.frameRows,
     rasterLayout.stateSlots,
+    seamEdges,
   );
+  const modelId = profile === "mobile" ? "cloth-mobile" : "cloth";
   const model = deepFreeze({
     schema: "polycss-morph.model@1",
-    identity: Object.freeze({ id: "cloth", name: "Cloth", revision: "1.0.0" }),
+    identity: Object.freeze({ id: modelId, name: "Cloth", revision: "1.0.0" }),
     profile: "static-prepared",
     capabilities: Object.freeze(["retained-render"]),
     budgets: Object.freeze({
@@ -205,8 +216,10 @@ export function buildClothPreparedModel() {
     playbackBanks,
     lightingStates: lighting.states,
     rasterBoxes,
+    triangles: source.triangles,
     metrics: Object.freeze({
-      particleCount: 121,
+      profile,
+      particleCount: new Set(source.triangles.flatMap((triangle) => triangle.particleIndices)).size,
       clothTriangleCount: firstFrame.triangles.length,
       groundLeafCount: 1,
       clothShadowLeafCount: clothShadow.leafCount,
@@ -287,7 +300,7 @@ export function applyClothRasterPlan(prepared, raster) {
   return deepFreeze({ ...prepared, model, playbackBanks, metrics });
 }
 
-function buildPreparedPlaybackBanks(source, clothShadow, lightingRows, atlasStateSlots) {
+function buildPreparedPlaybackBanks(source, clothShadow, lightingRows, atlasStateSlots, seamEdges) {
   if (source.frames.length !== CSSCLOTH_STREAM_FRAME_COUNT ||
       clothShadow.frames.length !== CSSCLOTH_STREAM_FRAME_COUNT ||
       lightingRows.length !== CSSCLOTH_STREAM_FRAME_COUNT) {
@@ -300,7 +313,7 @@ function buildPreparedPlaybackBanks(source, clothShadow, lightingRows, atlasStat
       const frame = source.frames[streamFrameIndex];
       return Object.freeze({
         matrices: Object.freeze(frame.triangles.map((_, triangleIndex) =>
-          clothTriangleMatrix(frame, triangleIndex))),
+          clothTriangleMatrix(frame, triangleIndex, seamEdges))),
         lightingRows: lightingRows[streamFrameIndex],
         shadowMatrices: clothShadow.frames[streamFrameIndex].matrices,
         shadowVisibility: clothShadow.frames[streamFrameIndex].visibility,

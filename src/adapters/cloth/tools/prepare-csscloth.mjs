@@ -39,156 +39,171 @@ const sourceLock = JSON.parse(await readFile(join(adapterRoot, "notes/references
 await assertSourceIdentity();
 const grassBytes = await readFile(join(sourceRoot, sourceLock.groundTexture.path));
 const logoBytes = await readFile(join(adapterRoot, sourceLock.cssLogo.localPath));
-const basePrepared = buildClothPreparedModel();
-const raster = await buildClothRasterAssets({
-  logoBytes,
-  grassBytes,
-  rasterBoxes: basePrepared.rasterBoxes,
-  lightingStates: basePrepared.lightingStates,
-});
-const prepared = applyClothRasterPlan(basePrepared, raster);
-const resources = [
-  ...raster.clothPages.map((bytes, index) => ({
-    path: clothRasterPagePath(index),
-    role: "image",
-    mediaType: "image/png",
-    bytes,
-  })),
-  ...raster.clothLogoPages.map((bytes, index) => ({
-    path: clothLogoRasterPagePath(index),
-    role: "image",
-    mediaType: "image/png",
-    bytes,
-  })),
-  {
-    path: CSSCLOTH_GROUND_IMAGE_PATH,
-    role: "image",
-    mediaType: "image/webp",
-    bytes: raster.groundImage,
-  },
-  {
-    path: CSSCLOTH_SHADOW_IMAGE_PATH,
-    role: "image",
-    mediaType: "image/png",
-    bytes: raster.shadowImage,
-  },
-];
-const builtPackage = await buildPolyMorphPackage(prepared.model, resources);
-const playbackAssets = Object.freeze(prepared.playbackBanks.map((playback, bankIndex) => {
-  const bytes = encodeClothPreparedPlayback(playback);
-  const compressedBytes = gzipSync(bytes, { level: 9 });
-  const uncompressedSha256 = createHash("sha256").update(bytes).digest("hex");
-  const sha256 = createHash("sha256").update(compressedBytes).digest("hex");
-  const fileName = `playback-bank-${String(bankIndex).padStart(2, "0")}-${sha256.slice(0, 16)}.bin.gz`;
-  return Object.freeze({
-    fileName,
-    bytes,
-    compressedBytes,
-    descriptor: Object.freeze({
-      schema: CSSCLOTH_PLAYBACK_SCHEMA,
-      encoding: CSSCLOTH_PLAYBACK_ENCODING,
-      bankIndex,
-      path: `/csscloth/${fileName}`,
-      sha256,
-      uncompressedSha256,
-      compressedByteLength: compressedBytes.byteLength,
-      uncompressedByteLength: bytes.byteLength,
-      frameCount: playback.frameCount,
-      triangleCount: playback.triangleCount,
-      shadowTriangleCount: playback.shadowTriangleCount,
-      frameMilliseconds: playback.frameMilliseconds,
-    }),
-  });
-}));
-const logoPage = raster.clothLogoLayout?.pages[0];
-const logoSlice = raster.clothLogoLayout?.slots[0];
-const logoAtlas = logoPage && logoSlice
-  ? Object.freeze({
-      pageWidth: logoPage.width,
-      pageHeight: logoPage.height,
-      leafWidth: logoSlice.width,
-      leafHeight: logoSlice.height,
-      gutter: logoSlice.x,
-      columns: logoPage.width / (logoSlice.width + logoSlice.x * 2),
-    })
-  : undefined;
-
 await rm(stagingRoot, { recursive: true, force: true });
-const packageRoot = join(stagingRoot, "model", prepared.model.identity.id);
-await mkdir(packageRoot, { recursive: true });
-for (const [path, bytes] of builtPackage.files) await writeBytes(join(packageRoot, path), bytes);
-await writeBytes(join(packageRoot, "manifest.json"), builtPackage.manifestBytes);
-const catalog = await buildPolyMorphCatalog(prepared.model.identity.id, [{
-  manifest: builtPackage.manifest,
-  manifestPath: `${prepared.model.identity.id}/manifest.json`,
-  manifestSha256: builtPackage.manifestSha256,
-}]);
-await writeBytes(join(stagingRoot, "model", "catalog.json"), catalog.bytes);
-for (const asset of playbackAssets) {
-  await writeBytes(join(stagingRoot, asset.fileName), asset.compressedBytes);
-}
-await writeJson(join(stagingRoot, "prepared.json"), {
-  schema: "csscloth-prepared-scene@1",
-  status: "ready",
-  source: sourceLock,
-  renderer: {
-    package: "@layoutit/polycss-morph",
-    profile: "static-prepared-with-external-prepared-playback",
-    representation: "retained-cloth-and-shadow-triangles-with-compact-prepared-raster-playback",
-    textureLeafSizing: "raster",
-    logoAtlas,
-    runtimeGeometryConstruction: false,
-    runtimeDomGrowth: false,
-    runtimeAtlasRasterization: false,
-  },
-  presentation: {
-    bankCount: CSSCLOTH_BANK_COUNT,
-    bankFrameCount: CSSCLOTH_BANK_FRAME_COUNT,
-    bankDurationMilliseconds: CSSCLOTH_BANK_FRAME_COUNT * CSSCLOTH_OUTPUT_FRAME_MILLISECONDS,
-    frameCount: CSSCLOTH_STREAM_FRAME_COUNT,
-    durationMilliseconds: CSSCLOTH_STREAM_FRAME_COUNT * CSSCLOTH_OUTPUT_FRAME_MILLISECONDS,
-    frameMilliseconds: CSSCLOTH_OUTPUT_FRAME_MILLISECONDS,
-    loop: true,
-    clothSurface: "white-i-love-css",
-    startingBankSelection: {
-      policy: "crypto-random-uniform-starting-bank-once-before-prepared-bank-fetch",
-      bankCount: CSSCLOTH_BANK_COUNT,
-    },
-    groundTextureRepeatCount: prepared.metrics.groundTextureRepeatCount,
-  },
-  playback: {
-    schema: "csscloth-prepared-playback-bank-catalog@1",
-    bankCount: CSSCLOTH_BANK_COUNT,
-    bankFrameCount: CSSCLOTH_BANK_FRAME_COUNT,
-    banks: playbackAssets.map((asset) => asset.descriptor),
-  },
-  metrics: {
-    ...prepared.metrics,
-    preparedPlaybackCompressedBytes: playbackAssets.reduce(
-      (sum, asset) => sum + asset.compressedBytes.byteLength,
-      0,
-    ),
-    preparedPlaybackUncompressedBytes: playbackAssets.reduce(
-      (sum, asset) => sum + asset.bytes.byteLength,
-      0,
-    ),
-  },
-  manifestSha256: builtPackage.manifestSha256,
-  oracle: {
-    sourceState: "source-model-pinned",
-    visual: "unqualified",
-  },
-});
+const desktop = await prepareProfile("desktop", stagingRoot, "/csscloth/");
+const mobile = await prepareProfile("mobile", join(stagingRoot, "mobile"), "/csscloth/mobile/");
 
 await rm(outputRoot, { recursive: true, force: true });
 await mkdir(dirname(outputRoot), { recursive: true });
 await rename(stagingRoot, outputRoot);
 console.log(JSON.stringify({
   outputRoot,
-  manifestSha256: builtPackage.manifestSha256,
-  playback: playbackAssets.map((asset) => asset.descriptor),
-  metrics: prepared.metrics,
+  profiles: { desktop, mobile },
 }, null, 2));
+
+async function prepareProfile(profile, profileRoot, publicRoot) {
+  const basePrepared = buildClothPreparedModel({ profile });
+  const raster = await buildClothRasterAssets({
+    logoBytes,
+    grassBytes,
+    rasterBoxes: basePrepared.rasterBoxes,
+    lightingStates: basePrepared.lightingStates,
+    triangles: basePrepared.triangles,
+  });
+  const prepared = applyClothRasterPlan(basePrepared, raster);
+  const resources = [
+    ...raster.clothPages.map((bytes, index) => ({
+      path: clothRasterPagePath(index),
+      role: "image",
+      mediaType: "image/png",
+      bytes,
+    })),
+    ...raster.clothLogoPages.map((bytes, index) => ({
+      path: clothLogoRasterPagePath(index),
+      role: "image",
+      mediaType: "image/png",
+      bytes,
+    })),
+    {
+      path: CSSCLOTH_GROUND_IMAGE_PATH,
+      role: "image",
+      mediaType: "image/webp",
+      bytes: raster.groundImage,
+    },
+    {
+      path: CSSCLOTH_SHADOW_IMAGE_PATH,
+      role: "image",
+      mediaType: "image/png",
+      bytes: raster.shadowImage,
+    },
+  ];
+  const builtPackage = await buildPolyMorphPackage(prepared.model, resources);
+  const playbackAssets = Object.freeze(prepared.playbackBanks.map((playback, bankIndex) => {
+    const bytes = encodeClothPreparedPlayback(playback);
+    const compressedBytes = gzipSync(bytes, { level: 9 });
+    const uncompressedSha256 = createHash("sha256").update(bytes).digest("hex");
+    const sha256 = createHash("sha256").update(compressedBytes).digest("hex");
+    const fileName = `playback-bank-${String(bankIndex).padStart(2, "0")}-${sha256.slice(0, 16)}.bin.gz`;
+    return Object.freeze({
+      fileName,
+      bytes,
+      compressedBytes,
+      descriptor: Object.freeze({
+        schema: CSSCLOTH_PLAYBACK_SCHEMA,
+        encoding: CSSCLOTH_PLAYBACK_ENCODING,
+        bankIndex,
+        path: `${publicRoot}${fileName}`,
+        sha256,
+        uncompressedSha256,
+        compressedByteLength: compressedBytes.byteLength,
+        uncompressedByteLength: bytes.byteLength,
+        frameCount: playback.frameCount,
+        triangleCount: playback.triangleCount,
+        shadowTriangleCount: playback.shadowTriangleCount,
+        frameMilliseconds: playback.frameMilliseconds,
+      }),
+    });
+  }));
+  const logoPage = raster.clothLogoLayout?.pages[0];
+  const logoSlice = raster.clothLogoLayout?.slots[0];
+  const logoAtlas = logoPage && logoSlice
+    ? Object.freeze({
+        pageWidth: logoPage.width,
+        pageHeight: logoPage.height,
+        leafWidth: logoSlice.width,
+        leafHeight: logoSlice.height,
+        gutter: logoSlice.x,
+        columns: logoPage.width / (logoSlice.width + logoSlice.x * 2),
+      })
+    : undefined;
+  const packageRoot = join(profileRoot, "model", prepared.model.identity.id);
+  await mkdir(packageRoot, { recursive: true });
+  for (const [path, bytes] of builtPackage.files) await writeBytes(join(packageRoot, path), bytes);
+  await writeBytes(join(packageRoot, "manifest.json"), builtPackage.manifestBytes);
+  const catalog = await buildPolyMorphCatalog(prepared.model.identity.id, [{
+    manifest: builtPackage.manifest,
+    manifestPath: `${prepared.model.identity.id}/manifest.json`,
+    manifestSha256: builtPackage.manifestSha256,
+  }]);
+  await writeBytes(join(profileRoot, "model", "catalog.json"), catalog.bytes);
+  for (const asset of playbackAssets) {
+    await writeBytes(join(profileRoot, asset.fileName), asset.compressedBytes);
+  }
+  await writeJson(join(profileRoot, "prepared.json"), {
+    schema: "csscloth-prepared-scene@1",
+    status: "ready",
+    source: sourceLock,
+    renderer: {
+      package: "@layoutit/polycss-morph",
+      profile: "static-prepared-with-external-prepared-playback",
+      profileId: profile,
+      modelId: prepared.model.identity.id,
+      modelRoot: `${publicRoot}model/`,
+      representation: "retained-cloth-and-shadow-triangles-with-compact-prepared-raster-playback",
+      textureLeafSizing: "raster",
+      logoAtlas,
+      runtimeGeometryConstruction: false,
+      runtimeDomGrowth: false,
+      runtimeAtlasRasterization: false,
+    },
+    presentation: {
+      bankCount: CSSCLOTH_BANK_COUNT,
+      bankFrameCount: CSSCLOTH_BANK_FRAME_COUNT,
+      bankDurationMilliseconds: CSSCLOTH_BANK_FRAME_COUNT * CSSCLOTH_OUTPUT_FRAME_MILLISECONDS,
+      frameCount: CSSCLOTH_STREAM_FRAME_COUNT,
+      durationMilliseconds: CSSCLOTH_STREAM_FRAME_COUNT * CSSCLOTH_OUTPUT_FRAME_MILLISECONDS,
+      frameMilliseconds: CSSCLOTH_OUTPUT_FRAME_MILLISECONDS,
+      loop: true,
+      clothSurface: "white-i-love-css",
+      responsiveProfile: profile === "desktop" ? {
+        media: "(max-width: 600px)",
+        path: "/csscloth/mobile/prepared.json",
+      } : undefined,
+      startingBankSelection: {
+        policy: "crypto-random-uniform-starting-bank-once-before-prepared-bank-fetch",
+        bankCount: CSSCLOTH_BANK_COUNT,
+      },
+      groundTextureRepeatCount: prepared.metrics.groundTextureRepeatCount,
+    },
+    playback: {
+      schema: "csscloth-prepared-playback-bank-catalog@1",
+      bankCount: CSSCLOTH_BANK_COUNT,
+      bankFrameCount: CSSCLOTH_BANK_FRAME_COUNT,
+      banks: playbackAssets.map((asset) => asset.descriptor),
+    },
+    metrics: {
+      ...prepared.metrics,
+      preparedPlaybackCompressedBytes: playbackAssets.reduce(
+        (sum, asset) => sum + asset.compressedBytes.byteLength,
+        0,
+      ),
+      preparedPlaybackUncompressedBytes: playbackAssets.reduce(
+        (sum, asset) => sum + asset.bytes.byteLength,
+        0,
+      ),
+    },
+    manifestSha256: builtPackage.manifestSha256,
+    oracle: {
+      sourceState: "source-model-pinned",
+      visual: "unqualified",
+    },
+  });
+  return Object.freeze({
+    manifestSha256: builtPackage.manifestSha256,
+    playback: playbackAssets.map((asset) => asset.descriptor),
+    metrics: prepared.metrics,
+  });
+}
 
 function resolveRequiredSourceRoot() {
   const value = process.env.CSSCLOTH_SOURCE_ROOT;

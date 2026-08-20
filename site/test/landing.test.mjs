@@ -182,6 +182,16 @@ test("deployment serves the landing at the root", async () => {
       netlify.indexOf('for = "/csscloth/model/cloth/assets/*"'),
     "Cloth hash-named texture headers must override the broad metadata rule",
   );
+  assert.ok(
+    netlify.indexOf('for = "/csscloth/*"') <
+      netlify.indexOf('for = "/csscloth/mobile/playback-bank-*"'),
+    "Mobile Cloth bank headers must override the broad metadata rule",
+  );
+  assert.ok(
+    netlify.indexOf('for = "/csscloth/*"') <
+      netlify.indexOf('for = "/csscloth/mobile/model/cloth-mobile/assets/*"'),
+    "Mobile Cloth texture headers must override the broad metadata rule",
+  );
   assert.match(
     packageManifest,
     /"prepare:electropaint:deploy": "pnpm prepare:electropaint:artifact"/u,

@@ -20,7 +20,9 @@ test("runtime has no per-frame geometry or raster construction", async () => {
   assert.doesNotMatch(client, /canvas|getContext|createElement\(["'](?:s|b|div)["']/);
   assert.doesNotMatch(client, /setTimeout|clearTimeout/u);
   assert.doesNotMatch(client, /Math\.random/u);
-  assert.match(client, /fetch\("\/csscloth\/prepared\.json", \{ cache: "no-store" \}\)/u);
+  assert.match(client, /matchMedia\("\(max-width: 600px\)"\)/u);
+  assert.match(client, /"\/csscloth\/mobile\/prepared\.json"/u);
+  assert.match(client, /fetch\(preparedPath, \{ cache: "no-store" \}\)/u);
   assert.match(client, /selectClothStartingBank/u);
   assert.match(client, /player\.seekFrame\(0\)/u);
   assert.match(client, /requestAnimationFrame/u);
@@ -33,6 +35,7 @@ test("runtime has no per-frame geometry or raster construction", async () => {
   assert.doesNotMatch(client, /Math\.floor\([^\n]*frameMilliseconds/u);
   assert.match(client, /createPolyMorphPreparedDomTarget/);
   assert.match(client, /mounted\.modelElement\.remove\(\)/u);
+  assert.match(client, /cleanPreparedDom\(mounted, playback\.triangleCount\)/u);
   assert.match(client, /loadClothPreparedPlayback/);
   assert.match(client, /textureLeafSizing !== "raster"/);
   assert.doesNotMatch(client, /backgroundRepeat|backgroundSize/);

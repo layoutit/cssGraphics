@@ -63,7 +63,17 @@
     Cache-Control = "public, max-age=31536000, immutable"
 
 [[headers]]
+  for = "/csscloth/mobile/playback-bank-*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
   for = "/csscloth/model/cloth/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/csscloth/mobile/model/cloth-mobile/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 

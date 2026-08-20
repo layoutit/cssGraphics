@@ -54,6 +54,15 @@ test("captures DevTools frame, JavaScript, GC, navigation, and optional screensh
   assert.ok(traceCategories({ screenshots: true }).includes("disabled-by-default-devtools.screenshot"));
 });
 
+test("supports the bounded frame-timeline capture used by Flocks qualification", () => {
+  const categories = traceCategories({ lean: true, frameTimeline: true });
+  assert.ok(categories.includes("disabled-by-default-devtools.timeline.frame"));
+  assert.ok(categories.includes("devtools.timeline"));
+  assert.ok(categories.includes("cc"));
+  assert.ok(!categories.includes("disabled-by-default-v8.cpu_profiler"));
+  assert.ok(!categories.includes("disabled-by-default-devtools.v8-source-rundown"));
+});
+
 test("derives reports beside the raw trace", () => {
   const fixture = resolve("output/frame-sleuth-test/run/Trace.json.gz");
   const root = resolve("output/frame-sleuth-test/run");
@@ -64,6 +73,7 @@ test("derives reports beside the raw trace", () => {
   assert.equal(paths.steadyReport, resolve(root, "Trace.frame-sleuth-steady.md"));
   assert.equal(paths.fullChart, resolve(root, "Trace.frame-times.svg"));
   assert.equal(paths.steadyChart, resolve(root, "Trace.frame-times-steady.svg"));
+  assert.equal(paths.rawTrace, resolve(root, "Trace.raw.json.gz"));
 });
 
 test("starts tracing before cold navigation and contains no app warmup seam", async () => {

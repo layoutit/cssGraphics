@@ -1,0 +1,37 @@
+{
+  "schema": "csscloth-source-lock@1",
+  "project": "Three.js webgl_animation_cloth",
+  "repository": "https://github.com/mrdoob/three.js",
+  "tag": "r132",
+  "revision": "e62b253081438c030d6af1ee3c3346a89124f277",
+  "primary": {
+    "path": "examples/webgl_animation_cloth.html",
+    "sha256": "dfcac0d0942ae045d04d2643384c248e995d7ed0dc86655d2cc338041f95f106"
+  },
+  "clothTexture": {
+    "path": "examples/textures/patterns/circuit_pattern.png",
+    "sha256": "3e8c452e12b2363ccf54bf37a3bcc0aaeec116dd160a5b63e13c3afa3f296044"
+  },
+  "groundTexture": {
+    "path": "examples/textures/terrain/grasslight-big.jpg",
+    "sha256": "23bd506b94e40a9de435375c2be6280eb088dc637fb64c331e325c7472f47177"
+  },
+  "license": {
+    "path": "LICENSE",
+    "sha256": "7dddf7c5b8fd10ee654db8857d75d104b5557889aa5a91fc4ca545ea7c07062f",
+    "spdx": "MIT"
+  },
+  "groundTextureNotice": {
+    "path": "examples/textures/terrain/readme.txt",
+    "sha256": "fb104c6022251bc2925705e81415ea30b03c220c56ed336d4de7dfb7450874ff",
+    "license": "CC-BY-3.0"
+  },
+  "cssLogo": {
+    "repository": "https://github.com/CSS-Next/logo.css",
+    "revision": "48f24dccd4e169118d17bab998c3d276e95167df",
+    "path": "css.svg",
+    "localPath": "assets/css.svg",
+    "sha256": "28dceb38651b6d3d43119bae6f56dc6dd76415cfedd4a718afcd61fc7bec8ba3",
+    "license": "CC0-1.0"
+  }
+}

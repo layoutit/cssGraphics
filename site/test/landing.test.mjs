@@ -170,6 +170,8 @@ test("deployment serves the landing at the root", async () => {
     packageManifest,
     /CSSGRAVITYWELL_DEPLOY_BUILD=1 pnpm build:gravitywell && CSSCYCLONE_DEPLOY_BUILD=1 pnpm build:cyclone && CSSMENGER_DEPLOY_BUILD=1 pnpm build:menger/u,
   );
+  assert.match(packageManifest, /pnpm prepare:cloth:artifact/u);
+  assert.match(packageManifest, /CSSCLOTH_DEPLOY_BUILD=1 pnpm build:cloth/u);
   assert.match(
     packageManifest,
     /"prepare:electropaint:deploy": "pnpm prepare:electropaint:artifact"/u,

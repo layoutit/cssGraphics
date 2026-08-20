@@ -56,8 +56,12 @@ test("uses the cssGraphics shell without product UI or alternate renderers", asy
   assert.match(stream, /\{ incremental \}/u);
   assert.match(worker, /type: "materialized-chunk"/u);
   assert.match(worker, /TRANSFORM_RESPONSE_CHUNK_TRANSFORMS = 960/u);
+  assert.match(worker, /data\.incremental && transformChunkIndex \+ 1 < transformChunkCount/u);
   assert.match(worker, /setTimeout\(resolve, catalog\.frameMilliseconds\)/u);
   assert.doesNotMatch(worker, /new TextDecoder\(\)|new TextEncoder\(\)/u);
+  assert.match(stream, /if \(request\.incremental\) \{\s*responseChunkQueue\.push/su);
+  assert.match(stream, /acceptResponseChunk\(data, request, response, false\)/u);
+  assert.match(stream, /pending\.set\(requestId, \{ resolve, reject, response: null, incremental \}\)/u);
   assert.match(stream, /workerMaterializationMaximumResponseChunkBytes/u);
   assert.match(stream, /requestIdle\(processResponseChunk, \{ timeout: 500 \}\)/u);
   assert.doesNotMatch(stream, /requestAnimationFrame\(processResponseChunk\)/u);

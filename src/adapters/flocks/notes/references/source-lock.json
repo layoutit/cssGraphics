@@ -1,0 +1,67 @@
+{
+  "schema": "cssflocks-source-lock@1",
+  "repository": "https://github.com/reallyslickscreensavers/reallyslickscreensavers",
+  "revision": "a419fc4ecf4b9b19526448bf9f5dfc435e24ca4c",
+  "path": "src/flocks/flocks.cpp",
+  "sha256": "0db819da1d123ad4ae2cf5f53bec278e64b2f65ecabe617a843197446c1813d6",
+  "license": "GPL-2.0-or-later",
+  "copyright": "Copyright (C) 1999-2010 Terence M. Welsh",
+  "dependencies": {
+    "rslibs": {
+      "repository": "https://github.com/reallyslickscreensavers/rslibs",
+      "revision": "42d251b1a751956f54c8aad263e78af527ef2b82",
+      "files": [
+        {
+          "path": "libs/rsMath/rsMath.h",
+          "sha256": "8d81f07b7ec4a0abc2788161fd600a260b648f0747387aff5abfea2b2510da93",
+          "license": "LGPL-2.1-or-later"
+        },
+        {
+          "path": "libs/Rgbhsl/Rgbhsl.h",
+          "sha256": "d3dc7b72ebc34e31f3966ec122880599f19eda91edf7c4059cb3ef5baedbc45b",
+          "license": "LGPL-2.1-or-later"
+        },
+        {
+          "path": "libs/Rgbhsl/Rgbhsl.cpp",
+          "sha256": "1866954fedbb83f5076cf078b35501882307285a88874c4e29658da76130e05b",
+          "license": "LGPL-2.1-or-later"
+        }
+      ]
+    }
+  },
+  "defaults": {
+    "leaders": 4,
+    "followers": 1000,
+    "geometry": 1,
+    "size": 5,
+    "complexity": 1,
+    "speed": 15,
+    "stretch": 20,
+    "colorFadeSpeed": 15,
+    "chromatek": 0,
+    "connections": 0
+  },
+  "sourceGeometry": {
+    "primitive": "gluSphere",
+    "radius": 2.5,
+    "slices": 3,
+    "stacks": 2,
+    "preparedTriangleFaces": 6
+  },
+  "adapter": {
+    "simulationLocation": "node-preparer",
+    "browserPublication": "prepared-transform-and-currentColor-only",
+    "lighting": "accepted-fixed-flat-face-factors-deviation",
+    "lightingDeviation": {
+      "source": "directional GL_LIGHT0 with smooth GLU vertex normals and material specular",
+      "prepared": "six fixed face opacity factors from 0.78 through 1.0 with currentColor",
+      "runtimeLeafLightingUpdates": 0
+    },
+    "excludedSourceModes": ["dots", "unstretched-points", "chromatek", "connections"],
+    "sourceOracle": "compiled-pinned-source-state-and-gl-transform-oracle",
+    "visualReference": "compiled-pinned-source-glu-frame-sequence",
+    "browserComparison": "strict-prepared-state-projection-and-continuity-with-diagnostic-rgb",
+    "terminalLoop": "prepare-only-eight-second-cubic-hermite-correspondence-deviation",
+    "mobileDeviceCadence": "unproven"
+  }
+}

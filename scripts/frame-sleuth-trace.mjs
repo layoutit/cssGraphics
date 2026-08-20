@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
 import { once } from "node:events";
 import { createReadStream, createWriteStream } from "node:fs";
-import { access, mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { analyzeTrace, extractFrameScreenshots, loadTrace, renderFrameChartSvg, renderMarkdown } from "./frame-sleuth.mjs";
+import { promisify } from "node:util";
+
+const run = promisify(execFile);
 
 export const CAPTURE_SCHEMA = "cssgraphics-frame-sleuth-capture@1";
 export const DEFAULT_CAPTURE_DURATION_MS = 8_000;
@@ -42,6 +46,18 @@ const DEVTOOLS_TRACE_CATEGORIES = Object.freeze([
   "v8.execute",
 ]);
 
+const LEAN_TRACE_CATEGORIES = Object.freeze([
+  "benchmark",
+  "blink.user_timing",
+  "browser",
+  "cc",
+  "devtools.timeline",
+  "loading",
+  "rail",
+  "renderer_host",
+  "toplevel",
+]);
+
 const HELP = `FrameSleuth Tracer — capture a DevTools-grade real-Chrome trace and analyze it
 
 Usage:
@@ -63,9 +79,10 @@ about:blank before cold navigation. The tracer never waits for network-idle or
 app readiness and never pauses, seeks, steps, or warms the measured page.
 `;
 
-export function traceCategories({ screenshots = false } = {}) {
+export function traceCategories({ screenshots = false, lean = false, frameTimeline = false } = {}) {
   return Object.freeze([
-    ...DEVTOOLS_TRACE_CATEGORIES,
+    ...(lean ? LEAN_TRACE_CATEGORIES : DEVTOOLS_TRACE_CATEGORIES),
+    ...(lean && frameTimeline ? ["disabled-by-default-devtools.timeline.frame"] : []),
     ...(screenshots ? ["disabled-by-default-devtools.screenshot"] : []),
   ]);
 }
@@ -129,12 +146,13 @@ export function captureOutputPaths(tracePath) {
     fullChart: resolve(root, `${stem}.frame-times.svg`),
     steadyChart: resolve(root, `${stem}.frame-times-steady.svg`),
     screenshots: resolve(root, `${stem}-screenshots`),
+    rawTrace: resolve(root, `${stem}.raw.json.gz`),
   });
 }
 
 export async function captureFrameSleuthTrace(options, { browserType = chromium } = {}) {
   const paths = captureOutputPaths(options.output);
-  await assertOutputsAbsent(paths, options.screenshots);
+  await assertOutputsAbsent(paths, options.screenshots, options.frameSleuthFilter === true);
   await mkdir(dirname(paths.trace), { recursive: true });
   const categories = traceCategories(options);
   const errors = [];
@@ -167,6 +185,14 @@ export async function captureFrameSleuthTrace(options, { browserType = chromium 
     }
     await stopTrace(cdp, paths.trace);
     if (navigationError) throw navigationError;
+    let rawTrace = null;
+    if (options.frameSleuthFilter === true) {
+      await rename(paths.trace, paths.rawTrace);
+      await run("python3", [resolve(import.meta.dirname, "filter-frame-sleuth-trace.py"), paths.rawTrace, paths.trace], {
+        maxBuffer: 1024 * 1024,
+      });
+      rawTrace = { path: paths.rawTrace, ...await fileIdentity(paths.rawTrace) };
+    }
     const finalUrl = page.url();
     await context.close();
     context = null;
@@ -214,8 +240,10 @@ export async function captureFrameSleuthTrace(options, { browserType = chromium 
       untouchedPage: true,
       categories,
       screenshotsRequested: options.screenshots,
+      leanCategories: options.lean === true,
       errors,
       trace: { path: paths.trace, ...traceIdentity },
+      rawTrace,
       reports: {
         full: paths.fullReport,
         steady: paths.steadyReport,
@@ -271,9 +299,10 @@ async function stopTrace(cdp, path) {
   }
 }
 
-async function assertOutputsAbsent(paths, screenshots) {
+async function assertOutputsAbsent(paths, screenshots, filtered) {
   const candidates = [paths.trace, paths.capture, paths.analysis, paths.fullReport, paths.steadyReport, paths.fullChart, paths.steadyChart];
   if (screenshots) candidates.push(paths.screenshots);
+  if (filtered) candidates.push(paths.rawTrace);
   for (const path of candidates) {
     try {
       await access(path);

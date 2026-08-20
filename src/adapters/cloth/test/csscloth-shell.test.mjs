@@ -57,6 +57,7 @@ test("runtime has no per-frame geometry or raster construction", async () => {
   assert.doesNotMatch(shadowTarget, /frameIndex \* playback\.shadowTriangleCount/u);
   assert.doesNotMatch(shadowTarget, /computeParametricShadowSilhouette|canvas|getContext|createElement|requestAnimationFrame/);
   assert.doesNotMatch(textureTarget, /style\.setProperty\("corner-bottom-right-shape"/u);
+  assert.doesNotMatch(textureTarget, /CSS\.supports/u);
   assert.match(textureTarget, /--csscloth-atlas/u);
   assert.match(textureTarget, /--csscloth-logo-atlas/u);
   assert.match(textureTarget, /--csscloth-logo-atlas-size/u);

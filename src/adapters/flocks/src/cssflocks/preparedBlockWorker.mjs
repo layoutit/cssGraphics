@@ -49,13 +49,18 @@ async function materialize(data) {
     if (canceledRequestIds.delete(data.requestId)) return;
     const start = chunkIndex * RESPONSE_CHUNK_SIZE;
     const end = Math.min(transforms.length, start + RESPONSE_CHUNK_SIZE);
+    const transformChunk = transforms.slice(start, end);
+    const colorChunk = colors.slice(start, end);
+    const chunkByteLength = transformChunk.reduce((total, value) => total + value.length, 0) +
+      colorChunk.reduce((total, value) => total + value.length, 0);
     self.postMessage({
       type: "materialized-chunk",
       requestId: data.requestId,
       chunkIndex,
       chunkCount,
-      transforms: transforms.slice(start, end),
-      colors: colors.slice(start, end),
+      transforms: transformChunk,
+      colors: colorChunk,
+      chunkByteLength,
     });
     if (!data.eager && chunkIndex + 1 < chunkCount) {
       await new Promise((resolve) => setTimeout(resolve, catalog.frameMilliseconds));

@@ -78,16 +78,22 @@ export function createFlocksPreparedPlayer({
     applyCount += 1;
   }
 
-  function lookaheadIndices() {
-    return [1, 2].map((offset) => (activeBlockIndex + offset) % catalog.blockCount);
+  function lookaheadIndices(blockIndex = activeBlockIndex) {
+    const indices = [];
+    for (let offset = 1; offset <= catalog.runtimeLookaheadBlockCount; offset += 1) {
+      const index = (blockIndex + offset) % catalog.blockCount;
+      if (!indices.includes(index)) indices.push(index);
+    }
+    return indices;
   }
 
   function queueLookahead() {
     const indices = lookaheadIndices();
-    const keep = new Set(indices);
+    const materializedIndices = indices.slice(0, catalog.runtimeMaterializedLookaheadBlockCount);
+    const keep = new Set(materializedIndices);
     for (const index of pending.keys()) if (!keep.has(index)) pending.delete(index);
     onBlockWindow([activeBlockIndex, ...indices]);
-    for (const index of indices) {
+    for (const index of materializedIndices) {
       if (pending.has(index)) continue;
       const record = { block: null, promise: null, error: null };
       prefetchCount += 1;
@@ -198,11 +204,7 @@ export function createFlocksPreparedPlayer({
     const nextBlockIndex = Math.floor(nextStreamFrameIndex / catalog.blockFrameCount);
     const nextFrameIndex = nextStreamFrameIndex % catalog.blockFrameCount;
     pending.clear();
-    onBlockWindow([
-      nextBlockIndex,
-      (nextBlockIndex + 1) % catalog.blockCount,
-      (nextBlockIndex + 2) % catalog.blockCount,
-    ]);
+    onBlockWindow([nextBlockIndex, ...lookaheadIndices(nextBlockIndex)]);
     const nextBlock = nextBlockIndex === activeBlockIndex ? activeBlock : await loadBlock(nextBlockIndex);
     validateBlock(nextBlock, catalog);
     activeBlock = nextBlock;
@@ -257,6 +259,9 @@ export function createFlocksPreparedPlayer({
       debugAbsoluteSeekCount,
       debugStepCount,
       pendingBlockIndices: Object.freeze(lookaheadIndices()),
+      pendingBlockReadyCount: lookaheadIndices()
+        .slice(0, catalog.runtimeMaterializedLookaheadBlockCount)
+        .filter((index) => pending.get(index)?.block).length,
       runtimeGeometryConstructionCount: 0,
       runtimeFrameMatrixFormattingCount: 0,
       runtimeFrameColorFormattingCount: 0,
@@ -287,7 +292,16 @@ export function createFlocksPreparedPlayer({
 function validateBinding(shapeElements, catalog, initialBlock, initialLookaheadBlocks, loadBlock) {
   if (!Array.isArray(shapeElements) || shapeElements.length !== catalog?.bugCount ||
       shapeElements.some((element) => !element?.style) || typeof loadBlock !== "function" ||
-      !Array.isArray(initialLookaheadBlocks) || initialLookaheadBlocks.length > 2 ||
+      !Number.isSafeInteger(catalog.runtimeLookaheadBlockCount) || catalog.runtimeLookaheadBlockCount < 1 ||
+      catalog.runtimeLookaheadBlockCount > catalog.blockCount ||
+      !Number.isSafeInteger(catalog.runtimeMaterializedLookaheadBlockCount) ||
+      catalog.runtimeMaterializedLookaheadBlockCount < 1 ||
+      catalog.runtimeMaterializedLookaheadBlockCount > catalog.runtimeLookaheadBlockCount ||
+      !Number.isSafeInteger(catalog.startupMaterializedLookaheadBlockCount) ||
+      catalog.startupMaterializedLookaheadBlockCount < 1 ||
+      catalog.startupMaterializedLookaheadBlockCount > catalog.runtimeMaterializedLookaheadBlockCount ||
+      !Array.isArray(initialLookaheadBlocks) ||
+      initialLookaheadBlocks.length > catalog.startupMaterializedLookaheadBlockCount ||
       !Number.isSafeInteger(initialBlock?.index) || initialBlock.index < 0 || initialBlock.index >= catalog.blockCount) {
     throw new Error("Prepared Flocks player binding drifted");
   }

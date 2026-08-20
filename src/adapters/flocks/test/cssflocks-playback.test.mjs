@@ -11,6 +11,9 @@ const catalog = Object.freeze({
   blockCount: 3,
   blockFrameCount: 2,
   streamFrameCount: 6,
+  runtimeLookaheadBlockCount: 2,
+  runtimeMaterializedLookaheadBlockCount: 2,
+  startupMaterializedLookaheadBlockCount: 2,
   terminalSeam: Object.freeze({ correspondence: Object.freeze([1, 0]) }),
 });
 
@@ -50,7 +53,17 @@ test("Flocks perspective reproduces a 50-degree vertical field of view", () => {
 
 test("continuous playback retains every transform state while bounding flat-color repaint cadence", async () => {
   const frameCount = 8;
-  const oneBugCatalog = Object.freeze({ ...catalog, bugCount: 1, blockCount: 1, blockFrameCount: frameCount, streamFrameCount: frameCount, terminalSeam: Object.freeze({ correspondence: Object.freeze([0]) }) });
+  const oneBugCatalog = Object.freeze({
+    ...catalog,
+    bugCount: 1,
+    blockCount: 1,
+    blockFrameCount: frameCount,
+    streamFrameCount: frameCount,
+    runtimeLookaheadBlockCount: 1,
+    runtimeMaterializedLookaheadBlockCount: 1,
+    startupMaterializedLookaheadBlockCount: 1,
+    terminalSeam: Object.freeze({ correspondence: Object.freeze([0]) }),
+  });
   const oneBugBlock = Object.freeze({
     schema: "cssflocks-prepared-stream-block@1",
     index: 0,
@@ -104,6 +117,9 @@ test("flat-color repaint phases are evenly staggered by stable retained-root ind
     blockCount: 1,
     blockFrameCount: frameCount,
     streamFrameCount: frameCount,
+    runtimeLookaheadBlockCount: 1,
+    runtimeMaterializedLookaheadBlockCount: 1,
+    startupMaterializedLookaheadBlockCount: 1,
     terminalSeam: Object.freeze({ correspondence: Object.freeze(Array.from({ length: bugCount }, (_, index) => index)) }),
   });
   const staggeredBlock = Object.freeze({
@@ -142,6 +158,32 @@ test("flat-color repaint phases are evenly staggered by stable retained-root ind
   }
   assert.equal(player.stats().colorPublicationPhaseCount, bugCount);
   assert.equal(player.stats().colorPublicationPolicy, "source-frame-plus-retained-root-index-round-robin");
+  player.destroy();
+});
+
+test("player exposes the Cyclone-standard verified horizon while materializing only two successors", () => {
+  const horizonCatalog = Object.freeze({
+    bugCount: 2,
+    blockCount: 13,
+    blockFrameCount: 1,
+    streamFrameCount: 13,
+    runtimeLookaheadBlockCount: 11,
+    runtimeMaterializedLookaheadBlockCount: 2,
+    startupMaterializedLookaheadBlockCount: 2,
+    terminalSeam: Object.freeze({ correspondence: Object.freeze([0, 1]) }),
+  });
+  const windows = [];
+  const player = createFlocksPreparedPlayer({
+    shapeElements: [{ style: {} }, { style: {} }],
+    catalog: horizonCatalog,
+    initialBlock: singleFrameBlock(0),
+    initialLookaheadBlocks: [singleFrameBlock(1), singleFrameBlock(2)],
+    loadBlock: async (index) => singleFrameBlock(index),
+    onBlockWindow(indices) { windows.push(indices); },
+  });
+  assert.deepEqual(player.stats().pendingBlockIndices, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+  assert.equal(player.stats().pendingBlockReadyCount, 2);
+  assert.deepEqual(windows, [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]]);
   player.destroy();
 });
 
@@ -209,6 +251,9 @@ test("superseded prefetch rejection cannot poison a later absolute sequence seek
     blockCount: 4,
     blockFrameCount: 1,
     streamFrameCount: 4,
+    runtimeLookaheadBlockCount: 3,
+    runtimeMaterializedLookaheadBlockCount: 2,
+    startupMaterializedLookaheadBlockCount: 2,
     terminalSeam: Object.freeze({ correspondence: Object.freeze([0, 1]) }),
   });
   const blocks = Array.from({ length: 4 }, (_, index) => singleFrameBlock(index));

@@ -32,6 +32,12 @@ export const CSSFLOCKS_PREPARED_CADENCE = Object.freeze({
   terminalBridgeSeconds: 8,
 });
 
+export const CSSFLOCKS_PREPARED_LOADER = Object.freeze({
+  runtimeLookaheadBlockCount: 11,
+  runtimeMaterializedLookaheadBlockCount: 2,
+  startupMaterializedLookaheadBlockCount: 2,
+});
+
 export const CSSFLOCKS_SOURCE_BANK = Object.freeze({
   id: "source-default",
   name: "Flocks Source Default",

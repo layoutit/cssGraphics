@@ -40,6 +40,9 @@ test("desktop and mobile assets declare exact source and product counts", async 
     assert.equal(catalog.streamFrameCount, 13_440);
     assert.equal(catalog.blockCount, 224);
     assert.equal(catalog.entries.length, 224);
+    assert.equal(catalog.runtimeLookaheadBlockCount, 11);
+    assert.equal(catalog.runtimeMaterializedLookaheadBlockCount, 2);
+    assert.equal(catalog.startupMaterializedLookaheadBlockCount, 2);
     assert.equal(catalog.terminalSeam.strategy, "cubic-hermite-correspondence");
     assert.equal(catalog.terminalSeam.sourceBehaviorDeviation, true);
     assert.equal(catalog.terminalSeam.bridgeFrameCount, 480);

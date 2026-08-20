@@ -8,8 +8,8 @@ export function resolveCssPipesRoute(input) {
   if (!supportedPaths.has(url.pathname)) {
     throw new CssPipesContractError(`Unsupported cssPipes route ${url.pathname}`);
   }
-  if (url.search || url.hash) {
-    throw new CssPipesContractError("cssPipes does not accept ad hoc scene selectors");
+  if (url.hash) {
+    throw new CssPipesContractError("cssPipes does not accept fragment scene selectors");
   }
   return Object.freeze({
     pathname: url.pathname.startsWith("/pipes") ? "/pipes/" : "/",

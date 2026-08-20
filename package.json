@@ -111,6 +111,7 @@
     "verify:source-only": "node scripts/verify-source-only.mjs --strict",
     "verify:flowerbox:bank": "node src/adapters/flowerbox/tools/verify-product-bank.mjs",
     "verify:flowerbox:runtime": "node src/adapters/flowerbox/tools/audit-runtime-surface.mjs",
+    "test:3dpipes": "node --test src/adapters/3dpipes/test/*.test.mjs",
     "test:flowerbox:lighting-publication": "node --test src/adapters/flowerbox/test/visible-lighting-publication.test.mjs",
     "test:flowerbox:browser": "node src/adapters/flowerbox/tools/smoke-browser.mjs",
     "test:cloth": "node --max-old-space-size=8192 --test src/adapters/cloth/test/*.test.mjs",

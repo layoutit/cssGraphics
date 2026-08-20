@@ -20,18 +20,22 @@ export function mountClothClient(host) {
   async function main() {
     if (!(host instanceof HTMLElement)) throw new Error("Missing Cloth host");
     setStatus("loading");
-    const metadata = await fetch("/csscloth/prepared.json", { cache: "no-store" })
+    const preparedPath = matchMedia("(max-width: 600px)").matches
+      ? "/csscloth/mobile/prepared.json"
+      : "/csscloth/prepared.json";
+    const metadata = await fetch(preparedPath, { cache: "no-store" })
       .then(assertResponse)
       .then((response) => response.json());
     const bankDescriptors = validatePlaybackCatalog(metadata);
     const startingBankIndex = selectClothStartingBank(bankDescriptors.length);
     const loadStartedAt = performance.now();
     const [loaded, playback] = await Promise.all([
-      loadPolyMorphPackage("/csscloth/model/", { modelId: "cloth" }),
+      loadPolyMorphPackage(metadata.renderer.modelRoot, { modelId: metadata.renderer.modelId }),
       loadClothPreparedPlayback(bankDescriptors[startingBankIndex]),
     ]);
     const loadMilliseconds = performance.now() - loadStartedAt;
-    if (loaded.model.identity.id !== "cloth" || metadata?.schema !== "csscloth-prepared-scene@1" ||
+    if (loaded.model.identity.id !== metadata.renderer.modelId ||
+        metadata?.schema !== "csscloth-prepared-scene@1" ||
         metadata?.renderer?.textureLeafSizing !== "raster") {
       throw new Error("Cloth prepared model binding drifted");
     }
@@ -46,7 +50,7 @@ export function mountClothClient(host) {
         distance: 0,
       }),
     });
-    cleanPreparedDom(mounted);
+    cleanPreparedDom(mounted, playback.triangleCount);
     const clothTexture = createPolyMorphPreparedCornerTextureTarget(
       mounted,
       loaded.resources,
@@ -362,7 +366,8 @@ function validatePlaybackCatalog(metadata) {
 }
 
 function validatePlaybackBank(playback, descriptor, currentPlayback = playback) {
-  if (playback?.triangleCount !== 200 || playback.frameCount !== 1440 ||
+  if (!Number.isSafeInteger(playback?.triangleCount) || playback.triangleCount < 1 ||
+      playback.frameCount !== 1440 ||
       playback.frameMilliseconds !== 1000 / 60 || playback.frameCount !== descriptor?.frameCount ||
       playback.triangleCount !== descriptor.triangleCount ||
       playback.shadowTriangleCount !== descriptor.shadowTriangleCount ||
@@ -373,7 +378,7 @@ function validatePlaybackBank(playback, descriptor, currentPlayback = playback) 
   }
 }
 
-function cleanPreparedDom(mounted) {
+function cleanPreparedDom(mounted, triangleCount) {
   mounted.cameraElement.className = "polycss-camera";
   mounted.cameraElement.removeAttribute("data-polycss-camera-projection");
   mounted.sceneElement.className = "polycss-scene";
@@ -405,7 +410,7 @@ function cleanPreparedDom(mounted) {
         element.parentElement !== mounted.modelElement)) {
     throw new Error("Cloth prepared model wrapper binding drifted");
   }
-  for (let triangleIndex = 0; triangleIndex < 200; triangleIndex += 1) {
+  for (let triangleIndex = 0; triangleIndex < triangleCount; triangleIndex += 1) {
     const suffix = String(triangleIndex).padStart(3, "0");
     const shape = mounted.shapeElements.get(`cloth-${suffix}`);
     const leaf = mounted.leafHandles.get(`leaf-cloth-${suffix}`)?.element;

@@ -23,6 +23,9 @@ export const CSSCLOTH_LOGO_SOURCE = Object.freeze({
 export const CSSCLOTH_SEGMENTS = 10;
 export const CSSCLOTH_PARTICLE_COUNT = 121;
 export const CSSCLOTH_TRIANGLE_COUNT = 200;
+export const CSSCLOTH_MOBILE_SEGMENTS = 6;
+export const CSSCLOTH_MOBILE_PARTICLE_COUNT = 49;
+export const CSSCLOTH_MOBILE_TRIANGLE_COUNT = 72;
 export const CSSCLOTH_RASTER_LEAF_SIZE = 28;
 export const CSSCLOTH_GROUND_SOURCE_REPEAT_COUNT = 25;
 export const CSSCLOTH_GROUND_REPEAT_COUNT = 14;
@@ -116,18 +119,73 @@ export function buildClothSourceFrames({
   });
 }
 
-export function buildClothTriangles() {
+export function buildClothMobileSourceFrames(source) {
+  if (!Array.isArray(source?.frames) || source.frames.length === 0 ||
+      !Array.isArray(source?.triangles) || source.triangles.length !== CSSCLOTH_TRIANGLE_COUNT) {
+    throw new TypeError("Mobile Cloth preparation needs complete desktop source frames");
+  }
+  const triangles = buildClothTriangles({ segments: CSSCLOTH_MOBILE_SEGMENTS });
+  const frames = source.frames.map((frame) => {
+    const positions = new Array(CSSCLOTH_PARTICLE_COUNT);
+    const normals = new Array(CSSCLOTH_PARTICLE_COUNT);
+    for (let triangleIndex = 0; triangleIndex < source.triangles.length; triangleIndex += 1) {
+      const topology = source.triangles[triangleIndex];
+      const triangle = frame.triangles[triangleIndex];
+      for (let cornerIndex = 0; cornerIndex < 3; cornerIndex += 1) {
+        const particle = topology.particleIndices[cornerIndex];
+        positions[particle] = triangle.positions[cornerIndex];
+        normals[particle] = triangle.normals[cornerIndex];
+      }
+    }
+    const mobilePositions = [];
+    const mobileNormals = [];
+    for (let v = 0; v <= CSSCLOTH_MOBILE_SEGMENTS; v += 1) {
+      for (let u = 0; u <= CSSCLOTH_MOBILE_SEGMENTS; u += 1) {
+        const sourceU = u * CSSCLOTH_SEGMENTS / CSSCLOTH_MOBILE_SEGMENTS;
+        const sourceV = v * CSSCLOTH_SEGMENTS / CSSCLOTH_MOBILE_SEGMENTS;
+        mobilePositions.push(Object.freeze(sampleSourceGrid(positions, sourceU, sourceV)));
+        mobileNormals.push(Object.freeze(normalize(sampleSourceGrid(normals, sourceU, sourceV))));
+      }
+    }
+    return Object.freeze({
+      frameIndex: frame.frameIndex,
+      triangles: Object.freeze(triangles.map((triangle) => Object.freeze({
+        positions: Object.freeze(triangle.particleIndices.map((index) => mobilePositions[index])),
+        normals: Object.freeze(triangle.particleIndices.map((index) => mobileNormals[index])),
+      }))),
+    });
+  });
+  return deepFreeze({
+    ...source,
+    schema: "csscloth-mobile-source-frames@1",
+    frames,
+    triangles,
+  });
+}
+
+export function buildClothTriangles({
+  segments = CSSCLOTH_SEGMENTS,
+  sourceSegments = segments,
+} = {}) {
+  if (!Number.isSafeInteger(segments) || segments < 1 ||
+      !Number.isSafeInteger(sourceSegments) || sourceSegments < segments ||
+      sourceSegments % segments !== 0) {
+    throw new RangeError("Cloth topology needs evenly sampled source segments");
+  }
+  const sourceStep = sourceSegments / segments;
   const triangles = [];
-  for (let v = 0; v < CSSCLOTH_SEGMENTS; v += 1) {
-    for (let u = 0; u < CSSCLOTH_SEGMENTS; u += 1) {
-      const a = particleIndex(u, v);
-      const b = particleIndex(u + 1, v);
-      const c = particleIndex(u + 1, v + 1);
-      const d = particleIndex(u, v + 1);
-      const u0 = u / CSSCLOTH_SEGMENTS;
-      const u1 = (u + 1) / CSSCLOTH_SEGMENTS;
-      const v0 = v / CSSCLOTH_SEGMENTS;
-      const v1 = (v + 1) / CSSCLOTH_SEGMENTS;
+  for (let v = 0; v < segments; v += 1) {
+    for (let u = 0; u < segments; u += 1) {
+      const sourceU = u * sourceStep;
+      const sourceV = v * sourceStep;
+      const a = topologyParticleIndex(sourceU, sourceV, sourceSegments);
+      const b = topologyParticleIndex(sourceU + sourceStep, sourceV, sourceSegments);
+      const c = topologyParticleIndex(sourceU + sourceStep, sourceV + sourceStep, sourceSegments);
+      const d = topologyParticleIndex(sourceU, sourceV + sourceStep, sourceSegments);
+      const u0 = u / segments;
+      const u1 = (u + 1) / segments;
+      const v0 = v / segments;
+      const v1 = (v + 1) / segments;
       triangles.push(Object.freeze({
         id: `cloth-${String(triangles.length).padStart(3, "0")}`,
         particleIndices: Object.freeze([a, b, d]),
@@ -143,7 +201,7 @@ export function buildClothTriangles() {
   return Object.freeze(triangles);
 }
 
-export function clothTriangleMatrix(frame, triangleIndex) {
+export function clothTriangleMatrix(frame, triangleIndex, seamEdges = CLOTH_SEAM_EDGES) {
   const triangle = frame.triangles[triangleIndex];
   if (!triangle) throw new RangeError("Cloth triangle index is out of range");
   const points = triangle.positions.map(sourceWorldToCssView);
@@ -155,7 +213,7 @@ export function clothTriangleMatrix(frame, triangleIndex) {
       layerElevation: 1,
       bleedRatio: 1,
       seamBleed: CLOTH_SEAM_BLEED,
-      seamEdges: new Set(CLOTH_SEAM_EDGES[triangleIndex]),
+      seamEdges: new Set(seamEdges[triangleIndex] ?? []),
     },
     {
       basis: clothTriangleBasis(triangleIndex),
@@ -178,8 +236,7 @@ export function clothTriangleMatrix(frame, triangleIndex) {
 }
 
 export function clothTriangleBasis(triangleIndex) {
-  if (!Number.isSafeInteger(triangleIndex) || triangleIndex < 0 ||
-      triangleIndex >= CSSCLOTH_TRIANGLE_COUNT) {
+  if (!Number.isSafeInteger(triangleIndex) || triangleIndex < 0) {
     throw new RangeError("Cloth triangle index is out of range");
   }
   return triangleIndex % 2 === 0 ? EVEN_TRIANGLE_BASIS : ODD_TRIANGLE_BASIS;
@@ -218,7 +275,7 @@ export function clothTriangleFogState(frame, triangleIndex) {
 
 export function buildClothLightingBank(source) {
   if (!Array.isArray(source?.frames) || source.frames.length === 0 ||
-      !Array.isArray(source?.triangles) || source.triangles.length !== CSSCLOTH_TRIANGLE_COUNT) {
+      !Array.isArray(source?.triangles) || source.triangles.length === 0) {
     throw new TypeError("Cloth lighting preparation needs complete source frames and topology");
   }
   const stateMaps = Array.from({ length: source.triangles.length }, () => new Map());
@@ -505,8 +562,7 @@ function groundHomographyMatrix(viewPoints) {
   return Object.freeze(geometry.matrix.split(",").map(Number).map(roundMatrix));
 }
 
-function buildClothSeamEdges() {
-  const triangles = buildClothTriangles();
+export function buildClothSeamEdges(triangles = buildClothTriangles()) {
   const edgeOwners = new Map();
   for (let triangleIndex = 0; triangleIndex < triangles.length; triangleIndex += 1) {
     const indices = triangles[triangleIndex].particleIndices;
@@ -535,6 +591,28 @@ function createViewBasis(position, target, up) {
 
 function particleIndex(u, v) {
   return u + v * (CSSCLOTH_SEGMENTS + 1);
+}
+
+function topologyParticleIndex(u, v, segments) {
+  return u + v * (segments + 1);
+}
+
+function sampleSourceGrid(values, u, v) {
+  const left = Math.floor(u);
+  const right = Math.min(CSSCLOTH_SEGMENTS, left + 1);
+  const top = Math.floor(v);
+  const bottom = Math.min(CSSCLOTH_SEGMENTS, top + 1);
+  const x = u - left;
+  const y = v - top;
+  const topValue = add(
+    scale(values[particleIndex(left, top)], 1 - x),
+    scale(values[particleIndex(right, top)], x),
+  );
+  const bottomValue = add(
+    scale(values[particleIndex(left, bottom)], 1 - x),
+    scale(values[particleIndex(right, bottom)], x),
+  );
+  return add(scale(topValue, 1 - y), scale(bottomValue, y)).map(Math.fround);
 }
 
 function addForce(particle, force) {

@@ -85,7 +85,7 @@
     "prepare:flowerbox:source": "node src/adapters/flowerbox/tools/prepare-cssflower.mjs && node src/adapters/flowerbox/tools/prepare-polycss-snapshot.mjs",
     "prepare:cloth": "node --max-old-space-size=8192 src/adapters/cloth/tools/prepare-csscloth.mjs",
     "prepare:cloth:artifact": "node scripts/prepare/csscloth-product-bank.mjs",
-    "package:cloth:artifact": "node src/adapters/cloth/tools/package-product-bank.mjs --source build/generated/public/csscloth --archive build/release/csscloth-product-bank-v1.tar.gz",
+    "package:cloth:artifact": "node src/adapters/cloth/tools/package-product-bank.mjs --source build/generated/public/csscloth --archive build/release/csscloth-product-bank-v2.tar.gz",
     "prepare:flipflop": "node src/adapters/flipflop/tools/prepare-cssflipflop.mjs",
     "prepare:gears:artifact": "node scripts/prepare/cssgears-product-bank.mjs",
     "prepare:gears:source": "node src/adapters/gears/tools/prepare-cssgears.mjs && node src/adapters/gears/tools/prepare-polycss-snapshot.mjs",

@@ -11,7 +11,6 @@ import {
   CSSCLOTH_GROUND_RASTER_WIDTH,
   CSSCLOTH_LIGHT_LEVELS,
   CSSCLOTH_RASTER_LEAF_SIZE,
-  CSSCLOTH_TRIANGLE_COUNT,
   shadeGroundSourceRgb,
   shadeSourceRgb,
   sourceCssViewToWorld,
@@ -68,7 +67,7 @@ export function buildClothDeduplicatedLightingLayout(rasterBoxes, lightingStates
 }
 
 function validateClothRasterInput(rasterBoxes, lightingStates) {
-  if (!Array.isArray(rasterBoxes) || rasterBoxes.length !== CSSCLOTH_TRIANGLE_COUNT ||
+  if (!Array.isArray(rasterBoxes) || rasterBoxes.length === 0 ||
       rasterBoxes.some((box) => !Number.isSafeInteger(box?.width) || !Number.isSafeInteger(box?.height) ||
         box.width < 1 || box.height < 1) || !Array.isArray(lightingStates) ||
       lightingStates.length !== rasterBoxes.length || lightingStates.some((states) =>
@@ -118,7 +117,13 @@ export function shadowImageSlice() {
   });
 }
 
-export async function buildClothRasterAssets({ logoBytes, grassBytes, rasterBoxes, lightingStates }) {
+export async function buildClothRasterAssets({
+  logoBytes,
+  grassBytes,
+  rasterBoxes,
+  lightingStates,
+  triangles = buildClothTriangles(),
+}) {
   const [cloth, groundImage] = await Promise.all([
     buildClothRasterPages({
       logoBytes,
@@ -139,6 +144,7 @@ export async function buildClothRasterAssets({ logoBytes, grassBytes, rasterBoxe
       outlineWidth: 0.009,
       outlineTopWidth: 0.016,
       outlineCornerSize: 0.014,
+      triangles,
     }),
     buildGroundImage(grassBytes),
   ]);
@@ -167,6 +173,7 @@ export async function buildClothRasterPages({
   outlineWidth = 0,
   outlineTopWidth = outlineWidth,
   outlineCornerSize = 0,
+  triangles = buildClothTriangles(),
 }) {
   if ([outlineWidth, outlineTopWidth, outlineCornerSize].some((value) =>
     !Number.isFinite(value) || value < 0 || value >= 0.5)) {
@@ -201,6 +208,7 @@ export async function buildClothRasterPages({
       outlineCornerSize,
       rasterBoxes,
       lightingStates,
+      triangles,
     );
     const [clothPages, clothLogoPages] = await Promise.all([
       Promise.all(separated.pages.map(encodeOpaqueRgbPng)),
@@ -221,6 +229,7 @@ export async function buildClothRasterPages({
     logo,
     rasterBoxes,
     lightingStates,
+    triangles,
   );
   const encodedClothPages = await Promise.all(clothPages.map((page) => (
     backingColor
@@ -689,8 +698,7 @@ function modulo(value, divisor) {
   return ((value % divisor) + divisor) % divisor;
 }
 
-function buildDeduplicatedClothPages(logo, rasterBoxes, lightingStates) {
-  const triangles = buildClothTriangles();
+function buildDeduplicatedClothPages(logo, rasterBoxes, lightingStates, triangles) {
   const uniqueTiles = [];
   const slotByHash = new Map();
   const stateSlots = [];
@@ -744,13 +752,13 @@ function buildSeparatedClothPages(
   outlineCornerSize,
   rasterBoxes,
   lightingStates,
+  triangles,
 ) {
   assertRgb(logoColor, "Cloth logo");
   assertRgb(heartColor, "Cloth heart");
   if (lightingSource.data.some((channel) => channel !== 0xff)) {
     throw new Error("Separated cloth lighting source must be uniform white");
   }
-  const triangles = buildClothTriangles();
   const uniqueTiles = [];
   const slotByState = new Map();
   const stateSlots = [];

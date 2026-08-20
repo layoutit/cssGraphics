@@ -72,9 +72,10 @@ try {
 }
 
 function validateLock(value) {
-  if (value.schema !== "csscloth-prepared-bank-lock@1" || value.bankCount !== 8 ||
+  if (value.schema !== "csscloth-prepared-bank-lock@2" || value.bankCount !== 8 ||
       value.bankFrameCount !== 1440 || value.durationMilliseconds !== 192_000 ||
-      value.retainedLeafCount !== 312 || value.fileCount !== 16 ||
+      value.retainedLeafCount !== 312 || value.mobileRetainedLeafCount !== 158 ||
+      value.mobileClothTriangleCount !== 72 || value.fileCount !== 32 ||
       !Number.isSafeInteger(value.archiveByteLength) || value.archiveByteLength <= 0 ||
       !/^[a-f0-9]{64}$/u.test(value.archiveSha256) ||
       !Number.isSafeInteger(value.closureBytes) || value.closureBytes <= 0 ||
@@ -90,6 +91,8 @@ async function matchesLock(root, value) {
       summary.bankFrameCount === value.bankFrameCount &&
       summary.durationMilliseconds === value.durationMilliseconds &&
       summary.retainedLeafCount === value.retainedLeafCount &&
+      summary.mobileRetainedLeafCount === value.mobileRetainedLeafCount &&
+      summary.mobileClothTriangleCount === value.mobileClothTriangleCount &&
       summary.fileCount === value.fileCount &&
       summary.closureBytes === value.closureBytes &&
       summary.closureSha256 === value.closureSha256;

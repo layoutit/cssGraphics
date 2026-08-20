@@ -6,6 +6,8 @@ import {
 } from "../src/prepare/csscloth/rasterAtlas.mjs";
 import {
   buildClothSourceFrames,
+  buildClothMobileSourceFrames,
+  buildClothSeamEdges,
   buildClothTriangles,
   buildFixtureFaces,
   buildFixtureShadowCasters,
@@ -21,12 +23,32 @@ import {
   CSSCLOTH_GROUND_SOURCE_REPEAT_COUNT,
   CSSCLOTH_PARTICLE_COUNT,
   CSSCLOTH_TRIANGLE_COUNT,
+  CSSCLOTH_MOBILE_PARTICLE_COUNT,
+  CSSCLOTH_MOBILE_TRIANGLE_COUNT,
 } from "../src/prepare/csscloth/sourceModel.mjs";
 
 test("the pinned source topology keeps 121 particles and 200 triangles", () => {
   assert.equal(CSSCLOTH_PARTICLE_COUNT, 121);
   assert.equal(CSSCLOTH_TRIANGLE_COUNT, 200);
   assert.equal(buildClothTriangles().length, 200);
+});
+
+test("mobile remesh keeps a full square with 72 cloth triangles", () => {
+  const source = buildClothSourceFrames({ frameCount: 2 });
+  const mobile = buildClothMobileSourceFrames(source);
+  assert.equal(CSSCLOTH_MOBILE_PARTICLE_COUNT, 49);
+  assert.equal(CSSCLOTH_MOBILE_TRIANGLE_COUNT, 72);
+  assert.equal(mobile.triangles.length, 72);
+  assert.equal(new Set(mobile.triangles.flatMap((triangle) => triangle.particleIndices)).size, 49);
+  assert.deepEqual(mobile.triangles[0].uv[0], [0, 0]);
+  assert.deepEqual(mobile.triangles.at(-1).uv[1], [1, 1]);
+  const seams = buildClothSeamEdges(mobile.triangles);
+  assert.equal(seams.length, 72);
+  const matrix = clothTriangleMatrix(mobile.frames[1], 47, seams);
+  assert.equal(matrix.length, 16);
+  assert.ok(matrix.every(Number.isFinite));
+  const lighting = buildClothLightingBank(mobile);
+  assert.equal(lighting.states.length, 72);
 });
 
 test("source fog uses the pinned Three.js r132 linear range", () => {

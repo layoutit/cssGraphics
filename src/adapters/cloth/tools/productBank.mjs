@@ -6,56 +6,25 @@ const PRODUCT_ROOT = "/csscloth/";
 
 export async function inspectCssclothProductBank(root) {
   const productRoot = resolve(root);
-  const preparedBytes = await readFile(join(productRoot, "prepared.json"));
-  const prepared = JSON.parse(preparedBytes);
-  const banks = prepared?.playback?.banks;
-  assert(prepared?.schema === "csscloth-prepared-scene@1", "prepared schema");
-  assert(prepared.status === "ready", "prepared status");
-  assert(prepared.presentation?.bankCount === 8, "bank count");
-  assert(prepared.presentation.bankFrameCount === 1440, "bank frame count");
-  assert(prepared.presentation.bankDurationMilliseconds === 24_000, "bank duration");
-  assert(prepared.presentation.durationMilliseconds === 192_000, "stream duration");
-  assert(prepared.playback?.schema === "csscloth-prepared-playback-bank-catalog@1", "playback catalog");
-  assert(Array.isArray(banks) && banks.length === 8, "playback banks");
-  assert(prepared.renderer?.runtimeGeometryConstruction === false, "runtime geometry contract");
-  assert(prepared.renderer.runtimeDomGrowth === false, "runtime DOM contract");
-  assert(prepared.renderer.runtimeAtlasRasterization === false, "runtime atlas contract");
-
-  const expectedPaths = new Set(["prepared.json", "model/catalog.json"]);
-  for (const [bankIndex, bank] of banks.entries()) {
-    assert(bank?.bankIndex === bankIndex, `bank ${bankIndex} index`);
-    assert(bank.frameCount === 1440 && bank.triangleCount === 200, `bank ${bankIndex} counts`);
-    assert(bank.shadowTriangleCount === 51, `bank ${bankIndex} shadow count`);
-    assert(bank.schema === "csscloth-prepared-playback@5", `bank ${bankIndex} schema`);
-    assert(bank.encoding ===
-      "gzip-third-order-zigzag-varint-fixed4-affine12-u16-lighting-u16-atlas-shadow@5",
-    `bank ${bankIndex} encoding`);
-    const path = productPath(bank.path);
-    const bytes = await readFile(join(productRoot, path));
-    assert(bytes.byteLength === bank.compressedByteLength, `bank ${bankIndex} bytes`);
-    assert(sha256(bytes) === bank.sha256, `bank ${bankIndex} hash`);
-    expectedPaths.add(path);
-  }
-
-  const catalogBytes = await readFile(join(productRoot, "model/catalog.json"));
-  const catalog = JSON.parse(catalogBytes);
-  assert(catalog?.schema === "polycss-morph.catalog@1", "model catalog schema");
-  assert(catalog.defaultId === "cloth" && catalog.packages?.length === 1, "model catalog package");
-  const manifestPath = productRelativePath(`model/${catalog.packages[0].manifestPath}`);
-  const manifestBytes = await readFile(join(productRoot, manifestPath));
-  assert(sha256(manifestBytes) === catalog.packages[0].manifestSha256, "model manifest hash");
-  expectedPaths.add(manifestPath);
-  const manifest = JSON.parse(manifestBytes);
-  assert(manifest?.schema === "polycss-morph.package@1", "model manifest schema");
-  assert(manifest.identity?.id === "cloth", "model identity");
-  const manifestDirectory = manifestPath.slice(0, manifestPath.lastIndexOf("/"));
-  for (const resource of manifest.resources ?? []) {
-    const path = productRelativePath(`${manifestDirectory}/${resource.path}`);
-    const bytes = await readFile(join(productRoot, path));
-    assert(bytes.byteLength === resource.bytes, `resource ${path} bytes`);
-    assert(sha256(bytes) === resource.sha256, `resource ${path} hash`);
-    expectedPaths.add(path);
-  }
+  const expectedPaths = new Set();
+  const desktop = await inspectProfile(productRoot, "", expectedPaths, {
+    profile: "desktop",
+    modelId: "cloth",
+    triangleCount: 200,
+    shadowTriangleCount: 51,
+    retainedLeafCount: 312,
+  });
+  assert(desktop.prepared.presentation?.responsiveProfile?.media === "(max-width: 600px)",
+    "mobile media query");
+  assert(desktop.prepared.presentation.responsiveProfile.path ===
+    "/csscloth/mobile/prepared.json", "mobile metadata path");
+  const mobile = await inspectProfile(productRoot, "mobile/", expectedPaths, {
+    profile: "mobile",
+    modelId: "cloth-mobile",
+    triangleCount: 72,
+    shadowTriangleCount: 25,
+    retainedLeafCount: 158,
+  });
 
   const paths = await listFiles(productRoot);
   assert(paths.length === expectedPaths.size && paths.every((path) => expectedPaths.has(path)),
@@ -71,17 +40,96 @@ export async function inspectCssclothProductBank(root) {
     closureBytes += bytes.byteLength;
   }
   return Object.freeze({
-    schema: "csscloth-product-bank-summary@1",
-    bankCount: banks.length,
-    bankFrameCount: prepared.presentation.bankFrameCount,
-    durationMilliseconds: prepared.presentation.durationMilliseconds,
-    retainedLeafCount: prepared.metrics?.retainedLeafCount,
+    schema: "csscloth-product-bank-summary@2",
+    bankCount: desktop.banks.length,
+    bankFrameCount: desktop.prepared.presentation.bankFrameCount,
+    durationMilliseconds: desktop.prepared.presentation.durationMilliseconds,
+    retainedLeafCount: desktop.prepared.metrics.retainedLeafCount,
+    mobileRetainedLeafCount: mobile.prepared.metrics.retainedLeafCount,
+    mobileClothTriangleCount: mobile.prepared.metrics.clothTriangleCount,
     fileCount: paths.length,
     closureBytes,
     closureSha256: closure.digest("hex"),
-    preparedByteLength: preparedBytes.byteLength,
-    preparedSha256: sha256(preparedBytes),
+    preparedByteLength: desktop.preparedBytes.byteLength,
+    preparedSha256: sha256(desktop.preparedBytes),
+    mobilePreparedByteLength: mobile.preparedBytes.byteLength,
+    mobilePreparedSha256: sha256(mobile.preparedBytes),
   });
+}
+
+async function inspectProfile(productRoot, prefix, expectedPaths, expected) {
+  const preparedPath = `${prefix}prepared.json`;
+  const preparedBytes = await readFile(join(productRoot, preparedPath));
+  const prepared = JSON.parse(preparedBytes);
+  const banks = prepared?.playback?.banks;
+  expectedPaths.add(preparedPath);
+  assert(prepared?.schema === "csscloth-prepared-scene@1", `${expected.profile} prepared schema`);
+  assert(prepared.status === "ready", `${expected.profile} prepared status`);
+  assert(prepared.renderer?.profileId === expected.profile, `${expected.profile} profile`);
+  assert(prepared.renderer.modelId === expected.modelId, `${expected.profile} model id`);
+  assert(prepared.presentation?.bankCount === 8, `${expected.profile} bank count`);
+  assert(prepared.presentation.bankFrameCount === 1440, `${expected.profile} bank frame count`);
+  assert(prepared.presentation.bankDurationMilliseconds === 24_000,
+    `${expected.profile} bank duration`);
+  assert(prepared.presentation.durationMilliseconds === 192_000,
+    `${expected.profile} stream duration`);
+  assert(prepared.playback?.schema === "csscloth-prepared-playback-bank-catalog@1",
+    `${expected.profile} playback catalog`);
+  assert(Array.isArray(banks) && banks.length === 8, `${expected.profile} playback banks`);
+  assert(prepared.metrics?.clothTriangleCount === expected.triangleCount,
+    `${expected.profile} cloth triangles`);
+  assert(prepared.metrics.retainedLeafCount === expected.retainedLeafCount,
+    `${expected.profile} retained leaves`);
+  assert(prepared.renderer.runtimeGeometryConstruction === false,
+    `${expected.profile} runtime geometry contract`);
+  assert(prepared.renderer.runtimeDomGrowth === false,
+    `${expected.profile} runtime DOM contract`);
+  assert(prepared.renderer.runtimeAtlasRasterization === false,
+    `${expected.profile} runtime atlas contract`);
+
+  for (const [bankIndex, bank] of banks.entries()) {
+    assert(bank?.bankIndex === bankIndex, `${expected.profile} bank ${bankIndex} index`);
+    assert(bank.frameCount === 1440 && bank.triangleCount === expected.triangleCount,
+      `${expected.profile} bank ${bankIndex} counts`);
+    assert(bank.shadowTriangleCount === expected.shadowTriangleCount,
+      `${expected.profile} bank ${bankIndex} shadow count`);
+    assert(bank.schema === "csscloth-prepared-playback@5",
+      `${expected.profile} bank ${bankIndex} schema`);
+    assert(bank.encoding ===
+      "gzip-third-order-zigzag-varint-fixed4-affine12-u16-lighting-u16-atlas-shadow@5",
+    `${expected.profile} bank ${bankIndex} encoding`);
+    const path = productPath(bank.path);
+    const bytes = await readFile(join(productRoot, path));
+    assert(bytes.byteLength === bank.compressedByteLength,
+      `${expected.profile} bank ${bankIndex} bytes`);
+    assert(sha256(bytes) === bank.sha256, `${expected.profile} bank ${bankIndex} hash`);
+    expectedPaths.add(path);
+  }
+
+  const catalogPath = `${prefix}model/catalog.json`;
+  const catalogBytes = await readFile(join(productRoot, catalogPath));
+  const catalog = JSON.parse(catalogBytes);
+  expectedPaths.add(catalogPath);
+  assert(catalog?.schema === "polycss-morph.catalog@1", `${expected.profile} model catalog schema`);
+  assert(catalog.defaultId === expected.modelId && catalog.packages?.length === 1,
+    `${expected.profile} model catalog package`);
+  const manifestPath = productRelativePath(`${prefix}model/${catalog.packages[0].manifestPath}`);
+  const manifestBytes = await readFile(join(productRoot, manifestPath));
+  assert(sha256(manifestBytes) === catalog.packages[0].manifestSha256,
+    `${expected.profile} model manifest hash`);
+  expectedPaths.add(manifestPath);
+  const manifest = JSON.parse(manifestBytes);
+  assert(manifest?.schema === "polycss-morph.package@1", `${expected.profile} model manifest schema`);
+  assert(manifest.identity?.id === expected.modelId, `${expected.profile} model identity`);
+  const manifestDirectory = manifestPath.slice(0, manifestPath.lastIndexOf("/"));
+  for (const resource of manifest.resources ?? []) {
+    const path = productRelativePath(`${manifestDirectory}/${resource.path}`);
+    const bytes = await readFile(join(productRoot, path));
+    assert(bytes.byteLength === resource.bytes, `resource ${path} bytes`);
+    assert(sha256(bytes) === resource.sha256, `resource ${path} hash`);
+    expectedPaths.add(path);
+  }
+  return Object.freeze({ prepared, preparedBytes, banks });
 }
 
 function productPath(url) {

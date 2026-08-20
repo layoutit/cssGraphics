@@ -13,6 +13,14 @@ export async function inspectCssclothProductBank(root) {
     triangleCount: 200,
     shadowTriangleCount: 51,
     retainedLeafCount: 312,
+    lightingStateCount: 60_269,
+    lightingStateKeyCount: 5_656,
+    lightingTileCount: 3_793,
+    lightingDeduplicatedCount: 56_476,
+    lightingAtlasPixels: 1_860 * 1_860,
+    logoAtlasWidth: 420,
+    logoAtlasHeight: 420,
+    logoTileCount: 43,
   });
   assert(desktop.prepared.presentation?.responsiveProfile?.media === "(max-width: 600px)",
     "mobile media query");
@@ -86,6 +94,35 @@ async function inspectProfile(productRoot, prefix, expectedPaths, expected) {
     `${expected.profile} runtime DOM contract`);
   assert(prepared.renderer.runtimeAtlasRasterization === false,
     `${expected.profile} runtime atlas contract`);
+  const logoAtlas = prepared.renderer.logoAtlas;
+  const lightingAtlas = prepared.renderer.lightingAtlas;
+  assert(logoAtlas?.rasterScale === 2 && logoAtlas.leafWidth === 56 &&
+    logoAtlas.leafHeight === 56 && logoAtlas.gutter === 2 &&
+    Array.isArray(logoAtlas.triangleSlots) &&
+    logoAtlas.triangleSlots.length === expected.triangleCount,
+    `${expected.profile} 2x logo atlas`);
+  assert(Array.isArray(lightingAtlas?.triangleSlots) &&
+    lightingAtlas.triangleSlots.length === expected.triangleCount &&
+    lightingAtlas.triangleSlots.every((slots) => Array.isArray(slots) && slots.length > 0),
+    `${expected.profile} lighting atlas slots`);
+  if (expected.lightingStateCount !== undefined) {
+    assert(prepared.metrics.clothLightingStateCount === expected.lightingStateCount,
+      `${expected.profile} lighting occurrences`);
+    assert(prepared.metrics.clothAtlasStoredStateCount === expected.lightingStateCount,
+      `${expected.profile} lighting stored states`);
+    assert(prepared.metrics.clothAtlasUniqueStateCount === expected.lightingTileCount,
+      `${expected.profile} lighting raster tiles`);
+    assert(prepared.metrics.clothAtlasDeduplicatedStateCount === expected.lightingDeduplicatedCount,
+      `${expected.profile} lighting deduplicated occurrences`);
+    assert(prepared.metrics.clothRasterPagePixels === expected.lightingAtlasPixels,
+      `${expected.profile} lighting atlas pixels`);
+    assert(prepared.metrics.clothLightingDistinctStateKeyCount === expected.lightingStateKeyCount,
+      `${expected.profile} lighting state keys`);
+    assert(logoAtlas.pageWidth === expected.logoAtlasWidth &&
+      logoAtlas.pageHeight === expected.logoAtlasHeight &&
+      new Set(logoAtlas.triangleSlots).size === expected.logoTileCount,
+      `${expected.profile} logo atlas metrics`);
+  }
 
   for (const [bankIndex, bank] of banks.entries()) {
     assert(bank?.bankIndex === bankIndex, `${expected.profile} bank ${bankIndex} index`);
@@ -93,11 +130,11 @@ async function inspectProfile(productRoot, prefix, expectedPaths, expected) {
       `${expected.profile} bank ${bankIndex} counts`);
     assert(bank.shadowTriangleCount === expected.shadowTriangleCount,
       `${expected.profile} bank ${bankIndex} shadow count`);
-    assert(bank.schema === "csscloth-prepared-playback@5",
+    assert(bank.schema === "csscloth-prepared-playback@6",
       `${expected.profile} bank ${bankIndex} schema`);
     assert(bank.encoding ===
-      "gzip-third-order-zigzag-varint-fixed4-affine12-u16-lighting-u16-atlas-shadow@5",
-    `${expected.profile} bank ${bankIndex} encoding`);
+      "gzip-third-order-zigzag-varint-fixed4-affine12-sparse-u16-lighting-shadow@6",
+      `${expected.profile} bank ${bankIndex} encoding`);
     const path = productPath(bank.path);
     const bytes = await readFile(join(productRoot, path));
     assert(bytes.byteLength === bank.compressedByteLength,

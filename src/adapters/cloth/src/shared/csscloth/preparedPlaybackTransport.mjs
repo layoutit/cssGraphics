@@ -1,11 +1,11 @@
 import { formatMatrix3dValues } from "@layoutit/polycss";
 
-export const CSSCLOTH_PLAYBACK_SCHEMA = "csscloth-prepared-playback@5";
+export const CSSCLOTH_PLAYBACK_SCHEMA = "csscloth-prepared-playback@6";
 export const CSSCLOTH_PLAYBACK_ENCODING =
-  "gzip-third-order-zigzag-varint-fixed4-affine12-u16-lighting-u16-atlas-shadow@5";
+  "gzip-third-order-zigzag-varint-fixed4-affine12-sparse-u16-lighting-shadow@6";
 
 const MAGIC = "CCLT";
-const VERSION = 5;
+const VERSION = 6;
 const HEADER_BYTES = 36;
 const PREDICTION_ORDER = 3;
 const MATRIX_DECIMALS = 4;
@@ -36,18 +36,12 @@ export function encodeClothPreparedPlayback(playback) {
       }
     }
   }
-  const lightingByteLength = playback.frameCount * playback.triangleCount * 2;
+  const lightingSchedule = buildSparseLightingSchedule(playback);
+  const lightingByteLength = lightingSchedule.offsets.byteLength +
+    lightingSchedule.indices.byteLength + lightingSchedule.slots.byteLength;
   const shadowVisibilityByteLength = playback.frameCount * playback.shadowTriangleCount;
-  const atlasStateOffsets = [0];
-  const atlasSlots = [];
-  for (const slots of playback.atlasStateSlots) {
-    atlasSlots.push(...slots);
-    atlasStateOffsets.push(atlasSlots.length);
-  }
-  const atlasMappingByteLength = (atlasStateOffsets.length + atlasSlots.length) * 2;
   const bytes = new Uint8Array(
-    HEADER_BYTES + matrixBytes.length + lightingByteLength + shadowVisibilityByteLength +
-      atlasMappingByteLength,
+    HEADER_BYTES + matrixBytes.length + lightingByteLength + shadowVisibilityByteLength,
   );
   const view = new DataView(bytes.buffer);
   for (let index = 0; index < MAGIC.length; index += 1) bytes[index] = MAGIC.charCodeAt(index);
@@ -61,27 +55,25 @@ export function encodeClothPreparedPlayback(playback) {
   view.setUint32(20, matrixBytes.length, true);
   view.setUint32(24, lightingByteLength, true);
   view.setUint16(28, playback.shadowTriangleCount, true);
-  view.setUint32(30, atlasMappingByteLength, true);
+  view.setUint32(30, lightingSchedule.indices.length, true);
   view.setUint16(34, 0, true);
   bytes.set(matrixBytes, HEADER_BYTES);
   let offset = HEADER_BYTES + matrixBytes.length;
-  for (const frame of playback.frames) {
-    for (const row of frame.lightingRows) {
-      view.setUint16(offset, row, true);
-      offset += 2;
-    }
+  for (const value of lightingSchedule.offsets) {
+    view.setUint32(offset, value, true);
+    offset += 4;
+  }
+  for (const value of lightingSchedule.indices) {
+    view.setUint16(offset, value, true);
+    offset += 2;
+  }
+  for (const value of lightingSchedule.slots) {
+    view.setUint16(offset, value, true);
+    offset += 2;
   }
   for (const frame of playback.frames) {
     bytes.set(frame.shadowVisibility, offset);
     offset += playback.shadowTriangleCount;
-  }
-  for (const value of atlasStateOffsets) {
-    view.setUint16(offset, value, true);
-    offset += 2;
-  }
-  for (const value of atlasSlots) {
-    view.setUint16(offset, value, true);
-    offset += 2;
   }
   return bytes;
 }
@@ -122,15 +114,17 @@ export function createClothPreparedPlaybackMaterialization(bytes, descriptor) {
   const frameMilliseconds = view.getFloat64(12, true);
   const matrixByteLength = view.getUint32(20, true);
   const lightingByteLength = view.getUint32(24, true);
-  const atlasMappingByteLength = view.getUint32(30, true);
+  const lightingAssignmentCount = view.getUint32(30, true);
   const shadowVisibilityByteLength = frameCount * shadowTriangleCount;
+  const expectedLightingByteLength = (frameCount + 1) * Uint32Array.BYTES_PER_ELEMENT +
+    lightingAssignmentCount * Uint16Array.BYTES_PER_ELEMENT * 2;
   if (view.getUint16(34, true) !== 0 || frameCount !== descriptor.frameCount ||
       triangleCount !== descriptor.triangleCount ||
       shadowTriangleCount !== descriptor.shadowTriangleCount ||
       frameMilliseconds !== descriptor.frameMilliseconds ||
-      lightingByteLength !== frameCount * triangleCount * 2 ||
-      HEADER_BYTES + matrixByteLength + lightingByteLength + shadowVisibilityByteLength +
-        atlasMappingByteLength !== bytes.byteLength) {
+      lightingByteLength !== expectedLightingByteLength ||
+      HEADER_BYTES + matrixByteLength + lightingByteLength + shadowVisibilityByteLength !==
+        bytes.byteLength) {
     throw new Error("Prepared Cloth playback counts drifted");
   }
   const transformCount = triangleCount + shadowTriangleCount;
@@ -156,36 +150,40 @@ export function createClothPreparedPlaybackMaterialization(bytes, descriptor) {
   if (stream.offset !== stream.end) throw new Error("Prepared Cloth matrix stream has trailing bytes");
   const lightingStart = stream.end;
   const shadowVisibilityStart = lightingStart + lightingByteLength;
-  const atlasMappingStart = shadowVisibilityStart + shadowVisibilityByteLength;
-  const atlasStateOffsets = new Uint16Array(triangleCount + 1);
-  let atlasOffset = atlasMappingStart;
-  for (let index = 0; index < atlasStateOffsets.length; index += 1) {
-    atlasStateOffsets[index] = view.getUint16(atlasOffset, true);
-    atlasOffset += 2;
+  const lightingOffsets = new Uint32Array(frameCount + 1);
+  let lightingOffset = lightingStart;
+  for (let index = 0; index < lightingOffsets.length; index += 1) {
+    lightingOffsets[index] = view.getUint32(lightingOffset, true);
+    lightingOffset += 4;
   }
-  const atlasStateCount = atlasStateOffsets[triangleCount];
-  if (atlasStateOffsets[0] !== 0 || atlasMappingByteLength !==
-      (atlasStateOffsets.length + atlasStateCount) * 2 ||
-      atlasStateOffsets.some((value, index) => index > 0 && value <= atlasStateOffsets[index - 1])) {
-    throw new Error("Prepared Cloth atlas mapping drifted");
+  if (lightingOffsets[0] !== 0 || lightingOffsets[1] !== triangleCount ||
+      lightingOffsets[frameCount] !== lightingAssignmentCount ||
+      lightingOffsets.some((value, index) => index > 0 && value < lightingOffsets[index - 1])) {
+    throw new Error("Prepared Cloth lighting schedule drifted");
   }
-  const atlasSlots = new Uint16Array(atlasStateCount);
-  for (let index = 0; index < atlasSlots.length; index += 1) {
-    atlasSlots[index] = view.getUint16(atlasOffset, true);
-    atlasOffset += 2;
+  const lightingIndices = new Uint16Array(lightingAssignmentCount);
+  for (let index = 0; index < lightingIndices.length; index += 1) {
+    lightingIndices[index] = view.getUint16(lightingOffset, true);
+    lightingOffset += 2;
+  }
+  if (lightingIndices.some((value) => value >= triangleCount)) {
+    throw new Error("Prepared Cloth lighting schedule addresses an invalid triangle");
+  }
+  const lightingSlots = new Uint16Array(lightingAssignmentCount);
+  for (let index = 0; index < lightingSlots.length; index += 1) {
+    lightingSlots[index] = view.getUint16(lightingOffset, true);
+    lightingOffset += 2;
   }
   const shadowSchedule = buildSparseShadowSchedule(
     quantized,
-    bytes.subarray(shadowVisibilityStart, atlasMappingStart),
+    bytes.subarray(shadowVisibilityStart),
     frameCount,
     triangleCount,
     shadowTriangleCount,
   );
-  const lightingRows = new Uint16Array(frameCount * triangleCount);
-  for (let index = 0; index < lightingRows.length; index += 1) {
-    lightingRows[index] = view.getUint16(lightingStart + index * 2, true);
+  if (lightingOffset !== shadowVisibilityStart) {
+    throw new Error("Prepared Cloth lighting schedule has trailing bytes");
   }
-  if (atlasOffset !== bytes.byteLength) throw new Error("Prepared Cloth atlas mapping has trailing bytes");
   return Object.freeze({
     playback: Object.freeze({
       schema: CSSCLOTH_PLAYBACK_SCHEMA,
@@ -195,15 +193,15 @@ export function createClothPreparedPlaybackMaterialization(bytes, descriptor) {
       frameMilliseconds,
       durationMilliseconds: frameCount * frameMilliseconds,
       transforms: null,
-      lightingRows,
+      lightingOffsets,
+      lightingIndices,
+      lightingSlots,
       shadowTransformOffsets: shadowSchedule.transformOffsets,
       shadowTransformIndices: shadowSchedule.transformIndices,
       shadowTransformValues: null,
       shadowVisibilityOffsets: shadowSchedule.visibilityOffsets,
       shadowVisibilityIndices: shadowSchedule.visibilityIndices,
       shadowVisibilityValues: shadowSchedule.visibilityValues,
-      atlasStateOffsets,
-      atlasSlots,
       decodedByteLength: bytes.byteLength,
     }),
     quantized,
@@ -281,6 +279,31 @@ export function completeClothPreparedPlaybackMaterialization(
 function clothCombinedTransformIndex(clothTransformIndex, triangleCount, transformCount) {
   const frameIndex = Math.floor(clothTransformIndex / triangleCount);
   return frameIndex * transformCount + clothTransformIndex % triangleCount;
+}
+
+function buildSparseLightingSchedule(playback) {
+  const offsets = new Uint32Array(playback.frameCount + 1);
+  const indices = [];
+  const slots = [];
+  const previousSlots = new Uint32Array(playback.triangleCount);
+  previousSlots.fill(0xffff_ffff);
+  for (let frameIndex = 0; frameIndex < playback.frameCount; frameIndex += 1) {
+    offsets[frameIndex] = indices.length;
+    const frame = playback.frames[frameIndex];
+    for (let triangleIndex = 0; triangleIndex < playback.triangleCount; triangleIndex += 1) {
+      const slot = playback.atlasStateSlots[triangleIndex][frame.lightingRows[triangleIndex]];
+      if (frameIndex !== 0 && previousSlots[triangleIndex] === slot) continue;
+      indices.push(triangleIndex);
+      slots.push(slot);
+      previousSlots[triangleIndex] = slot;
+    }
+  }
+  offsets[playback.frameCount] = indices.length;
+  return {
+    offsets,
+    indices: Uint16Array.from(indices),
+    slots: Uint16Array.from(slots),
+  };
 }
 
 function buildSparseShadowSchedule(

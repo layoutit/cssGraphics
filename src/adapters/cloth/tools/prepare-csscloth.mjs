@@ -26,6 +26,7 @@ import {
   CSSCLOTH_BANK_COUNT,
   CSSCLOTH_BANK_FRAME_COUNT,
   CSSCLOTH_OUTPUT_FRAME_MILLISECONDS,
+  CSSCLOTH_RASTER_LEAF_SIZE,
   CSSCLOTH_STREAM_FRAME_COUNT,
 } from "../src/prepare/csscloth/sourceModel.mjs";
 
@@ -124,6 +125,8 @@ async function prepareProfile(profile, profileRoot, publicRoot) {
         leafHeight: logoSlice.height,
         gutter: logoSlice.x,
         columns: logoPage.width / (logoSlice.width + logoSlice.x * 2),
+        rasterScale: logoSlice.width / CSSCLOTH_RASTER_LEAF_SIZE,
+        triangleSlots: raster.clothLogoLayout.stateSlots.map((slots) => slots[0]),
       })
     : undefined;
   const packageRoot = join(profileRoot, "model", prepared.model.identity.id);
@@ -152,6 +155,9 @@ async function prepareProfile(profile, profileRoot, publicRoot) {
       representation: "retained-cloth-and-shadow-triangles-with-compact-prepared-raster-playback",
       textureLeafSizing: "raster",
       logoAtlas,
+      lightingAtlas: {
+        triangleSlots: raster.clothLayout.stateSlots,
+      },
       runtimeGeometryConstruction: false,
       runtimeDomGrowth: false,
       runtimeAtlasRasterization: false,

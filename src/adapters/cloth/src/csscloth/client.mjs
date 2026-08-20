@@ -57,6 +57,7 @@ export function mountClothClient(host) {
       loaded.resources,
       playback.triangleCount,
       metadata.renderer.logoAtlas,
+      metadata.renderer.lightingAtlas,
     );
     const player = createPlayer(mounted, loaded.model, playback, clothTexture, {
       bankDescriptors,
@@ -110,8 +111,7 @@ function createPlayer(mounted, model, initialPlayback, clothTexture, transport) 
   const shadowTarget = createPolyMorphPreparedShadowTarget(mounted, initialPlayback);
   const frameMilliseconds = initialPlayback.frameMilliseconds;
   const schedulerLeadMilliseconds = Math.min(8, frameMilliseconds / 2);
-  const currentLightingRows = new Uint32Array(initialPlayback.triangleCount);
-  currentLightingRows.fill(0xffff_ffff);
+  const absoluteLightingSlots = new Uint32Array(initialPlayback.triangleCount);
   let playback = initialPlayback;
   let currentBankIndex = transport.startingBankIndex;
   let prefetchedBankIndex = -1;
@@ -132,6 +132,8 @@ function createPlayer(mounted, model, initialPlayback, clothTexture, transport) 
   let applyCount = 0;
   let leafTransformWrites = 0;
   let atlasRowWrites = 0;
+  let lightingScheduleAssignments = 0;
+  let lightingAbsoluteSeekCount = 0;
   let bankHandoffCount = 0;
   let bankBoundaryWaitCount = 0;
   let preparedPlaybackLoadCount = 1;
@@ -146,18 +148,44 @@ function createPlayer(mounted, model, initialPlayback, clothTexture, transport) 
       leafTransformWrites += Number(target.leaves[triangleIndex].writeTransform(
         playback.transforms[frameOffset + triangleIndex],
       ));
-      const lightingRow = playback.lightingRows[frameOffset + triangleIndex];
-      if (currentLightingRows[triangleIndex] === lightingRow) continue;
-      const atlasSlot = playback.atlasSlots[
-        playback.atlasStateOffsets[triangleIndex] + lightingRow
-      ];
-      atlasRowWrites += Number(clothTexture.writeSlot(triangleIndex, atlasSlot));
-      currentLightingRows[triangleIndex] = lightingRow;
+    }
+    if (lastFrameIndex < 0 ? frameIndex === 0 : frameIndex === lastFrameIndex + 1) {
+      publishSequentialLighting(frameIndex);
+    } else {
+      publishAbsoluteLighting(frameIndex);
     }
     shadowTarget.publish(frameIndex);
     lastFrameIndex = frameIndex;
     applyCount += 1;
     return frameIndex;
+  }
+
+  function publishSequentialLighting(frameIndex) {
+    const start = playback.lightingOffsets[frameIndex];
+    const end = playback.lightingOffsets[frameIndex + 1];
+    for (let assignment = start; assignment < end; assignment += 1) {
+      const triangleIndex = playback.lightingIndices[assignment];
+      const slot = playback.lightingSlots[assignment];
+      atlasRowWrites += Number(clothTexture.writeSlot(triangleIndex, slot));
+    }
+    lightingScheduleAssignments += end - start;
+  }
+
+  function publishAbsoluteLighting(frameIndex) {
+    absoluteLightingSlots.fill(0xffff_ffff);
+    for (let sourceFrame = 0; sourceFrame <= frameIndex; sourceFrame += 1) {
+      const start = playback.lightingOffsets[sourceFrame];
+      const end = playback.lightingOffsets[sourceFrame + 1];
+      for (let assignment = start; assignment < end; assignment += 1) {
+        absoluteLightingSlots[playback.lightingIndices[assignment]] =
+          playback.lightingSlots[assignment];
+      }
+    }
+    for (let triangleIndex = 0; triangleIndex < playback.triangleCount; triangleIndex += 1) {
+      const slot = absoluteLightingSlots[triangleIndex];
+      atlasRowWrites += Number(clothTexture.writeSlot(triangleIndex, slot));
+    }
+    lightingAbsoluteSeekCount += 1;
   }
 
   function prefetchNextBank() {
@@ -201,7 +229,6 @@ function createPlayer(mounted, model, initialPlayback, clothTexture, transport) 
     prefetchedBankIndex = -1;
     prefetchingBankIndex = -1;
     prefetchPromise = null;
-    currentLightingRows.fill(0xffff_ffff);
     shadowTarget.setPlayback(playback);
     lastFrameIndex = -1;
     publish(0);
@@ -308,6 +335,9 @@ function createPlayer(mounted, model, initialPlayback, clothTexture, transport) 
       schedulerLateResetCount,
       leafTransformWrites,
       atlasRowWrites,
+      lightingScheduleAssignments,
+      lightingAbsoluteSeekCount,
+      runtimeLightingComparisonCount: 0,
       shadowTransformAssignments: shadow.transformAssignments,
       shadowVisibilityAssignments: shadow.visibilityAssignments,
       shadowTransformWrites: shadow.transformWrites,
@@ -380,7 +410,15 @@ function validatePlaybackBank(playback, descriptor, currentPlayback = playback) 
       playback.shadowTriangleCount !== descriptor.shadowTriangleCount ||
       playback.triangleCount !== currentPlayback.triangleCount ||
       playback.shadowTriangleCount !== currentPlayback.shadowTriangleCount ||
-      playback.frameMilliseconds !== currentPlayback.frameMilliseconds) {
+      playback.frameMilliseconds !== currentPlayback.frameMilliseconds ||
+      !(playback.lightingOffsets instanceof Uint32Array) ||
+      playback.lightingOffsets.length !== playback.frameCount + 1 ||
+      playback.lightingOffsets[0] !== 0 ||
+      playback.lightingOffsets[1] !== playback.triangleCount ||
+      !(playback.lightingIndices instanceof Uint16Array) ||
+      !(playback.lightingSlots instanceof Uint16Array) ||
+      playback.lightingIndices.length !== playback.lightingSlots.length ||
+      playback.lightingOffsets[playback.frameCount] !== playback.lightingIndices.length) {
     throw new Error("Cloth prepared playback bank binding drifted");
   }
 }

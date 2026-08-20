@@ -22,6 +22,7 @@ export const CSSCLOTH_SHADOW_IMAGE_PATH = "assets/shadow.png";
 const RASTER_PAGE_WIDTH = 3072;
 const RASTER_PAGE_HEIGHT = 8192;
 const CLOTH_GUTTER = 1;
+const LOGO_RASTER_SCALE = 2;
 const GROUND_MAX_ANISOTROPY = 16;
 const GROUND_FIT_HORIZONTAL_BANDS = Object.freeze([-0.8, -0.8, 0.8, 0.8, 0.4, 0.2, 0.2, 0.4]);
 const GROUND_FIT_VERTICAL_BANDS = Object.freeze([1.3, 1.5, 1.5, 1.7, 1.9, 2, 2, 2]);
@@ -761,6 +762,7 @@ function buildSeparatedClothPages(
   }
   const uniqueTiles = [];
   const slotByState = new Map();
+  const slotByHash = new Map();
   const stateSlots = [];
   for (let triangleIndex = 0; triangleIndex < triangles.length; triangleIndex += 1) {
     const box = rasterBoxes[triangleIndex];
@@ -771,8 +773,6 @@ function buildSeparatedClothPages(
       const key = `${basisKey}:${state.join(",")}`;
       let slot = slotByState.get(key);
       if (slot === undefined) {
-        slot = uniqueTiles.length;
-        slotByState.set(key, slot);
         const tile = createRgba(box.width, box.height);
         paintClothTriangle(
           tile,
@@ -785,7 +785,14 @@ function buildSeparatedClothPages(
           box.width,
           box.height,
         );
-        uniqueTiles.push(tile);
+        const hash = hashOpaqueRgb(tile);
+        slot = slotByHash.get(hash);
+        if (slot === undefined) {
+          slot = uniqueTiles.length;
+          slotByHash.set(hash, slot);
+          uniqueTiles.push(tile);
+        }
+        slotByState.set(key, slot);
       }
       slots.push(slot);
     }
@@ -803,21 +810,20 @@ function buildSeparatedClothPages(
     copyTile(uniqueTiles[slot], pages[slice.pageIndex], slice.x, slice.y);
     copyAllGutters(pages[slice.pageIndex], slice.x, slice.y, slice.width, slice.height);
   }
-  const logoStateSlots = triangles.map((_, triangleIndex) => Object.freeze([triangleIndex]));
-  const logoLayout = buildClothSlotLayout(
-    rasterBoxes,
-    logoStateSlots,
-    triangles.length,
-    { preferSquare: true },
-  );
-  const logoPages = logoLayout.pages.map((page) => createRgba(page.width, page.height));
+  const logoRasterBoxes = rasterBoxes.map((box) => Object.freeze({
+    width: box.width * LOGO_RASTER_SCALE,
+    height: box.height * LOGO_RASTER_SCALE,
+  }));
+  const uniqueLogoTiles = [];
+  const logoSlotByHash = new Map();
+  const logoStateSlots = [];
   for (let triangleIndex = 0; triangleIndex < triangles.length; triangleIndex += 1) {
-    const box = rasterBoxes[triangleIndex];
-    const slice = logoLayout.slots[triangleIndex];
+    const box = logoRasterBoxes[triangleIndex];
+    const tile = createRgba(box.width, box.height);
     paintClothLogoTriangle(
-      logoPages[slice.pageIndex],
-      slice.x,
-      slice.y,
+      tile,
+      0,
+      0,
       logoMask,
       heartMask,
       logoColor,
@@ -830,7 +836,34 @@ function buildSeparatedClothPages(
       box.width,
       box.height,
     );
-    copyAllGutters(logoPages[slice.pageIndex], slice.x, slice.y, box.width, box.height);
+    const hash = hashOpaqueRgb(tile);
+    let slot = logoSlotByHash.get(hash);
+    if (slot === undefined) {
+      slot = uniqueLogoTiles.length;
+      logoSlotByHash.set(hash, slot);
+      uniqueLogoTiles.push(tile);
+    }
+    logoStateSlots.push(Object.freeze([slot]));
+  }
+  const logoLayout = buildClothSlotLayout(
+    logoRasterBoxes,
+    logoStateSlots,
+    uniqueLogoTiles.length,
+    { preferSquare: true, gutter: CLOTH_GUTTER * LOGO_RASTER_SCALE },
+  );
+  const logoPages = logoLayout.pages.map((page) => createRgba(page.width, page.height));
+  for (let slot = 0; slot < uniqueLogoTiles.length; slot += 1) {
+    const tile = uniqueLogoTiles[slot];
+    const slice = logoLayout.slots[slot];
+    copyTile(tile, logoPages[slice.pageIndex], slice.x, slice.y);
+    copyAllGutters(
+      logoPages[slice.pageIndex],
+      slice.x,
+      slice.y,
+      tile.width,
+      tile.height,
+      CLOTH_GUTTER * LOGO_RASTER_SCALE,
+    );
   }
   return Object.freeze({
     pages: Object.freeze(pages),
@@ -946,14 +979,22 @@ function paintClothLogoTriangle(
   }
 }
 
-function buildClothSlotLayout(rasterBoxes, stateSlots, slotCount, { preferSquare = false } = {}) {
+function buildClothSlotLayout(
+  rasterBoxes,
+  stateSlots,
+  slotCount,
+  { preferSquare = false, gutter = CLOTH_GUTTER } = {},
+) {
   const width = rasterBoxes[0].width;
   const height = rasterBoxes[0].height;
+  if (!Number.isSafeInteger(gutter) || gutter < 1) {
+    throw new RangeError("Cloth atlas gutter is invalid");
+  }
   if (rasterBoxes.some((box) => box.width !== width || box.height !== height)) {
     throw new RangeError("Cloth atlas deduplication requires one raster leaf size");
   }
-  const strideX = width + CLOTH_GUTTER * 2;
-  const strideY = height + CLOTH_GUTTER * 2;
+  const strideX = width + gutter * 2;
+  const strideY = height + gutter * 2;
   const columns = preferSquare
     ? resolveNearSquareColumns(slotCount, strideX, strideY)
     : Math.min(slotCount, Math.floor(RASTER_PAGE_WIDTH / strideX));
@@ -971,8 +1012,8 @@ function buildClothSlotLayout(rasterBoxes, stateSlots, slotCount, { preferSquare
   const slots = Object.freeze(Array.from({ length: slotCount }, (_, slot) => Object.freeze({
     pageIndex: 0,
     resourcePath: page.resourcePath,
-    x: (slot % columns) * strideX + CLOTH_GUTTER,
-    y: Math.floor(slot / columns) * strideY + CLOTH_GUTTER,
+    x: (slot % columns) * strideX + gutter,
+    y: Math.floor(slot / columns) * strideY + gutter,
     width,
     height,
     pageWidth,
@@ -1040,19 +1081,27 @@ function copyTile(source, target, left, top) {
   }
 }
 
-function copyAllGutters(page, left, top, width, height = width) {
-  for (let i = 0; i < height; i += 1) {
-    copyPixel(page, left, top + i, left - 1, top + i);
-    copyPixel(page, left + width - 1, top + i, left + width, top + i);
+function copyAllGutters(page, left, top, width, height = width, thickness = 1) {
+  for (let layer = 1; layer <= thickness; layer += 1) {
+    for (let i = 0; i < height; i += 1) {
+      copyPixel(page, left, top + i, left - layer, top + i);
+      copyPixel(page, left + width - 1, top + i, left + width - 1 + layer, top + i);
+    }
+    for (let i = 0; i < width; i += 1) {
+      copyPixel(page, left + i, top, left + i, top - layer);
+      copyPixel(page, left + i, top + height - 1, left + i, top + height - 1 + layer);
+    }
+    copyPixel(page, left, top, left - layer, top - layer);
+    copyPixel(page, left + width - 1, top, left + width - 1 + layer, top - layer);
+    copyPixel(page, left, top + height - 1, left - layer, top + height - 1 + layer);
+    copyPixel(
+      page,
+      left + width - 1,
+      top + height - 1,
+      left + width - 1 + layer,
+      top + height - 1 + layer,
+    );
   }
-  for (let i = 0; i < width; i += 1) {
-    copyPixel(page, left + i, top, left + i, top - 1);
-    copyPixel(page, left + i, top + height - 1, left + i, top + height);
-  }
-  copyPixel(page, left, top, left - 1, top - 1);
-  copyPixel(page, left + width - 1, top, left + width, top - 1);
-  copyPixel(page, left, top + height - 1, left - 1, top + height);
-  copyPixel(page, left + width - 1, top + height - 1, left + width, top + height);
 }
 
 function copyPixel(page, sourceX, sourceY, targetX, targetY) {

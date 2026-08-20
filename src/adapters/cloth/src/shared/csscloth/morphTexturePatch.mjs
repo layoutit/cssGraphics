@@ -1,6 +1,12 @@
 const CLOTH_ATLAS_GUTTER = 1;
 
-export function createPolyMorphPreparedCornerTextureTarget(mounted, resources, triangleCount, logoAtlas) {
+export function createPolyMorphPreparedCornerTextureTarget(
+  mounted,
+  resources,
+  triangleCount,
+  logoAtlas,
+  lightingAtlas,
+) {
   const handles = Array.from({ length: triangleCount }, (_, triangleIndex) =>
     mounted.leafHandles.get(`leaf-cloth-${String(triangleIndex).padStart(3, "0")}`));
   if (handles.some((handle) => !handle || handle.element.localName !== "u")) {
@@ -28,7 +34,10 @@ export function createPolyMorphPreparedCornerTextureTarget(mounted, resources, t
   const gutter = CLOTH_ATLAS_GUTTER;
   const stride = firstAtlas.width + gutter * 2;
   const columns = firstAtlas.pageWidth / stride;
-  if (!Number.isSafeInteger(columns) || columns < 1 || firstAtlas.height !== firstAtlas.width ||
+  const rowCount = firstAtlas.pageHeight / stride;
+  if (!Number.isSafeInteger(columns) || columns < 1 ||
+      !Number.isSafeInteger(rowCount) || rowCount < 1 ||
+      firstAtlas.height !== firstAtlas.width ||
       handles.some(({ plan }) => plan.width !== 28 || plan.height !== 28) ||
       atlases.some((atlas) => atlas.width !== firstAtlas.width || atlas.height !== firstAtlas.height ||
         atlas.pageWidth !== firstAtlas.pageWidth || atlas.pageHeight !== firstAtlas.pageHeight)) {
@@ -36,12 +45,30 @@ export function createPolyMorphPreparedCornerTextureTarget(mounted, resources, t
     URL.revokeObjectURL(logoUrl);
     throw new Error("Cloth prepared atlas grid is invalid");
   }
-  if (!Number.isSafeInteger(logoAtlas?.pageWidth) || logoAtlas.pageWidth < 1 ||
+  const logoRasterScale = logoAtlas?.rasterScale;
+  const logoStride = logoAtlas?.leafWidth + logoAtlas?.gutter * 2;
+  const logoRowCount = logoAtlas?.pageHeight / logoStride;
+  const logoSlotCount = logoAtlas?.columns * logoRowCount;
+  const lightingPositions = Array.from({ length: columns * rowCount }, (_, slot) =>
+    `${-(slot % columns * stride + gutter)}px ${-(Math.floor(slot / columns) * stride + gutter)}px`);
+  if (!Number.isSafeInteger(logoRasterScale) || logoRasterScale < 1 ||
+      !Number.isSafeInteger(logoAtlas?.pageWidth) || logoAtlas.pageWidth < 1 ||
       !Number.isSafeInteger(logoAtlas?.pageHeight) || logoAtlas.pageHeight < 1 ||
-      logoAtlas.leafWidth !== firstAtlas.width || logoAtlas.leafHeight !== firstAtlas.height ||
-      logoAtlas.gutter !== gutter || !Number.isSafeInteger(logoAtlas.columns) ||
-      logoAtlas.columns < 1 || logoAtlas.pageWidth !== logoAtlas.columns * stride ||
-      Math.ceil(handles.length / logoAtlas.columns) * stride !== logoAtlas.pageHeight) {
+      logoAtlas.leafWidth !== firstAtlas.width * logoRasterScale ||
+      logoAtlas.leafHeight !== firstAtlas.height * logoRasterScale ||
+      logoAtlas.gutter !== gutter * logoRasterScale ||
+      !Number.isSafeInteger(logoAtlas.columns) || logoAtlas.columns < 1 ||
+      !Number.isSafeInteger(logoRowCount) || logoRowCount < 1 ||
+      logoAtlas.pageWidth !== logoAtlas.columns * logoStride ||
+      !Array.isArray(logoAtlas.triangleSlots) ||
+      logoAtlas.triangleSlots.length !== handles.length ||
+      logoAtlas.triangleSlots.some((slot) =>
+        !Number.isSafeInteger(slot) || slot < 0 || slot >= logoSlotCount) ||
+      !Array.isArray(lightingAtlas?.triangleSlots) ||
+      lightingAtlas.triangleSlots.length !== handles.length ||
+      lightingAtlas.triangleSlots.some((slots) => !Array.isArray(slots) || slots.length < 1 ||
+        slots.some((slot) => !Number.isSafeInteger(slot) ||
+          slot < 0 || slot >= lightingPositions.length))) {
     URL.revokeObjectURL(url);
     URL.revokeObjectURL(logoUrl);
     throw new Error("Cloth prepared logo atlas grid is invalid");
@@ -54,20 +81,38 @@ export function createPolyMorphPreparedCornerTextureTarget(mounted, resources, t
   );
   mounted.cameraElement.style.setProperty(
     "--csscloth-logo-atlas-size",
-    `${logoAtlas.pageWidth}px ${logoAtlas.pageHeight}px`,
+    `${logoAtlas.pageWidth / logoRasterScale}px ${logoAtlas.pageHeight / logoRasterScale}px`,
   );
-  const positions = new Array(handles.length);
-  const logoPositions = new Array(handles.length);
+  const currentSlots = new Int32Array(handles.length);
+  currentSlots.fill(-1);
+  const backgroundPositions = new Array(handles.length);
 
   for (let index = 0; index < handles.length; index += 1) {
     const handle = handles[index];
     const atlas = atlases[index];
     const { element } = handle;
-    const position = `${-atlas.x}px ${-atlas.y}px`;
-    const logoPosition = `${-(index % logoAtlas.columns * stride + gutter)}px ${-(Math.floor(index / logoAtlas.columns) * stride + gutter)}px`;
-    positions[index] = position;
-    logoPositions[index] = logoPosition;
-    element.style.backgroundPosition = `${logoPosition}, ${position}`;
+    const slotColumn = (atlas.x - gutter) / stride;
+    const slotRow = (atlas.y - gutter) / stride;
+    const slot = slotRow * columns + slotColumn;
+    if (!Number.isSafeInteger(slotColumn) || !Number.isSafeInteger(slotRow) ||
+        slot < 0 || slot >= lightingPositions.length) {
+      throw new Error("Cloth prepared atlas slot is invalid");
+    }
+    const logoSlot = logoAtlas.triangleSlots[index];
+    const logoPosition = `${-(logoSlot % logoAtlas.columns * logoStride + logoAtlas.gutter) / logoRasterScale}px ${-(Math.floor(logoSlot / logoAtlas.columns) * logoStride + logoAtlas.gutter) / logoRasterScale}px`;
+    const positions = new Map();
+    for (const lightingSlot of lightingAtlas.triangleSlots[index]) {
+      if (!positions.has(lightingSlot)) {
+        positions.set(lightingSlot, `${logoPosition}, ${lightingPositions[lightingSlot]}`);
+      }
+    }
+    const position = positions.get(slot);
+    if (position === undefined) {
+      throw new Error("Cloth prepared initial atlas slot is invalid");
+    }
+    currentSlots[index] = slot;
+    backgroundPositions[index] = positions;
+    element.style.backgroundPosition = position;
   }
 
   return Object.freeze({
@@ -77,10 +122,13 @@ export function createPolyMorphPreparedCornerTextureTarget(mounted, resources, t
           !Number.isSafeInteger(slot) || slot < 0) {
         throw new RangeError("Cloth prepared atlas slot is out of range");
       }
-      const position = `${-(slot % columns * stride + gutter)}px ${-(Math.floor(slot / columns) * stride + gutter)}px`;
-      if (positions[index] === position) return false;
-      handles[index].element.style.backgroundPosition = `${logoPositions[index]}, ${position}`;
-      positions[index] = position;
+      if (currentSlots[index] === slot) return false;
+      const position = backgroundPositions[index].get(slot);
+      if (position === undefined) {
+        throw new RangeError("Cloth prepared atlas slot is out of range");
+      }
+      handles[index].element.style.backgroundPosition = position;
+      currentSlots[index] = slot;
       return true;
     },
     destroy() {

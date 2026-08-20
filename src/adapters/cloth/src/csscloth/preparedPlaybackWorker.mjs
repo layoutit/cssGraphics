@@ -88,14 +88,14 @@ async function streamMatrixKind(requestId, materialization, kind, count, chunkCo
 
 function playbackTransferables(playback) {
   return [
-    playback.lightingRows.buffer,
+    playback.lightingOffsets.buffer,
+    playback.lightingIndices.buffer,
+    playback.lightingSlots.buffer,
     playback.shadowTransformOffsets.buffer,
     playback.shadowTransformIndices.buffer,
     playback.shadowVisibilityOffsets.buffer,
     playback.shadowVisibilityIndices.buffer,
     playback.shadowVisibilityValues.buffer,
-    playback.atlasStateOffsets.buffer,
-    playback.atlasSlots.buffer,
   ];
 }
 

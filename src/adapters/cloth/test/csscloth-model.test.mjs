@@ -29,6 +29,7 @@ test("prepared model keeps one retained triangle root per cloth face", () => {
   assert.equal(prepared.metrics.frameCount, 11_520);
   assert.equal(prepared.metrics.durationMilliseconds, 192_000);
   assert.equal(prepared.metrics.clothLightingStateCount, 60_269);
+  assert.equal(prepared.metrics.clothLightingDistinctStateKeyCount, 5_656);
   assert.equal(prepared.metrics.clothAtlasStoredStateCount, 60_269);
   assert.equal(prepared.metrics.clothAtlasUniqueStateCount, 5_656);
   assert.equal(prepared.metrics.clothAtlasDeduplicatedStateCount, 54_613);
@@ -84,9 +85,10 @@ test("prepared playback uses compact fixed-point transport", () => {
     frameMilliseconds: playback.frameMilliseconds,
   });
   assert.equal(decoded.transforms.length, 1440 * 200);
-  assert.equal(decoded.lightingRows.length, 1440 * 200);
-  assert.equal(decoded.atlasStateOffsets.length, 201);
-  assert.equal(decoded.atlasSlots.length, prepared.metrics.clothLightingStateCount);
+  assert.equal(decoded.lightingOffsets.length, 1441);
+  assert.equal(decoded.lightingOffsets[1], 200);
+  assert.equal(decoded.lightingIndices.length, decoded.lightingSlots.length);
+  assert.ok(decoded.lightingIndices.length < 1440 * 50);
   assert.equal(decoded.shadowTransformOffsets.length, 1441);
   assert.equal(decoded.shadowVisibilityOffsets.length, 1441);
   assert.equal(decoded.shadowTransformOffsets[1], prepared.metrics.clothShadowLeafCount);
@@ -100,6 +102,10 @@ test("prepared playback uses compact fixed-point transport", () => {
   assert.deepEqual(
     [...materialization.playback.shadowTransformIndices],
     [...decoded.shadowTransformIndices],
+  );
+  assert.deepEqual(
+    [...materialization.playback.lightingOffsets],
+    [...decoded.lightingOffsets],
   );
   const sampledTransformIndex = 137 * 200 + 47;
   assert.deepEqual(
@@ -125,6 +131,12 @@ test("prepared playback uses compact fixed-point transport", () => {
   assert.deepEqual(
     [...shadowState.visibility],
     playback.frames[137].shadowVisibility,
+  );
+  const lightingState = reconstructLightingState(decoded, 137);
+  assert.deepEqual(
+    [...lightingState],
+    playback.frames[137].lightingRows.map((row, triangleIndex) =>
+      playback.atlasStateSlots[triangleIndex][row]),
   );
 });
 
@@ -157,6 +169,17 @@ function reconstructShadowState(playback, frameIndex) {
     }
   }
   return { transforms, visibility };
+}
+
+function reconstructLightingState(playback, frameIndex) {
+  const slots = new Uint16Array(playback.triangleCount);
+  for (let sourceFrame = 0; sourceFrame <= frameIndex; sourceFrame += 1) {
+    for (let assignment = playback.lightingOffsets[sourceFrame];
+      assignment < playback.lightingOffsets[sourceFrame + 1]; assignment += 1) {
+      slots[playback.lightingIndices[assignment]] = playback.lightingSlots[assignment];
+    }
+  }
+  return slots;
 }
 
 test("the prepared shadow leaves share one small raster triangle", () => {

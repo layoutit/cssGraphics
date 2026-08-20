@@ -233,6 +233,7 @@ export function buildClothPreparedModel({ profile = "desktop" } = {}) {
       clothRasterPageCount: rasterLayout.pages.length,
       clothRasterPagePixels: rasterLayout.pages.reduce((sum, page) => sum + page.width * page.height, 0),
       clothLightingStateCount: lighting.states.reduce((sum, states) => sum + states.length, 0),
+      clothLightingDistinctStateKeyCount: rasterLayout.slots.length,
       clothAtlasStoredStateCount: lighting.states.reduce((sum, states) => sum + states.length, 0),
       clothAtlasUniqueStateCount: rasterLayout.slots.length,
       clothAtlasDeduplicatedStateCount:

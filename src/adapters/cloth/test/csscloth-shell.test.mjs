@@ -44,6 +44,9 @@ test("runtime has no per-frame geometry or raster construction", async () => {
   assert.match(playbackStream, /requestIdleCallback/u);
   assert.match(playbackStream, /RESPONSE_CHUNK_TRANSFORM_COUNT = 480/u);
   assert.match(playbackWorker, /materializeClothPreparedMatrixRange/u);
+  assert.match(playbackWorker, /playback\.lightingOffsets\.buffer/u);
+  assert.match(playbackWorker, /playback\.lightingIndices\.buffer/u);
+  assert.match(playbackWorker, /playback\.lightingSlots\.buffer/u);
   assert.match(playbackWorker, /setTimeout\(resolve, materialization\.playback\.frameMilliseconds\)/u);
   assert.doesNotMatch(playbackWorker, /canvas|getContext|createElement|requestAnimationFrame/u);
   assert.match(client, /textureLeafSizing !== "raster"/);
@@ -57,8 +60,9 @@ test("runtime has no per-frame geometry or raster construction", async () => {
   assert.match(textureTarget, /--csscloth-atlas/u);
   assert.match(textureTarget, /--csscloth-logo-atlas/u);
   assert.match(textureTarget, /--csscloth-logo-atlas-size/u);
-  assert.match(textureTarget, /logoPositions/u);
+  assert.match(textureTarget, /logoAtlas\.triangleSlots/u);
   assert.match(client, /metadata\.renderer\.logoAtlas/u);
+  assert.match(client, /metadata\.renderer\.lightingAtlas/u);
   assert.match(styles, /body > \.polycss-camera > \.polycss-scene > u/u);
   assert.match(styles, /background-image: var\(--csscloth-logo-atlas\), var\(--csscloth-atlas\)/u);
   assert.match(styles, /background-size: var\(--csscloth-logo-atlas-size\), var\(--csscloth-atlas-size\)/u);
@@ -71,7 +75,16 @@ test("runtime has no per-frame geometry or raster construction", async () => {
   assert.match(styles, /corner-top-left-shape: bevel/u);
   assert.match(styles, /corner-top-right-shape: bevel/u);
   assert.match(client, /target\.leaves\[triangleIndex\]\.writeTransform/u);
+  assert.match(client, /playback\.lightingOffsets\[frameIndex\]/u);
+  assert.match(client, /publishAbsoluteLighting/u);
+  assert.match(client, /runtimeLightingComparisonCount: 0/u);
+  assert.doesNotMatch(client, /playback\.lightingRows/u);
+  assert.doesNotMatch(client, /currentLightingRows/u);
   assert.doesNotMatch(styles, /transform: matrix3d\(1, 0, 0, 0, 0, 1/u);
+  assert.match(textureTarget, /const lightingPositions = Array\.from/u);
+  assert.match(textureTarget, /const backgroundPositions = new Array/u);
+  assert.match(textureTarget, /element\.style\.backgroundPosition = position/u);
+  assert.doesNotMatch(textureTarget, /writeSlot\([\s\S]*?`\$\{/u);
   assert.doesNotMatch(textureTarget, /canvas|getContext|createElement|requestAnimationFrame/u);
 });
 

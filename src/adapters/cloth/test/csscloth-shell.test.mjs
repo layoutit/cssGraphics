@@ -40,10 +40,16 @@ test("runtime has no per-frame geometry or raster construction", async () => {
   assert.match(client, /cleanPreparedDom\(mounted, playback\.triangleCount\)/u);
   assert.match(client, /createClothPreparedPlaybackStream/);
   assert.match(client, /loadPlayback: playbackStream\.loadFuture/u);
+  assert.match(client, /playbackStream\.resumeInitial\(\)/u);
+  assert.match(client, /isFrameAvailable\(playback, lastFrameIndex \+ 1\)/u);
   assert.match(playbackStream, /new Worker/u);
   assert.match(playbackStream, /requestIdleCallback/u);
   assert.match(playbackStream, /RESPONSE_CHUNK_TRANSFORM_COUNT = 480/u);
+  assert.match(playbackStream, /INITIAL_BUFFER_FRAME_COUNT = 240/u);
+  assert.match(playbackStream, /materializeInitial/u);
   assert.match(playbackWorker, /materializeClothPreparedMatrixRange/u);
+  assert.match(playbackWorker, /type: "materialized-ready"/u);
+  assert.match(playbackWorker, /waitForContinuation/u);
   assert.match(playbackWorker, /playback\.lightingOffsets\.buffer/u);
   assert.match(playbackWorker, /playback\.lightingIndices\.buffer/u);
   assert.match(playbackWorker, /playback\.lightingSlots\.buffer/u);

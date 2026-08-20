@@ -4,8 +4,9 @@ import {
 } from "../shared/csscloth/preparedPlaybackTransport.mjs";
 
 const RESPONSE_CHUNK_TRANSFORM_COUNT = 480;
+const INITIAL_BUFFER_FRAME_COUNT = 240;
 
-export function createClothPreparedPlaybackStream() {
+export function createClothPreparedPlaybackStream({ recordError = () => {} } = {}) {
   const workerMaterializer = createWorkerMaterializer();
   let loadCount = 0;
   let workerLoadCount = 0;
@@ -17,6 +18,9 @@ export function createClothPreparedPlaybackStream() {
   let responseMaximumChunkBytes = 0;
   let responseMaximumIdleSliceMilliseconds = 0;
   let responseMaximumDirectMilliseconds = 0;
+  let initialBufferedFrameCount = 0;
+  let initialMaterializationComplete = workerMaterializer === null;
+  let resumeInitialMaterialization = null;
 
   async function loadInitial(descriptor) {
     if (workerMaterializer === null) {
@@ -24,7 +28,23 @@ export function createClothPreparedPlaybackStream() {
       loadCount += 1;
       return playback;
     }
-    return recordWorkerResult(await workerMaterializer.materialize(descriptor, { paced: false }));
+    const materialization = workerMaterializer.materializeInitial(descriptor, {
+      readyFrameCount: Math.min(INITIAL_BUFFER_FRAME_COUNT, descriptor.frameCount),
+    });
+    const result = await materialization.ready;
+    loadCount += 1;
+    workerLoadCount += 1;
+    initialBufferedFrameCount = result.playback.materialization.readyFrameCount;
+    workerPreparationMaximumMilliseconds = Math.max(
+      workerPreparationMaximumMilliseconds,
+      result.preparationMilliseconds,
+    );
+    resumeInitialMaterialization = materialization.resume;
+    materialization.complete.then((completed) => {
+      initialMaterializationComplete = true;
+      recordWorkerMetrics(completed);
+    }).catch((error) => recordError(error.stack || error.message || String(error)));
+    return result.playback;
   }
 
   async function loadFuture(descriptor) {
@@ -34,12 +54,13 @@ export function createClothPreparedPlaybackStream() {
       return playback;
     }
     const result = await workerMaterializer.materialize(descriptor, { paced: true });
-    return recordWorkerResult(result);
-  }
-
-  function recordWorkerResult(result) {
     loadCount += 1;
     workerLoadCount += 1;
+    recordWorkerMetrics(result);
+    return result.playback;
+  }
+
+  function recordWorkerMetrics(result) {
     workerPreparationMaximumMilliseconds = Math.max(
       workerPreparationMaximumMilliseconds,
       result.preparationMilliseconds,
@@ -63,17 +84,23 @@ export function createClothPreparedPlaybackStream() {
       responseMaximumDirectMilliseconds,
       result.maximumResponseDirectMilliseconds,
     );
-    return result.playback;
   }
 
   return Object.freeze({
     loadInitial,
     loadFuture,
+    resumeInitial() {
+      const resume = resumeInitialMaterialization;
+      resumeInitialMaterialization = null;
+      resume?.();
+    },
     stats() {
       return Object.freeze({
         preparedPlaybackStreamLoadCount: loadCount,
         preparedPlaybackWorkerAvailable: workerMaterializer !== null,
         preparedPlaybackWorkerLoadCount: workerLoadCount,
+        preparedPlaybackInitialBufferedFrameCount: initialBufferedFrameCount,
+        preparedPlaybackInitialMaterializationComplete: initialMaterializationComplete,
         preparedPlaybackWorkerPreparationMaximumMilliseconds:
           Number(workerPreparationMaximumMilliseconds.toFixed(2)),
         preparedPlaybackWorkerMaterializationMaximumMilliseconds:
@@ -115,11 +142,16 @@ function createWorkerMaterializer() {
   let destroyed = false;
 
   function rejectAll(error) {
-    for (const request of pending.values()) request.reject(error);
+    for (const request of pending.values()) rejectRequest(request, error);
     pending.clear();
     responseQueue.length = 0;
     if (idleRequest !== null) cancelIdle(idleRequest);
     idleRequest = null;
+  }
+
+  function rejectRequest(request, error) {
+    request.rejectReady?.(error);
+    request.rejectComplete(error);
   }
 
   function scheduleResponseSlice() {
@@ -127,11 +159,17 @@ function createWorkerMaterializer() {
     idleRequest = requestIdle(processResponseSlice, { timeout: 500 });
   }
 
-  function processResponseSlice() {
+  function processResponseSlice(deadline) {
     idleRequest = null;
-    const queued = responseQueue.shift();
-    if (!queued) return;
-    processResponseChunk(queued.data, queued.request, true);
+    const startedAt = performance.now();
+    let processed = 0;
+    while (responseQueue.length > 0 && processed < 24) {
+      const queued = responseQueue.shift();
+      processResponseChunk(queued.data, queued.request, true);
+      processed += 1;
+      if (performance.now() - startedAt >= 4 ||
+          (!deadline.didTimeout && deadline.timeRemaining() <= 1)) break;
+    }
     scheduleResponseSlice();
   }
 
@@ -146,12 +184,27 @@ function createWorkerMaterializer() {
         ? response.processedClothChunkCount
         : response.processedShadowChunkCount;
       const target = data.kind === "cloth" ? response.transforms : response.shadowTransformValues;
-      if (data.chunkIndex !== expectedChunkIndex || data.start !== target.length) {
+      const receivedTransformCount = data.kind === "cloth"
+        ? response.receivedClothTransformCount
+        : response.receivedShadowTransformCount;
+      if (data.chunkIndex !== expectedChunkIndex || data.start !== receivedTransformCount) {
         throw new Error("Prepared Cloth worker response ordering drifted");
       }
-      target.push(...data.transforms);
-      if (data.kind === "cloth") response.processedClothChunkCount += 1;
-      else response.processedShadowChunkCount += 1;
+      for (let index = 0; index < data.transforms.length; index += 1) {
+        target[data.start + index] = data.transforms[index];
+      }
+      if (data.kind === "cloth") {
+        response.processedClothChunkCount += 1;
+        response.receivedClothTransformCount += data.transforms.length;
+      } else {
+        response.processedShadowChunkCount += 1;
+        response.receivedShadowTransformCount += data.transforms.length;
+      }
+      if (response.materialization) {
+        response.materialization.clothTransformCount = response.receivedClothTransformCount;
+        response.materialization.shadowTransformValueCount =
+          response.receivedShadowTransformCount;
+      }
       response.responseChunkCount += 1;
       if (idle) response.responseIdleSliceCount += 1;
       else response.responseDirectChunkCount += 1;
@@ -175,7 +228,7 @@ function createWorkerMaterializer() {
       maybeComplete(data.requestId, request);
     } catch (error) {
       pending.delete(data.requestId);
-      request.reject(error);
+      rejectRequest(request, error);
     }
   }
 
@@ -184,17 +237,19 @@ function createWorkerMaterializer() {
     if (!response?.workerComplete ||
         response.processedClothChunkCount !== response.clothChunkCount ||
         response.processedShadowChunkCount !== response.shadowChunkCount) return;
-    if (response.transforms.length !== response.clothTransformCount ||
-        response.shadowTransformValues.length !== response.shadowTransformValueCount) {
+    if (response.receivedClothTransformCount !== response.clothTransformCount ||
+        response.receivedShadowTransformCount !== response.shadowTransformValueCount) {
       throw new Error("Prepared Cloth worker response count drifted");
     }
-    const playback = completeClothPreparedPlaybackMaterialization(
+    const completedPlayback = completeClothPreparedPlaybackMaterialization(
       response.playback,
       response.transforms,
       response.shadowTransformValues,
     );
+    if (response.materialization) response.materialization.complete = true;
+    const playback = response.progressivePlayback ?? completedPlayback;
     pending.delete(requestId);
-    request.resolve(Object.freeze({
+    request.resolveComplete(Object.freeze({
       playback,
       preparationMilliseconds: response.preparationMilliseconds,
       durationMilliseconds: response.durationMilliseconds,
@@ -215,7 +270,7 @@ function createWorkerMaterializer() {
       else {
         const request = pending.get(data.requestId);
         pending.delete(data.requestId);
-        request?.reject(error);
+        if (request) rejectRequest(request, error);
       }
       return;
     }
@@ -229,6 +284,8 @@ function createWorkerMaterializer() {
           !Number.isSafeInteger(data.clothChunkCount) || data.clothChunkCount < 1 ||
           !Number.isSafeInteger(data.shadowChunkCount) || data.shadowChunkCount < 1 ||
           typeof data.paced !== "boolean" ||
+          !Number.isSafeInteger(data.readyFrameCount) || data.readyFrameCount < 0 ||
+          data.readyFrameCount > data.playback.frameCount ||
           !Number.isFinite(data.preparationMilliseconds) || data.preparationMilliseconds < 0) {
         rejectAll(new Error("Prepared Cloth worker response drifted"));
         return;
@@ -240,10 +297,14 @@ function createWorkerMaterializer() {
         clothChunkCount: data.clothChunkCount,
         shadowChunkCount: data.shadowChunkCount,
         paced: data.paced,
+        readyFrameCount: data.readyFrameCount,
+        readyResolved: false,
         preparationMilliseconds: data.preparationMilliseconds,
         durationMilliseconds: 0,
         processedClothChunkCount: 0,
         processedShadowChunkCount: 0,
+        receivedClothTransformCount: 0,
+        receivedShadowTransformCount: 0,
         responseChunkCount: 0,
         responseIdleSliceCount: 0,
         responseDirectChunkCount: 0,
@@ -252,9 +313,45 @@ function createWorkerMaterializer() {
         maximumResponseIdleSliceMilliseconds: 0,
         maximumResponseDirectMilliseconds: 0,
         workerComplete: false,
-        transforms: [],
-        shadowTransformValues: [],
+        transforms: new Array(data.clothTransformCount),
+        shadowTransformValues: new Array(data.shadowTransformValueCount),
+        materialization: null,
+        progressivePlayback: null,
       };
+      return;
+    }
+    if (data.type === "materialized-ready") {
+      const response = request.response;
+      if (!response || response.readyFrameCount < 1 || response.readyResolved ||
+          data.readyFrameCount !== response.readyFrameCount ||
+          data.readyClothChunkCount !== response.processedClothChunkCount ||
+          data.readyShadowChunkCount !== response.processedShadowChunkCount ||
+          response.receivedClothTransformCount < data.readyFrameCount *
+            response.playback.triangleCount ||
+          response.receivedShadowTransformCount <
+            response.playback.shadowTransformOffsets[data.readyFrameCount]) {
+        rejectAll(new Error("Prepared Cloth worker readiness drifted"));
+        return;
+      }
+      const materialization = {
+        readyFrameCount: data.readyFrameCount,
+        clothTransformCount: response.receivedClothTransformCount,
+        shadowTransformValueCount: response.receivedShadowTransformCount,
+        complete: false,
+        completion: request.complete,
+      };
+      response.materialization = materialization;
+      response.progressivePlayback = Object.freeze({
+        ...response.playback,
+        transforms: response.transforms,
+        shadowTransformValues: response.shadowTransformValues,
+        materialization,
+      });
+      response.readyResolved = true;
+      request.resolveReady(Object.freeze({
+        playback: response.progressivePlayback,
+        preparationMilliseconds: response.preparationMilliseconds,
+      }));
       return;
     }
     if (data.type === "materialized-complete") {
@@ -288,7 +385,7 @@ function createWorkerMaterializer() {
       rejectAll(new Error("Prepared Cloth worker chunk count drifted"));
       return;
     }
-    if (request.response.paced) {
+    if (request.response.paced || request.response.readyResolved) {
       responseQueue.push({ data, request });
       scheduleResponseSlice();
     } else {
@@ -301,17 +398,10 @@ function createWorkerMaterializer() {
 
   return Object.freeze({
     materialize(descriptor, { paced }) {
-      if (destroyed) throw new Error("Prepared Cloth worker is destroyed");
-      if (typeof paced !== "boolean") {
-        throw new TypeError("Prepared Cloth worker pacing must be explicit");
-      }
-      const requestId = nextRequestId;
-      nextRequestId += 1;
-      const result = new Promise((resolve, reject) => {
-        pending.set(requestId, { resolve, reject, response: null });
-      });
-      worker.postMessage({ type: "materialize", requestId, descriptor, paced });
-      return result;
+      return startMaterialization(descriptor, { paced, readyFrameCount: 0 }).complete;
+    },
+    materializeInitial(descriptor, { readyFrameCount }) {
+      return startMaterialization(descriptor, { paced: false, readyFrameCount });
     },
     destroy() {
       if (destroyed) return;
@@ -320,4 +410,47 @@ function createWorkerMaterializer() {
       worker.terminate();
     },
   });
+
+  function startMaterialization(descriptor, { paced, readyFrameCount }) {
+    if (destroyed) throw new Error("Prepared Cloth worker is destroyed");
+    if (typeof paced !== "boolean" || !Number.isSafeInteger(readyFrameCount) ||
+        readyFrameCount < 0 || readyFrameCount > descriptor?.frameCount) {
+      throw new TypeError("Prepared Cloth worker materialization mode must be explicit");
+    }
+    const requestId = nextRequestId;
+    nextRequestId += 1;
+    let resolveReady;
+    let rejectReady;
+    const ready = readyFrameCount > 0
+      ? new Promise((resolve, reject) => {
+          resolveReady = resolve;
+          rejectReady = reject;
+        })
+      : null;
+    let resolveComplete;
+    let rejectComplete;
+    const complete = new Promise((resolve, reject) => {
+      resolveComplete = resolve;
+      rejectComplete = reject;
+    });
+    pending.set(requestId, {
+      resolveReady,
+      rejectReady,
+      resolveComplete,
+      rejectComplete,
+      complete,
+      response: null,
+    });
+    worker.postMessage({ type: "materialize", requestId, descriptor, paced, readyFrameCount });
+    let resumed = false;
+    return Object.freeze({
+      ready: ready ?? complete,
+      complete,
+      resume() {
+        if (resumed || readyFrameCount === 0) return;
+        resumed = true;
+        worker.postMessage({ type: "continue", requestId });
+      },
+    });
+  }
 }

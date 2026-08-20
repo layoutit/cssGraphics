@@ -47,9 +47,10 @@ The singular `capture:flocks:reference`, `capture:flocks:browser`, and `compare:
 - six stable `<u>` solid-triangle leaves per root
 - no retained model wrapper after mount
 - no Canvas, SVG scene renderer, WebGL, texture atlas, runtime geometry, class swapping, or DOM growth
-- one-second gzip checkpoint/delta blocks; a worker decodes and materializes prepared transforms/colors before publication
+- one-second gzip checkpoint/delta blocks; the active block plus eleven successors are downloaded, verified, and decompressed behind the loading indicator
+- the active block plus two successors are materialized before readiness; later successors are expanded sequentially in a worker and adopted as bounded 960-state main-thread idle slices
 - every source transform state is published at 60 Hz; root colors use five staggered phases, or 12 Hz per retained root
-- at most three materialized blocks are resident
+- at most three materialized blocks and twelve verified/decompressed blocks are resident
 
 Dynamic OpenGL lighting is intentionally replaced by fixed per-face flat-light factors using `currentColor`. Dots, connections, Chromatek, and alternate geometry are not part of the route.
 
@@ -60,13 +61,13 @@ The deterministic bank contains 216 seconds of exact source motion plus an 8-sec
 | Measure | Desktop | Mobile profile |
 | --- | ---: | ---: |
 | Encoded 224-second bank | 11,528,143 B | 5,678,413 B |
-| Cold-ready median, installed desktop Chrome | 446.15 ms | 237.35 ms |
-| Maximum initial encoded transfer | 160,845 B | 71,643 B |
-| Maximum resident prepared CSS strings | 15,515,222 B | 7,863,358 B |
+| Cold-ready median, installed desktop Chrome | 1,033.77 ms | 599.80 ms |
+| Maximum initial encoded transfer | 601,215 B | 305,342 B |
+| Maximum resident prepared CSS strings | 15,664,056 B | 7,863,196 B |
 
 The mobile row is a desktop-Chrome profile/startup measurement, not physical-device cadence evidence.
 
-Three final installed-Chrome desktop traces at 324 roots / 1,944 leaves recorded a presented-frame p95 of 16.667 ms and worst DrawFrame gaps of 22.312-24.792 ms, with zero app-attributed long tasks, block waits, steady-state scheduler resets, browser errors, or retained-DOM drift. These numbers establish the declared desktop trace gate on the reference machine; they are not a universal smoothness claim.
+Three final installed-Chrome desktop traces at 324 roots / 1,944 leaves recorded a presented-frame p95 of 16.667-16.720 ms and worst DrawFrame gaps of 19.016-27.115 ms, with zero app-attributed long tasks, block waits, steady-state scheduler resets, browser errors, or retained-DOM drift. The startup harness observed zero materialization or playback long tasks after the loading boundary. These numbers establish the declared desktop trace gate on the reference machine; they are not a universal smoothness claim.
 
 The 45-frame source/native/browser sequence covers startup, an ordinary block handoff, a visible hue wrap, maximum visible stretch/orientation, and the terminal loop. All 14,580 transforms and staggered colors match decoded prepared state within the 0.001 CSSOM tolerance. Maximum transport errors are 0.015625 source-position units, 0.003906 velocity units, 0.000015241 hue, and 0.049692 projected pixels. Terminal p95 center motion is 6.6933 px within the qualified 7.16 px bound.
 

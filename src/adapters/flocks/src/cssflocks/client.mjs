@@ -49,18 +49,34 @@ export async function mountFlocksClient(host) {
       requestedId: route.startupWindowId,
       previousId: readPreviousStartupWindowId(),
     });
-    const startupBlockIndices = [0, 1, 2].map((offset) => (startupWindow.blockIndex + offset) % catalog.blockCount);
-    blockLoader.retain(startupBlockIndices);
-    const initialBlock = await blockLoader.load(startupWindow.blockIndex, { eager: true });
+    const lookaheadBlockIndices = Array.from(
+      { length: catalog.runtimeLookaheadBlockCount },
+      (unused, offset) => (startupWindow.blockIndex + offset + 1) % catalog.blockCount,
+    );
+    const residentBlockIndices = [startupWindow.blockIndex, ...lookaheadBlockIndices];
+    const startupLookaheadBlockIndices = lookaheadBlockIndices.slice(
+      0,
+      catalog.startupMaterializedLookaheadBlockCount,
+    );
+    blockLoader.retain(residentBlockIndices);
+    const [initialBlock, initialLookaheadBlocks] = await Promise.all([
+      blockLoader.load(startupWindow.blockIndex, { eager: true }),
+      Promise.all(startupLookaheadBlockIndices.map((index) =>
+        blockLoader.load(index, { eager: true }))),
+      blockLoader.prime(residentBlockIndices),
+    ]);
     const mounted = mountFlocksPolycssScene(host, loaded, { sceneId: route.sceneId, profileId });
     const shapeElements = mounted.model.render.shapes.map((shape) => mounted.shapeElements.get(shape.id));
     const player = createFlocksPreparedPlayer({
       shapeElements,
       catalog,
       initialBlock,
-      initialLookaheadBlocks: [],
+      initialLookaheadBlocks,
       loadBlock: blockLoader.load,
-      onBlockWindow: blockLoader.retain,
+      onBlockWindow(indices) {
+        blockLoader.retain(indices);
+        for (const index of indices) blockLoader.prefetch(index);
+      },
       onError(error) {
         state.errors.push(String(error?.stack || error));
         document.body.classList.add("error");

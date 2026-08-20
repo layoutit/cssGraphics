@@ -12,6 +12,7 @@ import { CSSFLOCKS_SLICE_PLAN } from "./slicePlan.mjs";
 import {
   CSSFLOCKS_PRODUCT_PROFILES,
   CSSFLOCKS_PREPARED_CADENCE,
+  CSSFLOCKS_PREPARED_LOADER,
   CSSFLOCKS_SOURCE,
   CSSFLOCKS_SOURCE_BANK,
   buildFlocksSourceBlocks,
@@ -165,6 +166,11 @@ export async function prepareFlocks({ env = process.env } = {}) {
         streamDurationMilliseconds: (CSSFLOCKS_SOURCE_BANK.frameCount + bridgeFrameCount) / CSSFLOCKS_SOURCE_BANK.framesPerSecond * 1_000,
         blockCount: state.entries.length,
         blockFrameCount: CSSFLOCKS_SOURCE_BANK.blockFrameCount,
+        runtimeLookaheadBlockCount: CSSFLOCKS_PREPARED_LOADER.runtimeLookaheadBlockCount,
+        runtimeMaterializedLookaheadBlockCount:
+          CSSFLOCKS_PREPARED_LOADER.runtimeMaterializedLookaheadBlockCount,
+        startupMaterializedLookaheadBlockCount:
+          CSSFLOCKS_PREPARED_LOADER.startupMaterializedLookaheadBlockCount,
         loop: true,
         terminalSeam: state.terminalSeam,
         startupWindows: CSSFLOCKS_STARTUP_WINDOWS,

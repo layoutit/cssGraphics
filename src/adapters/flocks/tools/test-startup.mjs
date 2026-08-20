@@ -18,6 +18,7 @@ const profiles = [
     residentCssLimitBytes: 18 * 1024 * 1024,
     roots: 324,
     leaves: 1_944,
+    verifiedBlocks: 12,
   },
   {
     id: "mobile",
@@ -27,6 +28,7 @@ const profiles = [
     residentCssLimitBytes: 10 * 1024 * 1024,
     roots: 164,
     leaves: 984,
+    verifiedBlocks: 12,
   },
 ];
 await mkdir(outputRoot, { recursive: true });
@@ -52,6 +54,7 @@ try {
     const medianReadyMilliseconds = median(runs.map((run) => run.readyMilliseconds));
     const maximumInitialEncodedTransferBytes = Math.max(...runs.map((run) => run.initialEncodedTransferBytes));
     const maximumResidentPreparedCssStringBytes = Math.max(...runs.map((run) => run.maximumResidentPreparedCssStringBytes));
+    const startupLongTasks = runs.flatMap((run) => run.startupLongTasks);
     const materializationLongTasks = runs.flatMap((run) => run.materializationLongTasks);
     const foreignProfileBlockUrls = runs.flatMap((run) => run.foreignProfileBlockUrls);
     const playback = runs.at(-1).playback;
@@ -61,6 +64,7 @@ try {
       medianReadyMilliseconds,
       maximumInitialEncodedTransferBytes,
       maximumResidentPreparedCssStringBytes,
+      startupLongTasks,
       materializationLongTasks,
       foreignProfileBlockUrls,
       playback,
@@ -73,6 +77,18 @@ try {
         playback.finalStats.staleResponseCount !== 0 ||
         playback.finalStats.residentBlockCount > 3 ||
         playback.maximumResidentBlockCount > 3 ||
+        runs.some((run) =>
+          run.readyStats.fetchCount !== profile.verifiedBlocks ||
+          run.readyStats.residentVerifiedBlockCount !== profile.verifiedBlocks ||
+          run.readyStats.residentBlockCount !== 3 ||
+          run.readyStats.pendingBlockCount !== 0 ||
+          run.readyStats.workerMaterializationCount !== 3 ||
+          run.readyStats.workerMaterializationCompletedBlockCount !== 3 ||
+          run.readyStats.workerMaterializationResponseChunkCount < 3 ||
+          run.readyStats.workerMaterializationResponseIdleSliceCount !==
+            run.readyStats.workerMaterializationResponseChunkCount ||
+          run.readyStats.workerMaterializationMaximumResponseChunkBytes > 256 * 1024 ||
+          run.readyStats.desiredBlockIndices?.length !== profile.verifiedBlocks) ||
         playback.maximumResidentPreparedCssStringBytes > profile.residentCssLimitBytes ||
         materializationLongTasks.length > 0 ||
         foreignProfileBlockUrls.length > 0 ||
@@ -146,6 +162,8 @@ async function captureRun(profile, observePlayback) {
       return {
         readyAt: window.__flocksStartupProbe.readyAt,
         stats: window.__cssFlocksDebug.stats(),
+        startupLongTasks: window.__flocksStartupProbe.longTasks
+          .filter((entry) => entry.startTime < window.__flocksStartupProbe.readyAt && entry.duration >= 50),
         initialEncodedTransferBytes: resources
           .filter((entry) => /\/cssflocks\/(?:desktop|mobile)\/blocks\//u.test(entry.name) &&
             entry.responseEnd <= window.__flocksStartupProbe.readyAt)
@@ -197,6 +215,7 @@ async function captureRun(profile, observePlayback) {
     if (errors.length > 0) throw new Error(`Flocks ${profile.id} startup browser errors: ${errors.join("\n")}`);
     return {
       readyMilliseconds,
+      startupLongTasks: ready.startupLongTasks,
       initialEncodedTransferBytes: ready.initialEncodedTransferBytes,
       foreignProfileBlockUrls: ready.foreignProfileBlockUrls,
       readyStats: ready.stats,
@@ -222,6 +241,7 @@ function compact(report) {
     blockWaitCount: report.playback.finalStats.blockWaitCount,
     staleResponseCount: report.playback.finalStats.staleResponseCount,
     materializationLongTaskCount: report.materializationLongTasks.length,
+    startupLongTaskCount: report.startupLongTasks.length,
     playbackLongTaskCount: report.playback.playbackLongTasks.length,
   };
 }

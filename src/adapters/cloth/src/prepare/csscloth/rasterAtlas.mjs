@@ -16,7 +16,7 @@ import {
   sourceCssViewToWorld,
 } from "./sourceModel.mjs";
 
-export const CSSCLOTH_GROUND_IMAGE_PATH = "assets/ground.webp";
+export const CSSCLOTH_GROUND_IMAGE_PATH = "assets/ground.avif";
 export const CSSCLOTH_SHADOW_IMAGE_PATH = "assets/shadow.png";
 
 const RASTER_PAGE_WIDTH = 3072;
@@ -500,7 +500,7 @@ async function buildGroundImage(bytes) {
       height: CSSCLOTH_GROUND_RASTER_HEIGHT,
       channels: 3,
     },
-  }).webp({ quality: 90, effort: 6 }).toBuffer();
+  }).avif({ quality: 45, effort: 6, chromaSubsampling: "4:4:4" }).toBuffer();
 }
 
 export function fitGroundRasterPhase(data, width, height) {

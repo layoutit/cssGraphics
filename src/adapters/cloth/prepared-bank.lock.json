@@ -1,10 +1,10 @@
 {
   "schema": "csscloth-prepared-bank-lock@2",
-  "tag": "csscloth-product-bank-v4",
-  "asset": "csscloth-product-bank-v4.tar.gz",
-  "url": "https://github.com/layoutit/cssGraphics/releases/download/csscloth-product-bank-v4/csscloth-product-bank-v4.tar.gz",
-  "archiveByteLength": 8599204,
-  "archiveSha256": "36f161153f9180711140571852298182b37ae8e622691cbed23429d8636e2762",
+  "tag": "csscloth-product-bank-v5",
+  "asset": "csscloth-product-bank-v5.tar.gz",
+  "url": "https://github.com/layoutit/cssGraphics/releases/download/csscloth-product-bank-v5/csscloth-product-bank-v5.tar.gz",
+  "archiveByteLength": 4930433,
+  "archiveSha256": "c065f50d70a19fd720673d44522e6514264c07fec98a9d6bb3e3345f1eb8a950",
   "bankCount": 8,
   "bankFrameCount": 1440,
   "durationMilliseconds": 192000,
@@ -12,6 +12,6 @@
   "mobileRetainedLeafCount": 158,
   "mobileClothTriangleCount": 72,
   "fileCount": 32,
-  "closureBytes": 10049640,
-  "closureSha256": "6b327632bc45a2b4c8e5f5ee887f67af37d002229166692f42d4a122e488c055"
+  "closureBytes": 6380302,
+  "closureSha256": "849d8f4d5ed48e2814f9560e4342543fc0be06941896286efd58ab8048a361cc"
 }

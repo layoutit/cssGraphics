@@ -78,7 +78,7 @@ async function prepareProfile(profile, profileRoot, publicRoot) {
     {
       path: CSSCLOTH_GROUND_IMAGE_PATH,
       role: "image",
-      mediaType: "image/webp",
+      mediaType: "image/avif",
       bytes: raster.groundImage,
     },
     {

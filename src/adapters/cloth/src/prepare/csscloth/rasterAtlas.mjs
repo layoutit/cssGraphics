@@ -500,7 +500,7 @@ async function buildGroundImage(bytes) {
       height: CSSCLOTH_GROUND_RASTER_HEIGHT,
       channels: 3,
     },
-  }).webp({ lossless: true, effort: 6 }).toBuffer();
+  }).webp({ quality: 90, effort: 6 }).toBuffer();
 }
 
 export function fitGroundRasterPhase(data, width, height) {

@@ -3,8 +3,8 @@
   "tag": "csscloth-product-bank-v2",
   "asset": "csscloth-product-bank-v2.tar.gz",
   "url": "https://github.com/layoutit/cssGraphics/releases/download/csscloth-product-bank-v2/csscloth-product-bank-v2.tar.gz",
-  "archiveByteLength": 63988740,
-  "archiveSha256": "e5dd5932a0db3b0be04c8b2feb99825ad86ad152e58347b6bc41e8bb500ff4b3",
+  "archiveByteLength": 61884412,
+  "archiveSha256": "e8d32550e06fa6e1273f82fc40829983b1da2d45602db36f061c346eb906e70c",
   "bankCount": 8,
   "bankFrameCount": 1440,
   "durationMilliseconds": 192000,
@@ -12,6 +12,6 @@
   "mobileRetainedLeafCount": 158,
   "mobileClothTriangleCount": 72,
   "fileCount": 32,
-  "closureBytes": 64286783,
-  "closureSha256": "3107a4fe9d928d36809c69ccbc5eebced3ccc9c4d973bfbbe6cf54b80de3a2fa"
+  "closureBytes": 63325096,
+  "closureSha256": "a369c3024e0ec2cd475340e978d304a831ce5a4a57c10f050933209959acaff5"
 }

@@ -7,6 +7,7 @@ import {
 } from "../src/prepare/csscloth/rasterAtlas.mjs";
 import {
   buildClothSourceFrames,
+  buildClothSourceFramesFromCheckpoint,
   buildClothMobileSourceFrames,
   buildClothSeamEdges,
   buildClothTriangles,
@@ -23,6 +24,7 @@ import {
   CSSCLOTH_GROUND_RASTER_WIDTH,
   CSSCLOTH_GROUND_REPEAT_COUNT,
   CSSCLOTH_GROUND_SOURCE_REPEAT_COUNT,
+  CSSCLOTH_BANK_FRAME_COUNT,
   CSSCLOTH_PARTICLE_COUNT,
   CSSCLOTH_TRIANGLE_COUNT,
   CSSCLOTH_MOBILE_PARTICLE_COUNT,
@@ -94,6 +96,22 @@ test("prepared simulation is deterministic and keeps the full top row pinned", (
   assert.equal(lighting.states.length, 200);
   assert.ok(lighting.states.every((states) => states.length > 0 && states.length <= 0x10000));
   assert.ok(lighting.states.flat().every((state) => state.length === 6));
+});
+
+test("late-bank checkpoints preserve the source simulation exactly", () => {
+  const bankIndex = 5;
+  const replayFrameCount = 840;
+  const source = buildClothSourceFrames({
+    frameCount: (bankIndex + 1) * CSSCLOTH_BANK_FRAME_COUNT,
+  });
+  const replay = buildClothSourceFramesFromCheckpoint(
+    source.bankCheckpoints[bankIndex],
+    replayFrameCount,
+  );
+  const frameOffset = bankIndex * CSSCLOTH_BANK_FRAME_COUNT;
+  for (let frameIndex = 0; frameIndex < replayFrameCount; frameIndex += 1) {
+    assert.deepEqual(replay.frames[frameIndex], source.frames[frameOffset + frameIndex]);
+  }
 });
 
 test("specialized particle matrices match the general PolyCSS triangle planner", () => {

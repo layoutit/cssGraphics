@@ -15,5 +15,7 @@ test("generated Cloth product bank is exact and portable", async () => {
   assert.equal(summary.retainedLeafCount, 312);
   assert.equal(summary.mobileRetainedLeafCount, 158);
   assert.equal(summary.mobileClothTriangleCount, 72);
+  assert.ok(summary.playbackCompressedBytes <= 700_000);
+  assert.ok(summary.mobilePlaybackCompressedBytes <= 350_000);
   assert.equal(summary.fileCount, 32);
 });

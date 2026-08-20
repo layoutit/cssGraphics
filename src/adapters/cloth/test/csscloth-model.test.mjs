@@ -13,7 +13,7 @@ import {
   decodeClothPreparedPlayback,
   encodeClothPreparedPlayback,
   materializeClothPreparedMatrixRange,
-} from "../src/shared/csscloth/preparedPlaybackTransport.mjs";
+} from "../src/shared/csscloth/preparedCheckpointTransport.mjs";
 
 const prepared = buildClothPreparedModel();
 
@@ -38,7 +38,7 @@ test("prepared model keeps one retained triangle root per cloth face", () => {
   assert.equal(prepared.metrics.clothAtlasUniqueStateCount, 5_656);
   assert.equal(prepared.metrics.clothAtlasDeduplicatedStateCount, 54_613);
   assert.equal(prepared.metrics.clothRasterPagePixels, 5_130_000);
-  assert.equal(prepared.metrics.runtimeGeometryConstructionCount, 0);
+  assert.equal(prepared.metrics.mainThreadRuntimeGeometryConstructionCount, 0);
   assert.equal(prepared.metrics.runtimeDomGrowth, false);
   assert.equal(prepared.model.render.shapes.filter((shape) => /^cloth-\d{3}$/u.test(shape.id)).length, 200);
   assert.ok(prepared.model.render.shapes
@@ -68,13 +68,15 @@ test("prepared model keeps one retained triangle root per cloth face", () => {
   assert.equal(prepared.model.budgets.maxResources, prepared.metrics.clothRasterPageCount + 3);
 });
 
-test("prepared playback uses compact fixed-point transport", () => {
+test("prepared playback uses an exact simulation checkpoint transport", () => {
   const playback = prepared.playbackBanks[0];
   const bytes = encodeClothPreparedPlayback(playback);
-  assert.ok(bytes.byteLength < 3_500_000);
+  assert.ok(bytes.byteLength < 300_000);
   const decoded = decodeClothPreparedPlayback(bytes, {
     schema: CSSCLOTH_PLAYBACK_SCHEMA,
     encoding: CSSCLOTH_PLAYBACK_ENCODING,
+    profile: playback.profile,
+    streamFrameOffset: playback.streamFrameOffset,
     frameCount: playback.frameCount,
     particleCount: playback.particleCount,
     triangleCount: playback.triangleCount,
@@ -84,6 +86,8 @@ test("prepared playback uses compact fixed-point transport", () => {
   const materialization = createClothPreparedPlaybackMaterialization(bytes, {
     schema: CSSCLOTH_PLAYBACK_SCHEMA,
     encoding: CSSCLOTH_PLAYBACK_ENCODING,
+    profile: playback.profile,
+    streamFrameOffset: playback.streamFrameOffset,
     frameCount: playback.frameCount,
     particleCount: playback.particleCount,
     triangleCount: playback.triangleCount,

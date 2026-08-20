@@ -14,7 +14,7 @@ import {
   CSSCLOTH_PLAYBACK_ENCODING,
   CSSCLOTH_PLAYBACK_SCHEMA,
   encodeClothPreparedPlayback,
-} from "../src/shared/csscloth/preparedPlaybackTransport.mjs";
+} from "../src/shared/csscloth/preparedCheckpointTransport.mjs";
 import {
   buildClothRasterAssets,
   clothLogoRasterPagePath,
@@ -102,7 +102,9 @@ async function prepareProfile(profile, profileRoot, publicRoot) {
       descriptor: Object.freeze({
         schema: CSSCLOTH_PLAYBACK_SCHEMA,
         encoding: CSSCLOTH_PLAYBACK_ENCODING,
+        profile,
         bankIndex,
+        streamFrameOffset: playback.streamFrameOffset,
         path: `${publicRoot}${fileName}`,
         sha256,
         uncompressedSha256,
@@ -153,13 +155,14 @@ async function prepareProfile(profile, profileRoot, publicRoot) {
       profileId: profile,
       modelId: prepared.model.identity.id,
       modelRoot: `${publicRoot}model/`,
-      representation: "retained-cloth-and-shadow-triangles-with-corrected-particle-bank-playback",
+      representation: "retained-cloth-and-shadow-triangles-with-worker-expanded-simulation-checkpoints",
       textureLeafSizing: "raster",
       logoAtlas,
       lightingAtlas: {
         triangleSlots: raster.clothLayout.stateSlots,
       },
-      runtimeGeometryConstruction: false,
+      mainThreadRuntimeGeometryConstruction: false,
+      workerBankGeometryExpansion: true,
       runtimeDomGrowth: false,
       runtimeAtlasRasterization: false,
     },

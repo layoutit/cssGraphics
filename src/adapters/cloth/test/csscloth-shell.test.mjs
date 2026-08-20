@@ -50,6 +50,7 @@ test("runtime has no per-frame geometry or raster construction", async () => {
   assert.match(playbackStream, /INITIAL_BUFFER_FRAME_COUNT = 240/u);
   assert.match(playbackStream, /materializeInitial/u);
   assert.match(playbackWorker, /materializeClothPreparedMatrixRange/u);
+  assert.match(playbackWorker, /preparedCheckpointTransport/u);
   assert.match(playbackWorker, /type: "materialized-ready"/u);
   assert.match(playbackWorker, /waitForContinuation/u);
   assert.match(playbackWorker, /playback\.lightingOffsets\.buffer/u);
@@ -59,7 +60,7 @@ test("runtime has no per-frame geometry or raster construction", async () => {
   assert.doesNotMatch(playbackWorker, /canvas|getContext|createElement|requestAnimationFrame/u);
   assert.match(client, /textureLeafSizing !== "raster"/);
   assert.doesNotMatch(client, /backgroundRepeat|backgroundSize/);
-  assert.match(client, /runtimeGeometryConstructionCount: 0/);
+  assert.match(client, /mainThreadRuntimeGeometryConstructionCount: 0/);
   assert.match(shadowTarget, /createPolyMorphPreparedDomTarget/);
   assert.match(shadowTarget, /shadowTransformOffsets/u);
   assert.doesNotMatch(shadowTarget, /frameIndex \* playback\.shadowTriangleCount/u);

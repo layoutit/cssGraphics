@@ -1,6 +1,6 @@
 export async function loadCyclonePreparedLightingColors(lighting, paletteVariantId) {
   const variant = lighting?.variants?.find((entry) => entry?.paletteVariantId === paletteVariantId);
-  if (lighting?.schema !== "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@16" ||
+  if (lighting?.schema !== "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@17" ||
       lighting.preparedMinimumSaturation !== 0.55 ||
       lighting.preparedMinimumValue !== 0.75 ||
       !isFinalLitColorProfileValid(lighting.finalLitColorProfile, lighting.paletteVariantIds) ||
@@ -9,6 +9,9 @@ export async function loadCyclonePreparedLightingColors(lighting, paletteVariant
       !lighting.paletteVariantIds.includes(paletteVariantId) ||
       lighting.variants?.length !== lighting.paletteVariantIds.length ||
       typeof variant?.hueRotation !== "number" ||
+      variant?.preparedHues?.length !== 3 ||
+      new Set(variant.preparedHues).size !== variant.preparedHues.length ||
+      variant.preparedHues.some((hue) => typeof hue !== "number" || hue < 0 || hue >= 1) ||
       typeof variant?.assetUrl !== "string" ||
       !Number.isSafeInteger(variant?.byteLength) || variant.byteLength < 1 ||
       !/^[a-f0-9]{64}$/u.test(variant?.sha256 ?? "") ||
@@ -39,6 +42,7 @@ export async function loadCyclonePreparedLightingColors(lighting, paletteVariant
       preparedVariant.streamId !== lighting.streamId ||
       preparedVariant.paletteVariantId !== paletteVariantId ||
       preparedVariant.hueRotation !== variant.hueRotation ||
+      !sameNumbers(preparedVariant.preparedHues, variant.preparedHues) ||
       preparedVariant.uniqueColorCount !== lighting.uniqueColorCount ||
       !Array.isArray(preparedVariant.colors) ||
       preparedVariant.colors.length !== lighting.uniqueColorCount ||
@@ -48,10 +52,16 @@ export async function loadCyclonePreparedLightingColors(lighting, paletteVariant
   return Object.freeze({
     paletteVariantId,
     hueRotation: variant.hueRotation,
+    preparedHues: Object.freeze([...variant.preparedHues]),
     colors: Object.freeze(preparedVariant.colors),
     colorSlotIndices,
     destroy() {},
   });
+}
+
+function sameNumbers(left, right) {
+  return Array.isArray(left) && left.length === right.length &&
+    left.every((value, index) => value === right[index]);
 }
 
 async function fetchBytes(url) {

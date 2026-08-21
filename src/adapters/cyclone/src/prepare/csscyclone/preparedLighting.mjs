@@ -17,8 +17,6 @@ const PREPARED_TARGET_ENERGY_RATIO = Number(((
 ) / 2).toFixed(4));
 const PREPARED_MINIMUM_TARGET_ENERGY_RATIO = 1;
 const PREPARED_MAXIMUM_TARGET_ENERGY_RATIO = 1.03;
-const PREPARED_PRIMARY_HUE_SPREAD = 1 / 24;
-const PREPARED_COMPLEMENTARY_HUE_OFFSET = 5 / 12;
 const PREPARED_COMPLEMENTARY_ACCENT_SHARE = 0.2;
 const SOURCE_VERTEX_NORMALS = Object.freeze(
   CSSCYCLONE_PARTICLE_VERTICES.map((vertex) => Object.freeze(normalize(vertex))),
@@ -148,10 +146,13 @@ async function buildPreparedLightingColors({
   const paletteVariants = CSSCYCLONE_PRESENTATION.preparedPaletteVariants;
   if (!Array.isArray(paletteVariants) || paletteVariants.length !== 12 ||
       new Set(paletteVariants.map(({ id }) => id)).size !== paletteVariants.length ||
-      paletteVariants.some(({ id, hueRotation }, index) =>
+      paletteVariants.some(({ id, hueRotation, preparedHues }, index) =>
         id !== `rotate-${String(index * 30).padStart(3, "0")}` ||
-        hueRotation !== index / paletteVariants.length)) {
-    throw new Error("Cyclone prepared hue-rotation palette configuration drifted");
+        hueRotation !== index / paletteVariants.length ||
+        preparedHues?.length !== 3 ||
+        new Set(preparedHues).size !== preparedHues.length ||
+        preparedHues.some((hue) => typeof hue !== "number" || hue < 0 || hue >= 1))) {
+    throw new Error("Cyclone curated prepared palette configuration drifted");
   }
   const sourceLitVariants = paletteVariants.map((paletteVariant) => {
     const colors = [];
@@ -173,6 +174,7 @@ async function buildPreparedLightingColors({
     return Object.freeze({
       paletteVariantId: paletteVariant.id,
       hueRotation: paletteVariant.hueRotation,
+      preparedHues: paletteVariant.preparedHues,
       colors: Object.freeze(colors),
     });
   });
@@ -187,6 +189,7 @@ async function buildPreparedLightingColors({
     return Object.freeze({
       paletteVariantId: variant.paletteVariantId,
       hueRotation: variant.hueRotation,
+      preparedHues: variant.preparedHues,
       colors: Object.freeze(colors),
       energyRatios: Object.freeze(energyRatios),
     });
@@ -205,12 +208,13 @@ async function buildPreparedLightingColors({
   const variants = logicalVariants.map((variant) => Object.freeze({
     paletteVariantId: variant.paletteVariantId,
     hueRotation: variant.hueRotation,
+    preparedHues: variant.preparedHues,
     colors: Object.freeze(deduplication.uniqueSourceColorIndices.map((index) =>
       variant.colors[index])),
   }));
   const contract = deepFreeze({
-    schema: "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@16",
-    technique: "prepared-source-smooth-vertex-lighting-averaged-per-solid-face-with-three-color-split-complementary-session-palettes-mid-green-yellow-reference-srgb-energy-normalization-sparse-source-color-restarts-and-exact-cross-variant-deduplication",
+    schema: "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@17",
+    technique: "prepared-source-smooth-vertex-lighting-averaged-per-solid-face-with-curated-three-color-split-complementary-session-palettes-mid-green-yellow-reference-srgb-energy-normalization-sparse-source-color-restarts-and-exact-cross-variant-deduplication",
     source: "src/cyclone/cyclone.cpp#particle::update+initSaver",
     streamId,
     encoding: "CSS-sRGB-hex-plus-little-endian-color-slot-indices-base64",
@@ -353,18 +357,12 @@ export function prepareCyclonePaletteColor(baseColor, paletteVariantId) {
     else hue = (baseColor[0] - baseColor[1]) / chroma + 4;
     hue = (hue / 6 + 1) % 1;
   }
-  const primaryHue = (paletteVariant.hueRotation + 1 / 3) % 1;
-  const preparedHues = [
-    (primaryHue - PREPARED_PRIMARY_HUE_SPREAD + 1) % 1,
-    (primaryHue + PREPARED_PRIMARY_HUE_SPREAD) % 1,
-    (primaryHue + PREPARED_COMPLEMENTARY_HUE_OFFSET) % 1,
-  ];
   const primaryShare = (1 - PREPARED_COMPLEMENTARY_ACCENT_SHARE) / 2;
   const preparedHue = hue < primaryShare
-    ? preparedHues[0]
+    ? paletteVariant.preparedHues[0]
     : hue < primaryShare * 2
-      ? preparedHues[1]
-      : preparedHues[2];
+      ? paletteVariant.preparedHues[1]
+      : paletteVariant.preparedHues[2];
   return hsvToRgb(
     preparedHue,
     saturation,

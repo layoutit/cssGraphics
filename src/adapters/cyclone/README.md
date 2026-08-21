@@ -34,16 +34,16 @@ session variant contains at most three coordinated hue families: two primaries
 30 degrees apart and one split-complementary accent. Source hue ranks assign 40%
 of particle colors to each primary and 20% to the accent. The source's uniform
 random hue-target timing and rule that particles change color only when they
-restart remain unchanged. Twelve prepared variants rotate the coordinated
-three-color palette by a fixed 30-degree step. The browser selects one complete
-prepared color table and performs no color calculation. The same source RNG
+restart remain unchanged. Twelve prepared variants use explicit audited
+three-hue sets; none contains an orange- or yellow-dominant primary pair. The
+browser selects one complete prepared color table and performs no color calculation. The same source RNG
 draws preserve RNG cadence, trajectory geometry, restart timing, and coherent
 color bands. The session palette and midpoint energy normalization are
 intentional presentation changes; they are not exact source colors.
 Startup is prebaked to ten audited 48-frame source windows. A 24-load
-session-shuffled cycle includes every hue rotation without adjacent repeats,
-but weights green-through-blue palettes most heavily, limits the orange/brown-
-heavy palette to once, and keeps red-family palettes sparse. It independently
+session-shuffled cycle includes every prepared palette without adjacent
+repeats: 16 loads use green-through-blue primaries, four use violet primaries,
+and four use magenta-through-red primaries. It independently
 chooses one expressive browser-reviewed source window while excluding the
 previous exact window.
 It never phases individual particles around a full hue wheel. This is an

@@ -10,7 +10,7 @@ const hueSectorNames = Object.freeze(["red", "yellow", "green", "cyan", "blue", 
 const startupPaletteFamilies = Object.freeze(["blue", "yellow", "red", "magenta", "green"]);
 const startupPaletteVariantIds = Object.freeze(Array.from({ length: 12 }, (_, index) =>
   `rotate-${String(index * 30).padStart(3, "0")}`));
-const startupPaletteVariantWeights = Object.freeze([3, 3, 3, 3, 2, 1, 1, 1, 1, 1, 2, 3]);
+const startupPaletteVariantWeights = Object.freeze([3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1]);
 const startupSelections = Object.freeze([
   Object.freeze({ id: "blue-a", paletteFamily: "blue", chunkIndex: 17, startFrameIndex: 249, frameCount: 48 }),
   Object.freeze({ id: "blue-b", paletteFamily: "blue", chunkIndex: 23, startFrameIndex: 492, frameCount: 48 }),

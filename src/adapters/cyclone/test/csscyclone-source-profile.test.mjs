@@ -69,17 +69,18 @@ test("pins the current Really Slick Cyclone source profile", () => {
   assert.equal(CSSCYCLONE_PRESENTATION.particleColorAssignment, "source-hue-at-particle-restart");
   assert.equal(
     CSSCYCLONE_PRESENTATION.preparedPaletteAssignment,
-    "source-hue-ranked-session-three-color-split-complementary-palette",
+    "source-hue-ranked-curated-three-color-split-complementary-palette",
   );
   assert.equal(CSSCYCLONE_PRESENTATION.preparedPaletteVariants.length, 12);
   assert.deepEqual(CSSCYCLONE_PRESENTATION.preparedPaletteVariants[4], {
     id: "rotate-120",
     hueRotation: 1 / 3,
+    preparedHues: [195 / 360, 225 / 360, 0],
     startupWeight: 2,
   });
   assert.deepEqual(
     CSSCYCLONE_PRESENTATION.preparedPaletteVariants.map(({ startupWeight }) => startupWeight),
-    [3, 3, 3, 3, 2, 1, 1, 1, 1, 1, 2, 3],
+    [3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1],
   );
   assert.equal(CSSCYCLONE_PRESENTATION.maximumColorFamilyCount, 3);
   assert.deepEqual(
@@ -336,7 +337,7 @@ test("prepares source-vertex-averaged face lighting without a runtime lighting t
   const bank = { ...CSSCYCLONE_BANK, particleCount: 3, warmupFrames: 20, frameCount: 4 };
   const source = buildCycloneSourceSequence({ bank });
   const prepared = await buildCyclonePreparedLighting({ source });
-  assert.equal(prepared.contract.schema, "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@16");
+  assert.equal(prepared.contract.schema, "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@17");
   assert.equal(prepared.contract.leafCount, 18);
   assert.equal(prepared.contract.colorStateCount, 3);
   assert.equal(prepared.contract.colorRestartCount, 0);
@@ -382,7 +383,8 @@ test("prepares source-vertex-averaged face lighting without a runtime lighting t
   assert.equal(prepared.contract.variants.length, 12);
   assert.ok(prepared.contract.variants.every((variant, index) =>
     variant.paletteVariantId === prepared.contract.paletteVariantIds[index] &&
-    variant.hueRotation === index / 12));
+    variant.hueRotation === index / 12 &&
+    variant.preparedHues.length === 3));
   assert.equal(prepared.contract.sourceStreamFrameCount, 4);
   assert.equal(prepared.contract.chunkCount, 1);
   assert.equal(prepared.chunk.frameParticleColorStateIndices.length, 4);
@@ -407,7 +409,7 @@ test("maps source hues into two primary colors and one split-complementary accen
   const hueCounts = new Map();
   for (const hue of preparedHues) hueCounts.set(hue, (hueCounts.get(hue) ?? 0) + 1);
   assert.deepEqual([...hueCounts.values()], [4, 4, 2]);
-  assert.deepEqual([...hueCounts.keys()], [0.291667, 0.375, 0.75]);
+  assert.deepEqual([...hueCounts.keys()], [0.291667, 0.375, 0.791667]);
 });
 
 test("publishes only exact source color restarts through sparse leaf colors", async () => {

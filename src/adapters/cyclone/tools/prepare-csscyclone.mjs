@@ -370,6 +370,7 @@ async function writePreparedLightingVariantAssets(lighting, profile) {
       streamId: lighting.streamId,
       paletteVariantId: variant.paletteVariantId,
       hueRotation: variant.hueRotation,
+      preparedHues: variant.preparedHues,
       uniqueColorCount: lighting.uniqueColorCount,
       colors: variant.colors,
     })}\n`);
@@ -379,6 +380,7 @@ async function writePreparedLightingVariantAssets(lighting, profile) {
     variants.push(Object.freeze({
       paletteVariantId: variant.paletteVariantId,
       hueRotation: variant.hueRotation,
+      preparedHues: variant.preparedHues,
       assetUrl,
       byteLength: bytes.byteLength,
       sha256: digest,

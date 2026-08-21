@@ -62,13 +62,29 @@ export const CSSCYCLONE_BANKS = Object.freeze({
 
 export const CSSCYCLONE_BANK = CSSCYCLONE_BANKS.desktop;
 
-const PREPARED_PALETTE_STARTUP_WEIGHTS = Object.freeze([3, 3, 3, 3, 2, 1, 1, 1, 1, 1, 2, 3]);
+const PREPARED_PALETTE_STARTUP_WEIGHTS = Object.freeze([3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1]);
+
+const PREPARED_PALETTE_HUES_DEGREES = Object.freeze([
+  Object.freeze([105, 135, 285]),
+  Object.freeze([120, 150, 300]),
+  Object.freeze([150, 180, 330]),
+  Object.freeze([180, 210, 0]),
+  Object.freeze([195, 225, 0]),
+  Object.freeze([210, 240, 15]),
+  Object.freeze([240, 270, 105]),
+  Object.freeze([255, 285, 120]),
+  Object.freeze([270, 300, 135]),
+  Object.freeze([285, 315, 150]),
+  Object.freeze([300, 330, 165]),
+  Object.freeze([315, 345, 180]),
+]);
 
 const PREPARED_PALETTE_VARIANTS = Object.freeze(Array.from({ length: 12 }, (_, index) => {
   const degrees = index * 30;
   return Object.freeze({
     id: `rotate-${String(degrees).padStart(3, "0")}`,
     hueRotation: index / 12,
+    preparedHues: Object.freeze(PREPARED_PALETTE_HUES_DEGREES[index].map((hue) => hue / 360)),
     startupWeight: PREPARED_PALETTE_STARTUP_WEIGHTS[index],
   });
 }));
@@ -79,7 +95,7 @@ export const CSSCYCLONE_PRESENTATION = Object.freeze({
   minimumSaturation: 0.55,
   hueSampling: "source-uniform-random-targets",
   particleColorAssignment: "source-hue-at-particle-restart",
-  preparedPaletteAssignment: "source-hue-ranked-session-three-color-split-complementary-palette",
+  preparedPaletteAssignment: "source-hue-ranked-curated-three-color-split-complementary-palette",
   preparedPaletteVariants: PREPARED_PALETTE_VARIANTS,
   maximumColorFamilyCount: 3,
   startupPaletteFamilies: Object.freeze(["blue", "yellow", "red", "magenta", "green"]),

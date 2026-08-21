@@ -15,7 +15,7 @@ const STARTUP_HUE_SECTOR_NAMES = Object.freeze(["red", "yellow", "green", "cyan"
 const STARTUP_PALETTE_FAMILIES = Object.freeze(["blue", "yellow", "red", "magenta", "green"]);
 const STARTUP_PALETTE_VARIANT_IDS = Object.freeze(Array.from({ length: 12 }, (_, index) =>
   `rotate-${String(index * 30).padStart(3, "0")}`));
-const STARTUP_PALETTE_VARIANT_WEIGHTS = Object.freeze([3, 3, 3, 3, 2, 1, 1, 1, 1, 1, 2, 3]);
+const STARTUP_PALETTE_VARIANT_WEIGHTS = Object.freeze([3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1]);
 const STARTUP_SILHOUETTE_SAMPLING = "browser-reviewed-expressive-source-windows";
 const STARTUP_SELECTION = "session-weighted-shuffled-hue-rotation-plus-crypto-source-window-no-immediate-repeat";
 

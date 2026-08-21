@@ -56,7 +56,7 @@ function fixture({
     transforms: ["a", "b", "c", "d", "e", "f", "g", "h"],
   };
   const lighting = {
-    schema: "csscyclone-prepared-flat-lighting-colors@9",
+    schema: "csscyclone-prepared-energy-balanced-continuous-hue-vertex-lighting-colors@15",
     streamId: "stream",
     chunkCount: 1,
     chunkFrameCount: blockCount * 4,
@@ -69,9 +69,8 @@ function fixture({
     deduplicatedColorCount: 0,
     colorDeduplication: "exact-cross-palette-css-srgb-tuples",
     colorSlotIndexCount: 1,
-    paletteHueSlotCount: 3,
-    maximumColorFamilyCount: 3,
-    variants: [{ paletteFamily: "blue", colors: ["#123456"] }],
+    paletteVariantCount: 1,
+    variants: [{ paletteVariantId: "rotate-000", colors: ["#123456"] }],
     runtime: { lightingCalculations: 0, imageConstruction: 0 },
   };
   const blocks = Array.from({ length: blockCount }, (_, streamBlockIndex) => {
@@ -145,8 +144,8 @@ function fixture({
     initialFrameIndex: 0,
     lighting,
     lightingColors: {
-      paletteFamily: "blue",
-      hueSlots: [0.5, 2 / 3, 5 / 6],
+      paletteVariantId: "rotate-000",
+      hueRotation: 0,
       colors: lighting.variants[0].colors,
       colorSlotIndices: new Uint16Array([0]),
       destroy: identity,

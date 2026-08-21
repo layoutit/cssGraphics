@@ -8,12 +8,21 @@ desktop leaves or 996 mobile leaves. The
 selected profile plays 24 source-continuous logical chunks of 540 prepared
 16.667 ms
 transform states. The stream is transported as 216 one-second prepared blocks
-so decompression stays outside long animation frames. Source fixed-function
-lighting is sampled once per face at the first published frame into prepared
-opaque CSS colors. Exact cross-palette color tuples are deduplicated into a
-compact prepared slot table. Initial leaf colors are bound once. Later color
-writes are limited to the six leaves of a particle when the source restarts it
-with a new color. The mounted graph is camera, scene, particle roots, and leaves; the
+so decompression stays outside long animation frames. The source fixed-function
+light is sampled at each particle's original smooth vertex normals in the first
+published frame, then the three lit vertex colors of every triangle are averaged
+into one prepared opaque CSS face color. For every source-lit face state, the
+brightest result across the twelve hue rotations sets the shared sRGB energy.
+Every dimmer rotation is first exposed without changing hue or saturation. Only
+colors that reach the sRGB gamut ceiling before that shared target is met mix
+toward neutral by the minimum remaining amount. The energetic rotation is never
+dimmed.
+A preparation guard rejects banks whose final lit palette becomes predominantly
+dark or falls below that shared cross-rotation energy. Exact cross-palette color tuples
+are deduplicated into a compact prepared slot table. Initial leaf colors are
+bound once. Later color writes are limited to the six leaves of a particle when
+the source restarts it with a new color. The mounted graph is camera, scene,
+particle roots, and leaves; the
 PolyCSS Morph model wrapper is removed after adoption and its fixed transform is
 composed onto the existing scene node.
 There is no Canvas, SVG, WebGL, runtime random walk, geometry construction,
@@ -21,20 +30,18 @@ lighting calculation, color calculation, matrix formatting, image decode, atlas
 rasterization, or DOM growth.
 The prepared presentation maps the source's random saturation samples into a
 0.55-1.0 range and lifts the dark end of prepared HSV value to 0.75. The
-source's uniform random hue-target timing and its rule that
-particles change color only when they restart are preserved. At preparation,
-each source hue is assigned to one of three slots in the selected session palette.
-Five prepared solid-color variants provide blue-, yellow-, red-, magenta-,
-and green-centered palettes; each variant spans at most three adjacent hue
-families for the entire playback. The browser selects one prepared color table
-and performs no color calculation. The same source RNG draws preserve RNG cadence,
-trajectory geometry, restart timing, and coherent color bands, but prepared hue values are
-intentionally quantized and low lightness is intentionally lifted; these are not
-exact source colors.
+source's continuous hues, uniform random hue-target timing, and rule that
+particles change color only when they restart are preserved. Twelve prepared
+solid-color variants rotate every source hue by a fixed 30-degree step. The
+browser selects one complete prepared color table and performs no color
+calculation. The same source RNG draws preserve RNG cadence, trajectory geometry,
+restart timing, and coherent color bands. The session rotation and shared
+cross-rotation energy normalization are intentional presentation changes; they
+are not exact source colors.
 Startup is prebaked to ten audited 48-frame source windows. The selector gives
-each of the five prepared palette variants—blue, yellow, red, magenta, and
-green—exactly once per session-shuffled cycle before any family repeats, then
-chooses between two expressive browser-reviewed source windows in that family.
+each of the twelve hue rotations exactly once per session-shuffled cycle before
+any rotation repeats, then independently chooses one expressive browser-reviewed
+source window while excluding the previous exact window.
 It never phases individual particles around a full hue wheel. This is an
 intentional presentation rather than an exact native-color or random-start
 claim. Mobile/coarse-pointer devices and viewports below 600px select the
@@ -49,7 +56,7 @@ the reduced particle budget into tighter cyclone bands without runtime layout.
 
 The stream discards the source's dark startup by preparing 12 seconds before its
 first published frame. Its 12,960 states cover 216 seconds before repeating.
-Startup uses `crypto.getRandomValues` to shuffle the five-family session bag and
+Startup uses `crypto.getRandomValues` to shuffle the twelve-rotation session bag and
 to select an audited source window and frame, excluding the previous exact
 window. Playback
 then follows the original source order. Each hash-bound
@@ -85,8 +92,8 @@ pnpm dev:cyclone
 ```
 
 The retained-DOM route is publication-qualified within its documented PolyCSS
-constraints. The first published frame qualifies the prepared flat-face light
-field. During motion the face shading stays attached to each particle
+constraints. The first published frame qualifies the prepared source-vertex-
+averaged solid-face light field. During motion the face shading stays attached to each particle
 while source color restarts remain exact; this is an intentional performance
 adaptation. The complete dense scene is not claimed to be pixel-identical to
 OpenGL because OpenGL resolves intersecting particles with a per-fragment depth

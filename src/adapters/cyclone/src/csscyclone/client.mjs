@@ -12,7 +12,7 @@ import {
   CSSCYCLONE_PREPARED_PROFILES,
   selectCyclonePreparedProfile,
 } from "./profileSelection.mjs";
-import { selectCycloneStartupPaletteFamily } from "./startupPaletteSelection.mjs";
+import { selectCycloneStartupPaletteVariant } from "./startupPaletteSelection.mjs";
 
 const LAST_START_SELECTION_STORAGE_KEY = "csscyclone:last-start-selection";
 
@@ -50,18 +50,19 @@ export async function mountCycloneClient(host) {
         profile.presentation?.preparedStream?.id !== catalog.streamId ||
         profile.playback?.chunkCount !== catalog.chunkCount ||
         profile.playback?.preparedBlockCount !== catalog.blockCount ||
-        profile.lighting?.maximumColorFamilyCount !== catalog.maximumColorFamilyCount ||
-        profile.lighting?.paletteFamilies?.some((family, index) =>
-          family !== catalog.startupPaletteFamilies[index])) {
+        !Array.isArray(profile.lighting?.paletteVariantIds) ||
+        profile.lighting.paletteVariantIds.length !== catalog.startupPaletteVariantIds.length ||
+        profile.lighting.paletteVariantIds.some((variantId, index) =>
+          variantId !== catalog.startupPaletteVariantIds[index])) {
       throw new Error("Cyclone prepared model binding drifted");
     }
     const route = new URLSearchParams(globalThis.location?.search ?? "");
     const paletteSelection = route.has("chunk") || route.has("frame")
       ? null
-      : selectCycloneStartupPaletteFamily(catalog.startupPaletteFamilies);
+      : selectCycloneStartupPaletteVariant(catalog.startupPaletteVariantIds);
     const selection = selectInitialCyclonePosition(catalog, {
       previousSelectionId: readPreviousStartSelection(catalog.startupSelections),
-      preferredPaletteFamily: paletteSelection?.paletteFamily ?? null,
+      preferredPaletteVariantId: paletteSelection?.paletteVariantId ?? null,
     });
     rememberStartSelection(selection.selectionId);
     const initialStreamFrameIndex = selection.chunkIndex * catalog.chunkFrameCount + selection.frameIndex;
@@ -82,7 +83,7 @@ export async function mountCycloneClient(host) {
       blockLoader.load(initialBlockIndex, { offMainThread: true }),
       Promise.all(startupLookaheadBlockIndices.map((streamBlockIndex) =>
         blockLoader.load(streamBlockIndex, { offMainThread: true }))),
-      loadCyclonePreparedLightingColors(profile.lighting, selection.paletteFamily),
+      loadCyclonePreparedLightingColors(profile.lighting, selection.paletteVariantId),
       blockLoader.prime(residentBlockIndices),
     ]);
     lightingColors = loadedLightingColors;
@@ -204,7 +205,8 @@ function installDebugApi(state) {
           initialChunkIndex: state.selection.chunkIndex,
           initialFrameIndex: state.selection.frameIndex,
           startupSelectionId: state.selection.selectionId ?? null,
-          startupPaletteFamily: state.selection.paletteFamily ?? null,
+          startupPaletteVariantId: state.selection.paletteVariantId ?? null,
+          startupSourcePaletteFamily: state.selection.sourcePaletteFamily ?? null,
           startupSelectionMode: state.selection.mode,
           ...state.blockLoader.stats(),
           ...state.player.stats(),

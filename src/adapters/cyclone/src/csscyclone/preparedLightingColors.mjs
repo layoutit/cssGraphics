@@ -1,17 +1,17 @@
-export function loadCyclonePreparedLightingColors(lighting, paletteFamily) {
-  const variant = lighting?.variants?.find((entry) => entry?.paletteFamily === paletteFamily);
-  if (lighting?.schema !== "csscyclone-prepared-flat-lighting-colors@9" ||
-      lighting.maximumColorFamilyCount !== 3 ||
-      lighting.paletteHueSlotCount !== 3 ||
+export async function loadCyclonePreparedLightingColors(lighting, paletteVariantId) {
+  const variant = lighting?.variants?.find((entry) => entry?.paletteVariantId === paletteVariantId);
+  if (lighting?.schema !== "csscyclone-prepared-energy-balanced-continuous-hue-vertex-lighting-colors@15" ||
       lighting.preparedMinimumSaturation !== 0.55 ||
       lighting.preparedMinimumValue !== 0.75 ||
-      !Array.isArray(lighting.paletteFamilies) ||
-      !lighting.paletteFamilies.includes(paletteFamily) ||
-      lighting.variants?.length !== lighting.paletteFamilies.length ||
-      variant?.hueSlots?.length !== lighting.maximumColorFamilyCount ||
-      !Array.isArray(variant?.colors) ||
-      variant.colors.length !== lighting.uniqueColorCount ||
-      variant.colors.some((color) => !/^#[a-f0-9]{6}$/u.test(color)) ||
+      !isFinalLitColorProfileValid(lighting.finalLitColorProfile, lighting.paletteVariantIds) ||
+      !Array.isArray(lighting.paletteVariantIds) ||
+      lighting.paletteVariantCount !== lighting.paletteVariantIds.length ||
+      !lighting.paletteVariantIds.includes(paletteVariantId) ||
+      lighting.variants?.length !== lighting.paletteVariantIds.length ||
+      typeof variant?.hueRotation !== "number" ||
+      typeof variant?.assetUrl !== "string" ||
+      !Number.isSafeInteger(variant?.byteLength) || variant.byteLength < 1 ||
+      !/^[a-f0-9]{64}$/u.test(variant?.sha256 ?? "") ||
       !Number.isSafeInteger(lighting.colorEntryCount) || lighting.colorEntryCount < 1 ||
       !Number.isSafeInteger(lighting.uniqueColorCount) || lighting.uniqueColorCount < 1 ||
       lighting.uniqueColorCount > lighting.colorEntryCount ||
@@ -32,13 +32,65 @@ export function loadCyclonePreparedLightingColors(lighting, paletteFamily) {
   if (colorSlotIndices.some((slotIndex) => slotIndex >= lighting.uniqueColorCount)) {
     throw new Error("Prepared Cyclone lighting color slot drifted");
   }
+  const bytes = new Uint8Array(await fetchBytes(variant.assetUrl));
+  await verifyBytes(bytes, variant.byteLength, variant.sha256);
+  const preparedVariant = JSON.parse(new TextDecoder().decode(bytes));
+  if (preparedVariant?.schema !== "csscyclone-prepared-lighting-color-variant@1" ||
+      preparedVariant.streamId !== lighting.streamId ||
+      preparedVariant.paletteVariantId !== paletteVariantId ||
+      preparedVariant.hueRotation !== variant.hueRotation ||
+      preparedVariant.uniqueColorCount !== lighting.uniqueColorCount ||
+      !Array.isArray(preparedVariant.colors) ||
+      preparedVariant.colors.length !== lighting.uniqueColorCount ||
+      preparedVariant.colors.some((color) => !/^#[a-f0-9]{6}$/u.test(color))) {
+    throw new Error("Prepared Cyclone lighting color variant is invalid");
+  }
   return Object.freeze({
-    paletteFamily,
-    hueSlots: variant.hueSlots,
-    colors: variant.colors,
+    paletteVariantId,
+    hueRotation: variant.hueRotation,
+    colors: Object.freeze(preparedVariant.colors),
     colorSlotIndices,
     destroy() {},
   });
+}
+
+async function fetchBytes(url) {
+  const response = await fetch(url, { cache: "force-cache" });
+  if (!response.ok) {
+    throw new Error(`Prepared Cyclone lighting color asset failed: ${response.status} ${url}`);
+  }
+  return response.arrayBuffer();
+}
+
+async function verifyBytes(bytes, expectedLength, expectedSha256) {
+  if (bytes.byteLength !== expectedLength) {
+    throw new Error("Prepared Cyclone lighting color asset byte length drifted");
+  }
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  const actualSha256 = [...digest]
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
+  if (actualSha256 !== expectedSha256) {
+    throw new Error("Prepared Cyclone lighting color asset hash drifted");
+  }
+}
+
+function isFinalLitColorProfileValid(profile, paletteVariantIds) {
+  return profile?.schema === "csscyclone-prepared-final-lit-color-profile@1" &&
+    profile.darkFaceValueThreshold === 0.4 &&
+    profile.maximumDarkFaceShare === 0.25 &&
+    profile.minimumMedianLitValue === 0.5 &&
+    profile.minimumCrossVariantEnergyRatio === 1 &&
+    profile.srgbLumaWeights?.length === 3 &&
+    profile.srgbLumaWeights.every((value, index) =>
+      value === [0.2126, 0.7152, 0.0722][index]) &&
+    profile.variants?.length === paletteVariantIds?.length &&
+    profile.variants.every((variant, index) =>
+      variant?.paletteVariantId === paletteVariantIds[index] &&
+      variant.medianLitValue >= profile.minimumMedianLitValue &&
+      variant.darkFaceShare <= profile.maximumDarkFaceShare &&
+      variant.minimumCrossVariantEnergyRatio >=
+        profile.minimumCrossVariantEnergyRatio);
 }
 
 function decodeColorSlotIndices(encoded, bytesPerIndex, count) {

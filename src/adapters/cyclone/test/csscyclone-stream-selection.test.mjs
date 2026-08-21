@@ -8,6 +8,8 @@ import {
 const hash = "0".repeat(64);
 const hueSectorNames = Object.freeze(["red", "yellow", "green", "cyan", "blue", "magenta"]);
 const startupPaletteFamilies = Object.freeze(["blue", "yellow", "red", "magenta", "green"]);
+const startupPaletteVariantIds = Object.freeze(Array.from({ length: 12 }, (_, index) =>
+  `rotate-${String(index * 30).padStart(3, "0")}`));
 const startupSelections = Object.freeze([
   Object.freeze({ id: "blue-a", paletteFamily: "blue", chunkIndex: 17, startFrameIndex: 249, frameCount: 48 }),
   Object.freeze({ id: "blue-b", paletteFamily: "blue", chunkIndex: 23, startFrameIndex: 492, frameCount: 48 }),
@@ -46,11 +48,12 @@ const catalog = Object.freeze({
   streamFrameCount: 12_960,
   streamDurationMilliseconds: 216_000,
   startupPaletteFamilies,
+  startupPaletteVariantIds,
   startupSelections,
   startupSilhouetteSampling: "browser-reviewed-expressive-source-windows",
   startupSilhouetteSampleFrameOffsets: Object.freeze([0, 12, 24, 36, 47]),
   maximumColorFamilyCount: 3,
-  selection: "session-crypto-shuffled-palette-family-source-window-no-immediate-repeat",
+  selection: "session-shuffled-hue-rotation-plus-crypto-source-window-no-immediate-repeat",
   startupColorProfile: Object.freeze({
     schema: "csscyclone-prepared-startup-color-profile@2",
     metric: "prepared-source-particle-rgb-hsv-dominant-family-per-curated-window",
@@ -109,41 +112,44 @@ test("slices worker transform responses before publishing a materialized block",
   assert.ok(yieldCount > 0);
 });
 
-test("selects a balanced prepared source-palette window once", () => {
+test("selects an independent prepared hue rotation and source window", () => {
   assert.deepEqual(selectInitialCyclonePosition(catalog, {
     randomUint32Pair: () => [7, 901],
   }), {
-    selectionId: "red-b",
-    paletteFamily: "red",
-    chunkIndex: 13,
-    frameIndex: 141,
+    selectionId: "blue-a",
+    paletteVariantId: "rotate-210",
+    sourcePaletteFamily: "blue",
+    chunkIndex: 17,
+    frameIndex: 286,
     mode: "crypto-random-balanced-source-palette",
   });
 });
 
 test("does not immediately repeat the previous prepared window", () => {
   assert.deepEqual(selectInitialCyclonePosition(catalog, {
-    previousSelectionId: "red-b",
+    previousSelectionId: "blue-a",
     randomUint32Pair: () => [7, 901],
   }), {
-    selectionId: "red-a",
-    paletteFamily: "red",
-    chunkIndex: 19,
-    frameIndex: 208,
+    selectionId: "blue-b",
+    paletteVariantId: "rotate-210",
+    sourcePaletteFamily: "blue",
+    chunkIndex: 23,
+    frameIndex: 529,
     mode: "crypto-random-balanced-source-palette-no-repeat",
   });
 });
 
-test("uses the session-shuffled family while retaining a random curated source window", () => {
+test("uses the session-shuffled hue rotation with an independent curated source window", () => {
   assert.deepEqual(selectInitialCyclonePosition(catalog, {
-    preferredPaletteFamily: "green",
+    preferredPaletteVariantId: "rotate-120",
     randomUint32Pair: () => [7, 901],
   }), {
-    selectionId: "green-b",
-    paletteFamily: "green",
-    chunkIndex: 15,
-    frameIndex: 238,
-    mode: "session-shuffled-palette-crypto-random-source-window",
+    selectionId: "magenta-b",
+    paletteVariantId: "rotate-120",
+    sourcePaletteFamily: "magenta",
+    chunkIndex: 12,
+    frameIndex: 451,
+    mode: "session-shuffled-hue-rotation-crypto-random-source-window",
   });
 });
 
@@ -154,20 +160,23 @@ test("rejects a previous start outside the prepared window pool", () => {
   }), /Previous Cyclone start selection is invalid/u);
 });
 
-test("gives each prepared three-family palette variant equal selection coverage", () => {
-  const selected = Array.from({ length: 10 }, (_, value) => selectInitialCyclonePosition(catalog, {
+test("covers every prepared hue rotation and curated source window independently", () => {
+  const selected = Array.from({ length: 120 }, (_, value) => selectInitialCyclonePosition(catalog, {
     randomUint32Pair: () => [value, value],
   }));
-  assert.deepEqual([...new Set(selected.map(({ paletteFamily }) => paletteFamily))], startupPaletteFamilies);
+  assert.deepEqual(
+    [...new Set(selected.map(({ paletteVariantId }) => paletteVariantId))],
+    startupPaletteVariantIds,
+  );
   assert.deepEqual([...new Set(selected.map(({ selectionId }) => selectionId))].sort(),
     [...startupSelections.map(({ id }) => id)].sort());
 });
 
 test("accepts an explicit chunk and frame for deterministic browser proof", () => {
   assert.deepEqual(selectInitialCyclonePosition(catalog, {
-    search: "?chunk=23&frame=539&palette=green",
+    search: "?chunk=23&frame=539&palette=rotate-120",
   }), {
-    paletteFamily: "green",
+    paletteVariantId: "rotate-120",
     chunkIndex: 23,
     frameIndex: 539,
     mode: "explicit",

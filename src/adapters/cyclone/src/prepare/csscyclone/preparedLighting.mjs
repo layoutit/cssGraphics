@@ -1,18 +1,19 @@
 import {
   CSSCYCLONE_FACE_INDICES,
-  CSSCYCLONE_FACE_NORMALS,
+  CSSCYCLONE_PARTICLE_VERTICES,
 } from "./modelBuilder.mjs";
 import { CSSCYCLONE_PRESENTATION } from "./sourceModel.mjs";
 
 const PREPARED_MINIMUM_SATURATION = CSSCYCLONE_PRESENTATION.minimumSaturation;
 const PREPARED_MINIMUM_VALUE = 0.75;
-const PALETTE_CENTER_HUES = Object.freeze({
-  blue: 2 / 3,
-  yellow: 1 / 6,
-  red: 0,
-  magenta: 5 / 6,
-  green: 1 / 3,
-});
+const PREPARED_DARK_FACE_VALUE = 0.4;
+const PREPARED_MAXIMUM_DARK_FACE_SHARE = 0.25;
+const PREPARED_MINIMUM_MEDIAN_LIT_VALUE = 0.5;
+const SRGB_LUMA_WEIGHTS = Object.freeze([0.2126, 0.7152, 0.0722]);
+const PREPARED_MINIMUM_CROSS_VARIANT_ENERGY_RATIO = 1;
+const SOURCE_VERTEX_NORMALS = Object.freeze(
+  CSSCYCLONE_PARTICLE_VERTICES.map((vertex) => Object.freeze(normalize(vertex))),
+);
 const LIGHT_DIRECTION = normalize([400, -200, 400]);
 const HALF_VECTOR = normalize([
   LIGHT_DIRECTION[0],
@@ -20,14 +21,16 @@ const HALF_VECTOR = normalize([
   LIGHT_DIRECTION[2] + 1,
 ]);
 
-export function createCyclonePreparedLightingStream() {
+export function createCyclonePreparedLightingStream({
+  enforceFinalColorProfile = true,
+} = {}) {
   let particleCount = null;
   let expectedChunkCount = null;
   let chunkFrameCount = null;
   let streamId = null;
   let nextChunkIndex = 0;
   let sourceStreamFrameCount = 0;
-  let frozenFaceNormals = null;
+  let frozenVertexNormals = null;
   let currentColorStateIndices = null;
   let previousColors = null;
   let colorRestartCount = 0;
@@ -78,7 +81,7 @@ export function createCyclonePreparedLightingStream() {
   }
 
   async function finalize({ allowPartial = false } = {}) {
-    if (particleCount === null || frozenFaceNormals === null || colorStates.length === 0) {
+    if (particleCount === null || frozenVertexNormals === null || colorStates.length === 0) {
       throw new Error("Prepared Cyclone lighting stream has no source chunks");
     }
     if (!allowPartial && nextChunkIndex !== expectedChunkCount) {
@@ -90,9 +93,10 @@ export function createCyclonePreparedLightingStream() {
       chunkFrameCount,
       streamId,
       sourceStreamFrameCount,
-      frozenFaceNormals,
+      frozenVertexNormals,
       colorStates,
       colorRestartCount,
+      enforceFinalColorProfile: enforceFinalColorProfile && !allowPartial,
     });
   }
 
@@ -103,9 +107,9 @@ export function createCyclonePreparedLightingStream() {
     streamId = source.bank.streamId;
     currentColorStateIndices = Array(particleCount).fill(-1);
     previousColors = Array(particleCount).fill(null);
-    frozenFaceNormals = source.frames[0].particles.map((particle) => {
+    frozenVertexNormals = source.frames[0].particles.map((particle) => {
       const normalMatrix = inverseTranspose3(particle.matrix);
-      return CSSCYCLONE_FACE_NORMALS.map((normal) => transform3(normalMatrix, normal));
+      return SOURCE_VERTEX_NORMALS.map((normal) => transform3(normalMatrix, normal));
     });
   }
 
@@ -125,35 +129,64 @@ async function buildPreparedLightingColors({
   chunkFrameCount,
   streamId,
   sourceStreamFrameCount,
-  frozenFaceNormals,
+  frozenVertexNormals,
   colorStates,
   colorRestartCount,
+  enforceFinalColorProfile,
 }) {
   const leafCount = particleCount * CSSCYCLONE_FACE_INDICES.length;
   const tileCount = colorStates.length * CSSCYCLONE_FACE_INDICES.length;
-  if (CSSCYCLONE_PRESENTATION.preparedPaletteHueSlotCount !== 3 ||
-      CSSCYCLONE_PRESENTATION.maximumColorFamilyCount !== 3 ||
-      CSSCYCLONE_PRESENTATION.startupPaletteFamilies.some((family) =>
-        !Object.hasOwn(PALETTE_CENTER_HUES, family))) {
-    throw new Error("Cyclone prepared three-family palette configuration drifted");
+  const paletteVariants = CSSCYCLONE_PRESENTATION.preparedPaletteVariants;
+  if (!Array.isArray(paletteVariants) || paletteVariants.length !== 12 ||
+      new Set(paletteVariants.map(({ id }) => id)).size !== paletteVariants.length ||
+      paletteVariants.some(({ id, hueRotation }, index) =>
+        id !== `rotate-${String(index * 30).padStart(3, "0")}` ||
+        hueRotation !== index / paletteVariants.length)) {
+    throw new Error("Cyclone prepared hue-rotation palette configuration drifted");
   }
-  const logicalVariants = [];
-  for (const paletteFamily of CSSCYCLONE_PRESENTATION.startupPaletteFamilies) {
-    const hueSlots = preparedPaletteHues(paletteFamily);
+  const sourceLitVariants = paletteVariants.map((paletteVariant) => {
     const colors = [];
     for (let stateIndex = 0; stateIndex < colorStates.length; stateIndex += 1) {
       const state = colorStates[stateIndex];
-      const baseColor = prepareCyclonePaletteColor(state.baseColor, paletteFamily);
+      const baseColor = prepareCyclonePaletteColor(state.baseColor, paletteVariant.id);
+      const vertexColors = frozenVertexNormals[state.particleIndex].map((normal) => shadeVertex({
+        baseColor,
+        normal,
+      }));
       for (let faceIndex = 0; faceIndex < CSSCYCLONE_FACE_INDICES.length; faceIndex += 1) {
-        const faceColor = shadeVertex({
-          baseColor,
-          normal: frozenFaceNormals[state.particleIndex][faceIndex],
-        });
-        colors.push(rgbHex(faceColor));
+        const sourceLitColor = averageVertexColors(
+          vertexColors,
+          CSSCYCLONE_FACE_INDICES[faceIndex],
+        );
+        colors.push(sourceLitColor);
       }
     }
-    logicalVariants.push(Object.freeze({ paletteFamily, hueSlots, colors: Object.freeze(colors) }));
-  }
+    return Object.freeze({
+      paletteVariantId: paletteVariant.id,
+      hueRotation: paletteVariant.hueRotation,
+      colors: Object.freeze(colors),
+    });
+  });
+  const targetEnergies = Object.freeze(sourceLitVariants[0].colors.map((unused, colorIndex) =>
+    Math.max(...sourceLitVariants.map((variant) => srgbLuma(variant.colors[colorIndex])))));
+  const logicalVariants = sourceLitVariants.map((variant) => {
+    const energyRatios = [];
+    const colors = variant.colors.map((color, colorIndex) => {
+      const faceColor = balanceSrgbEnergy(color, targetEnergies[colorIndex]);
+      energyRatios.push(srgbLuma(faceColor) / targetEnergies[colorIndex]);
+      return rgbHex(faceColor);
+    });
+    return Object.freeze({
+      paletteVariantId: variant.paletteVariantId,
+      hueRotation: variant.hueRotation,
+      colors: Object.freeze(colors),
+      energyRatios: Object.freeze(energyRatios),
+    });
+  });
+  const finalLitColorProfile = buildFinalLitColorProfile(
+    logicalVariants,
+    enforceFinalColorProfile,
+  );
   const deduplication = deduplicateExactCrossVariantColors(logicalVariants, tileCount);
   const uniqueColorCount = deduplication.uniqueSourceColorIndices.length;
   const colorSlotIndexBytes = uniqueColorCount <= 0xffff ? 2 : 4;
@@ -162,25 +195,24 @@ async function buildPreparedLightingColors({
     colorSlotIndexBytes,
   );
   const variants = logicalVariants.map((variant) => Object.freeze({
-    paletteFamily: variant.paletteFamily,
-    hueSlots: variant.hueSlots,
+    paletteVariantId: variant.paletteVariantId,
+    hueRotation: variant.hueRotation,
     colors: Object.freeze(deduplication.uniqueSourceColorIndices.map((index) =>
       variant.colors[index])),
   }));
   const contract = deepFreeze({
-    schema: "csscyclone-prepared-flat-lighting-colors@9",
-    technique: "prepared-flat-face-session-three-family-solid-colors-with-dark-color-floor-sparse-source-color-restarts-and-exact-cross-variant-deduplication",
+    schema: "csscyclone-prepared-energy-balanced-continuous-hue-vertex-lighting-colors@15",
+    technique: "prepared-source-smooth-vertex-lighting-averaged-per-solid-face-with-cross-variant-maximum-srgb-energy-balanced-session-hue-rotation-variants-sparse-source-color-restarts-and-exact-cross-variant-deduplication",
     source: "src/cyclone/cyclone.cpp#particle::update+initSaver",
     streamId,
     encoding: "CSS-sRGB-hex-plus-little-endian-color-slot-indices-base64",
     lossless: true,
-    paletteFamilyCount: CSSCYCLONE_PRESENTATION.startupPaletteFamilies.length,
-    paletteFamilies: CSSCYCLONE_PRESENTATION.startupPaletteFamilies,
-    paletteHueSlotCount: CSSCYCLONE_PRESENTATION.preparedPaletteHueSlotCount,
+    paletteVariantCount: paletteVariants.length,
+    paletteVariantIds: Object.freeze(paletteVariants.map(({ id }) => id)),
     paletteAssignment: CSSCYCLONE_PRESENTATION.preparedPaletteAssignment,
     preparedMinimumSaturation: PREPARED_MINIMUM_SATURATION,
     preparedMinimumValue: PREPARED_MINIMUM_VALUE,
-    maximumColorFamilyCount: CSSCYCLONE_PRESENTATION.maximumColorFamilyCount,
+    finalLitColorProfile,
     variants: Object.freeze(variants),
     colorEntryCount: tileCount,
     uniqueColorCount,
@@ -205,10 +237,10 @@ async function buildPreparedLightingColors({
     sourceHueTimingExact: true,
     sourceHueValuesExact: false,
     dynamicLightOrientation: false,
-    sampling: "one-prepared-solid-srgb-color-per-face-state",
-    interpolation: "browser-perspective-transformed-stream-frame-zero-flat-face-color",
+    sampling: "three-source-smooth-vertex-light-samples-averaged-per-solid-face-state",
+    interpolation: "browser-solid-face-average-of-stream-frame-zero-source-vertex-lighting",
     material: Object.freeze({
-      ambientAndDiffuse: "prepared-session-three-family-palette-from-source-particle-rgb",
+      ambientAndDiffuse: "prepared-session-hue-rotation-of-source-particle-rgb",
       specular: Object.freeze([0.7, 0.7, 0.7, 1]),
       shininess: 20,
     }),
@@ -295,15 +327,10 @@ function validateSourceChunk(source) {
   }
 }
 
-function preparedPaletteHues(paletteFamily) {
-  const centerHue = PALETTE_CENTER_HUES[paletteFamily];
-  return Object.freeze([-1, 0, 1].map((offset) => {
-    const hue = centerHue + offset / 6;
-    return hue < 0 ? hue + 1 : hue >= 1 ? hue - 1 : hue;
-  }));
-}
-
-export function prepareCyclonePaletteColor(baseColor, paletteFamily) {
+export function prepareCyclonePaletteColor(baseColor, paletteVariantId) {
+  const paletteVariant = CSSCYCLONE_PRESENTATION.preparedPaletteVariants.find(({ id }) =>
+    id === paletteVariantId);
+  if (!paletteVariant) throw new RangeError("Cyclone prepared palette variant is invalid");
   const maximum = Math.max(...baseColor);
   const minimum = Math.min(...baseColor);
   const chroma = maximum - minimum;
@@ -318,12 +345,9 @@ export function prepareCyclonePaletteColor(baseColor, paletteFamily) {
     else hue = (baseColor[0] - baseColor[1]) / chroma + 4;
     hue = (hue / 6 + 1) % 1;
   }
-  const hueSlotIndex = Math.min(
-    CSSCYCLONE_PRESENTATION.preparedPaletteHueSlotCount - 1,
-    Math.floor(hue * CSSCYCLONE_PRESENTATION.preparedPaletteHueSlotCount),
-  );
+  const rotatedHue = (hue + paletteVariant.hueRotation) % 1;
   return hsvToRgb(
-    preparedPaletteHues(paletteFamily)[hueSlotIndex],
+    rotatedHue,
     saturation,
     Math.max(PREPARED_MINIMUM_VALUE, maximum),
   );
@@ -357,6 +381,101 @@ function shadeVertex({ baseColor, normal }) {
       baseColor[channel] * diffuse +
       0.7 * specular) * 255,
   ));
+}
+
+function averageVertexColors(vertexColors, vertexIndices) {
+  return [0, 1, 2].map((channel) => clampByte(
+    vertexIndices.reduce((sum, vertexIndex) =>
+      sum + vertexColors[vertexIndex][channel], 0) / vertexIndices.length,
+  ));
+}
+
+function balanceSrgbEnergy(color, targetEnergy) {
+  const sourceValue = Math.max(...color);
+  if (sourceValue === 0) return color;
+  if (srgbLuma(color) >= targetEnergy) return color;
+  const maximumExposure = 255 / sourceValue;
+  const fullyExposed = exposeSrgb(color, maximumExposure);
+  if (srgbLuma(fullyExposed) >= targetEnergy) {
+    const exposure = solveMinimumMix(1, maximumExposure, (candidate) =>
+      srgbLuma(exposeSrgb(color, candidate)) >= targetEnergy);
+    return exposeSrgb(color, exposure);
+  }
+  const exposedValue = Math.max(...fullyExposed);
+  const neutralMix = solveMinimumMix(0, 1, (candidate) =>
+    srgbLuma(mixTowardNeutral(fullyExposed, exposedValue, candidate)) >= targetEnergy);
+  return mixTowardNeutral(fullyExposed, exposedValue, neutralMix);
+}
+
+function exposeSrgb(color, exposure) {
+  return color.map((channel) => Math.min(255, Math.ceil(channel * exposure)));
+}
+
+function mixTowardNeutral(color, neutralValue, mix) {
+  return color.map((channel) => Math.min(
+    neutralValue,
+    Math.ceil(channel + (neutralValue - channel) * mix),
+  ));
+}
+
+function solveMinimumMix(low, high, reachesTarget) {
+  for (let iteration = 0; iteration < 16; iteration += 1) {
+    const middle = (low + high) / 2;
+    if (reachesTarget(middle)) high = middle;
+    else low = middle;
+  }
+  return high;
+}
+
+function buildFinalLitColorProfile(variants, enforce) {
+  const profiles = variants.map((variant) => {
+    const values = variant.colors.map(colorValue).sort((left, right) => left - right);
+    const energyRatios = [...variant.energyRatios]
+      .sort((left, right) => left - right);
+    const darkFaceCount = values.filter((value) => value < PREPARED_DARK_FACE_VALUE).length;
+    return Object.freeze({
+      paletteVariantId: variant.paletteVariantId,
+      medianLitValue: roundMetric(values[Math.floor((values.length - 1) / 2)]),
+      darkFaceShare: roundMetric(darkFaceCount / values.length),
+      minimumCrossVariantEnergyRatio: roundMetric(energyRatios[0]),
+      medianCrossVariantEnergyRatio: roundMetric(
+        energyRatios[Math.floor((energyRatios.length - 1) / 2)],
+      ),
+    });
+  });
+  const invalidProfiles = profiles.filter((profile) =>
+    profile.medianLitValue < PREPARED_MINIMUM_MEDIAN_LIT_VALUE ||
+    profile.darkFaceShare > PREPARED_MAXIMUM_DARK_FACE_SHARE ||
+    profile.minimumCrossVariantEnergyRatio <
+      PREPARED_MINIMUM_CROSS_VARIANT_ENERGY_RATIO);
+  if (enforce && invalidProfiles.length > 0) {
+    throw new Error(`Prepared Cyclone final lit colors are too dark: ${JSON.stringify(invalidProfiles)}`);
+  }
+  return deepFreeze({
+    schema: "csscyclone-prepared-final-lit-color-profile@1",
+    darkFaceValueThreshold: PREPARED_DARK_FACE_VALUE,
+    maximumDarkFaceShare: PREPARED_MAXIMUM_DARK_FACE_SHARE,
+    minimumMedianLitValue: PREPARED_MINIMUM_MEDIAN_LIT_VALUE,
+    srgbLumaWeights: SRGB_LUMA_WEIGHTS,
+    minimumCrossVariantEnergyRatio: PREPARED_MINIMUM_CROSS_VARIANT_ENERGY_RATIO,
+    variants: profiles,
+  });
+}
+
+function colorValue(color) {
+  return Math.max(
+    Number.parseInt(color.slice(1, 3), 16),
+    Number.parseInt(color.slice(3, 5), 16),
+    Number.parseInt(color.slice(5, 7), 16),
+  ) / 255;
+}
+
+function srgbLuma(color) {
+  return dot(color, SRGB_LUMA_WEIGHTS);
+}
+
+function roundMetric(value) {
+  return Number(value.toFixed(6));
 }
 
 function rgbHex(color) {

@@ -48,10 +48,6 @@ const CSSCYCLONE_FACE_PLANS = Object.freeze(CSSCYCLONE_FACE_INDICES.map((localIn
 export const CSSCYCLONE_FACE_TILE_VERTEX_ORDERS = Object.freeze(
   CSSCYCLONE_FACE_PLANS.map(({ tileVertexOrder }) => tileVertexOrder),
 );
-export const CSSCYCLONE_FACE_NORMALS = Object.freeze(
-  CSSCYCLONE_FACE_PLANS.map(({ matrix }) => Object.freeze(matrix.slice(8, 11))),
-);
-
 export function buildCyclonePreparedModel({
   source = buildCycloneSourceSequence(),
   modelId = CSSCYCLONE_MODEL_ID,

@@ -62,14 +62,22 @@ export const CSSCYCLONE_BANKS = Object.freeze({
 
 export const CSSCYCLONE_BANK = CSSCYCLONE_BANKS.desktop;
 
+const PREPARED_PALETTE_VARIANTS = Object.freeze(Array.from({ length: 12 }, (_, index) => {
+  const degrees = index * 30;
+  return Object.freeze({
+    id: `rotate-${String(degrees).padStart(3, "0")}`,
+    hueRotation: index / 12,
+  });
+}));
+
 export const CSSCYCLONE_PRESENTATION = Object.freeze({
   radialOrbitScale: 0.75,
   saturationSampling: "floor-0.55-plus-0.45-sqrt-uniform",
   minimumSaturation: 0.55,
   hueSampling: "source-uniform-random-targets",
   particleColorAssignment: "source-hue-at-particle-restart",
-  preparedPaletteHueSlotCount: 3,
-  preparedPaletteAssignment: "source-hue-quantized-to-session-three-family-variant",
+  preparedPaletteAssignment: "source-continuous-hue-plus-session-prepared-rotation",
+  preparedPaletteVariants: PREPARED_PALETTE_VARIANTS,
   maximumColorFamilyCount: 3,
   startupPaletteFamilies: Object.freeze(["blue", "yellow", "red", "magenta", "green"]),
   startupSelections: Object.freeze([

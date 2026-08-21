@@ -1,21 +1,21 @@
-const STORAGE_KEY = "csscyclone:startup-palette-shuffle@1";
-const STORAGE_SCHEMA = "csscyclone-startup-palette-shuffle@1";
+const STORAGE_KEY = "csscyclone:startup-palette-variant-shuffle@2";
+const STORAGE_SCHEMA = "csscyclone-startup-palette-variant-shuffle@2";
 
-export function selectCycloneStartupPaletteFamily(paletteFamilies, options = {}) {
-  const families = [...(paletteFamilies ?? [])];
-  if (families.length < 2 || new Set(families).size !== families.length ||
-      families.some((family) => typeof family !== "string" || family.length < 1)) {
-    throw new Error("Cyclone startup palette shuffle requires distinct prepared families");
+export function selectCycloneStartupPaletteVariant(paletteVariantIds, options = {}) {
+  const variantIds = [...(paletteVariantIds ?? [])];
+  if (variantIds.length < 2 || new Set(variantIds).size !== variantIds.length ||
+      variantIds.some((variantId) => typeof variantId !== "string" || variantId.length < 1)) {
+    throw new Error("Cyclone startup palette shuffle requires distinct prepared variants");
   }
-  const signature = families.join("\n");
+  const signature = variantIds.join("\n");
   const storage = options.storage ?? safeSessionStorage();
   const randomUint32 = options.randomUint32 ?? cryptoRandomUint32;
-  const restored = readState(storage, signature, families);
-  let remaining = restored?.remainingPaletteFamilies ?? [];
-  const lastPaletteFamily = restored?.lastPaletteFamily ?? null;
+  const restored = readState(storage, signature, variantIds);
+  let remaining = restored?.remainingPaletteVariantIds ?? [];
+  const lastPaletteVariantId = restored?.lastPaletteVariantId ?? null;
 
   if (remaining.length === 0) {
-    remaining = [...families];
+    remaining = [...variantIds];
     for (let index = remaining.length - 1; index > 0; index -= 1) {
       const value = randomUint32();
       if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff) {
@@ -24,44 +24,45 @@ export function selectCycloneStartupPaletteFamily(paletteFamilies, options = {})
       const swapIndex = value % (index + 1);
       [remaining[index], remaining[swapIndex]] = [remaining[swapIndex], remaining[index]];
     }
-    if (lastPaletteFamily && remaining.at(-1) === lastPaletteFamily) {
+    if (lastPaletteVariantId && remaining.at(-1) === lastPaletteVariantId) {
       [remaining[0], remaining[remaining.length - 1]] =
         [remaining[remaining.length - 1], remaining[0]];
     }
   }
 
-  const paletteFamily = remaining.pop();
-  if (!paletteFamily || paletteFamily === lastPaletteFamily) {
-    throw new Error("Cyclone startup palette shuffle repeated its previous family");
+  const paletteVariantId = remaining.pop();
+  if (!paletteVariantId || paletteVariantId === lastPaletteVariantId) {
+    throw new Error("Cyclone startup palette shuffle repeated its previous variant");
   }
   writeState(storage, {
     schema: STORAGE_SCHEMA,
     paletteSignature: signature,
-    lastPaletteFamily: paletteFamily,
-    remainingPaletteFamilies: remaining,
+    lastPaletteVariantId: paletteVariantId,
+    remainingPaletteVariantIds: remaining,
   });
   return Object.freeze({
-    paletteFamily,
-    remainingPaletteFamilyCount: remaining.length,
+    paletteVariantId,
+    remainingPaletteVariantCount: remaining.length,
     sessionPersistence: Boolean(storage),
   });
 }
 
-function readState(storage, signature, families) {
+function readState(storage, signature, variantIds) {
   if (!storage) return null;
   try {
     const value = JSON.parse(storage.getItem(STORAGE_KEY));
-    const remaining = value?.remainingPaletteFamilies;
-    const allowed = new Set(families);
+    const remaining = value?.remainingPaletteVariantIds;
+    const allowed = new Set(variantIds);
     if (value?.schema !== STORAGE_SCHEMA || value.paletteSignature !== signature ||
-        (value.lastPaletteFamily !== null && !allowed.has(value.lastPaletteFamily)) ||
+        (value.lastPaletteVariantId !== null && !allowed.has(value.lastPaletteVariantId)) ||
         !Array.isArray(remaining) || new Set(remaining).size !== remaining.length ||
-        remaining.some((family) => !allowed.has(family) || family === value.lastPaletteFamily)) {
+        remaining.some((variantId) =>
+          !allowed.has(variantId) || variantId === value.lastPaletteVariantId)) {
       return null;
     }
     return Object.freeze({
-      lastPaletteFamily: value.lastPaletteFamily,
-      remainingPaletteFamilies: [...remaining],
+      lastPaletteVariantId: value.lastPaletteVariantId,
+      remainingPaletteVariantIds: [...remaining],
     });
   } catch {
     return null;

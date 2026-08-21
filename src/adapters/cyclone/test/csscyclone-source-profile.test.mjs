@@ -67,11 +67,15 @@ test("pins the current Really Slick Cyclone source profile", () => {
   assert.equal(CSSCYCLONE_PRESENTATION.minimumSaturation, 0.55);
   assert.equal(CSSCYCLONE_PRESENTATION.hueSampling, "source-uniform-random-targets");
   assert.equal(CSSCYCLONE_PRESENTATION.particleColorAssignment, "source-hue-at-particle-restart");
-  assert.equal(CSSCYCLONE_PRESENTATION.preparedPaletteHueSlotCount, 3);
   assert.equal(
     CSSCYCLONE_PRESENTATION.preparedPaletteAssignment,
-    "source-hue-quantized-to-session-three-family-variant",
+    "source-continuous-hue-plus-session-prepared-rotation",
   );
+  assert.equal(CSSCYCLONE_PRESENTATION.preparedPaletteVariants.length, 12);
+  assert.deepEqual(CSSCYCLONE_PRESENTATION.preparedPaletteVariants[4], {
+    id: "rotate-120",
+    hueRotation: 1 / 3,
+  });
   assert.equal(CSSCYCLONE_PRESENTATION.maximumColorFamilyCount, 3);
   assert.deepEqual(
     CSSCYCLONE_PRESENTATION.startupPaletteFamilies,
@@ -323,11 +327,11 @@ test("round-trips exact prepared matrices through compact source-state blocks", 
   );
 });
 
-test("prepares flat face lighting without a runtime lighting timeline", async () => {
+test("prepares source-vertex-averaged face lighting without a runtime lighting timeline", async () => {
   const bank = { ...CSSCYCLONE_BANK, particleCount: 3, warmupFrames: 20, frameCount: 4 };
   const source = buildCycloneSourceSequence({ bank });
   const prepared = await buildCyclonePreparedLighting({ source });
-  assert.equal(prepared.contract.schema, "csscyclone-prepared-flat-lighting-colors@9");
+  assert.equal(prepared.contract.schema, "csscyclone-prepared-energy-balanced-continuous-hue-vertex-lighting-colors@15");
   assert.equal(prepared.contract.leafCount, 18);
   assert.equal(prepared.contract.colorStateCount, 3);
   assert.equal(prepared.contract.colorRestartCount, 0);
@@ -341,13 +345,37 @@ test("prepares flat face lighting without a runtime lighting timeline", async ()
   assert.equal(prepared.contract.colorSlotIndexCount, 18);
   assert.ok([2, 4].includes(prepared.contract.colorSlotIndexBytes));
   assert.ok(prepared.contract.colorSlotIndicesBase64.length > 0);
-  assert.equal(prepared.contract.paletteFamilyCount, 5);
-  assert.equal(prepared.contract.paletteHueSlotCount, 3);
-  assert.equal(prepared.contract.maximumColorFamilyCount, 3);
+  assert.equal(prepared.contract.paletteVariantCount, 12);
+  assert.equal(prepared.contract.paletteVariantIds.length, 12);
   assert.equal(prepared.contract.preparedMinimumSaturation, 0.55);
   assert.equal(prepared.contract.preparedMinimumValue, 0.75);
-  assert.equal(prepared.contract.variants.length, 5);
-  assert.ok(prepared.contract.variants.every((variant) => variant.hueSlots.length === 3));
+  assert.equal(
+    prepared.contract.sampling,
+    "three-source-smooth-vertex-light-samples-averaged-per-solid-face-state",
+  );
+  assert.equal(
+    prepared.contract.interpolation,
+    "browser-solid-face-average-of-stream-frame-zero-source-vertex-lighting",
+  );
+  assert.equal(
+    prepared.contract.finalLitColorProfile.schema,
+    "csscyclone-prepared-final-lit-color-profile@1",
+  );
+  assert.equal(prepared.contract.finalLitColorProfile.darkFaceValueThreshold, 0.4);
+  assert.equal(prepared.contract.finalLitColorProfile.maximumDarkFaceShare, 0.25);
+  assert.equal(prepared.contract.finalLitColorProfile.minimumMedianLitValue, 0.5);
+  assert.deepEqual(
+    prepared.contract.finalLitColorProfile.srgbLumaWeights,
+    [0.2126, 0.7152, 0.0722],
+  );
+  assert.equal(prepared.contract.finalLitColorProfile.minimumCrossVariantEnergyRatio, 1);
+  assert.ok(prepared.contract.finalLitColorProfile.variants.every((variant) =>
+    variant.minimumCrossVariantEnergyRatio >= 1));
+  assert.equal(prepared.contract.finalLitColorProfile.variants.length, 12);
+  assert.equal(prepared.contract.variants.length, 12);
+  assert.ok(prepared.contract.variants.every((variant, index) =>
+    variant.paletteVariantId === prepared.contract.paletteVariantIds[index] &&
+    variant.hueRotation === index / 12));
   assert.equal(prepared.contract.sourceStreamFrameCount, 4);
   assert.equal(prepared.contract.chunkCount, 1);
   assert.equal(prepared.chunk.frameParticleColorStateIndices.length, 4);
@@ -357,9 +385,9 @@ test("prepares flat face lighting without a runtime lighting timeline", async ()
   assert.ok(prepared.contract.variants.every((variant) =>
     variant.colors.length === prepared.contract.uniqueColorCount &&
     variant.colors.every((color) => /^#[a-f0-9]{6}$/u.test(color))));
-  const liftedBlack = prepareCyclonePaletteColor([0, 0, 0], "yellow");
+  const liftedBlack = prepareCyclonePaletteColor([0, 0, 0], "rotate-060");
   assert.equal(Math.max(...liftedBlack), 0.75);
-  const liftedRedBlack = prepareCyclonePaletteColor([0, 0, 0], "red");
+  const liftedRedBlack = prepareCyclonePaletteColor([0, 0, 0], "rotate-000");
   assert.equal(Math.max(...liftedRedBlack), 0.75);
   assert.equal(Number((1 - Math.min(...liftedBlack) / Math.max(...liftedBlack)).toFixed(2)), 0.55);
 });
@@ -408,7 +436,7 @@ test("prepares one shared lighting color-slot space across consecutive chunks", 
     frameCount: 20,
     chunkCount: 2,
   };
-  const stream = createCyclonePreparedLightingStream();
+  const stream = createCyclonePreparedLightingStream({ enforceFinalColorProfile: false });
   const lightingChunks = [...buildCycloneSourceChunks({ bank })].map(stream.add);
   const prepared = await stream.finalize();
   assert.equal(prepared.contract.chunkCount, 2);

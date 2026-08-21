@@ -66,7 +66,7 @@ async function prepareProfile(profile, profileRoot, publicRoot) {
     ...raster.clothPages.map((bytes, index) => ({
       path: clothRasterPagePath(index),
       role: "image",
-      mediaType: "image/png",
+      mediaType: "image/webp",
       bytes,
     })),
     ...raster.clothLogoPages.map((bytes, index) => ({

@@ -19,7 +19,7 @@ export function createPolyMorphPreparedCornerTextureTarget(
   }
   const resource = resources.get(resourcePath);
   if (!resource) throw new Error(`Cloth prepared atlas is missing: ${resourcePath}`);
-  const logoResourcePath = resourcePath.replace(/\/cloth-(\d+)\.png$/u, "/cloth-logo-$1.png");
+  const logoResourcePath = resourcePath.replace(/\/cloth-(\d+)\.webp$/u, "/cloth-logo-$1.png");
   const logoResource = resources.get(logoResourcePath);
   if (!logoResource) throw new Error(`Cloth prepared logo atlas is missing: ${logoResourcePath}`);
   const url = URL.createObjectURL(new Blob([resource.bytes], { type: resource.descriptor.mediaType }));

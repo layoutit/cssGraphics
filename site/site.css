@@ -247,8 +247,12 @@ body {
   transition: color 180ms ease;
 }
 
-.project-thumbnail:is([href="/cloth/"], [href="/maze/"]) .project-title {
+.project-thumbnail[href="/cloth/"] .project-title {
   color: rgb(20 27 31 / 76%);
+}
+
+.project-thumbnail[href="/maze/"] .project-title {
+  color: rgb(10 14 16 / 96%);
 }
 
 .project-number {
@@ -294,8 +298,12 @@ body {
   color: rgb(238 242 244 / 88%);
 }
 
-.project-thumbnail:is([href="/cloth/"], [href="/maze/"]):is(:hover, :focus-visible) .project-title {
+.project-thumbnail[href="/cloth/"]:is(:hover, :focus-visible) .project-title {
   color: rgb(12 17 20 / 92%);
+}
+
+.project-thumbnail[href="/maze/"]:is(:hover, :focus-visible) .project-title {
+  color: rgb(4 7 8);
 }
 
 @media (max-width: 2073px) {

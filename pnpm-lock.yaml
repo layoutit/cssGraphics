@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@layoutit/polycss-morph@0.2.11':
+    hash: 6a5584d96f7c523d9b588757560cc72db52adeb03c00f757ee9d7a842692f8ea
+    path: patches/@layoutit__polycss-morph@0.2.11.patch
+
 importers:
 
   .:
@@ -13,7 +18,7 @@ importers:
         version: 0.2.11
       '@layoutit/polycss-morph':
         specifier: 0.2.11
-        version: 0.2.11
+        version: 0.2.11(patch_hash=6a5584d96f7c523d9b588757560cc72db52adeb03c00f757ee9d7a842692f8ea)
       prismjs:
         specifier: 1.30.0
         version: 1.30.0
@@ -869,7 +874,7 @@ snapshots:
 
   '@layoutit/polycss-core@0.2.11': {}
 
-  '@layoutit/polycss-morph@0.2.11':
+  '@layoutit/polycss-morph@0.2.11(patch_hash=6a5584d96f7c523d9b588757560cc72db52adeb03c00f757ee9d7a842692f8ea)':
     dependencies:
       '@layoutit/polycss': 0.2.11
 

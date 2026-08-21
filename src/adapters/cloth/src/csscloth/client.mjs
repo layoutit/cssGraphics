@@ -574,9 +574,18 @@ function cleanPreparedDom(mounted, triangleCount) {
     const suffix = String(triangleIndex).padStart(3, "0");
     const shape = mounted.shapeElements.get(`cloth-${suffix}`);
     const leaf = mounted.leafHandles.get(`leaf-cloth-${suffix}`)?.element;
-    if (!shape || !leaf || leaf.localName !== "u" || leaf.parentElement !== shape ||
+    if (!shape || !leaf || !["s", "u"].includes(leaf.localName) || leaf.parentElement !== shape ||
         shape.childElementCount !== 1) {
       throw new Error(`Cloth prepared triangle ${suffix} cannot be flattened`);
+    }
+    if (leaf.localName === "s") {
+      leaf.style.removeProperty("background-image");
+      leaf.style.removeProperty("background-size");
+      leaf.style.removeProperty("mask-image");
+      leaf.style.removeProperty("mask-mode");
+      leaf.style.removeProperty("mask-position");
+      leaf.style.removeProperty("mask-repeat");
+      leaf.style.removeProperty("mask-size");
     }
     mounted.sceneElement.append(leaf);
     shape.remove();
@@ -584,6 +593,14 @@ function cleanPreparedDom(mounted, triangleCount) {
   for (const [id, element] of mounted.shapeElements) {
     if (!/^cloth-\d{3}$/u.test(id)) mounted.sceneElement.append(element);
   }
+  const groundShape = mounted.shapeElements.get("ground");
+  const ground = mounted.leafHandles.get("leaf-ground")?.element;
+  if (!groundShape || !ground || ground.parentElement !== groundShape ||
+      groundShape.parentElement !== mounted.sceneElement || groundShape.childElementCount !== 1) {
+    throw new Error("Cloth prepared ground cannot be flattened");
+  }
+  mounted.sceneElement.prepend(ground);
+  groundShape.remove();
   if (mounted.modelElement.childElementCount !== 0) {
     throw new Error("Cloth prepared model wrapper contains unexpected retained nodes");
   }

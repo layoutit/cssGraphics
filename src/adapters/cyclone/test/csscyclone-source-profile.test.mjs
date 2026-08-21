@@ -69,13 +69,13 @@ test("pins the current Really Slick Cyclone source profile", () => {
   assert.equal(CSSCYCLONE_PRESENTATION.particleColorAssignment, "source-hue-at-particle-restart");
   assert.equal(
     CSSCYCLONE_PRESENTATION.preparedPaletteAssignment,
-    "source-hue-ranked-curated-three-color-split-complementary-palette",
+    "source-hue-ranked-curated-three-color-analogous-palette",
   );
   assert.equal(CSSCYCLONE_PRESENTATION.preparedPaletteVariants.length, 12);
   assert.deepEqual(CSSCYCLONE_PRESENTATION.preparedPaletteVariants[4], {
     id: "rotate-120",
     hueRotation: 1 / 3,
-    preparedHues: [195 / 360, 225 / 360, 0],
+    preparedHues: [195 / 360, 210 / 360, 225 / 360],
     startupWeight: 2,
   });
   assert.deepEqual(
@@ -337,7 +337,7 @@ test("prepares source-vertex-averaged face lighting without a runtime lighting t
   const bank = { ...CSSCYCLONE_BANK, particleCount: 3, warmupFrames: 20, frameCount: 4 };
   const source = buildCycloneSourceSequence({ bank });
   const prepared = await buildCyclonePreparedLighting({ source });
-  assert.equal(prepared.contract.schema, "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@17");
+  assert.equal(prepared.contract.schema, "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@18");
   assert.equal(prepared.contract.leafCount, 18);
   assert.equal(prepared.contract.colorStateCount, 3);
   assert.equal(prepared.contract.colorRestartCount, 0);
@@ -401,7 +401,7 @@ test("prepares source-vertex-averaged face lighting without a runtime lighting t
   assert.equal(Number((1 - Math.min(...liftedBlack) / Math.max(...liftedBlack)).toFixed(2)), 0.55);
 });
 
-test("maps source hues into two primary colors and one split-complementary accent", () => {
+test("maps source hues into three neighboring prepared colors", () => {
   const preparedHues = Array.from({ length: 10 }, (_, index) => {
     const source = hsvColor((index + 0.5) / 10, 0.8, 0.8);
     return rgbHue(prepareCyclonePaletteColor(source, "rotate-000"));
@@ -409,7 +409,7 @@ test("maps source hues into two primary colors and one split-complementary accen
   const hueCounts = new Map();
   for (const hue of preparedHues) hueCounts.set(hue, (hueCounts.get(hue) ?? 0) + 1);
   assert.deepEqual([...hueCounts.values()], [4, 4, 2]);
-  assert.deepEqual([...hueCounts.keys()], [0.291667, 0.375, 0.791667]);
+  assert.deepEqual([...hueCounts.keys()], [0.291667, 0.333333, 0.375]);
 });
 
 test("publishes only exact source color restarts through sparse leaf colors", async () => {

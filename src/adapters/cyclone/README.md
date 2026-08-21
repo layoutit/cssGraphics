@@ -31,11 +31,11 @@ rasterization, or DOM growth.
 The prepared presentation maps the source's random saturation samples into a
 0.55-1.0 range and lifts the dark end of prepared HSV value to 0.75. Each
 session variant contains at most three coordinated hue families: two primaries
-30 degrees apart and one split-complementary accent. Source hue ranks assign 40%
-of particle colors to each primary and 20% to the accent. The source's uniform
+and one secondary, all within a 30-degree analogous range. Source hue ranks
+assign 40% of particle colors to each primary and 20% to the secondary. The source's uniform
 random hue-target timing and rule that particles change color only when they
 restart remain unchanged. Twelve prepared variants use explicit audited
-three-hue sets; none contains an orange- or yellow-dominant primary pair. The
+three-hue sets; none combines opposing families such as red and blue. The
 browser selects one complete prepared color table and performs no color calculation. The same source RNG
 draws preserve RNG cadence, trajectory geometry, restart timing, and coherent
 color bands. The session palette and midpoint energy normalization are

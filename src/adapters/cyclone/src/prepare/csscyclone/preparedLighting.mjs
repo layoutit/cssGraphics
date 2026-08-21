@@ -17,7 +17,7 @@ const PREPARED_TARGET_ENERGY_RATIO = Number(((
 ) / 2).toFixed(4));
 const PREPARED_MINIMUM_TARGET_ENERGY_RATIO = 1;
 const PREPARED_MAXIMUM_TARGET_ENERGY_RATIO = 1.03;
-const PREPARED_COMPLEMENTARY_ACCENT_SHARE = 0.2;
+const PREPARED_THIRD_HUE_SHARE = 0.2;
 const SOURCE_VERTEX_NORMALS = Object.freeze(
   CSSCYCLONE_PARTICLE_VERTICES.map((vertex) => Object.freeze(normalize(vertex))),
 );
@@ -213,8 +213,8 @@ async function buildPreparedLightingColors({
       variant.colors[index])),
   }));
   const contract = deepFreeze({
-    schema: "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@17",
-    technique: "prepared-source-smooth-vertex-lighting-averaged-per-solid-face-with-curated-three-color-split-complementary-session-palettes-mid-green-yellow-reference-srgb-energy-normalization-sparse-source-color-restarts-and-exact-cross-variant-deduplication",
+    schema: "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@18",
+    technique: "prepared-source-smooth-vertex-lighting-averaged-per-solid-face-with-curated-three-color-analogous-session-palettes-mid-green-yellow-reference-srgb-energy-normalization-sparse-source-color-restarts-and-exact-cross-variant-deduplication",
     source: "src/cyclone/cyclone.cpp#particle::update+initSaver",
     streamId,
     encoding: "CSS-sRGB-hex-plus-little-endian-color-slot-indices-base64",
@@ -252,7 +252,7 @@ async function buildPreparedLightingColors({
     sampling: "three-source-smooth-vertex-light-samples-averaged-per-solid-face-state",
     interpolation: "browser-solid-face-average-of-stream-frame-zero-source-vertex-lighting",
     material: Object.freeze({
-      ambientAndDiffuse: "prepared-session-three-color-complementary-palette",
+      ambientAndDiffuse: "prepared-session-three-color-analogous-palette",
       specular: Object.freeze([0.7, 0.7, 0.7, 1]),
       shininess: 20,
     }),
@@ -357,7 +357,7 @@ export function prepareCyclonePaletteColor(baseColor, paletteVariantId) {
     else hue = (baseColor[0] - baseColor[1]) / chroma + 4;
     hue = (hue / 6 + 1) % 1;
   }
-  const primaryShare = (1 - PREPARED_COMPLEMENTARY_ACCENT_SHARE) / 2;
+  const primaryShare = (1 - PREPARED_THIRD_HUE_SHARE) / 2;
   const preparedHue = hue < primaryShare
     ? paletteVariant.preparedHues[0]
     : hue < primaryShare * 2

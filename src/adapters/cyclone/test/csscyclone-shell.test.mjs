@@ -5,9 +5,10 @@ import test from "node:test";
 const adapter = new URL("../", import.meta.url);
 
 test("uses the cssGraphics shell without product UI or alternate renderers", async () => {
-  const [html, client, playback, stream, worker, styles] = await Promise.all([
+  const [html, client, preparedDom, playback, stream, worker, styles] = await Promise.all([
     readFile(new URL("index.html", adapter), "utf8"),
     readFile(new URL("src/csscyclone/client.mjs", adapter), "utf8"),
+    readFile(new URL("src/csscyclone/preparedDom.mjs", adapter), "utf8"),
     readFile(new URL("src/csscyclone/preparedPlayback.mjs", adapter), "utf8"),
     readFile(new URL("src/csscyclone/preparedStream.mjs", adapter), "utf8"),
     readFile(new URL("src/csscyclone/preparedBlockWorker.mjs", adapter), "utf8"),
@@ -17,7 +18,9 @@ test("uses the cssGraphics shell without product UI or alternate renderers", asy
   assert.match(html, /<nav class="site-actions" aria-label="Scene actions">/u);
   assert.doesNotMatch(html, /<main\b/u);
   assert.doesNotMatch(html, /<canvas\b|<svg\b[^>]*class="scene|controls|button/u);
-  assert.match(client, /mountPolyMorphModel/u);
+  assert.match(preparedDom, /mountPolyMorphModel/u);
+  assert.match(preparedDom, /model\.render\.leaves\.every\(\(leaf\) => leaf\.strategy === "solid-triangle"\)/u);
+  assert.match(preparedDom, /host\.append\(mounted\.cameraElement\)/u);
   assert.match(playback, /createPolyMorphPreparedDomTarget/u);
   assert.match(styles, /\.site-wordmark-svg\s*\{[^}]*width:\s*190px;/su);
   assert.match(styles, /\.site-actions\s*\{/u);
@@ -37,8 +40,8 @@ test("uses the cssGraphics shell without product UI or alternate renderers", asy
   assert.match(styles, /body > \.polycss-camera u\s*\{[^}]*corner-top-left-shape:\s*bevel;/su);
   assert.doesNotMatch(styles, /body > \.polycss-camera :is\(u, b\)\s*\{[^}]*corner-top-left-shape:/su);
   assert.doesNotMatch(styles, /color-mix|--cyclone-tone/u);
-  assert.match(client, /cameraElement\.style\.removeProperty\("perspective"\)/u);
-  assert.match(client, /sceneElement\.style\.removeProperty\("transform"\)/u);
+  assert.match(preparedDom, /cameraElement\.style\.removeProperty\("perspective"\)/u);
+  assert.match(preparedDom, /sceneElement\.style\.removeProperty\("transform"\)/u);
   assert.match(playback, /style\.setProperty\("--cyclone-perspective"/u);
   assert.doesNotMatch(playback, /sceneElement\.style\.transform|cameraElement\.style\.perspective/u);
   assert.match(playback, /deadline-setTimeout-requestAnimationFrame-prepared-publication/u);

@@ -73,7 +73,8 @@ test("runtime has no per-frame geometry or raster construction", async () => {
   assert.match(textureTarget, /logoAtlas\.triangleSlots/u);
   assert.match(client, /metadata\.renderer\.logoAtlas/u);
   assert.match(client, /metadata\.renderer\.lightingAtlas/u);
-  assert.match(styles, /body > \.polycss-camera > \.polycss-scene > u/u);
+  assert.match(styles, /body > \.polycss-camera > \.polycss-scene > :is\(s, u\)/u);
+  assert.match(styles, /clip-path: polygon\(50% 0, 100% 100%, 0 100%\)/u);
   assert.match(styles, /background-image: var\(--csscloth-logo-atlas\), var\(--csscloth-atlas\)/u);
   assert.match(styles, /background-size: var\(--csscloth-logo-atlas-size\), var\(--csscloth-atlas-size\)/u);
   assert.match(styles, /-webkit-backface-visibility: visible/u);

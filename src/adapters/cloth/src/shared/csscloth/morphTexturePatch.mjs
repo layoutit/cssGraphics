@@ -9,8 +9,8 @@ export function createPolyMorphPreparedCornerTextureTarget(
 ) {
   const handles = Array.from({ length: triangleCount }, (_, triangleIndex) =>
     mounted.leafHandles.get(`leaf-cloth-${String(triangleIndex).padStart(3, "0")}`));
-  if (handles.some((handle) => !handle || handle.element.localName !== "u")) {
-    throw new Error("Cloth requires PolyCSS corner-shape triangle leaves");
+  if (handles.some((handle) => !handle || !["s", "u"].includes(handle.element.localName))) {
+    throw new Error("Cloth requires PolyCSS prepared triangle leaves");
   }
   const atlases = handles.map((handle) => handle.plan.fallback?.atlas);
   const resourcePath = atlases[0]?.resourcePath;

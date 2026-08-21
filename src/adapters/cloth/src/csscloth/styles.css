@@ -156,7 +156,7 @@ body > .polycss-camera u {
   image-rendering: auto;
 }
 
-body > .polycss-camera > .polycss-scene > u {
+body > .polycss-camera > .polycss-scene > :is(s, u) {
   width: 28px;
   height: 28px;
   color: #fff;
@@ -172,6 +172,10 @@ body > .polycss-camera > .polycss-scene > u {
   corner-top-right-shape: bevel;
   corner-bottom-left-shape: initial;
   corner-bottom-right-shape: initial;
+}
+
+body > .polycss-camera > .polycss-scene > s {
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 
 body > .polycss-camera b {

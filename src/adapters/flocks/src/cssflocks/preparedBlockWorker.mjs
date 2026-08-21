@@ -3,6 +3,7 @@ import { decodeFlocksPreparedBlock } from "../shared/cssflocks/preparedBlockTran
 
 const RESPONSE_CHUNK_SIZE = 960;
 let catalog = null;
+let paletteVariantId = null;
 let tail = Promise.resolve();
 const canceledRequestIds = new Set();
 
@@ -13,6 +14,7 @@ self.addEventListener("message", ({ data }) => {
         throw new Error("Prepared Flocks worker catalog drifted");
       }
       catalog = data.catalog;
+      paletteVariantId = data.paletteVariantId;
       self.postMessage({ type: "initialized" });
       return;
     }
@@ -34,7 +36,9 @@ self.addEventListener("message", ({ data }) => {
 async function materialize(data) {
   if (canceledRequestIds.delete(data.requestId)) return;
   const startedAt = performance.now();
-  const block = decodeFlocksPreparedBlock(data.bytes, data.descriptor, catalog);
+  const block = decodeFlocksPreparedBlock(data.bytes, data.descriptor, catalog, {
+    paletteVariantId,
+  });
   if (canceledRequestIds.delete(data.requestId)) return;
   const { transforms, colors } = block.playback;
   const chunkCount = Math.ceil(transforms.length / RESPONSE_CHUNK_SIZE);

@@ -20,7 +20,7 @@ const profile = options.profile === "desktop"
 const outputRoot = resolve(repositoryRoot, `bench/results/cssflocks/cadence/${profile.id}`);
 const baselineTracePath = resolve(repositoryRoot, `bench/results/cssflocks/baseline/${profile.id}/Trace.json.gz`);
 const port = 4195;
-const url = `http://127.0.0.1:${port}/flocks/?window=source-114s`;
+const url = `http://127.0.0.1:${port}/flocks/?window=source-114s&palette=rotate-120`;
 const thresholds = Object.freeze({
   presentedFrameP95Milliseconds: 22,
   maximumDrawFrameGapMilliseconds: 33.3,

@@ -14,10 +14,11 @@ Prepared-product deviations:
 
 - OpenGL/GLU rendering is replaced by six PolyCSS solid triangles per bug.
 - Dynamic OpenGL lighting/specular response is replaced by fixed per-face flat-light factors.
+- Exact source hue remains in the prepared stream, but its rank is presented through the same three-color analogous palette bank and weighted session cycle as Cyclone.
 - Every source transform state is published at 60 Hz, while each retained root's prepared color is published on one of five staggered phases (12 Hz per root) to bound repaint work.
 - The exact-source bank lasts 216 seconds. Its final 8 seconds are followed by a prepare-only cubic-Hermite correspondence bridge so the retained roots can loop without the source stream's discontinuous restart.
 - Source-optional dot, line, Chromatek, and connection modes are not exposed on the default route.
 
-The compiled native oracles include the pinned upstream source and qualify state evolution, GL transforms, GLU topology, winding, camera projection, and the numbered native reference sequence. Native/browser RGB results are diagnostic, not a visual-parity claim, because the accepted flat-lighting system intentionally differs from source OpenGL lighting. Physical-device mobile cadence has not been qualified.
+The compiled native oracles include the pinned upstream source and qualify state evolution, GL transforms, GLU topology, winding, camera projection, and the numbered native reference sequence. Native/browser RGB results are diagnostic, not a visual-parity claim, because the shared product palette and accepted flat-lighting system intentionally differ from source OpenGL lighting. Physical-device mobile cadence has not been qualified.
 
 This adapter is distributed under GPL-2.0-or-later. The GPL version 2 terms are included at `src/adapters/electropaint/LICENSE.GPL-2.0`; the pinned rsMath and Rgbhsl dependencies are LGPL-2.1-or-later as recorded in `notes/references/source-lock.json`.

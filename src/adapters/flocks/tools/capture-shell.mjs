@@ -8,7 +8,7 @@ import { chromium } from "playwright";
 const repositoryRoot = resolve(import.meta.dirname, "../../../..");
 const outputRoot = resolve(repositoryRoot, "bench/results/cssflocks/shell");
 const port = 4189;
-const url = `http://127.0.0.1:${port}/flocks/`;
+const url = `http://127.0.0.1:${port}/flocks/?palette=rotate-120`;
 const profiles = [
   { id: "desktop", viewport: { width: 1280, height: 800 }, expectedWordmarkWidth: 190 },
   { id: "mobile", viewport: { width: 390, height: 844 }, expectedWordmarkWidth: 148 },

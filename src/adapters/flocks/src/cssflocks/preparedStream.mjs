@@ -23,9 +23,9 @@ export async function loadFlocksPreparedCatalog(descriptor) {
   return Object.freeze(catalog);
 }
 
-export function createFlocksPreparedBlockLoader(catalog) {
+export function createFlocksPreparedBlockLoader(catalog, { paletteVariantId = null } = {}) {
   validateCatalog(catalog);
-  const worker = createWorkerMaterializer(catalog);
+  const worker = createWorkerMaterializer(catalog, paletteVariantId);
   const decodedRecords = new Map();
   const blockRecords = new Map();
   let desiredBlockIndices = new Set();
@@ -99,10 +99,14 @@ export function createFlocksPreparedBlockLoader(catalog) {
       assertCurrent(index, record);
       const result = worker
         ? await worker.materialize(decodedRecord.bytes, descriptor, { signal: record.controller.signal, eager })
-        : Object.freeze({ block: decodeFlocksPreparedBlock(decodedRecord.bytes, descriptor, catalog) });
+        : Object.freeze({
+          block: decodeFlocksPreparedBlock(decodedRecord.bytes, descriptor, catalog, {
+            paletteVariantId,
+          }),
+        });
       assertCurrent(index, record);
       const block = result.block;
-      validateBlock(block, descriptor, catalog);
+      validateBlock(block, descriptor, catalog, paletteVariantId);
       materializationCount += 1;
       if (worker) workerMaterializationCount += 1;
       cumulativePreparedCssStringBytes += block.preparedCssStringByteLength;
@@ -196,6 +200,7 @@ export function createFlocksPreparedBlockLoader(catalog) {
         workerMaterializationResponseChunkCount: worker?.stats().responseChunkCount ?? 0,
         workerMaterializationResponseIdleSliceCount: worker?.stats().responseIdleSliceCount ?? 0,
         workerMaterializationMaximumResponseChunkBytes: worker?.stats().maximumResponseChunkBytes ?? 0,
+        paletteVariantId,
         desiredBlockIndices: Object.freeze([...desiredBlockIndices].sort((left, right) => left - right)),
       });
     },
@@ -214,7 +219,7 @@ export function createFlocksPreparedBlockLoader(catalog) {
   }
 }
 
-function createWorkerMaterializer(catalog) {
+function createWorkerMaterializer(catalog, paletteVariantId) {
   if (typeof Worker !== "function") return null;
   const worker = new Worker(new URL("./preparedBlockWorker.mjs", import.meta.url), { type: "module" });
   const responseChunkQueue = [];
@@ -359,7 +364,7 @@ function createWorkerMaterializer(catalog) {
   worker.addEventListener("error", (event) => {
     rejectAll(new Error(event.message || "Prepared Flocks worker failed"));
   });
-  worker.postMessage({ type: "initialize", catalog });
+  worker.postMessage({ type: "initialize", catalog, paletteVariantId });
   return Object.freeze({
     async materialize(bytes, descriptor, { signal, eager = false } = {}) {
       if (destroyed) throw new Error("Prepared Flocks worker is destroyed");
@@ -447,11 +452,12 @@ function isPermutation(values, count) {
     new Set(values).size === count;
 }
 
-function validateBlock(block, descriptor, catalog) {
+function validateBlock(block, descriptor, catalog, paletteVariantId) {
   if (block?.schema !== "cssflocks-prepared-stream-block@1" ||
       block.index !== descriptor.index || block.startFrameIndex !== descriptor.startFrameIndex ||
       block.playback?.schema !== CSSFLOCKS_PLAYBACK_SCHEMA ||
       block.playback.modelId !== catalog.modelId || block.playback.bugCount !== catalog.bugCount ||
+      block.playback.paletteVariantId !== paletteVariantId ||
       block.playback.transforms?.length !== descriptor.frameCount * catalog.bugCount ||
       block.playback.colors?.length !== descriptor.frameCount * catalog.bugCount) {
     throw new Error(`Prepared Flocks block ${descriptor.index} binding drifted`);

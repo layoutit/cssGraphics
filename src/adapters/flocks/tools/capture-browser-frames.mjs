@@ -15,7 +15,8 @@ const outputRoot = resolve(repositoryRoot, "bench/results/cssflocks/browser-fram
 const rawFrames = resolve(outputRoot, "raw");
 const packagedFrames = resolve(outputRoot, "packaged");
 const port = 4197;
-const url = `http://127.0.0.1:${port}/flocks/?window=source-114s`;
+const paletteVariantId = "rotate-120";
+const url = `http://127.0.0.1:${port}/flocks/?window=source-114s&palette=${paletteVariantId}`;
 
 await rm(outputRoot, { recursive: true, force: true });
 await mkdir(rawFrames, { recursive: true });
@@ -101,6 +102,7 @@ try {
     schema: "cssflocks-frame-sequence-browser-state@1",
     browser: `installed Google Chrome ${browser.version()}`,
     url,
+    paletteVariantId,
     viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
     initial,
     browserErrors,

@@ -5,11 +5,13 @@ import { resolve } from "node:path";
 import sharp from "sharp";
 import { CSSFLOCKS_FRAME_SEQUENCE_COUNT, CSSFLOCKS_FRAME_SEQUENCE_PLAN } from "./frameSequencePlan.mjs";
 import { compareFlocksFrameSequence } from "./frameSequenceArtifacts.mjs";
+import { mapReallySlickHueToPreparedHex } from "../../shared/reallyslickPalette.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "../../../..");
 const referenceRoot = resolve(repositoryRoot, "bench/results/cssflocks/reference-frames");
 const browserRoot = resolve(repositoryRoot, "bench/results/cssflocks/browser-frames");
 const outputRoot = resolve(repositoryRoot, "bench/results/cssflocks/frame-comparison");
+const paletteVariantId = "rotate-120";
 
 await rm(outputRoot, { recursive: true, force: true });
 await mkdir(outputRoot, { recursive: true });
@@ -55,7 +57,9 @@ for (let ordinal = 0; ordinal < reference.frames.length; ordinal += 1) {
     const matrixDelta = Math.max(...actualMatrix.map((value, index) => Math.abs(value - expectedRoot.matrix[index])));
     maximumMatrixElementDelta = Math.max(maximumMatrixElementDelta, matrixDelta);
     if (matrixDelta > 0.001) { transformMismatchCount += 1; frameTransformMismatches += 1; }
-    if (firstInSegment || (localFrameIndex + rootIndex) % 5 === 0) colorByRoot[rootIndex] = expectedRoot.color;
+    if (firstInSegment || (localFrameIndex + rootIndex) % 5 === 0) {
+      colorByRoot[rootIndex] = mapReallySlickHueToPreparedHex(expectedRoot.hue, paletteVariantId);
+    }
     if (normalizeColor(actualRoot.color) !== normalizeColor(colorByRoot[rootIndex])) {
       colorMismatchCount += 1;
       frameColorMismatches += 1;
@@ -117,6 +121,7 @@ const report = Object.freeze({
   status: Object.values(gates).every(Boolean) ? "passed" : "failed",
   gates,
   plan: CSSFLOCKS_FRAME_SEQUENCE_PLAN,
+  paletteVariantId,
   counts: Object.freeze({ frames: CSSFLOCKS_FRAME_SEQUENCE_COUNT, rootsPerFrame: reference.rootCount, leavesPerFrame: reference.leafCount }),
   state: Object.freeze({ cssomMatrixSerializationTolerance, maximumMatrixElementDelta, transformMismatchCount, colorMismatchCount, frames: stateFrames }),
   transport: Object.freeze({ tolerances: referenceReport.transportTolerances, maxima: referenceReport.transportMaxima }),

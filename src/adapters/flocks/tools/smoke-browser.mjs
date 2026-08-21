@@ -9,7 +9,7 @@ const deploy = process.argv.includes("--deploy");
 const resultRoot = resolve(repositoryRoot, `bench/results/cssflocks/${deploy ? "deploy" : "browser"}`);
 const port = 4177;
 const proof = `${Date.now().toString(36)}-${process.pid}`;
-const url = `http://127.0.0.1:${port}/flocks/${deploy ? "?window=source-114s" : ""}`;
+const url = `http://127.0.0.1:${port}/flocks/?window=source-114s&palette=rotate-120`;
 const cacheBustedHtmlUrl = `http://127.0.0.1:${port}/flocks/?proof=${proof}`;
 await mkdir(resultRoot, { recursive: true });
 let serverOutput = "";

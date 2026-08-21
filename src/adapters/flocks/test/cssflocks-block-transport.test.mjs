@@ -14,6 +14,7 @@ import {
   decodeFlocksPreparedSourceValues,
   encodeFlocksPreparedBlock,
 } from "../src/shared/cssflocks/preparedBlockTransport.mjs";
+import { mapReallySlickHueToPreparedHex } from "../../shared/reallyslickPalette.mjs";
 
 test("Flocks source-state block round-trips into prepared transforms and currentColor values", () => {
   const source = selectFlocksProductPrefix(buildFlocksSourceSequence({
@@ -54,6 +55,18 @@ test("Flocks source-state block round-trips into prepared transforms and current
     storage: "int16", scale: 1 / 128, minimum: -256, maximum: 255.9921875,
   });
   assert.equal(decodeFlocksPreparedSourceValues(bytes, descriptor, catalog).length, 2 * 164 * 7);
+
+  const sharedPaletteBlock = decodeFlocksPreparedBlock(bytes, descriptor, catalog, {
+    paletteVariantId: "rotate-120",
+  });
+  const sourceValues = decodeFlocksPreparedSourceValues(bytes, descriptor, catalog);
+  assert.equal(sharedPaletteBlock.playback.paletteVariantId, "rotate-120");
+  assert.deepEqual(
+    sharedPaletteBlock.playback.colors,
+    Array.from({ length: 328 }, (unused, index) =>
+      mapReallySlickHueToPreparedHex(sourceValues[index * 7 + 6], "rotate-120")),
+  );
+  assert.ok(new Set(sharedPaletteBlock.playback.colors).size <= 3);
 
   const corruptHeader = bytes.slice();
   corruptHeader[12] ^= 1;

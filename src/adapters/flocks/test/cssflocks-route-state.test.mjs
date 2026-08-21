@@ -11,12 +11,17 @@ const manifest = Object.freeze({
 
 test("no-param Flocks route resolves only through the manifest default", () => {
   assert.deepEqual(resolveFlocksRoute({ search: "", manifest }), {
-    sceneId: "flocks-default", startupWindowId: null, mode: "manifest-default",
+    sceneId: "flocks-default", startupWindowId: null, paletteVariantId: null, mode: "manifest-default",
   });
   assert.deepEqual(resolveFlocksRoute({ search: "?window=source-114s", manifest }), {
-    sceneId: "flocks-default", startupWindowId: "source-114s", mode: "explicit-startup-window",
+    sceneId: "flocks-default", startupWindowId: "source-114s", paletteVariantId: null, mode: "explicit-presentation",
+  });
+  assert.deepEqual(resolveFlocksRoute({ search: "?window=source-114s&palette=rotate-120", manifest }), {
+    sceneId: "flocks-default", startupWindowId: "source-114s", paletteVariantId: "rotate-120", mode: "explicit-presentation",
   });
   assert.throws(() => resolveFlocksRoute({ search: "?scene=fake", manifest }), /only one startup window/u);
+  assert.throws(() => resolveFlocksRoute({ search: "?palette=sepia", manifest }), /palette selector is invalid/u);
+  assert.throws(() => resolveFlocksRoute({ search: "?palette=rotate-120&palette=rotate-150", manifest }), /only one startup window/u);
 });
 
 test("Flocks startup profile selection is bounded and startup-only", () => {

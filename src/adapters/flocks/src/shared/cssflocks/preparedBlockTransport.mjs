@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import { formatMatrix3dValues } from "@layoutit/polycss";
+import { mapReallySlickHueToPreparedHex } from "../../../../shared/reallyslickPalette.mjs";
 import { buildFlocksBugMatrix, flocksHueToHex } from "./bugTransform.mjs";
 
 export const CSSFLOCKS_BLOCK_ENCODING = "gzip-flocks-checkpoint-delta@2";
@@ -104,14 +105,18 @@ export function decodeFlocksPreparedSourceValues(bytes, descriptor, catalog) {
   return values;
 }
 
-export function decodeFlocksPreparedBlock(bytes, descriptor, catalog) {
+export function decodeFlocksPreparedBlock(bytes, descriptor, catalog, {
+  paletteVariantId = null,
+} = {}) {
   const transforms = new Array(descriptor.frameCount * catalog.bugCount);
   const colors = new Array(descriptor.frameCount * catalog.bugCount);
   decodeRecords(bytes, descriptor, catalog, (frameIndex, bugIndex, position, velocity, hue) => {
     const outputIndex = frameIndex * catalog.bugCount + bugIndex;
     const transform = buildFlocksBugMatrix(position, velocity);
     transforms[outputIndex] = `matrix3d(${formatMatrix3dValues(transform.matrix, 6)})`;
-    colors[outputIndex] = flocksHueToHex(hue);
+    colors[outputIndex] = paletteVariantId === null
+      ? flocksHueToHex(hue)
+      : mapReallySlickHueToPreparedHex(hue, paletteVariantId);
   });
   const preparedCssStringByteLength = [...transforms, ...colors]
     .reduce((total, value) => total + value.length * 2, 0);
@@ -123,6 +128,7 @@ export function decodeFlocksPreparedBlock(bytes, descriptor, catalog) {
       schema: CSSFLOCKS_PLAYBACK_SCHEMA,
       streamId: catalog.streamId,
       modelId: catalog.modelId,
+      paletteVariantId,
       bugCount: catalog.bugCount,
       leafCount: catalog.leafCount,
       framesPerSecond: catalog.framesPerSecond,

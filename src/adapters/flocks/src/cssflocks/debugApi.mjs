@@ -10,6 +10,7 @@ export function installFlocksDebugApi(state) {
       get scene() { return state.scene; },
       get route() { return state.route; },
       get startupWindow() { return state.startupWindow; },
+      get paletteSelection() { return state.paletteSelection; },
       pause() { return state.player?.pause(); },
       resume() { return state.player?.resume(); },
       seekFrame(index) { return state.player?.seekFrame(index); },

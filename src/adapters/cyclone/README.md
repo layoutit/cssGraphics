@@ -36,7 +36,7 @@ assign 40% of particle colors to each primary and 20% to the secondary. The sour
 random hue-target timing and rule that particles change color only when they
 restart remain unchanged. Twelve prepared variants use explicit audited
 three-hue sets; none combines opposing families such as red and blue. The
-browser selects one complete prepared color table and performs no color calculation. The same source RNG
+palette definition and weighted session cycle are shared with Flocks. The browser selects one complete prepared color table and performs no color calculation. The same source RNG
 draws preserve RNG cadence, trajectory geometry, restart timing, and coherent
 color bands. The session palette and midpoint energy normalization are
 intentional presentation changes; they are not exact source colors.

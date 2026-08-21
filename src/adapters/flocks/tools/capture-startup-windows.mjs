@@ -11,6 +11,7 @@ const repositoryRoot = resolve(import.meta.dirname, "../../../..");
 const outputRoot = resolve(repositoryRoot, "bench/results/cssflocks/startup-windows");
 const port = 4193;
 const baseUrl = `http://127.0.0.1:${port}/flocks/`;
+const paletteVariantId = "rotate-120";
 const profiles = Object.freeze([
   Object.freeze({ id: "desktop", viewport: Object.freeze({ width: 1280, height: 800 }), rootCount: 324, leafCount: 1_944, cell: Object.freeze({ width: 320, height: 200 }) }),
   Object.freeze({ id: "mobile", viewport: Object.freeze({ width: 390, height: 844 }), rootCount: 164, leafCount: 984, cell: Object.freeze({ width: 195, height: 422 }) }),
@@ -42,6 +43,7 @@ try {
     browser: "installed Chrome via Playwright channel=chrome",
     baseUrl,
     captureFrames,
+    paletteVariantId,
     startupWindowOrder: CSSFLOCKS_STARTUP_WINDOWS.map(({ id, blockIndex, sourceFrameIndex }) => ({ id, blockIndex, sourceFrameIndex })),
     profiles: profiles.map(({ id, viewport, rootCount, leafCount }) => ({
       id,
@@ -65,7 +67,7 @@ async function captureWindow({ browser, profile, profileRoot, startupWindow }) {
   const errors = [];
   page.on("pageerror", (error) => errors.push(String(error?.stack || error)));
   page.on("requestfailed", (request) => errors.push(`${request.method()} ${request.url()}: ${request.failure()?.errorText ?? "request failed"}`));
-  const url = `${baseUrl}?window=${encodeURIComponent(startupWindow.id)}`;
+  const url = `${baseUrl}?window=${encodeURIComponent(startupWindow.id)}&palette=${paletteVariantId}`;
   try {
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
     await page.waitForFunction(() => window.__cssFlocksDebug?.ready === true, null, { timeout: 30_000 });
@@ -94,6 +96,7 @@ async function captureWindow({ browser, profile, profileRoot, startupWindow }) {
         blockFrameIndex: frameIndex,
         retainedBugRootCount: state.stats.retainedBugRootCount,
         retainedPolygonLeafCount: state.stats.retainedPolygonLeafCount,
+        paletteVariantId: state.stats.paletteVariantId,
         path: framePath,
       }));
     }
@@ -111,6 +114,7 @@ function assertCaptureBinding({ errors, initial, profile, startupWindow, frameIn
       initial.stats?.profileId !== profile.id || initial.stats?.activeBlockIndex !== startupWindow.blockIndex ||
       initial.stats?.retainedBugRootCount !== profile.rootCount ||
       initial.stats?.retainedPolygonLeafCount !== profile.leafCount ||
+      initial.stats?.paletteVariantId !== paletteVariantId ||
       initial.stats?.retainedDomStable !== true || initial.stats?.runtimeDomGrowth !== false ||
       (expectedStreamFrame !== null && initial.stats?.streamFrameIndex !== expectedStreamFrame)) {
     throw new Error(`Flocks startup-window capture binding failed: ${JSON.stringify({

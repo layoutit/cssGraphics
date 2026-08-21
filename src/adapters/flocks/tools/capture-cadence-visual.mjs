@@ -9,7 +9,7 @@ import sharp from "sharp";
 const repositoryRoot = resolve(import.meta.dirname, "../../../..");
 const outputRoot = resolve(repositoryRoot, "bench/results/cssflocks/cadence/visual");
 const port = 4196;
-const url = `http://127.0.0.1:${port}/flocks/?window=source-114s`;
+const url = `http://127.0.0.1:${port}/flocks/?window=source-114s&palette=rotate-120`;
 const opaquePath = resolve(outputRoot, "opaque-flat-lighting.png");
 const alphaPath = resolve(outputRoot, "prior-alpha-lighting-reference.png");
 const globalContextPath = resolve(outputRoot, "prior-global-preserve-3d-reference.png");

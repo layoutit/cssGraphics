@@ -50,9 +50,12 @@ The singular `capture:flocks:reference`, `capture:flocks:browser`, and `compare:
 - one-second gzip checkpoint/delta blocks; the active block plus eleven successors are downloaded, verified, and decompressed behind the loading indicator
 - the active block plus two successors are materialized before readiness; later successors are expanded sequentially in a worker and adopted as bounded 960-state main-thread idle slices
 - every source transform state is published at 60 Hz; root colors use five staggered phases, or 12 Hz per retained root
+- source hue ranks select one of the same three prepared analogous colors used by Cyclone; both adapters share the same weighted 24-load session palette cycle, with no adjacent repeat
 - at most three materialized blocks and twelve verified/decompressed blocks are resident
 
-Dynamic OpenGL lighting is intentionally replaced by fixed per-face flat-light factors using `currentColor`. Dots, connections, Chromatek, and alternate geometry are not part of the route.
+The selected palette is expanded with each prepared block in the existing worker. Its three CSS color strings are precomputed; there is no per-frame color conversion or added DOM work. Dynamic OpenGL lighting is intentionally replaced by fixed per-face flat-light factors using `currentColor`, so Flocks and Cyclone share palette families while preserving their adapter-specific lighting. Dots, connections, Chromatek, and alternate geometry are not part of the route.
+
+Use `?palette=rotate-120` to pin a prepared palette for deterministic captures. With no selector, reloads advance through the shared weighted session cycle.
 
 ## Measured budgets
 
@@ -69,7 +72,7 @@ The mobile row is a desktop-Chrome profile/startup measurement, not physical-dev
 
 Three final installed-Chrome desktop traces at 324 roots / 1,944 leaves recorded a presented-frame p95 of 16.667-16.720 ms and worst DrawFrame gaps of 19.016-27.115 ms, with zero app-attributed long tasks, block waits, steady-state scheduler resets, browser errors, or retained-DOM drift. The startup harness observed zero materialization or playback long tasks after the loading boundary. These numbers establish the declared desktop trace gate on the reference machine; they are not a universal smoothness claim.
 
-The 45-frame source/native/browser sequence covers startup, an ordinary block handoff, a visible hue wrap, maximum visible stretch/orientation, and the terminal loop. All 14,580 transforms and staggered colors match decoded prepared state within the 0.001 CSSOM tolerance. Maximum transport errors are 0.015625 source-position units, 0.003906 velocity units, 0.000015241 hue, and 0.049692 projected pixels. Terminal p95 center motion is 6.6933 px within the qualified 7.16 px bound.
+The 45-frame source/native/browser sequence covers startup, an ordinary block handoff, a visible hue wrap, maximum visible stretch/orientation, and the terminal loop. All 14,580 transforms and staggered shared-palette colors match decoded prepared state within the 0.001 CSSOM tolerance. Maximum transport errors are 0.015625 source-position units, 0.003906 velocity units, 0.000015241 hue, and 0.049692 projected pixels. Terminal p95 center motion is 6.6933 px within the qualified 7.16 px bound.
 
 ## Evidence and limits
 

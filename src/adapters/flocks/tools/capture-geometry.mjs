@@ -11,7 +11,7 @@ const outputRoot = resolve(repositoryRoot, "bench/results/cssflocks/geometry");
 const browserFrames = resolve(outputRoot, "browser-frames");
 const nativeFrames = resolve(outputRoot, "native-frames");
 const port = 4188;
-const url = `http://127.0.0.1:${port}/flocks/`;
+const url = `http://127.0.0.1:${port}/flocks/?palette=rotate-120`;
 await mkdir(browserFrames, { recursive: true });
 const server = spawn("pnpm", ["exec", "vite", "--config", "src/adapters/flocks/vite.config.mjs", "--host", "127.0.0.1", "--port", String(port), "--strictPort"], {
   cwd: repositoryRoot, env: process.env, stdio: "ignore",

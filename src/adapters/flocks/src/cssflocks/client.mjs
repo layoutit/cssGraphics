@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 import { loadPolyMorphPackage } from "@layoutit/polycss-morph";
+import {
+  CSSGRAPHICS_REALLYSLICK_PALETTE_STARTUP_WEIGHTS,
+  CSSGRAPHICS_REALLYSLICK_PALETTE_VARIANT_IDS,
+  selectReallySlickPaletteVariant,
+} from "../../../shared/reallyslickPalette.mjs";
 import { installFlocksDebugApi } from "./debugApi.mjs";
 import { loadFlocksJson, loadFlocksManifest } from "./manifestClient.mjs";
 import { createFlocksPreparedPlayer } from "./preparedPlayback.mjs";
@@ -21,6 +26,7 @@ export async function mountFlocksClient(host) {
     blockLoader: null,
     player: null,
     startupWindow: null,
+    paletteSelection: null,
   };
   installFlocksDebugApi(state);
   try {
@@ -44,7 +50,18 @@ export async function mountFlocksClient(host) {
         catalog.bugCount !== profile.presentation.productBugCount) {
       throw new Error("Flocks prepared model binding drifted");
     }
-    const blockLoader = createFlocksPreparedBlockLoader(catalog);
+    const paletteSelection = route.paletteVariantId === null
+      ? selectReallySlickPaletteVariant(CSSGRAPHICS_REALLYSLICK_PALETTE_VARIANT_IDS, {
+        weights: CSSGRAPHICS_REALLYSLICK_PALETTE_STARTUP_WEIGHTS,
+      })
+      : Object.freeze({
+        paletteVariantId: route.paletteVariantId,
+        remainingPaletteVariantCount: null,
+        sessionPersistence: false,
+      });
+    const blockLoader = createFlocksPreparedBlockLoader(catalog, {
+      paletteVariantId: paletteSelection.paletteVariantId,
+    });
     const startupWindow = selectFlocksStartupWindow({
       requestedId: route.startupWindowId,
       previousId: readPreviousStartupWindowId(),
@@ -96,6 +113,7 @@ export async function mountFlocksClient(host) {
     state.blockLoader = blockLoader;
     state.player = player;
     state.startupWindow = startupWindow;
+    state.paletteSelection = paletteSelection;
     writePreviousStartupWindowId(startupWindow.id);
     document.body.classList.replace("loading", "priming");
     await waitForPaint();

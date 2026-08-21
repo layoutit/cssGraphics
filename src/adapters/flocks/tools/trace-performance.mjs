@@ -10,7 +10,7 @@ import { captureFrameSleuthTrace } from "../../../../scripts/frame-sleuth-trace.
 const repositoryRoot = resolve(import.meta.dirname, "../../../..");
 const resultRoot = resolve(repositoryRoot, "bench/results/cssflocks/baseline");
 const port = 4187;
-const url = `http://127.0.0.1:${port}/flocks/`;
+const url = `http://127.0.0.1:${port}/flocks/?palette=rotate-120`;
 const profiles = Object.freeze([
   Object.freeze({ id: "desktop", viewport: Object.freeze({ width: 1280, height: 800 }) }),
   Object.freeze({ id: "mobile", viewport: Object.freeze({ width: 390, height: 844 }) }),

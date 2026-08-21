@@ -1,6 +1,6 @@
 export async function loadCyclonePreparedLightingColors(lighting, paletteVariantId) {
   const variant = lighting?.variants?.find((entry) => entry?.paletteVariantId === paletteVariantId);
-  if (lighting?.schema !== "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@18" ||
+  if (lighting?.schema !== "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@19" ||
       lighting.preparedMinimumSaturation !== 0.55 ||
       lighting.preparedMinimumValue !== 0.75 ||
       !isFinalLitColorProfileValid(lighting.finalLitColorProfile, lighting.paletteVariantIds) ||

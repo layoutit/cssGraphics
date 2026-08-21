@@ -213,7 +213,7 @@ async function buildPreparedLightingColors({
       variant.colors[index])),
   }));
   const contract = deepFreeze({
-    schema: "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@18",
+    schema: "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@19",
     technique: "prepared-source-smooth-vertex-lighting-averaged-per-solid-face-with-curated-three-color-analogous-session-palettes-mid-green-yellow-reference-srgb-energy-normalization-sparse-source-color-restarts-and-exact-cross-variant-deduplication",
     source: "src/cyclone/cyclone.cpp#particle::update+initSaver",
     streamId,

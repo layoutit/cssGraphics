@@ -65,18 +65,18 @@ export const CSSCYCLONE_BANK = CSSCYCLONE_BANKS.desktop;
 const PREPARED_PALETTE_STARTUP_WEIGHTS = Object.freeze([3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1]);
 
 const PREPARED_PALETTE_HUES_DEGREES = Object.freeze([
-  Object.freeze([105, 120, 135]),
-  Object.freeze([120, 135, 150]),
-  Object.freeze([150, 165, 180]),
-  Object.freeze([180, 195, 210]),
-  Object.freeze([195, 210, 225]),
-  Object.freeze([210, 225, 240]),
-  Object.freeze([240, 255, 270]),
-  Object.freeze([255, 270, 285]),
-  Object.freeze([270, 285, 300]),
-  Object.freeze([285, 300, 315]),
-  Object.freeze([300, 315, 330]),
-  Object.freeze([330, 345, 0]),
+  Object.freeze([90, 120, 150]),
+  Object.freeze([105, 135, 165]),
+  Object.freeze([135, 165, 195]),
+  Object.freeze([165, 195, 225]),
+  Object.freeze([180, 210, 240]),
+  Object.freeze([210, 240, 270]),
+  Object.freeze([225, 255, 285]),
+  Object.freeze([240, 270, 300]),
+  Object.freeze([255, 285, 315]),
+  Object.freeze([270, 300, 330]),
+  Object.freeze([285, 315, 345]),
+  Object.freeze([300, 330, 0]),
 ]);
 
 const PREPARED_PALETTE_VARIANTS = Object.freeze(Array.from({ length: 12 }, (_, index) => {

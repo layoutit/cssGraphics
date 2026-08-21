@@ -31,7 +31,7 @@ rasterization, or DOM growth.
 The prepared presentation maps the source's random saturation samples into a
 0.55-1.0 range and lifts the dark end of prepared HSV value to 0.75. Each
 session variant contains at most three coordinated hue families: two primaries
-and one secondary, all within a 30-degree analogous range. Source hue ranks
+and one secondary, separated by 30-degree steps across a 60-degree analogous range. Source hue ranks
 assign 40% of particle colors to each primary and 20% to the secondary. The source's uniform
 random hue-target timing and rule that particles change color only when they
 restart remain unchanged. Twelve prepared variants use explicit audited

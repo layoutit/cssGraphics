@@ -75,7 +75,7 @@ test("pins the current Really Slick Cyclone source profile", () => {
   assert.deepEqual(CSSCYCLONE_PRESENTATION.preparedPaletteVariants[4], {
     id: "rotate-120",
     hueRotation: 1 / 3,
-    preparedHues: [195 / 360, 210 / 360, 225 / 360],
+    preparedHues: [180 / 360, 210 / 360, 240 / 360],
     startupWeight: 2,
   });
   assert.deepEqual(
@@ -337,7 +337,7 @@ test("prepares source-vertex-averaged face lighting without a runtime lighting t
   const bank = { ...CSSCYCLONE_BANK, particleCount: 3, warmupFrames: 20, frameCount: 4 };
   const source = buildCycloneSourceSequence({ bank });
   const prepared = await buildCyclonePreparedLighting({ source });
-  assert.equal(prepared.contract.schema, "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@18");
+  assert.equal(prepared.contract.schema, "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@19");
   assert.equal(prepared.contract.leafCount, 18);
   assert.equal(prepared.contract.colorStateCount, 3);
   assert.equal(prepared.contract.colorRestartCount, 0);
@@ -409,7 +409,7 @@ test("maps source hues into three neighboring prepared colors", () => {
   const hueCounts = new Map();
   for (const hue of preparedHues) hueCounts.set(hue, (hueCounts.get(hue) ?? 0) + 1);
   assert.deepEqual([...hueCounts.values()], [4, 4, 2]);
-  assert.deepEqual([...hueCounts.keys()], [0.291667, 0.333333, 0.375]);
+  assert.deepEqual([...hueCounts.keys()], [0.25, 0.333333, 0.416667]);
 });
 
 test("publishes only exact source color restarts through sparse leaf colors", async () => {

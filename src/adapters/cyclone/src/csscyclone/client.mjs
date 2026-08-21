@@ -59,7 +59,9 @@ export async function mountCycloneClient(host) {
     const route = new URLSearchParams(globalThis.location?.search ?? "");
     const paletteSelection = route.has("chunk") || route.has("frame")
       ? null
-      : selectCycloneStartupPaletteVariant(catalog.startupPaletteVariantIds);
+      : selectCycloneStartupPaletteVariant(catalog.startupPaletteVariantIds, {
+        weights: catalog.startupPaletteVariantWeights,
+      });
     const selection = selectInitialCyclonePosition(catalog, {
       previousSelectionId: readPreviousStartSelection(catalog.startupSelections),
       preferredPaletteVariantId: paletteSelection?.paletteVariantId ?? null,

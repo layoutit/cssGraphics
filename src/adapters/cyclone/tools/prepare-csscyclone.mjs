@@ -41,6 +41,9 @@ const startupPaletteFamilies = CSSCYCLONE_PRESENTATION.startupPaletteFamilies;
 const startupPaletteVariantIds = Object.freeze(
   CSSCYCLONE_PRESENTATION.preparedPaletteVariants.map(({ id }) => id),
 );
+const startupPaletteVariantWeights = Object.freeze(
+  CSSCYCLONE_PRESENTATION.preparedPaletteVariants.map(({ startupWeight }) => startupWeight),
+);
 const startupSilhouetteSampleFrameOffsets = CSSCYCLONE_PRESENTATION.startupSilhouetteSampleFrameOffsets;
 const hueSectorNames = Object.freeze(["red", "yellow", "green", "cyan", "blue", "magenta"]);
 const profileConfigs = Object.freeze([
@@ -235,12 +238,13 @@ async function prepareProfile(profile) {
     streamDurationMilliseconds: bank.chunkCount * bank.frameCount / bank.framesPerSecond * 1_000,
     startupPaletteFamilies,
     startupPaletteVariantIds,
+    startupPaletteVariantWeights,
     startupSelections,
     startupSilhouetteSampling: CSSCYCLONE_PRESENTATION.startupSilhouetteSampling,
     startupSilhouetteSampleFrameOffsets,
     maximumColorFamilyCount: CSSCYCLONE_PRESENTATION.maximumColorFamilyCount,
     startupColorProfile,
-    selection: "session-shuffled-hue-rotation-plus-crypto-source-window-no-immediate-repeat",
+    selection: "session-weighted-shuffled-hue-rotation-plus-crypto-source-window-no-immediate-repeat",
     playbackOrder: "source-continuous-ascending-chunks-with-one-terminal-stream-wrap",
     runtimeLookaheadBlockCount,
     runtimeMaterializedLookaheadBlockCount,
@@ -289,12 +293,13 @@ async function prepareProfile(profile) {
         streamDurationMilliseconds: bank.chunkCount * bank.frameCount / bank.framesPerSecond * 1_000,
         startupPaletteFamilies,
         startupPaletteVariantIds,
+        startupPaletteVariantWeights,
         startupSelections,
         startupSilhouetteSampling: CSSCYCLONE_PRESENTATION.startupSilhouetteSampling,
         startupSilhouetteSampleFrameOffsets,
         maximumColorFamilyCount: CSSCYCLONE_PRESENTATION.maximumColorFamilyCount,
         startupColorProfile,
-        startupSelection: "session-shuffled-hue-rotation-plus-crypto-source-window-no-immediate-repeat",
+        startupSelection: "session-weighted-shuffled-hue-rotation-plus-crypto-source-window-no-immediate-repeat",
         handoff: "source-continuous-twelve-block-decoded-window",
       }),
       productParticleCount: bank.particleCount,

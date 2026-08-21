@@ -38,10 +38,12 @@ calculation. The same source RNG draws preserve RNG cadence, trajectory geometry
 restart timing, and coherent color bands. The session rotation and shared
 cross-rotation energy normalization are intentional presentation changes; they
 are not exact source colors.
-Startup is prebaked to ten audited 48-frame source windows. The selector gives
-each of the twelve hue rotations exactly once per session-shuffled cycle before
-any rotation repeats, then independently chooses one expressive browser-reviewed
-source window while excluding the previous exact window.
+Startup is prebaked to ten audited 48-frame source windows. A 24-load
+session-shuffled cycle includes every hue rotation without adjacent repeats,
+but weights blue, cyan, and green rotations 19 times, limits the brown-dominant
+rotation to once, and keeps red-family rotations sparse. It independently
+chooses one expressive browser-reviewed source window while excluding the
+previous exact window.
 It never phases individual particles around a full hue wheel. This is an
 intentional presentation rather than an exact native-color or random-start
 claim. Mobile/coarse-pointer devices and viewports below 600px select the

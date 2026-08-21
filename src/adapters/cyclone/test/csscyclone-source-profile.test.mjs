@@ -75,7 +75,12 @@ test("pins the current Really Slick Cyclone source profile", () => {
   assert.deepEqual(CSSCYCLONE_PRESENTATION.preparedPaletteVariants[4], {
     id: "rotate-120",
     hueRotation: 1 / 3,
+    startupWeight: 2,
   });
+  assert.deepEqual(
+    CSSCYCLONE_PRESENTATION.preparedPaletteVariants.map(({ startupWeight }) => startupWeight),
+    [3, 3, 3, 3, 2, 1, 1, 1, 1, 1, 2, 3],
+  );
   assert.equal(CSSCYCLONE_PRESENTATION.maximumColorFamilyCount, 3);
   assert.deepEqual(
     CSSCYCLONE_PRESENTATION.startupPaletteFamilies,

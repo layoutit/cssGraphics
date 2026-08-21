@@ -62,11 +62,14 @@ export const CSSCYCLONE_BANKS = Object.freeze({
 
 export const CSSCYCLONE_BANK = CSSCYCLONE_BANKS.desktop;
 
+const PREPARED_PALETTE_STARTUP_WEIGHTS = Object.freeze([3, 3, 3, 3, 2, 1, 1, 1, 1, 1, 2, 3]);
+
 const PREPARED_PALETTE_VARIANTS = Object.freeze(Array.from({ length: 12 }, (_, index) => {
   const degrees = index * 30;
   return Object.freeze({
     id: `rotate-${String(degrees).padStart(3, "0")}`,
     hueRotation: index / 12,
+    startupWeight: PREPARED_PALETTE_STARTUP_WEIGHTS[index],
   });
 }));
 

@@ -7,7 +7,7 @@ import {
 
 const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@3";
 const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@2";
-const LIGHTING_SCHEMA = "csscyclone-prepared-flat-lighting-colors@9";
+const LIGHTING_SCHEMA = "csscyclone-prepared-energy-balanced-continuous-hue-vertex-lighting-colors@15";
 const SOURCE_FIELD_OF_VIEW_DEGREES = 80;
 const MOBILE_FIELD_OF_VIEW_DEGREES = 90;
 const MOBILE_MAX_WIDTH = 600;
@@ -369,8 +369,8 @@ export function createCyclonePreparedPlayer({
       preparedContinuousHandoffCount,
       preparedTerminalWrapCount,
       preparedLightingColorSlotCount: lightingColors.colors.length,
-      preparedLightingPaletteFamily: lightingColors.paletteFamily,
-      preparedLightingMaximumColorFamilyCount: lighting.maximumColorFamilyCount,
+      preparedLightingPaletteVariantId: lightingColors.paletteVariantId,
+      preparedLightingPaletteVariantCount: lighting.paletteVariantCount,
       preparedLightingColorStateCount: lighting.colorStateCount,
       preparedLightingColorRestartCount: lighting.colorRestartCount,
       runtimeGeometryConstructionCount: 0,
@@ -418,7 +418,7 @@ function validateBinding(
   loadBlock,
 ) {
   const lightingVariant = lighting?.variants?.find((variant) =>
-    variant?.paletteFamily === lightingColors?.paletteFamily);
+    variant?.paletteVariantId === lightingColors?.paletteVariantId);
   if (modelTransform !== STYLESHEET_MODEL_TRANSFORM ||
       catalog?.schema !== CATALOG_SCHEMA ||
       catalog.blockCount !== catalog.entries?.length ||
@@ -444,10 +444,8 @@ function validateBinding(
       lighting.facesPerParticle * mounted.model.render.shapes.length !== lighting.leafCount ||
       lighting.colorSlotIndexCount !== lighting.colorEntryCount ||
       lighting.colorEntryCount !== lighting.colorStateCount * lighting.facesPerParticle ||
-      lighting.maximumColorFamilyCount !== 3 ||
-      lighting.paletteHueSlotCount !== 3 ||
-      lightingColors?.hueSlots?.length !== lighting.maximumColorFamilyCount ||
-      lightingColors?.colors !== lightingVariant?.colors ||
+      !lightingVariant ||
+      lightingColors?.colors?.length !== lighting.uniqueColorCount ||
       lightingColors?.colorSlotIndices?.length !== lighting.colorEntryCount ||
       lighting.runtime?.lightingCalculations !== 0 ||
       lighting.runtime?.imageConstruction !== 0 ||

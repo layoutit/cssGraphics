@@ -38,6 +38,9 @@ const runtimeLookaheadBlockCount = 11;
 const runtimeMaterializedLookaheadBlockCount = 2;
 const startupMaterializedLookaheadBlockCount = 2;
 const startupPaletteFamilies = CSSCYCLONE_PRESENTATION.startupPaletteFamilies;
+const startupPaletteVariantIds = Object.freeze(
+  CSSCYCLONE_PRESENTATION.preparedPaletteVariants.map(({ id }) => id),
+);
 const startupSilhouetteSampleFrameOffsets = CSSCYCLONE_PRESENTATION.startupSilhouetteSampleFrameOffsets;
 const hueSectorNames = Object.freeze(["red", "yellow", "green", "cyan", "blue", "magenta"]);
 const profileConfigs = Object.freeze([
@@ -200,6 +203,10 @@ async function prepareProfile(profile) {
     startupSelections,
   );
   const preparedLighting = await lightingStream.finalize();
+  const preparedLightingAssets = await writePreparedLightingVariantAssets(
+    preparedLighting.contract,
+    profile,
+  );
   const catalogBytes = Buffer.from(`${JSON.stringify({
     schema: "csscyclone-prepared-stream-catalog@3",
     streamId: bank.id,
@@ -227,12 +234,13 @@ async function prepareProfile(profile) {
     streamFrameCount: bank.chunkCount * bank.frameCount,
     streamDurationMilliseconds: bank.chunkCount * bank.frameCount / bank.framesPerSecond * 1_000,
     startupPaletteFamilies,
+    startupPaletteVariantIds,
     startupSelections,
     startupSilhouetteSampling: CSSCYCLONE_PRESENTATION.startupSilhouetteSampling,
     startupSilhouetteSampleFrameOffsets,
     maximumColorFamilyCount: CSSCYCLONE_PRESENTATION.maximumColorFamilyCount,
     startupColorProfile,
-    selection: "session-crypto-shuffled-palette-family-source-window-no-immediate-repeat",
+    selection: "session-shuffled-hue-rotation-plus-crypto-source-window-no-immediate-repeat",
     playbackOrder: "source-continuous-ascending-chunks-with-one-terminal-stream-wrap",
     runtimeLookaheadBlockCount,
     runtimeMaterializedLookaheadBlockCount,
@@ -266,8 +274,8 @@ async function prepareProfile(profile) {
         minimumSaturation: CSSCYCLONE_PRESENTATION.minimumSaturation,
         hueSampling: CSSCYCLONE_PRESENTATION.hueSampling,
         particleColorAssignment: CSSCYCLONE_PRESENTATION.particleColorAssignment,
-        preparedPaletteHueSlotCount: CSSCYCLONE_PRESENTATION.preparedPaletteHueSlotCount,
         preparedPaletteAssignment: CSSCYCLONE_PRESENTATION.preparedPaletteAssignment,
+        preparedPaletteVariantCount: startupPaletteVariantIds.length,
         maximumColorFamilyCount: CSSCYCLONE_PRESENTATION.maximumColorFamilyCount,
       }),
       preparedStream: Object.freeze({
@@ -280,12 +288,13 @@ async function prepareProfile(profile) {
         streamFrameCount: bank.chunkCount * bank.frameCount,
         streamDurationMilliseconds: bank.chunkCount * bank.frameCount / bank.framesPerSecond * 1_000,
         startupPaletteFamilies,
+        startupPaletteVariantIds,
         startupSelections,
         startupSilhouetteSampling: CSSCYCLONE_PRESENTATION.startupSilhouetteSampling,
         startupSilhouetteSampleFrameOffsets,
         maximumColorFamilyCount: CSSCYCLONE_PRESENTATION.maximumColorFamilyCount,
         startupColorProfile,
-        startupSelection: "session-crypto-shuffled-palette-family-source-window-no-immediate-repeat",
+        startupSelection: "session-shuffled-hue-rotation-plus-crypto-source-window-no-immediate-repeat",
         handoff: "source-continuous-twelve-block-decoded-window",
       }),
       productParticleCount: bank.particleCount,
@@ -324,7 +333,7 @@ async function prepareProfile(profile) {
       startupMaterializedBlockCount: startupMaterializedLookaheadBlockCount + 1,
       maximumRuntimeMaterializedBlockCount: runtimeMaterializedLookaheadBlockCount + 1,
     }),
-    lighting: preparedLighting.contract,
+    lighting: preparedLightingAssets.contract,
   });
   return Object.freeze({
     profile,
@@ -341,7 +350,39 @@ async function prepareProfile(profile) {
       residentBlockWindowCount,
       maximumResidentBlockWindowDecodedBytes,
       ...preparedLighting.metrics,
+      preparedLightingVariantAssetBytes: preparedLightingAssets.byteLength,
     }),
+  });
+}
+
+async function writePreparedLightingVariantAssets(lighting, profile) {
+  const assetRoot = profile.blockRoot.replace(/\/blocks$/u, "/lighting");
+  const variants = [];
+  let byteLength = 0;
+  for (const variant of lighting.variants) {
+    const bytes = Buffer.from(`${JSON.stringify({
+      schema: "csscyclone-prepared-lighting-color-variant@1",
+      streamId: lighting.streamId,
+      paletteVariantId: variant.paletteVariantId,
+      hueRotation: variant.hueRotation,
+      uniqueColorCount: lighting.uniqueColorCount,
+      colors: variant.colors,
+    })}\n`);
+    const digest = sha256(bytes);
+    const assetUrl = `${assetRoot}/${variant.paletteVariantId}-${digest}.json`;
+    await writeBytes(join(stagingRoot, assetUrl.replace(/^\/csscyclone\//u, "")), bytes);
+    variants.push(Object.freeze({
+      paletteVariantId: variant.paletteVariantId,
+      hueRotation: variant.hueRotation,
+      assetUrl,
+      byteLength: bytes.byteLength,
+      sha256: digest,
+    }));
+    byteLength += bytes.byteLength;
+  }
+  return Object.freeze({
+    contract: Object.freeze({ ...lighting, variants: Object.freeze(variants) }),
+    byteLength,
   });
 }
 

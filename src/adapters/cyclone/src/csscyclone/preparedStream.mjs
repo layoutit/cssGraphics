@@ -13,8 +13,10 @@ const RUNTIME_MATERIALIZED_LOOKAHEAD_BLOCK_COUNT = 2;
 const STARTUP_MATERIALIZED_LOOKAHEAD_BLOCK_COUNT = 2;
 const STARTUP_HUE_SECTOR_NAMES = Object.freeze(["red", "yellow", "green", "cyan", "blue", "magenta"]);
 const STARTUP_PALETTE_FAMILIES = Object.freeze(["blue", "yellow", "red", "magenta", "green"]);
+const STARTUP_PALETTE_VARIANT_IDS = Object.freeze(Array.from({ length: 12 }, (_, index) =>
+  `rotate-${String(index * 30).padStart(3, "0")}`));
 const STARTUP_SILHOUETTE_SAMPLING = "browser-reviewed-expressive-source-windows";
-const STARTUP_SELECTION = "session-crypto-shuffled-palette-family-source-window-no-immediate-repeat";
+const STARTUP_SELECTION = "session-shuffled-hue-rotation-plus-crypto-source-window-no-immediate-repeat";
 
 export async function loadCyclonePreparedCatalog(descriptor) {
   if (typeof descriptor?.catalogUrl !== "string" ||
@@ -32,57 +34,57 @@ export async function loadCyclonePreparedCatalog(descriptor) {
 export function selectInitialCyclonePosition(catalog, {
   search = globalThis.location?.search ?? "",
   previousSelectionId = null,
-  preferredPaletteFamily = null,
+  preferredPaletteVariantId = null,
   randomUint32Pair = cryptoRandomUint32Pair,
 } = {}) {
   validateCatalog(catalog);
   const params = new URLSearchParams(search);
   const requestedChunk = params.get("chunk");
   const requestedFrame = params.get("frame");
-  const requestedPaletteFamily = params.get("palette");
+  const requestedPaletteVariantId = params.get("palette");
   if (requestedChunk !== null || requestedFrame !== null) {
     const chunkIndex = requestedChunk === null ? 0 : Number(requestedChunk);
     const frameIndex = requestedFrame === null ? 0 : Number(requestedFrame);
-    const paletteFamily = requestedPaletteFamily ?? catalog.startupPaletteFamilies[0];
+    const paletteVariantId = requestedPaletteVariantId ?? catalog.startupPaletteVariantIds[0];
     validatePosition(catalog, chunkIndex, frameIndex);
-    if (!catalog.startupPaletteFamilies.includes(paletteFamily)) {
-      throw new RangeError("Requested Cyclone palette family is invalid");
+    if (!catalog.startupPaletteVariantIds.includes(paletteVariantId)) {
+      throw new RangeError("Requested Cyclone palette variant is invalid");
     }
-    return Object.freeze({ paletteFamily, chunkIndex, frameIndex, mode: "explicit" });
+    return Object.freeze({ paletteVariantId, chunkIndex, frameIndex, mode: "explicit" });
   }
   if (previousSelectionId !== null &&
       (typeof previousSelectionId !== "string" ||
         !catalog.startupSelections.some((selection) => selection.id === previousSelectionId))) {
     throw new RangeError("Previous Cyclone start selection is invalid");
   }
-  if (preferredPaletteFamily !== null &&
-      !catalog.startupPaletteFamilies.includes(preferredPaletteFamily)) {
-    throw new RangeError("Preferred Cyclone palette family is invalid");
+  if (preferredPaletteVariantId !== null &&
+      !catalog.startupPaletteVariantIds.includes(preferredPaletteVariantId)) {
+    throw new RangeError("Preferred Cyclone palette variant is invalid");
   }
   const values = randomUint32Pair();
   if (!Array.isArray(values) || values.length !== 2 ||
       values.some((value) => !Number.isSafeInteger(value) || value < 0 || value > 0xffffffff)) {
     throw new RangeError("Cyclone startup random values must be two uint32 values");
   }
-  const paletteFamilyIndex = values[0] % catalog.startupPaletteFamilies.length;
-  const paletteFamily = preferredPaletteFamily ?? catalog.startupPaletteFamilies[paletteFamilyIndex];
-  const familySelections = catalog.startupSelections.filter((selection) =>
-    selection.paletteFamily === paletteFamily);
-  let selectionIndex = (preferredPaletteFamily === null
-    ? Math.floor(values[0] / catalog.startupPaletteFamilies.length)
-    : values[0]) % familySelections.length;
-  if (familySelections[selectionIndex].id === previousSelectionId && familySelections.length > 1) {
-    selectionIndex = (selectionIndex + 1) % familySelections.length;
+  const paletteVariantId = preferredPaletteVariantId ??
+    catalog.startupPaletteVariantIds[values[0] % catalog.startupPaletteVariantIds.length];
+  let selectionIndex = (preferredPaletteVariantId === null
+    ? Math.floor(values[0] / catalog.startupPaletteVariantIds.length)
+    : values[0]) % catalog.startupSelections.length;
+  if (catalog.startupSelections[selectionIndex].id === previousSelectionId &&
+      catalog.startupSelections.length > 1) {
+    selectionIndex = (selectionIndex + 1) % catalog.startupSelections.length;
   }
-  const selection = familySelections[selectionIndex];
+  const selection = catalog.startupSelections[selectionIndex];
   const frameIndex = selection.startFrameIndex + values[1] % selection.frameCount;
   return Object.freeze({
     selectionId: selection.id,
-    paletteFamily,
+    paletteVariantId,
+    sourcePaletteFamily: selection.paletteFamily,
     chunkIndex: selection.chunkIndex,
     frameIndex,
-    mode: preferredPaletteFamily !== null
-      ? "session-shuffled-palette-crypto-random-source-window"
+    mode: preferredPaletteVariantId !== null
+      ? "session-shuffled-hue-rotation-crypto-random-source-window"
       : previousSelectionId === null
       ? "crypto-random-balanced-source-palette"
       : "crypto-random-balanced-source-palette-no-repeat",
@@ -628,6 +630,10 @@ function validateCatalog(catalog) {
       catalog.startupPaletteFamilies.length !== STARTUP_PALETTE_FAMILIES.length ||
       catalog.startupPaletteFamilies.some((family, index) =>
         family !== STARTUP_PALETTE_FAMILIES[index]) ||
+      !Array.isArray(catalog.startupPaletteVariantIds) ||
+      catalog.startupPaletteVariantIds.length !== STARTUP_PALETTE_VARIANT_IDS.length ||
+      catalog.startupPaletteVariantIds.some((variantId, index) =>
+        variantId !== STARTUP_PALETTE_VARIANT_IDS[index]) ||
       !Array.isArray(catalog.startupSelections) || catalog.startupSelections.length < 2 ||
       new Set(catalog.startupSelections.map((selection) => selection?.id)).size !==
         catalog.startupSelections.length ||

@@ -597,10 +597,12 @@ function cleanPreparedDom(mounted, triangleCount) {
   const ground = mounted.leafHandles.get("leaf-ground")?.element;
   if (!groundShape || !ground || ground.parentElement !== groundShape ||
       groundShape.parentElement !== mounted.sceneElement || groundShape.childElementCount !== 1) {
-    throw new Error("Cloth prepared ground cannot be flattened");
+    throw new Error("Cloth prepared ground binding drifted");
   }
-  mounted.sceneElement.prepend(ground);
-  groundShape.remove();
+  const userAgent = navigator.userAgent;
+  const webkitProjectiveCompositing = /AppleWebKit/u.test(userAgent) &&
+    !/(?:Chrome|Chromium|Edg|OPR)\//u.test(userAgent);
+  if (webkitProjectiveCompositing) mounted.sceneElement.prepend(groundShape);
   if (mounted.modelElement.childElementCount !== 0) {
     throw new Error("Cloth prepared model wrapper contains unexpected retained nodes");
   }

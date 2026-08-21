@@ -79,6 +79,9 @@ function fixture({
       streamBlockIndex,
       blockIndex: streamBlockIndex,
       startFrameIndex: streamBlockIndex * 4,
+      transforms: streamBlockIndex === 0
+        ? playback.transforms
+        : playback.transforms.map((transform) => `${streamBlockIndex}:${transform}`),
     };
     return {
       schema: "csscyclone-prepared-stream-block@2",
@@ -256,6 +259,37 @@ test("starts from one materialized successor while filling the verified horizon"
   assert.equal(stats.pendingBlockReadyCount, 2);
   assert.equal(stats.runtimePreparedBlockWaitCount, 0);
   assert.deepEqual(state.loadBlockCalls, [2, 3]);
+});
+
+test("bounds the terminal rewind across retained particle publications", async () => {
+  const state = fixture({ blockCount: 2, initialLookaheadBlockCount: 1 });
+  state.player.resume();
+  for (const timestamp of [20, 40, 60, 80, 100, 120, 140, 160]) {
+    await state.advanceAt(timestamp);
+  }
+
+  assert.deepEqual(
+    state.shapeElements.map((element) => element.style.transform),
+    ["a", "1:h"],
+  );
+  assert.equal(state.player.stats().preparedTerminalWrapCount, 1);
+
+  await state.advanceAt(180);
+  assert.deepEqual(state.shapeElements.map((element) => element.style.transform), ["c", "d"]);
+  assert.equal(state.player.stats().runtimeDomGrowth, false);
+  assert.equal(state.player.stats().runtimeFrameMatrixFormattingCount, 0);
+});
+
+test("an explicit seek completes an in-progress terminal handoff", async () => {
+  const state = fixture({ blockCount: 2, initialLookaheadBlockCount: 1 });
+  state.player.resume();
+  for (const timestamp of [20, 40, 60, 80, 100, 120, 140, 160]) {
+    await state.advanceAt(timestamp);
+  }
+
+  state.player.seekFrame(0);
+  assert.deepEqual(state.shapeElements.map((element) => element.style.transform), ["a", "b"]);
+  assert.equal(state.player.stats().frameIndex, 0);
 });
 
 test("publishes one adjacent prepared frame and resets a missed deadline", async () => {

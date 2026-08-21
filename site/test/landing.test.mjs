@@ -115,6 +115,7 @@ test("landing uses the compact examples shell and a single live viewer", async (
   assert.match(html, /id="asset-list"/u);
   assert.doesNotMatch(html, /code-panel|controls-panel|asset-stage|landing-mark/u);
   assert.doesNotMatch(siteCss, /\.project-thumbnail::after/u);
+  assert.match(siteCss, /\.project-thumbnail img \{[\s\S]*?height: auto;[\s\S]*?object-fit: cover;/u);
   assert.match(siteCss, /grid-template-columns: 354px minmax\(0, 1fr\)/u);
   assert.match(siteCss, /\[hidden\] \{[\s\S]*?display: none !important;/u);
   assert.match(siteCss, /\.project-thumbnail\[aria-current="true"\]/u);

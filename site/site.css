@@ -200,6 +200,7 @@ input {
 .project-thumbnail img {
   display: block;
   width: 100%;
+  height: auto;
   aspect-ratio: 16 / 9;
   object-fit: cover;
   background: #111;
@@ -357,6 +358,10 @@ input {
     flex: 0 0 178px;
     grid-template-rows: 82px 25px;
     margin: 0;
+  }
+
+  .project-thumbnail img {
+    height: 100%;
   }
 
   .project-copy {

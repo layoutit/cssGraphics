@@ -7,10 +7,17 @@ import { CSSCYCLONE_PRESENTATION } from "./sourceModel.mjs";
 const PREPARED_MINIMUM_SATURATION = CSSCYCLONE_PRESENTATION.minimumSaturation;
 const PREPARED_MINIMUM_VALUE = 0.75;
 const PREPARED_DARK_FACE_VALUE = 0.4;
-const PREPARED_MAXIMUM_DARK_FACE_SHARE = 0.25;
+const PREPARED_MAXIMUM_DARK_FACE_SHARE = 0.2;
 const PREPARED_MINIMUM_MEDIAN_LIT_VALUE = 0.5;
 const SRGB_LUMA_WEIGHTS = Object.freeze([0.2126, 0.7152, 0.0722]);
-const PREPARED_MINIMUM_CROSS_VARIANT_ENERGY_RATIO = 1;
+const PREPARED_GREEN_REFERENCE_ENERGY_RATIO = SRGB_LUMA_WEIGHTS[1];
+const PREPARED_YELLOW_REFERENCE_ENERGY_RATIO = SRGB_LUMA_WEIGHTS[0] + SRGB_LUMA_WEIGHTS[1];
+const PREPARED_TARGET_ENERGY_RATIO = Number(((
+  PREPARED_GREEN_REFERENCE_ENERGY_RATIO + PREPARED_YELLOW_REFERENCE_ENERGY_RATIO
+) / 2).toFixed(4));
+const PREPARED_MINIMUM_TARGET_ENERGY_RATIO = 1;
+const PREPARED_MAXIMUM_TARGET_ENERGY_RATIO = 1.03;
+const PREPARED_THIRD_HUE_SHARE = 0.2;
 const SOURCE_VERTEX_NORMALS = Object.freeze(
   CSSCYCLONE_PARTICLE_VERTICES.map((vertex) => Object.freeze(normalize(vertex))),
 );
@@ -139,10 +146,13 @@ async function buildPreparedLightingColors({
   const paletteVariants = CSSCYCLONE_PRESENTATION.preparedPaletteVariants;
   if (!Array.isArray(paletteVariants) || paletteVariants.length !== 12 ||
       new Set(paletteVariants.map(({ id }) => id)).size !== paletteVariants.length ||
-      paletteVariants.some(({ id, hueRotation }, index) =>
+      paletteVariants.some(({ id, hueRotation, preparedHues }, index) =>
         id !== `rotate-${String(index * 30).padStart(3, "0")}` ||
-        hueRotation !== index / paletteVariants.length)) {
-    throw new Error("Cyclone prepared hue-rotation palette configuration drifted");
+        hueRotation !== index / paletteVariants.length ||
+        preparedHues?.length !== 3 ||
+        new Set(preparedHues).size !== preparedHues.length ||
+        preparedHues.some((hue) => typeof hue !== "number" || hue < 0 || hue >= 1))) {
+    throw new Error("Cyclone curated prepared palette configuration drifted");
   }
   const sourceLitVariants = paletteVariants.map((paletteVariant) => {
     const colors = [];
@@ -164,21 +174,22 @@ async function buildPreparedLightingColors({
     return Object.freeze({
       paletteVariantId: paletteVariant.id,
       hueRotation: paletteVariant.hueRotation,
+      preparedHues: paletteVariant.preparedHues,
       colors: Object.freeze(colors),
     });
   });
-  const targetEnergies = Object.freeze(sourceLitVariants[0].colors.map((unused, colorIndex) =>
-    Math.max(...sourceLitVariants.map((variant) => srgbLuma(variant.colors[colorIndex])))));
   const logicalVariants = sourceLitVariants.map((variant) => {
     const energyRatios = [];
-    const colors = variant.colors.map((color, colorIndex) => {
-      const faceColor = balanceSrgbEnergy(color, targetEnergies[colorIndex]);
-      energyRatios.push(srgbLuma(faceColor) / targetEnergies[colorIndex]);
+    const colors = variant.colors.map((color) => {
+      const targetEnergy = Math.max(...color) * PREPARED_TARGET_ENERGY_RATIO;
+      const faceColor = normalizeSrgbEnergy(color, targetEnergy);
+      energyRatios.push(srgbLuma(faceColor) / targetEnergy);
       return rgbHex(faceColor);
     });
     return Object.freeze({
       paletteVariantId: variant.paletteVariantId,
       hueRotation: variant.hueRotation,
+      preparedHues: variant.preparedHues,
       colors: Object.freeze(colors),
       energyRatios: Object.freeze(energyRatios),
     });
@@ -197,12 +208,13 @@ async function buildPreparedLightingColors({
   const variants = logicalVariants.map((variant) => Object.freeze({
     paletteVariantId: variant.paletteVariantId,
     hueRotation: variant.hueRotation,
+    preparedHues: variant.preparedHues,
     colors: Object.freeze(deduplication.uniqueSourceColorIndices.map((index) =>
       variant.colors[index])),
   }));
   const contract = deepFreeze({
-    schema: "csscyclone-prepared-energy-balanced-continuous-hue-vertex-lighting-colors@15",
-    technique: "prepared-source-smooth-vertex-lighting-averaged-per-solid-face-with-cross-variant-maximum-srgb-energy-balanced-session-hue-rotation-variants-sparse-source-color-restarts-and-exact-cross-variant-deduplication",
+    schema: "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@19",
+    technique: "prepared-source-smooth-vertex-lighting-averaged-per-solid-face-with-curated-three-color-analogous-session-palettes-mid-green-yellow-reference-srgb-energy-normalization-sparse-source-color-restarts-and-exact-cross-variant-deduplication",
     source: "src/cyclone/cyclone.cpp#particle::update+initSaver",
     streamId,
     encoding: "CSS-sRGB-hex-plus-little-endian-color-slot-indices-base64",
@@ -240,7 +252,7 @@ async function buildPreparedLightingColors({
     sampling: "three-source-smooth-vertex-light-samples-averaged-per-solid-face-state",
     interpolation: "browser-solid-face-average-of-stream-frame-zero-source-vertex-lighting",
     material: Object.freeze({
-      ambientAndDiffuse: "prepared-session-hue-rotation-of-source-particle-rgb",
+      ambientAndDiffuse: "prepared-session-three-color-analogous-palette",
       specular: Object.freeze([0.7, 0.7, 0.7, 1]),
       shininess: 20,
     }),
@@ -345,9 +357,14 @@ export function prepareCyclonePaletteColor(baseColor, paletteVariantId) {
     else hue = (baseColor[0] - baseColor[1]) / chroma + 4;
     hue = (hue / 6 + 1) % 1;
   }
-  const rotatedHue = (hue + paletteVariant.hueRotation) % 1;
+  const primaryShare = (1 - PREPARED_THIRD_HUE_SHARE) / 2;
+  const preparedHue = hue < primaryShare
+    ? paletteVariant.preparedHues[0]
+    : hue < primaryShare * 2
+      ? paletteVariant.preparedHues[1]
+      : paletteVariant.preparedHues[2];
   return hsvToRgb(
-    rotatedHue,
+    preparedHue,
     saturation,
     Math.max(PREPARED_MINIMUM_VALUE, maximum),
   );
@@ -390,10 +407,14 @@ function averageVertexColors(vertexColors, vertexIndices) {
   ));
 }
 
-function balanceSrgbEnergy(color, targetEnergy) {
+function normalizeSrgbEnergy(color, targetEnergy) {
   const sourceValue = Math.max(...color);
   if (sourceValue === 0) return color;
-  if (srgbLuma(color) >= targetEnergy) return color;
+  const sourceEnergy = srgbLuma(color);
+  if (sourceEnergy > targetEnergy) {
+    return color.map((channel) => Math.min(255, Math.ceil(channel * targetEnergy / sourceEnergy)));
+  }
+  if (sourceEnergy === targetEnergy) return color;
   const maximumExposure = 255 / sourceValue;
   const fullyExposed = exposeSrgb(color, maximumExposure);
   if (srgbLuma(fullyExposed) >= targetEnergy) {
@@ -437,27 +458,30 @@ function buildFinalLitColorProfile(variants, enforce) {
       paletteVariantId: variant.paletteVariantId,
       medianLitValue: roundMetric(values[Math.floor((values.length - 1) / 2)]),
       darkFaceShare: roundMetric(darkFaceCount / values.length),
-      minimumCrossVariantEnergyRatio: roundMetric(energyRatios[0]),
-      medianCrossVariantEnergyRatio: roundMetric(
+      minimumTargetEnergyRatio: roundMetric(energyRatios[0]),
+      medianTargetEnergyRatio: roundMetric(
         energyRatios[Math.floor((energyRatios.length - 1) / 2)],
       ),
+      maximumTargetEnergyRatio: roundMetric(energyRatios[energyRatios.length - 1]),
     });
   });
   const invalidProfiles = profiles.filter((profile) =>
     profile.medianLitValue < PREPARED_MINIMUM_MEDIAN_LIT_VALUE ||
     profile.darkFaceShare > PREPARED_MAXIMUM_DARK_FACE_SHARE ||
-    profile.minimumCrossVariantEnergyRatio <
-      PREPARED_MINIMUM_CROSS_VARIANT_ENERGY_RATIO);
+    profile.minimumTargetEnergyRatio < PREPARED_MINIMUM_TARGET_ENERGY_RATIO ||
+    profile.maximumTargetEnergyRatio > PREPARED_MAXIMUM_TARGET_ENERGY_RATIO);
   if (enforce && invalidProfiles.length > 0) {
     throw new Error(`Prepared Cyclone final lit colors are too dark: ${JSON.stringify(invalidProfiles)}`);
   }
   return deepFreeze({
-    schema: "csscyclone-prepared-final-lit-color-profile@1",
+    schema: "csscyclone-prepared-final-lit-color-profile@2",
     darkFaceValueThreshold: PREPARED_DARK_FACE_VALUE,
     maximumDarkFaceShare: PREPARED_MAXIMUM_DARK_FACE_SHARE,
     minimumMedianLitValue: PREPARED_MINIMUM_MEDIAN_LIT_VALUE,
     srgbLumaWeights: SRGB_LUMA_WEIGHTS,
-    minimumCrossVariantEnergyRatio: PREPARED_MINIMUM_CROSS_VARIANT_ENERGY_RATIO,
+    targetSrgbEnergyRatio: PREPARED_TARGET_ENERGY_RATIO,
+    minimumTargetEnergyRatio: PREPARED_MINIMUM_TARGET_ENERGY_RATIO,
+    maximumTargetEnergyRatio: PREPARED_MAXIMUM_TARGET_ENERGY_RATIO,
     variants: profiles,
   });
 }

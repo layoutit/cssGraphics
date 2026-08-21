@@ -11,14 +11,14 @@ transform states. The stream is transported as 216 one-second prepared blocks
 so decompression stays outside long animation frames. The source fixed-function
 light is sampled at each particle's original smooth vertex normals in the first
 published frame, then the three lit vertex colors of every triangle are averaged
-into one prepared opaque CSS face color. For every source-lit face state, the
-brightest result across the twelve hue rotations sets the shared sRGB energy.
-Every dimmer rotation is first exposed without changing hue or saturation. Only
-colors that reach the sRGB gamut ceiling before that shared target is met mix
-toward neutral by the minimum remaining amount. The energetic rotation is never
-dimmed.
+into one prepared opaque CSS face color. Every face is normalized to the
+encoded-sRGB midpoint between its green and yellow channel references.
+Higher-energy hues are dimmed without changing their channel ratio. Lower-energy hues are first
+exposed without changing hue or saturation; only colors that reach the sRGB
+gamut ceiling before the target mix toward neutral by the minimum remaining
+amount.
 A preparation guard rejects banks whose final lit palette becomes predominantly
-dark or falls below that shared cross-rotation energy. Exact cross-palette color tuples
+dark or falls outside that prepared energy range. Exact cross-palette color tuples
 are deduplicated into a compact prepared slot table. Initial leaf colors are
 bound once. Later color writes are limited to the six leaves of a particle when
 the source restarts it with a new color. The mounted graph is camera, scene,
@@ -29,19 +29,23 @@ There is no Canvas, SVG, WebGL, runtime random walk, geometry construction,
 lighting calculation, color calculation, matrix formatting, image decode, atlas
 rasterization, or DOM growth.
 The prepared presentation maps the source's random saturation samples into a
-0.55-1.0 range and lifts the dark end of prepared HSV value to 0.75. The
-source's continuous hues, uniform random hue-target timing, and rule that
-particles change color only when they restart are preserved. Twelve prepared
-solid-color variants rotate every source hue by a fixed 30-degree step. The
-browser selects one complete prepared color table and performs no color
-calculation. The same source RNG draws preserve RNG cadence, trajectory geometry,
-restart timing, and coherent color bands. The session rotation and shared
-cross-rotation energy normalization are intentional presentation changes; they
-are not exact source colors.
-Startup is prebaked to ten audited 48-frame source windows. The selector gives
-each of the twelve hue rotations exactly once per session-shuffled cycle before
-any rotation repeats, then independently chooses one expressive browser-reviewed
-source window while excluding the previous exact window.
+0.55-1.0 range and lifts the dark end of prepared HSV value to 0.75. Each
+session variant contains at most three coordinated hue families: two primaries
+and one secondary, separated by 30-degree steps across a 60-degree analogous range. Source hue ranks
+assign 40% of particle colors to each primary and 20% to the secondary. The source's uniform
+random hue-target timing and rule that particles change color only when they
+restart remain unchanged. Twelve prepared variants use explicit audited
+three-hue sets; none combines opposing families such as red and blue. The
+browser selects one complete prepared color table and performs no color calculation. The same source RNG
+draws preserve RNG cadence, trajectory geometry, restart timing, and coherent
+color bands. The session palette and midpoint energy normalization are
+intentional presentation changes; they are not exact source colors.
+Startup is prebaked to ten audited 48-frame source windows. A 24-load
+session-shuffled cycle includes every prepared palette without adjacent
+repeats: 16 loads use green-through-blue primaries, four use violet primaries,
+and four use magenta-through-red primaries. It independently
+chooses one expressive browser-reviewed source window while excluding the
+previous exact window.
 It never phases individual particles around a full hue wheel. This is an
 intentional presentation rather than an exact native-color or random-start
 claim. Mobile/coarse-pointer devices and viewports below 600px select the

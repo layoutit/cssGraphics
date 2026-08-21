@@ -1,6 +1,6 @@
 export async function loadCyclonePreparedLightingColors(lighting, paletteVariantId) {
   const variant = lighting?.variants?.find((entry) => entry?.paletteVariantId === paletteVariantId);
-  if (lighting?.schema !== "csscyclone-prepared-energy-balanced-continuous-hue-vertex-lighting-colors@15" ||
+  if (lighting?.schema !== "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@19" ||
       lighting.preparedMinimumSaturation !== 0.55 ||
       lighting.preparedMinimumValue !== 0.75 ||
       !isFinalLitColorProfileValid(lighting.finalLitColorProfile, lighting.paletteVariantIds) ||
@@ -9,6 +9,9 @@ export async function loadCyclonePreparedLightingColors(lighting, paletteVariant
       !lighting.paletteVariantIds.includes(paletteVariantId) ||
       lighting.variants?.length !== lighting.paletteVariantIds.length ||
       typeof variant?.hueRotation !== "number" ||
+      variant?.preparedHues?.length !== 3 ||
+      new Set(variant.preparedHues).size !== variant.preparedHues.length ||
+      variant.preparedHues.some((hue) => typeof hue !== "number" || hue < 0 || hue >= 1) ||
       typeof variant?.assetUrl !== "string" ||
       !Number.isSafeInteger(variant?.byteLength) || variant.byteLength < 1 ||
       !/^[a-f0-9]{64}$/u.test(variant?.sha256 ?? "") ||
@@ -39,6 +42,7 @@ export async function loadCyclonePreparedLightingColors(lighting, paletteVariant
       preparedVariant.streamId !== lighting.streamId ||
       preparedVariant.paletteVariantId !== paletteVariantId ||
       preparedVariant.hueRotation !== variant.hueRotation ||
+      !sameNumbers(preparedVariant.preparedHues, variant.preparedHues) ||
       preparedVariant.uniqueColorCount !== lighting.uniqueColorCount ||
       !Array.isArray(preparedVariant.colors) ||
       preparedVariant.colors.length !== lighting.uniqueColorCount ||
@@ -48,10 +52,16 @@ export async function loadCyclonePreparedLightingColors(lighting, paletteVariant
   return Object.freeze({
     paletteVariantId,
     hueRotation: variant.hueRotation,
+    preparedHues: Object.freeze([...variant.preparedHues]),
     colors: Object.freeze(preparedVariant.colors),
     colorSlotIndices,
     destroy() {},
   });
+}
+
+function sameNumbers(left, right) {
+  return Array.isArray(left) && left.length === right.length &&
+    left.every((value, index) => value === right[index]);
 }
 
 async function fetchBytes(url) {
@@ -76,11 +86,13 @@ async function verifyBytes(bytes, expectedLength, expectedSha256) {
 }
 
 function isFinalLitColorProfileValid(profile, paletteVariantIds) {
-  return profile?.schema === "csscyclone-prepared-final-lit-color-profile@1" &&
+  return profile?.schema === "csscyclone-prepared-final-lit-color-profile@2" &&
     profile.darkFaceValueThreshold === 0.4 &&
-    profile.maximumDarkFaceShare === 0.25 &&
+    profile.maximumDarkFaceShare === 0.2 &&
     profile.minimumMedianLitValue === 0.5 &&
-    profile.minimumCrossVariantEnergyRatio === 1 &&
+    profile.targetSrgbEnergyRatio === 0.8215 &&
+    profile.minimumTargetEnergyRatio === 1 &&
+    profile.maximumTargetEnergyRatio === 1.03 &&
     profile.srgbLumaWeights?.length === 3 &&
     profile.srgbLumaWeights.every((value, index) =>
       value === [0.2126, 0.7152, 0.0722][index]) &&
@@ -89,8 +101,8 @@ function isFinalLitColorProfileValid(profile, paletteVariantIds) {
       variant?.paletteVariantId === paletteVariantIds[index] &&
       variant.medianLitValue >= profile.minimumMedianLitValue &&
       variant.darkFaceShare <= profile.maximumDarkFaceShare &&
-      variant.minimumCrossVariantEnergyRatio >=
-        profile.minimumCrossVariantEnergyRatio);
+      variant.minimumTargetEnergyRatio >= profile.minimumTargetEnergyRatio &&
+      variant.maximumTargetEnergyRatio <= profile.maximumTargetEnergyRatio);
 }
 
 function decodeColorSlotIndices(encoded, bytesPerIndex, count) {

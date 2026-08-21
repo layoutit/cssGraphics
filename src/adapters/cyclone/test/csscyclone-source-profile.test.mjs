@@ -69,13 +69,19 @@ test("pins the current Really Slick Cyclone source profile", () => {
   assert.equal(CSSCYCLONE_PRESENTATION.particleColorAssignment, "source-hue-at-particle-restart");
   assert.equal(
     CSSCYCLONE_PRESENTATION.preparedPaletteAssignment,
-    "source-continuous-hue-plus-session-prepared-rotation",
+    "source-hue-ranked-curated-three-color-analogous-palette",
   );
   assert.equal(CSSCYCLONE_PRESENTATION.preparedPaletteVariants.length, 12);
   assert.deepEqual(CSSCYCLONE_PRESENTATION.preparedPaletteVariants[4], {
     id: "rotate-120",
     hueRotation: 1 / 3,
+    preparedHues: [180 / 360, 210 / 360, 240 / 360],
+    startupWeight: 2,
   });
+  assert.deepEqual(
+    CSSCYCLONE_PRESENTATION.preparedPaletteVariants.map(({ startupWeight }) => startupWeight),
+    [3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1],
+  );
   assert.equal(CSSCYCLONE_PRESENTATION.maximumColorFamilyCount, 3);
   assert.deepEqual(
     CSSCYCLONE_PRESENTATION.startupPaletteFamilies,
@@ -331,7 +337,7 @@ test("prepares source-vertex-averaged face lighting without a runtime lighting t
   const bank = { ...CSSCYCLONE_BANK, particleCount: 3, warmupFrames: 20, frameCount: 4 };
   const source = buildCycloneSourceSequence({ bank });
   const prepared = await buildCyclonePreparedLighting({ source });
-  assert.equal(prepared.contract.schema, "csscyclone-prepared-energy-balanced-continuous-hue-vertex-lighting-colors@15");
+  assert.equal(prepared.contract.schema, "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@19");
   assert.equal(prepared.contract.leafCount, 18);
   assert.equal(prepared.contract.colorStateCount, 3);
   assert.equal(prepared.contract.colorRestartCount, 0);
@@ -359,23 +365,26 @@ test("prepares source-vertex-averaged face lighting without a runtime lighting t
   );
   assert.equal(
     prepared.contract.finalLitColorProfile.schema,
-    "csscyclone-prepared-final-lit-color-profile@1",
+    "csscyclone-prepared-final-lit-color-profile@2",
   );
   assert.equal(prepared.contract.finalLitColorProfile.darkFaceValueThreshold, 0.4);
-  assert.equal(prepared.contract.finalLitColorProfile.maximumDarkFaceShare, 0.25);
+  assert.equal(prepared.contract.finalLitColorProfile.maximumDarkFaceShare, 0.2);
   assert.equal(prepared.contract.finalLitColorProfile.minimumMedianLitValue, 0.5);
   assert.deepEqual(
     prepared.contract.finalLitColorProfile.srgbLumaWeights,
     [0.2126, 0.7152, 0.0722],
   );
-  assert.equal(prepared.contract.finalLitColorProfile.minimumCrossVariantEnergyRatio, 1);
+  assert.equal(prepared.contract.finalLitColorProfile.targetSrgbEnergyRatio, 0.8215);
+  assert.equal(prepared.contract.finalLitColorProfile.minimumTargetEnergyRatio, 1);
+  assert.equal(prepared.contract.finalLitColorProfile.maximumTargetEnergyRatio, 1.03);
   assert.ok(prepared.contract.finalLitColorProfile.variants.every((variant) =>
-    variant.minimumCrossVariantEnergyRatio >= 1));
+    variant.minimumTargetEnergyRatio >= 1 && variant.maximumTargetEnergyRatio <= 1.03));
   assert.equal(prepared.contract.finalLitColorProfile.variants.length, 12);
   assert.equal(prepared.contract.variants.length, 12);
   assert.ok(prepared.contract.variants.every((variant, index) =>
     variant.paletteVariantId === prepared.contract.paletteVariantIds[index] &&
-    variant.hueRotation === index / 12));
+    variant.hueRotation === index / 12 &&
+    variant.preparedHues.length === 3));
   assert.equal(prepared.contract.sourceStreamFrameCount, 4);
   assert.equal(prepared.contract.chunkCount, 1);
   assert.equal(prepared.chunk.frameParticleColorStateIndices.length, 4);
@@ -390,6 +399,17 @@ test("prepares source-vertex-averaged face lighting without a runtime lighting t
   const liftedRedBlack = prepareCyclonePaletteColor([0, 0, 0], "rotate-000");
   assert.equal(Math.max(...liftedRedBlack), 0.75);
   assert.equal(Number((1 - Math.min(...liftedBlack) / Math.max(...liftedBlack)).toFixed(2)), 0.55);
+});
+
+test("maps source hues into three neighboring prepared colors", () => {
+  const preparedHues = Array.from({ length: 10 }, (_, index) => {
+    const source = hsvColor((index + 0.5) / 10, 0.8, 0.8);
+    return rgbHue(prepareCyclonePaletteColor(source, "rotate-000"));
+  });
+  const hueCounts = new Map();
+  for (const hue of preparedHues) hueCounts.set(hue, (hueCounts.get(hue) ?? 0) + 1);
+  assert.deepEqual([...hueCounts.values()], [4, 4, 2]);
+  assert.deepEqual([...hueCounts.keys()], [0.25, 0.333333, 0.416667]);
 });
 
 test("publishes only exact source color restarts through sparse leaf colors", async () => {
@@ -463,3 +483,31 @@ test("preserves the source tangent orientation", () => {
     11.576768, -18.356715, 79.662214, 1,
   ]);
 });
+
+function hsvColor(hue, saturation, value) {
+  const sector = hue * 6;
+  const index = Math.floor(sector) % 6;
+  const fraction = sector - Math.floor(sector);
+  const minimum = value * (1 - saturation);
+  const descending = value * (1 - fraction * saturation);
+  const ascending = value * (1 - (1 - fraction) * saturation);
+  return [
+    [value, ascending, minimum],
+    [descending, value, minimum],
+    [minimum, value, ascending],
+    [minimum, descending, value],
+    [ascending, minimum, value],
+    [value, minimum, descending],
+  ][index];
+}
+
+function rgbHue(color) {
+  const maximum = Math.max(...color);
+  const minimum = Math.min(...color);
+  const chroma = maximum - minimum;
+  let hue = 0;
+  if (maximum === color[0]) hue = ((color[1] - color[2]) / chroma) % 6;
+  else if (maximum === color[1]) hue = (color[2] - color[0]) / chroma + 2;
+  else hue = (color[0] - color[1]) / chroma + 4;
+  return Number(((hue / 6 + 1) % 1).toFixed(6));
+}

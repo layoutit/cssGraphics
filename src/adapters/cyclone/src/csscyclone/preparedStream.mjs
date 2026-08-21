@@ -15,8 +15,9 @@ const STARTUP_HUE_SECTOR_NAMES = Object.freeze(["red", "yellow", "green", "cyan"
 const STARTUP_PALETTE_FAMILIES = Object.freeze(["blue", "yellow", "red", "magenta", "green"]);
 const STARTUP_PALETTE_VARIANT_IDS = Object.freeze(Array.from({ length: 12 }, (_, index) =>
   `rotate-${String(index * 30).padStart(3, "0")}`));
+const STARTUP_PALETTE_VARIANT_WEIGHTS = Object.freeze([3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1]);
 const STARTUP_SILHOUETTE_SAMPLING = "browser-reviewed-expressive-source-windows";
-const STARTUP_SELECTION = "session-shuffled-hue-rotation-plus-crypto-source-window-no-immediate-repeat";
+const STARTUP_SELECTION = "session-weighted-shuffled-hue-rotation-plus-crypto-source-window-no-immediate-repeat";
 
 export async function loadCyclonePreparedCatalog(descriptor) {
   if (typeof descriptor?.catalogUrl !== "string" ||
@@ -84,7 +85,7 @@ export function selectInitialCyclonePosition(catalog, {
     chunkIndex: selection.chunkIndex,
     frameIndex,
     mode: preferredPaletteVariantId !== null
-      ? "session-shuffled-hue-rotation-crypto-random-source-window"
+      ? "session-weighted-shuffled-hue-rotation-crypto-random-source-window"
       : previousSelectionId === null
       ? "crypto-random-balanced-source-palette"
       : "crypto-random-balanced-source-palette-no-repeat",
@@ -634,6 +635,10 @@ function validateCatalog(catalog) {
       catalog.startupPaletteVariantIds.length !== STARTUP_PALETTE_VARIANT_IDS.length ||
       catalog.startupPaletteVariantIds.some((variantId, index) =>
         variantId !== STARTUP_PALETTE_VARIANT_IDS[index]) ||
+      !Array.isArray(catalog.startupPaletteVariantWeights) ||
+      catalog.startupPaletteVariantWeights.length !== STARTUP_PALETTE_VARIANT_WEIGHTS.length ||
+      catalog.startupPaletteVariantWeights.some((weight, index) =>
+        weight !== STARTUP_PALETTE_VARIANT_WEIGHTS[index]) ||
       !Array.isArray(catalog.startupSelections) || catalog.startupSelections.length < 2 ||
       new Set(catalog.startupSelections.map((selection) => selection?.id)).size !==
         catalog.startupSelections.length ||

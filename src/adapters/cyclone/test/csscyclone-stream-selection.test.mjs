@@ -10,6 +10,7 @@ const hueSectorNames = Object.freeze(["red", "yellow", "green", "cyan", "blue", 
 const startupPaletteFamilies = Object.freeze(["blue", "yellow", "red", "magenta", "green"]);
 const startupPaletteVariantIds = Object.freeze(Array.from({ length: 12 }, (_, index) =>
   `rotate-${String(index * 30).padStart(3, "0")}`));
+const startupPaletteVariantWeights = Object.freeze([3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1]);
 const startupSelections = Object.freeze([
   Object.freeze({ id: "blue-a", paletteFamily: "blue", chunkIndex: 17, startFrameIndex: 249, frameCount: 48 }),
   Object.freeze({ id: "blue-b", paletteFamily: "blue", chunkIndex: 23, startFrameIndex: 492, frameCount: 48 }),
@@ -49,11 +50,12 @@ const catalog = Object.freeze({
   streamDurationMilliseconds: 216_000,
   startupPaletteFamilies,
   startupPaletteVariantIds,
+  startupPaletteVariantWeights,
   startupSelections,
   startupSilhouetteSampling: "browser-reviewed-expressive-source-windows",
   startupSilhouetteSampleFrameOffsets: Object.freeze([0, 12, 24, 36, 47]),
   maximumColorFamilyCount: 3,
-  selection: "session-shuffled-hue-rotation-plus-crypto-source-window-no-immediate-repeat",
+  selection: "session-weighted-shuffled-hue-rotation-plus-crypto-source-window-no-immediate-repeat",
   startupColorProfile: Object.freeze({
     schema: "csscyclone-prepared-startup-color-profile@2",
     metric: "prepared-source-particle-rgb-hsv-dominant-family-per-curated-window",
@@ -149,7 +151,7 @@ test("uses the session-shuffled hue rotation with an independent curated source 
     sourcePaletteFamily: "magenta",
     chunkIndex: 12,
     frameIndex: 451,
-    mode: "session-shuffled-hue-rotation-crypto-random-source-window",
+    mode: "session-weighted-shuffled-hue-rotation-crypto-random-source-window",
   });
 });
 

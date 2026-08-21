@@ -34,7 +34,7 @@ const CSS_PURPLE = Object.freeze([0x66, 0x33, 0x99]);
 const CSS_WHITE = Object.freeze([0xff, 0xff, 0xff]);
 
 export function clothRasterPagePath(pageIndex) {
-  return `assets/cloth-${pageIndex}.png`;
+  return `assets/cloth-${pageIndex}.webp`;
 }
 
 export function clothLogoRasterPagePath(pageIndex) {
@@ -212,7 +212,7 @@ export async function buildClothRasterPages({
       triangles,
     );
     const [clothPages, clothLogoPages] = await Promise.all([
-      Promise.all(separated.pages.map(encodeOpaqueRgbPng)),
+      Promise.all(separated.pages.map(encodeOpaqueRgbWebp)),
       Promise.all(separated.logoPages.map(encodeRgbaPng)),
     ]);
     return Object.freeze({
@@ -234,8 +234,8 @@ export async function buildClothRasterPages({
   );
   const encodedClothPages = await Promise.all(clothPages.map((page) => (
     backingColor
-      ? encodeRgbaPng(buildLightingOverlayPage(page, backingColor))
-      : encodeOpaqueRgbPng(page)
+      ? encodeRgbaWebp(buildLightingOverlayPage(page, backingColor))
+      : encodeOpaqueRgbWebp(page)
   )));
   return Object.freeze({
     clothPages: Object.freeze(encodedClothPages),
@@ -1158,9 +1158,15 @@ function encodeRgbaPng(image) {
     .toBuffer();
 }
 
-function encodeOpaqueRgbPng(image) {
+function encodeRgbaWebp(image) {
+  return sharp(image.data, { raw: { width: image.width, height: image.height, channels: 4 } })
+    .webp({ lossless: true, quality: 100, effort: 6 })
+    .toBuffer();
+}
+
+function encodeOpaqueRgbWebp(image) {
   return sharp(image.data, { raw: { width: image.width, height: image.height, channels: 4 } })
     .removeAlpha()
-    .png({ compressionLevel: 9, adaptiveFiltering: false, palette: false })
+    .webp({ lossless: true, quality: 100, effort: 6 })
     .toBuffer();
 }

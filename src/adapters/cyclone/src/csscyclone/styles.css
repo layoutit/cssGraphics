@@ -161,14 +161,8 @@ body > .polycss-camera > .polycss-scene > div {
 }
 
 body > .polycss-camera > .polycss-scene {
-  left: 60%;
-  top: 60%;
   transform: translateZ(var(--cyclone-perspective))
     matrix3d(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, -400, 1);
-}
-
-@media (max-width: 599px) {
-  body > .polycss-camera > .polycss-scene { left: 62%; }
 }
 
 body > .polycss-camera :is(u, b) {

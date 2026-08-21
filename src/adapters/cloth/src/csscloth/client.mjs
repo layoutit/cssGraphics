@@ -26,7 +26,7 @@ const CLOTH_PREPARED_PROFILES = Object.freeze({
   }),
 });
 const CLOTH_PACKAGE_RESOURCE_PATHS = Object.freeze([
-  "assets/cloth-0.png",
+  "assets/cloth-0.webp",
   "assets/cloth-logo-0.png",
   "assets/ground.avif",
   "assets/shadow.png",

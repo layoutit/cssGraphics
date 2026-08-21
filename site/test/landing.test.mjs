@@ -120,6 +120,7 @@ test("landing is only the shared shell and linked project thumbnails", async () 
   );
   assert.doesNotMatch(siteCss, /\.project-thumbnail::after/u);
   assert.match(siteCss, /\.project-thumbnail img \{[\s\S]*?background: #000;/u);
+  assert.match(siteCss, /\[href="\/cloth\/"\], \[href="\/maze\/"\][\s\S]*?\.project-title/u);
   assert.match(siteCss, /\.site-header \{[\s\S]*?position: relative;/u);
   assert.match(siteCss, /\.site-brand \{[^}]*max-width: calc\(100% - 58px\);/u);
   assert.match(siteCss, /\.site-wordmark-svg \{[^}]*max-width: 100%;/u);

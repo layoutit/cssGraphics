@@ -247,6 +247,10 @@ body {
   transition: color 180ms ease;
 }
 
+.project-thumbnail:is([href="/cloth/"], [href="/maze/"]) .project-title {
+  color: rgb(20 27 31 / 76%);
+}
+
 .project-number {
   position: absolute;
   top: 0;
@@ -288,6 +292,10 @@ body {
 .project-thumbnail:hover .project-number,
 .project-thumbnail:focus-visible .project-number {
   color: rgb(238 242 244 / 88%);
+}
+
+.project-thumbnail:is([href="/cloth/"], [href="/maze/"]):is(:hover, :focus-visible) .project-title {
+  color: rgb(12 17 20 / 92%);
 }
 
 @media (max-width: 2073px) {

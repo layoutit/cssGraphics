@@ -11,6 +11,7 @@ const LIGHTING_SCHEMA = "csscyclone-prepared-energy-balanced-three-color-vertex-
 const SOURCE_FIELD_OF_VIEW_DEGREES = 80;
 const MOBILE_FIELD_OF_VIEW_DEGREES = 90;
 const MOBILE_MAX_WIDTH = 600;
+const TERMINAL_HANDOFF_TARGET_FRAME_COUNT = 16;
 const STYLESHEET_MODEL_TRANSFORM =
   "matrix3d(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, -400, 1)";
 
@@ -107,6 +108,10 @@ export function createCyclonePreparedPlayer({
   let runtimePreparedBlockWaitCount = 0;
   let preparedContinuousHandoffCount = 0;
   let preparedTerminalWrapCount = 0;
+  let terminalWrapPublishedParticleCount = 0;
+  const terminalWrapParticleBatchSize = Math.ceil(
+    playback.particleCount / Math.min(TERMINAL_HANDOFF_TARGET_FRAME_COUNT, playback.frameCount),
+  );
   const lightingRowWrites = 0;
   const lightingLeafBindingWrites = leafElements.length;
   let currentParticleColorStateIndices = [];
@@ -116,18 +121,22 @@ export function createCyclonePreparedPlayer({
   applyCount += 1;
   queueLookaheadBlocks();
 
-  function publishTransforms(nextFrameIndex) {
+  function publishTransforms(nextFrameIndex, particleCount = playback.particleCount) {
     const frameOffset = nextFrameIndex * playback.particleCount;
-    for (let particleIndex = 0; particleIndex < playback.particleCount; particleIndex += 1) {
+    for (let particleIndex = 0; particleIndex < particleCount; particleIndex += 1) {
       shapeTransformWrites += Number(target.shapes[particleIndex].writeTransform(
         playback.transforms[frameOffset + particleIndex],
       ));
     }
   }
 
-  function publishLighting(nextFrameIndex, force = false) {
+  function publishLighting(
+    nextFrameIndex,
+    force = false,
+    particleCount = playback.particleCount,
+  ) {
     const frameOffset = nextFrameIndex * playback.particleCount;
-    for (let particleIndex = 0; particleIndex < playback.particleCount; particleIndex += 1) {
+    for (let particleIndex = 0; particleIndex < particleCount; particleIndex += 1) {
       const nextStateIndex = lightingFrames.frameParticleColorStateIndices[frameOffset + particleIndex];
       if (!force && nextStateIndex === currentParticleColorStateIndices[particleIndex]) continue;
       const leafOffset = particleIndex * lighting.facesPerParticle;
@@ -139,6 +148,20 @@ export function createCyclonePreparedPlayer({
         if (!force) lightingLeafColorWrites += 1;
       }
       currentParticleColorStateIndices[particleIndex] = nextStateIndex;
+    }
+  }
+
+  function publishTerminalWrap(nextFrameIndex) {
+    terminalWrapPublishedParticleCount = Math.min(
+      playback.particleCount,
+      terminalWrapPublishedParticleCount + terminalWrapParticleBatchSize,
+    );
+    publishTransforms(nextFrameIndex, terminalWrapPublishedParticleCount);
+    publishLighting(nextFrameIndex, false, terminalWrapPublishedParticleCount);
+    frameIndex = nextFrameIndex;
+    applyCount += 1;
+    if (terminalWrapPublishedParticleCount === playback.particleCount) {
+      terminalWrapPublishedParticleCount = 0;
     }
   }
 
@@ -211,12 +234,16 @@ export function createCyclonePreparedPlayer({
     lightingFrames = activeBlock.lighting;
     pendingBlocks.delete(nextBlockIndex);
     frameIndex = 0;
-    publishTransforms(0);
-    publishLighting(0);
-    applyCount += 1;
     preparedBlockSwitchCount += 1;
-    if (activeBlockIndex === previousBlockIndex + 1) preparedContinuousHandoffCount += 1;
-    else preparedTerminalWrapCount += 1;
+    if (activeBlockIndex === previousBlockIndex + 1) {
+      publishTransforms(0);
+      publishLighting(0);
+      applyCount += 1;
+      preparedContinuousHandoffCount += 1;
+    } else {
+      preparedTerminalWrapCount += 1;
+      publishTerminalWrap(0);
+    }
     if (activeBlock.chunkIndex !== previousChunkIndex) preparedChunkSwitchCount += 1;
     queueLookaheadBlocks();
     return waited;
@@ -257,7 +284,9 @@ export function createCyclonePreparedPlayer({
       return;
     }
     try {
-      if (frameIndex + 1 >= playback.frameCount) {
+      if (terminalWrapPublishedParticleCount > 0) {
+        publishTerminalWrap(frameIndex + 1);
+      } else if (frameIndex + 1 >= playback.frameCount) {
         await activatePendingBlock();
       } else {
         advanceTo(frameIndex + 1);
@@ -310,7 +339,8 @@ export function createCyclonePreparedPlayer({
     }
     const wasPaused = paused;
     if (!wasPaused) pause();
-    if (nextFrameIndex !== frameIndex) {
+    if (terminalWrapPublishedParticleCount > 0 || nextFrameIndex !== frameIndex) {
+      terminalWrapPublishedParticleCount = 0;
       publishTransforms(nextFrameIndex);
       publishLighting(nextFrameIndex);
       frameIndex = nextFrameIndex;

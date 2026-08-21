@@ -79,7 +79,7 @@ export const CSSCYCLONE_PRESENTATION = Object.freeze({
   minimumSaturation: 0.55,
   hueSampling: "source-uniform-random-targets",
   particleColorAssignment: "source-hue-at-particle-restart",
-  preparedPaletteAssignment: "source-continuous-hue-plus-session-prepared-rotation",
+  preparedPaletteAssignment: "source-hue-ranked-session-three-color-split-complementary-palette",
   preparedPaletteVariants: PREPARED_PALETTE_VARIANTS,
   maximumColorFamilyCount: 3,
   startupPaletteFamilies: Object.freeze(["blue", "yellow", "red", "magenta", "green"]),

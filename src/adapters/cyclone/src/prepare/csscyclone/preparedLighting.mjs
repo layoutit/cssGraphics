@@ -7,10 +7,19 @@ import { CSSCYCLONE_PRESENTATION } from "./sourceModel.mjs";
 const PREPARED_MINIMUM_SATURATION = CSSCYCLONE_PRESENTATION.minimumSaturation;
 const PREPARED_MINIMUM_VALUE = 0.75;
 const PREPARED_DARK_FACE_VALUE = 0.4;
-const PREPARED_MAXIMUM_DARK_FACE_SHARE = 0.25;
+const PREPARED_MAXIMUM_DARK_FACE_SHARE = 0.2;
 const PREPARED_MINIMUM_MEDIAN_LIT_VALUE = 0.5;
 const SRGB_LUMA_WEIGHTS = Object.freeze([0.2126, 0.7152, 0.0722]);
-const PREPARED_MINIMUM_CROSS_VARIANT_ENERGY_RATIO = 1;
+const PREPARED_GREEN_REFERENCE_ENERGY_RATIO = SRGB_LUMA_WEIGHTS[1];
+const PREPARED_YELLOW_REFERENCE_ENERGY_RATIO = SRGB_LUMA_WEIGHTS[0] + SRGB_LUMA_WEIGHTS[1];
+const PREPARED_TARGET_ENERGY_RATIO = Number(((
+  PREPARED_GREEN_REFERENCE_ENERGY_RATIO + PREPARED_YELLOW_REFERENCE_ENERGY_RATIO
+) / 2).toFixed(4));
+const PREPARED_MINIMUM_TARGET_ENERGY_RATIO = 1;
+const PREPARED_MAXIMUM_TARGET_ENERGY_RATIO = 1.03;
+const PREPARED_PRIMARY_HUE_SPREAD = 1 / 24;
+const PREPARED_COMPLEMENTARY_HUE_OFFSET = 5 / 12;
+const PREPARED_COMPLEMENTARY_ACCENT_SHARE = 0.2;
 const SOURCE_VERTEX_NORMALS = Object.freeze(
   CSSCYCLONE_PARTICLE_VERTICES.map((vertex) => Object.freeze(normalize(vertex))),
 );
@@ -167,13 +176,12 @@ async function buildPreparedLightingColors({
       colors: Object.freeze(colors),
     });
   });
-  const targetEnergies = Object.freeze(sourceLitVariants[0].colors.map((unused, colorIndex) =>
-    Math.max(...sourceLitVariants.map((variant) => srgbLuma(variant.colors[colorIndex])))));
   const logicalVariants = sourceLitVariants.map((variant) => {
     const energyRatios = [];
-    const colors = variant.colors.map((color, colorIndex) => {
-      const faceColor = balanceSrgbEnergy(color, targetEnergies[colorIndex]);
-      energyRatios.push(srgbLuma(faceColor) / targetEnergies[colorIndex]);
+    const colors = variant.colors.map((color) => {
+      const targetEnergy = Math.max(...color) * PREPARED_TARGET_ENERGY_RATIO;
+      const faceColor = normalizeSrgbEnergy(color, targetEnergy);
+      energyRatios.push(srgbLuma(faceColor) / targetEnergy);
       return rgbHex(faceColor);
     });
     return Object.freeze({
@@ -201,8 +209,8 @@ async function buildPreparedLightingColors({
       variant.colors[index])),
   }));
   const contract = deepFreeze({
-    schema: "csscyclone-prepared-energy-balanced-continuous-hue-vertex-lighting-colors@15",
-    technique: "prepared-source-smooth-vertex-lighting-averaged-per-solid-face-with-cross-variant-maximum-srgb-energy-balanced-session-hue-rotation-variants-sparse-source-color-restarts-and-exact-cross-variant-deduplication",
+    schema: "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@16",
+    technique: "prepared-source-smooth-vertex-lighting-averaged-per-solid-face-with-three-color-split-complementary-session-palettes-mid-green-yellow-reference-srgb-energy-normalization-sparse-source-color-restarts-and-exact-cross-variant-deduplication",
     source: "src/cyclone/cyclone.cpp#particle::update+initSaver",
     streamId,
     encoding: "CSS-sRGB-hex-plus-little-endian-color-slot-indices-base64",
@@ -240,7 +248,7 @@ async function buildPreparedLightingColors({
     sampling: "three-source-smooth-vertex-light-samples-averaged-per-solid-face-state",
     interpolation: "browser-solid-face-average-of-stream-frame-zero-source-vertex-lighting",
     material: Object.freeze({
-      ambientAndDiffuse: "prepared-session-hue-rotation-of-source-particle-rgb",
+      ambientAndDiffuse: "prepared-session-three-color-complementary-palette",
       specular: Object.freeze([0.7, 0.7, 0.7, 1]),
       shininess: 20,
     }),
@@ -345,9 +353,20 @@ export function prepareCyclonePaletteColor(baseColor, paletteVariantId) {
     else hue = (baseColor[0] - baseColor[1]) / chroma + 4;
     hue = (hue / 6 + 1) % 1;
   }
-  const rotatedHue = (hue + paletteVariant.hueRotation) % 1;
+  const primaryHue = (paletteVariant.hueRotation + 1 / 3) % 1;
+  const preparedHues = [
+    (primaryHue - PREPARED_PRIMARY_HUE_SPREAD + 1) % 1,
+    (primaryHue + PREPARED_PRIMARY_HUE_SPREAD) % 1,
+    (primaryHue + PREPARED_COMPLEMENTARY_HUE_OFFSET) % 1,
+  ];
+  const primaryShare = (1 - PREPARED_COMPLEMENTARY_ACCENT_SHARE) / 2;
+  const preparedHue = hue < primaryShare
+    ? preparedHues[0]
+    : hue < primaryShare * 2
+      ? preparedHues[1]
+      : preparedHues[2];
   return hsvToRgb(
-    rotatedHue,
+    preparedHue,
     saturation,
     Math.max(PREPARED_MINIMUM_VALUE, maximum),
   );
@@ -390,10 +409,14 @@ function averageVertexColors(vertexColors, vertexIndices) {
   ));
 }
 
-function balanceSrgbEnergy(color, targetEnergy) {
+function normalizeSrgbEnergy(color, targetEnergy) {
   const sourceValue = Math.max(...color);
   if (sourceValue === 0) return color;
-  if (srgbLuma(color) >= targetEnergy) return color;
+  const sourceEnergy = srgbLuma(color);
+  if (sourceEnergy > targetEnergy) {
+    return color.map((channel) => Math.min(255, Math.ceil(channel * targetEnergy / sourceEnergy)));
+  }
+  if (sourceEnergy === targetEnergy) return color;
   const maximumExposure = 255 / sourceValue;
   const fullyExposed = exposeSrgb(color, maximumExposure);
   if (srgbLuma(fullyExposed) >= targetEnergy) {
@@ -437,27 +460,30 @@ function buildFinalLitColorProfile(variants, enforce) {
       paletteVariantId: variant.paletteVariantId,
       medianLitValue: roundMetric(values[Math.floor((values.length - 1) / 2)]),
       darkFaceShare: roundMetric(darkFaceCount / values.length),
-      minimumCrossVariantEnergyRatio: roundMetric(energyRatios[0]),
-      medianCrossVariantEnergyRatio: roundMetric(
+      minimumTargetEnergyRatio: roundMetric(energyRatios[0]),
+      medianTargetEnergyRatio: roundMetric(
         energyRatios[Math.floor((energyRatios.length - 1) / 2)],
       ),
+      maximumTargetEnergyRatio: roundMetric(energyRatios[energyRatios.length - 1]),
     });
   });
   const invalidProfiles = profiles.filter((profile) =>
     profile.medianLitValue < PREPARED_MINIMUM_MEDIAN_LIT_VALUE ||
     profile.darkFaceShare > PREPARED_MAXIMUM_DARK_FACE_SHARE ||
-    profile.minimumCrossVariantEnergyRatio <
-      PREPARED_MINIMUM_CROSS_VARIANT_ENERGY_RATIO);
+    profile.minimumTargetEnergyRatio < PREPARED_MINIMUM_TARGET_ENERGY_RATIO ||
+    profile.maximumTargetEnergyRatio > PREPARED_MAXIMUM_TARGET_ENERGY_RATIO);
   if (enforce && invalidProfiles.length > 0) {
     throw new Error(`Prepared Cyclone final lit colors are too dark: ${JSON.stringify(invalidProfiles)}`);
   }
   return deepFreeze({
-    schema: "csscyclone-prepared-final-lit-color-profile@1",
+    schema: "csscyclone-prepared-final-lit-color-profile@2",
     darkFaceValueThreshold: PREPARED_DARK_FACE_VALUE,
     maximumDarkFaceShare: PREPARED_MAXIMUM_DARK_FACE_SHARE,
     minimumMedianLitValue: PREPARED_MINIMUM_MEDIAN_LIT_VALUE,
     srgbLumaWeights: SRGB_LUMA_WEIGHTS,
-    minimumCrossVariantEnergyRatio: PREPARED_MINIMUM_CROSS_VARIANT_ENERGY_RATIO,
+    targetSrgbEnergyRatio: PREPARED_TARGET_ENERGY_RATIO,
+    minimumTargetEnergyRatio: PREPARED_MINIMUM_TARGET_ENERGY_RATIO,
+    maximumTargetEnergyRatio: PREPARED_MAXIMUM_TARGET_ENERGY_RATIO,
     variants: profiles,
   });
 }

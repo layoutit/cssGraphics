@@ -56,7 +56,7 @@ function fixture({
     transforms: ["a", "b", "c", "d", "e", "f", "g", "h"],
   };
   const lighting = {
-    schema: "csscyclone-prepared-energy-balanced-continuous-hue-vertex-lighting-colors@15",
+    schema: "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@16",
     streamId: "stream",
     chunkCount: 1,
     chunkFrameCount: blockCount * 4,

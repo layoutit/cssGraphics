@@ -11,6 +11,7 @@ import { PROJECTS } from "./site/projects";
 import {
   renderLandingProjectCards,
   renderLandingStructuredData,
+  renderLandingViewer,
 } from "./site/render-projects";
 
 const repoRoot = import.meta.dirname;
@@ -101,12 +102,17 @@ function landingHtmlPlugin(): Plugin {
     name: "cssgraphics-landing-html",
     transformIndexHtml(html) {
       const projectsMarker = "<!-- cssgraphics-projects -->";
+      const projectCountMarker = "<!-- cssgraphics-project-count -->";
+      const viewerMarker = "<!-- cssgraphics-viewer -->";
       const structuredDataMarker = "<!-- cssgraphics-structured-data -->";
-      if (!html.includes(projectsMarker) || !html.includes(structuredDataMarker)) {
+      if (!html.includes(projectsMarker) || !html.includes(projectCountMarker) ||
+          !html.includes(viewerMarker) || !html.includes(structuredDataMarker)) {
         throw new Error("The css.graphics landing HTML markers are missing.");
       }
       return html
         .replace(projectsMarker, renderLandingProjectCards(PROJECTS))
+        .replace(projectCountMarker, String(PROJECTS.length))
+        .replace(viewerMarker, renderLandingViewer(PROJECTS[0]))
         .replace(structuredDataMarker, renderLandingStructuredData(PROJECTS));
     },
   };

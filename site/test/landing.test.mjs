@@ -65,75 +65,63 @@ test("landing presents the current deployed collection", async () => {
     `${html}\n${main}\n${projectSource}\n${rendererSource}\n${projectManifestText}`,
     /animated-morph-sphere|webgl-morphtargets|morph-stress-test/u,
   );
-  assert.equal(main.trim(), 'import "./site.css";');
-  assert.doesNotMatch(main, /createElement|appendChild|PROJECTS/u);
+  assert.match(main, /#example-frame/u);
+  assert.match(main, /\.project-thumbnail/u);
+  assert.match(main, /history\.pushState/u);
+  assert.match(main, /#example-search/u);
+  assert.doesNotMatch(main, /createElement|appendChild|innerHTML/u);
   assert.match(rendererSource, /<a class="project-thumbnail" href=/u);
+  assert.match(rendererSource, /data-project-id=/u);
   assert.match(rendererSource, /alt="\$\{escapeAttribute\(project\.description\)\}"/u);
   assert.match(rendererSource, /loading="lazy" fetchpriority="low"/u);
   assert.match(rendererSource, /fetchpriority="high"/u);
+  assert.match(rendererSource, /<iframe id="example-frame"/u);
+  assert.match(rendererSource, /renderLandingViewer/u);
   assert.match(rendererSource, /"@type": "WebSite"/u);
   assert.match(rendererSource, /"@type": "ItemList"/u);
   assert.match(viteConfig, /transformIndexHtml\(html\)/u);
   assert.match(viteConfig, /renderLandingProjectCards\(PROJECTS\)/u);
+  assert.match(viteConfig, /renderLandingViewer\(PROJECTS\[0\]\)/u);
   assert.match(html, /cssgraphics-projects/u);
+  assert.match(html, /cssgraphics-viewer/u);
   assert.match(html, /cssgraphics-structured-data/u);
   assert.match(projectSource, /projectManifest\.projects\.length - index/u);
   assert.match(projectSource, /project\.description\.length < 40/u);
-  assert.doesNotMatch(`${html}\n${main}`, /iframe|canvas|<code|<pre/u);
+  assert.doesNotMatch(`${html}\n${main}`, /canvas|<code|<pre/u);
 });
 
-test("landing is only the shared shell and linked project thumbnails", async () => {
+test("landing uses the compact examples shell and a single live viewer", async () => {
   const [html, siteCss] = await Promise.all([
     readFile(resolve(siteRoot, "index.html"), "utf8"),
     readFile(resolve(siteRoot, "site.css"), "utf8"),
   ]);
-  assert.match(html, /class="site-header"/u);
-  assert.match(html, /class="site-wordmark-svg"/u);
+  assert.match(html, /class="examples-layout"/u);
+  assert.match(html, /class="examples-sidebar"/u);
+  assert.match(html, /class="examples-header"/u);
+  assert.match(html, /class="site-wordmark"/u);
+  assert.match(html, /class="site-wordmark-css"/u);
   assert.match(html, /class="site-wordmark-dot"/u);
-  assert.match(html, /class="site-brand-mark"/u);
-  assert.match(html, /class="site-brand-mark-inner"/u);
-  assert.match(html, /class="site-brand-mark-inner-secondary"/u);
-  assert.match(html, /class="site-brand-mark-inner-tertiary"/u);
-  assert.match(html, /class="site-brand-mark-outer"/u);
-  assert.match(html, /commons\.wikimedia\.org\/wiki\/File:Benzol\.svg/u);
-  assert.match(html, /class="site-brand-copy"/u);
+  assert.match(html, /class="site-wordmark-graphics"/u);
+  assert.match(html, /<h1>examples<\/h1>/u);
   assert.match(html, /class="site-github-link"/u);
   assert.match(html, /href="https:\/\/github\.com\/layoutit\/cssGraphics"/u);
-  assert.match(html, /aria-label="View cssGraphics on GitHub"/u);
-  assert.match(html, /viewBox="0 0 130 30"/u);
-  assert.match(html, /class="site-subtitle"/u);
-  assert.match(html, /<h1 class="site-subtitle">/u);
-  assert.match(html, /Self-contained 3D scenes powered by/u);
-  assert.match(html, />PolyCSS<\/a>/u);
-  assert.match(html, /class="site-subtitle-sparkle"/u);
-  assert.match(html, /href="https:\/\/github\.com\/LayoutitStudio\/polycss"/u);
-  assert.match(html, /class="site-divider"/u);
-  assert.match(html, /<title>css\.graphics - Powered by PolyCSS<\/title>/u);
-  assert.match(html, /property="og:image" content="https:\/\/css\.graphics\/landing\/pipes\.webp"/u);
+  assert.match(html, /id="example-search"/u);
+  assert.match(html, /class="examples-list-heading"/u);
+  assert.match(html, /cssgraphics-project-count/u);
+  assert.match(html, /cssgraphics-viewer/u);
+  assert.match(html, /<title>css\.graphics examples - Powered by PolyCSS<\/title>/u);
+  assert.match(html, /property="og:image" content="https:\/\/css\.graphics\/landing\/cloth\.webp"/u);
   assert.match(html, /name="twitter:card" content="summary_large_image"/u);
-  assert.doesNotMatch(html, /site-actions|site-action-icon/u);
-  assert.match(html, /class="thumbnail-gallery"/u);
   assert.match(html, /id="asset-list"/u);
-  assert.doesNotMatch(
-    html,
-    /code-panel|assets-sidebar|viewer|asset-stage|landing-mark/u,
-  );
+  assert.doesNotMatch(html, /code-panel|controls-panel|asset-stage|landing-mark/u);
   assert.doesNotMatch(siteCss, /\.project-thumbnail::after/u);
-  assert.match(siteCss, /\.project-thumbnail img \{[\s\S]*?background: #000;/u);
-  assert.match(siteCss, /\[href="\/cloth\/"\] \.project-title/u);
-  assert.match(siteCss, /\[href="\/maze\/"\] \.project-title/u);
-  assert.match(siteCss, /\.site-header \{[\s\S]*?position: relative;/u);
-  assert.match(siteCss, /\.site-brand \{[^}]*max-width: calc\(100% - 58px\);/u);
-  assert.match(siteCss, /\.site-wordmark-svg \{[^}]*max-width: 100%;/u);
-  assert.match(
-    siteCss,
-    /@media \(max-width: 440px\) \{[\s\S]*?\.site-brand \{[^}]*max-width: calc\(100% - 54px\);/u,
-  );
-  assert.match(
-    siteCss,
-    /@media \(max-width: 440px\) \{[\s\S]*?\.site-brand-mark \{[^}]*align-self: flex-start;[^}]*margin-top: 11px;/u,
-  );
-  assert.match(siteCss, /grid-template-columns: repeat\(5, minmax\(0, 386px\)\)/u);
+  assert.match(siteCss, /grid-template-columns: 354px minmax\(0, 1fr\)/u);
+  assert.match(siteCss, /\[hidden\] \{[\s\S]*?display: none !important;/u);
+  assert.match(siteCss, /\.project-thumbnail\[aria-current="true"\]/u);
+  assert.match(siteCss, /#example-frame \{[\s\S]*?width: 100%;[\s\S]*?height: 100%;/u);
+  assert.match(siteCss, /@media \(max-width: 760px\)/u);
+  assert.match(siteCss, /grid-template-rows: 220px minmax\(0, 1fr\)/u);
+  assert.match(siteCss, /#asset-list \{[\s\S]*?overflow-x: auto;/u);
 });
 
 test("every deployed project wordmark links back to the landing", async () => {

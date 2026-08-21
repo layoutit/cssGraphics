@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-import { createPolyPerspectiveCamera } from "@layoutit/polycss";
-import { loadPolyMorphPackage, mountPolyMorphModel } from "@layoutit/polycss-morph";
+import { loadPolyMorphPackage } from "@layoutit/polycss-morph";
+import { prepareCycloneDom } from "./preparedDom.mjs";
 import { loadCyclonePreparedLightingColors } from "./preparedLightingColors.mjs";
 import { createCyclonePreparedPlayer } from "./preparedPlayback.mjs";
 import {
@@ -89,11 +89,8 @@ export async function mountCycloneClient(host) {
       blockLoader.prime(residentBlockIndices),
     ]);
     lightingColors = loadedLightingColors;
-    const mounted = mountPolyMorphModel(host, loaded.model, {
-      resources: loaded.resources,
-      camera: createPolyPerspectiveCamera({ perspective: 800, target: [0, 0, 0], rotX: 0, rotY: 0, zoom: 50 }),
-    });
-    const modelTransform = cleanPreparedDom(mounted);
+    const preparedDom = prepareCycloneDom(host, loaded);
+    const { mounted, modelTransform } = preparedDom;
     const player = createCyclonePreparedPlayer({
       mounted,
       modelTransform,
@@ -113,6 +110,7 @@ export async function mountCycloneClient(host) {
       },
     });
     player.resize();
+    preparedDom.attach();
     addEventListener("resize", player.resize, { passive: true });
     state.metadata = metadata;
     state.profile = profile;
@@ -146,45 +144,6 @@ export async function mountCycloneClient(host) {
 
 function waitForCycloneScenePaint() {
   return new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
-}
-
-function cleanPreparedDom(mounted) {
-  mounted.cameraElement.className = "polycss-camera";
-  mounted.cameraElement.removeAttribute("data-polycss-camera-projection");
-  mounted.cameraElement.removeAttribute("data-polycss-camera-perspective");
-  mounted.cameraElement.style.removeProperty("perspective");
-  mounted.sceneElement.className = "polycss-scene";
-  mounted.sceneElement.removeAttribute("aria-hidden");
-  mounted.sceneElement.style.removeProperty("transform");
-  mounted.modelElement.removeAttribute("class");
-  mounted.modelElement.removeAttribute("data-poly-morph-model");
-  for (const element of mounted.shapeElements.values()) {
-    element.removeAttribute("class");
-    element.removeAttribute("data-poly-morph-shape");
-  }
-  for (const { element } of mounted.leafHandles.values()) {
-    element.removeAttribute("class");
-    element.removeAttribute("data-poly-morph-leaf");
-    element.removeAttribute("data-poly-morph-strategy");
-    element.removeAttribute("data-poly-morph-resolved-strategy");
-    element.style.removeProperty("backface-visibility");
-    element.style.removeProperty("color");
-    element.style.removeProperty("opacity");
-    element.style.removeProperty("transform-origin");
-    element.style.removeProperty("visibility");
-  }
-  if (mounted.modelElement.parentElement !== mounted.sceneElement ||
-      [...mounted.shapeElements.values()].some((element) =>
-        element.parentElement !== mounted.modelElement)) {
-    throw new Error("Cyclone prepared model wrapper binding drifted");
-  }
-  const modelTransform = mounted.modelElement.style.transform;
-  for (const element of mounted.shapeElements.values()) mounted.sceneElement.append(element);
-  if (mounted.modelElement.childElementCount !== 0) {
-    throw new Error("Cyclone prepared model wrapper contains unexpected retained nodes");
-  }
-  mounted.modelElement.remove();
-  return modelTransform;
 }
 
 function installDebugApi(state) {

@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(siteRoot, "..");
 const expectedProjects = [
+  ["cloth", 7, "Three.js", "2026-08-20", "The Three.js cloth simulation"],
   ["solitaire", 6, "Classic Solitaire", "2026-08-17", "The classic Solitaire victory cascade"],
   ["electropaint", 5, "David Tristram", "2026-08-10", "ElectroPaint, originally written by David Tristram"],
   ["menger", 4, "XScreenSaver", "2026-08-13", "XScreenSaver Menger"],
@@ -16,6 +17,7 @@ const expectedProjects = [
 ];
 const projectsExcludedFromLanding = ["flowerbox", "gravitywell"];
 const projectAdapterDirectories = new Map([
+  ["cloth", "cloth"],
   ["electropaint", "electropaint"],
   ["flowerbox", "flowerbox"],
   ["gravitywell", "gravitywell"],

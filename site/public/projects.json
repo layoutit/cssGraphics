@@ -2,6 +2,16 @@
   "schema": "cssgraphics.projects@2",
   "projects": [
     {
+      "number": 7,
+      "id": "cloth",
+      "name": "Cloth",
+      "route": "/cloth/",
+      "preview": "/landing/cloth.webp",
+      "source": "Three.js",
+      "description": "The Three.js cloth simulation rendered entirely with HTML and CSS using PolyCSS.",
+      "date": "2026-08-20"
+    },
+    {
       "number": 6,
       "id": "solitaire",
       "name": "Solitaire",

@@ -80,10 +80,14 @@ non-source-continuous boundary.
 
 Source identity is pinned in `notes/references/source-lock.json`. Preparation
 uses a fixed MT19937 authoring seed because current `rslibs` seeds its generator
-from `std::random_device`. It also initializes the source's first target-point
-buffer from the current path before the first update, replacing an upstream
-uninitialized read with deterministic state. The source's duplicated X tangent
-accumulation is otherwise retained.
+from `std::random_device`. Preparation preserves that source stream and smoothly
+compresses only particle centers that enter the last 80 CSS units before the
+camera, keeping at least 40 CSS units of depth. This prepared-only guard applies
+to every authoring seed and rejects any generated stream that still crosses the
+camera-depth boundary. It also initializes the source's first target-point
+buffer before the first update, replacing an upstream uninitialized read with
+deterministic state. The source's duplicated X tangent accumulation is otherwise
+retained.
 
 Run:
 

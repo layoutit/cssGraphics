@@ -6,6 +6,7 @@ import {
   CSSCYCLONE_PRESENTATION,
   CSSCYCLONE_SOURCE,
   CSSCYCLONE_SOURCE_BANK,
+  CSSCYCLONE_SOURCE_SAFETY,
   buildCycloneSourceChunks,
   buildCycloneSourceSequence,
   selectCycloneSourceParticlePrefix,
@@ -58,6 +59,9 @@ test("pins the current Really Slick Cyclone source profile", () => {
   assert.equal(CSSCYCLONE_BANK.warmupFrames, 720);
   assert.equal(CSSCYCLONE_BANK.chunkCount, 24);
   assert.equal(CSSCYCLONE_BANK.frameCount, 540);
+  assert.equal(CSSCYCLONE_BANK.seed, 1);
+  assert.equal(CSSCYCLONE_SOURCE_SAFETY.cameraDepthGuardStart, 80);
+  assert.equal(CSSCYCLONE_SOURCE_SAFETY.minimumParticleCenterDepth, 40);
   assert.equal(CSSCYCLONE_BANK.warmupFrames / CSSCYCLONE_BANK.framesPerSecond, 12);
   assert.equal(CSSCYCLONE_BANK.frameCount / CSSCYCLONE_BANK.framesPerSecond, 9);
   assert.equal(

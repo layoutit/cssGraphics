@@ -63,6 +63,11 @@ export const CSSCYCLONE_BANKS = Object.freeze({
 
 export const CSSCYCLONE_BANK = CSSCYCLONE_BANKS.desktop;
 
+export const CSSCYCLONE_SOURCE_SAFETY = Object.freeze({
+  cameraDepthGuardStart: 80,
+  minimumParticleCenterDepth: 40,
+});
+
 export const CSSCYCLONE_PRESENTATION = Object.freeze({
   radialOrbitScale: 0.75,
   saturationSampling: "floor-0.55-plus-0.45-sqrt-uniform",

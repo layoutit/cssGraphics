@@ -25,9 +25,10 @@ try {
   await page.waitForFunction(() => window.__cssFlocksDebug?.ready === true, null, { timeout: 30_000 });
   await page.evaluate(() => {
     window.__cssFlocksDebug.pause();
-    const header = document.querySelector(".site-header");
-    if (header) header.style.display = "none";
-    const camera = document.querySelector("body > .polycss-camera");
+    document.querySelector(".examples-sidebar")?.style.setProperty("display", "none");
+    document.querySelector(".example-info")?.style.setProperty("display", "none");
+    document.querySelector(".example-stage")?.style.setProperty("inset", "0");
+    const camera = document.querySelector(".example-stage > .polycss-camera");
     const scene = camera.querySelector(":scope > .polycss-scene");
     const roots = [...scene.children];
     roots.slice(1).forEach((root) => { root.style.display = "none"; });
@@ -60,7 +61,7 @@ try {
     nativeFrames,
     browserContactSheet: resolve(outputRoot, "browser-contact-sheet.png"),
     nativeContactSheet: resolve(outputRoot, "native-contact-sheet.png"),
-    lightingDeviation: "browser uses accepted fixed flat face factors; native uses source directional smooth lighting",
+    lightingDeviation: "browser uses prepared source-directional root brightness plus fixed face factors; native uses smooth directional and specular lighting",
   });
   if (report.minimumVisiblePixelCount < 1000 || frameReports.some((frame) => frame.coloredBounds.width < 20 || frame.coloredBounds.height < 20)) {
     throw new Error(`Isolated Flocks browser geometry lost front faces: ${JSON.stringify(report)}`);

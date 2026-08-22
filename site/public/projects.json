@@ -2,6 +2,24 @@
   "schema": "cssgraphics.projects@2",
   "projects": [
     {
+      "number": 8,
+      "id": "cyclone",
+      "name": "Cyclone",
+      "route": "/cyclone/",
+      "preview": "/landing/cyclone.webp",
+      "numberTone": "light",
+      "source": "Really Slick Screensavers",
+      "credits": [
+        {
+          "relation": "Adapted from",
+          "name": "Really Slick Screensavers",
+          "url": "https://github.com/reallyslickscreensavers/reallyslickscreensavers/blob/5f0a788bf0cc47f66a233ed528919295cd1e7500/src/cyclone/cyclone.cpp"
+        }
+      ],
+      "description": "Really Slick Cyclone rendered entirely with retained HTML and CSS using PolyCSS.",
+      "date": "2026-08-22"
+    },
+    {
       "number": 7,
       "id": "cloth",
       "name": "Cloth",
@@ -129,6 +147,26 @@
       ],
       "description": "CSS Pipes rendered entirely with HTML and CSS using PolyCSS.",
       "date": "2026-08-06"
+    }
+  ],
+  "unlistedProjects": [
+    {
+      "number": 9,
+      "id": "flocks",
+      "name": "Flocks",
+      "route": "/flocks/",
+      "preview": "/landing/flocks.webp",
+      "numberTone": "light",
+      "source": "Really Slick Screensavers",
+      "credits": [
+        {
+          "relation": "Adapted from",
+          "name": "Really Slick Screensavers",
+          "url": "https://github.com/reallyslickscreensavers/reallyslickscreensavers/blob/a419fc4ecf4b9b19526448bf9f5dfc435e24ca4c/src/flocks/flocks.cpp"
+        }
+      ],
+      "description": "Really Slick Flocks rendered entirely with retained HTML and CSS using PolyCSS.",
+      "date": "2026-08-22"
     }
   ]
 }

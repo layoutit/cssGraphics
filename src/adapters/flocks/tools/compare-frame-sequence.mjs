@@ -6,6 +6,7 @@ import sharp from "sharp";
 import { CSSFLOCKS_FRAME_SEQUENCE_COUNT, CSSFLOCKS_FRAME_SEQUENCE_PLAN } from "./frameSequencePlan.mjs";
 import { compareFlocksFrameSequence } from "./frameSequenceArtifacts.mjs";
 import { mapReallySlickHueToPreparedHex } from "../../shared/reallyslickPalette.mjs";
+import { shadeFlocksPreparedHex } from "../src/shared/cssflocks/bugLighting.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "../../../..");
 const referenceRoot = resolve(repositoryRoot, "bench/results/cssflocks/reference-frames");
@@ -58,7 +59,10 @@ for (let ordinal = 0; ordinal < reference.frames.length; ordinal += 1) {
     maximumMatrixElementDelta = Math.max(maximumMatrixElementDelta, matrixDelta);
     if (matrixDelta > 0.001) { transformMismatchCount += 1; frameTransformMismatches += 1; }
     if (firstInSegment || (localFrameIndex + rootIndex) % 5 === 0) {
-      colorByRoot[rootIndex] = mapReallySlickHueToPreparedHex(expectedRoot.hue, paletteVariantId);
+      colorByRoot[rootIndex] = shadeFlocksPreparedHex(
+        mapReallySlickHueToPreparedHex(expectedRoot.hue, paletteVariantId),
+        expectedRoot.matrix,
+      );
     }
     if (normalizeColor(actualRoot.color) !== normalizeColor(colorByRoot[rootIndex])) {
       colorMismatchCount += 1;

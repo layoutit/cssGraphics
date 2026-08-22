@@ -9,14 +9,7 @@ const PREPARED_MINIMUM_VALUE = 0.75;
 const PREPARED_DARK_FACE_VALUE = 0.4;
 const PREPARED_MAXIMUM_DARK_FACE_SHARE = 0.2;
 const PREPARED_MINIMUM_MEDIAN_LIT_VALUE = 0.5;
-const SRGB_LUMA_WEIGHTS = Object.freeze([0.2126, 0.7152, 0.0722]);
-const PREPARED_GREEN_REFERENCE_ENERGY_RATIO = SRGB_LUMA_WEIGHTS[1];
-const PREPARED_YELLOW_REFERENCE_ENERGY_RATIO = SRGB_LUMA_WEIGHTS[0] + SRGB_LUMA_WEIGHTS[1];
-const PREPARED_TARGET_ENERGY_RATIO = Number(((
-  PREPARED_GREEN_REFERENCE_ENERGY_RATIO + PREPARED_YELLOW_REFERENCE_ENERGY_RATIO
-) / 2).toFixed(4));
-const PREPARED_MINIMUM_TARGET_ENERGY_RATIO = 1;
-const PREPARED_MAXIMUM_TARGET_ENERGY_RATIO = 1.03;
+const PREPARED_SRGB_EXPOSURE = 1.4;
 const PREPARED_THIRD_HUE_SHARE = 0.2;
 const SOURCE_VERTEX_NORMALS = Object.freeze(
   CSSCYCLONE_PARTICLE_VERTICES.map((vertex) => Object.freeze(normalize(vertex))),
@@ -179,19 +172,13 @@ async function buildPreparedLightingColors({
     });
   });
   const logicalVariants = sourceLitVariants.map((variant) => {
-    const energyRatios = [];
-    const colors = variant.colors.map((color) => {
-      const targetEnergy = Math.max(...color) * PREPARED_TARGET_ENERGY_RATIO;
-      const faceColor = normalizeSrgbEnergy(color, targetEnergy);
-      energyRatios.push(srgbLuma(faceColor) / targetEnergy);
-      return rgbHex(faceColor);
-    });
+    const colors = variant.colors.map((color) =>
+      rgbHex(exposeSrgb(color, PREPARED_SRGB_EXPOSURE)));
     return Object.freeze({
       paletteVariantId: variant.paletteVariantId,
       hueRotation: variant.hueRotation,
       preparedHues: variant.preparedHues,
       colors: Object.freeze(colors),
-      energyRatios: Object.freeze(energyRatios),
     });
   });
   const finalLitColorProfile = buildFinalLitColorProfile(
@@ -213,8 +200,8 @@ async function buildPreparedLightingColors({
       variant.colors[index])),
   }));
   const contract = deepFreeze({
-    schema: "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@19",
-    technique: "prepared-source-smooth-vertex-lighting-averaged-per-solid-face-with-curated-three-color-analogous-session-palettes-mid-green-yellow-reference-srgb-energy-normalization-sparse-source-color-restarts-and-exact-cross-variant-deduplication",
+    schema: "csscyclone-prepared-source-lit-three-color-vertex-lighting-colors@20",
+    technique: "prepared-source-smooth-vertex-lighting-averaged-per-solid-face-with-curated-three-color-analogous-session-palettes-srgb-exposure-sparse-source-color-restarts-and-exact-cross-variant-deduplication",
     source: "src/cyclone/cyclone.cpp#particle::update+initSaver",
     streamId,
     encoding: "CSS-sRGB-hex-plus-little-endian-color-slot-indices-base64",
@@ -407,81 +394,32 @@ function averageVertexColors(vertexColors, vertexIndices) {
   ));
 }
 
-function normalizeSrgbEnergy(color, targetEnergy) {
-  const sourceValue = Math.max(...color);
-  if (sourceValue === 0) return color;
-  const sourceEnergy = srgbLuma(color);
-  if (sourceEnergy > targetEnergy) {
-    return color.map((channel) => Math.min(255, Math.ceil(channel * targetEnergy / sourceEnergy)));
-  }
-  if (sourceEnergy === targetEnergy) return color;
-  const maximumExposure = 255 / sourceValue;
-  const fullyExposed = exposeSrgb(color, maximumExposure);
-  if (srgbLuma(fullyExposed) >= targetEnergy) {
-    const exposure = solveMinimumMix(1, maximumExposure, (candidate) =>
-      srgbLuma(exposeSrgb(color, candidate)) >= targetEnergy);
-    return exposeSrgb(color, exposure);
-  }
-  const exposedValue = Math.max(...fullyExposed);
-  const neutralMix = solveMinimumMix(0, 1, (candidate) =>
-    srgbLuma(mixTowardNeutral(fullyExposed, exposedValue, candidate)) >= targetEnergy);
-  return mixTowardNeutral(fullyExposed, exposedValue, neutralMix);
-}
-
 function exposeSrgb(color, exposure) {
   return color.map((channel) => Math.min(255, Math.ceil(channel * exposure)));
-}
-
-function mixTowardNeutral(color, neutralValue, mix) {
-  return color.map((channel) => Math.min(
-    neutralValue,
-    Math.ceil(channel + (neutralValue - channel) * mix),
-  ));
-}
-
-function solveMinimumMix(low, high, reachesTarget) {
-  for (let iteration = 0; iteration < 16; iteration += 1) {
-    const middle = (low + high) / 2;
-    if (reachesTarget(middle)) high = middle;
-    else low = middle;
-  }
-  return high;
 }
 
 function buildFinalLitColorProfile(variants, enforce) {
   const profiles = variants.map((variant) => {
     const values = variant.colors.map(colorValue).sort((left, right) => left - right);
-    const energyRatios = [...variant.energyRatios]
-      .sort((left, right) => left - right);
     const darkFaceCount = values.filter((value) => value < PREPARED_DARK_FACE_VALUE).length;
     return Object.freeze({
       paletteVariantId: variant.paletteVariantId,
       medianLitValue: roundMetric(values[Math.floor((values.length - 1) / 2)]),
       darkFaceShare: roundMetric(darkFaceCount / values.length),
-      minimumTargetEnergyRatio: roundMetric(energyRatios[0]),
-      medianTargetEnergyRatio: roundMetric(
-        energyRatios[Math.floor((energyRatios.length - 1) / 2)],
-      ),
-      maximumTargetEnergyRatio: roundMetric(energyRatios[energyRatios.length - 1]),
     });
   });
   const invalidProfiles = profiles.filter((profile) =>
     profile.medianLitValue < PREPARED_MINIMUM_MEDIAN_LIT_VALUE ||
-    profile.darkFaceShare > PREPARED_MAXIMUM_DARK_FACE_SHARE ||
-    profile.minimumTargetEnergyRatio < PREPARED_MINIMUM_TARGET_ENERGY_RATIO ||
-    profile.maximumTargetEnergyRatio > PREPARED_MAXIMUM_TARGET_ENERGY_RATIO);
+    profile.darkFaceShare > PREPARED_MAXIMUM_DARK_FACE_SHARE);
   if (enforce && invalidProfiles.length > 0) {
     throw new Error(`Prepared Cyclone final lit colors are too dark: ${JSON.stringify(invalidProfiles)}`);
   }
   return deepFreeze({
-    schema: "csscyclone-prepared-final-lit-color-profile@2",
+    schema: "csscyclone-prepared-final-lit-color-profile@3",
     darkFaceValueThreshold: PREPARED_DARK_FACE_VALUE,
     maximumDarkFaceShare: PREPARED_MAXIMUM_DARK_FACE_SHARE,
     minimumMedianLitValue: PREPARED_MINIMUM_MEDIAN_LIT_VALUE,
-    srgbLumaWeights: SRGB_LUMA_WEIGHTS,
-    targetSrgbEnergyRatio: PREPARED_TARGET_ENERGY_RATIO,
-    minimumTargetEnergyRatio: PREPARED_MINIMUM_TARGET_ENERGY_RATIO,
-    maximumTargetEnergyRatio: PREPARED_MAXIMUM_TARGET_ENERGY_RATIO,
+    srgbExposure: PREPARED_SRGB_EXPOSURE,
     variants: profiles,
   });
 }
@@ -492,10 +430,6 @@ function colorValue(color) {
     Number.parseInt(color.slice(3, 5), 16),
     Number.parseInt(color.slice(5, 7), 16),
   ) / 255;
-}
-
-function srgbLuma(color) {
-  return dot(color, SRGB_LUMA_WEIGHTS);
 }
 
 function roundMetric(value) {

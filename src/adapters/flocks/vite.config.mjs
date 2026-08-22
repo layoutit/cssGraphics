@@ -2,6 +2,7 @@ import { cp, mkdir, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
+import { createExamplesShellPlugin } from "../../../site/examples-shell-plugin.mjs";
 
 const adapterRoot = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(adapterRoot, "..", "..", "..");
@@ -14,7 +15,7 @@ export default defineConfig({
   base: deployBuild ? "/flocks/" : "/",
   root: adapterRoot,
   publicDir: deployBuild ? false : generatedPublicDir,
-  plugins: deployBuild ? [{
+  plugins: [createExamplesShellPlugin("flocks"), ...(deployBuild ? [{
     name: "cssflocks-netlify-assets",
     async closeBundle() {
       const deployAssets = resolve(repositoryRoot, "dist/site/cssflocks");
@@ -22,7 +23,7 @@ export default defineConfig({
       await rm(deployAssets, { recursive: true, force: true });
       await cp(resolve(generatedPublicDir, "cssflocks"), deployAssets, { recursive: true, force: true });
     },
-  }] : [],
+  }] : [])],
   server: { host: "127.0.0.1" },
   preview: { host: "127.0.0.1" },
   build: {

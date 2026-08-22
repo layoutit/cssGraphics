@@ -15,6 +15,8 @@ const generatedAssetRoots = [
   "cssmaze/",
   "cssgears/",
   "csspipes/",
+  "cssflocks/",
+  "csscyclone/",
 ];
 
 function generatedAssetsPlugin() {

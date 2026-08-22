@@ -4,27 +4,12 @@ import {
   computeSolidTrianglePlanFromCssPoints,
 } from "@layoutit/polycss";
 import { CSSFLOCKS_SOURCE } from "./sourceModel.mjs";
+import {
+  CSSFLOCKS_BUG_VERTICES,
+  CSSFLOCKS_FACE_INDICES,
+} from "../../shared/cssflocks/bugGeometry.mjs";
 
-const BUG_RADIUS = CSSFLOCKS_SOURCE.size * 0.5;
-const EQUATOR = Object.freeze(Array.from({ length: CSSFLOCKS_SOURCE.complexity + 2 }, (_, index) => {
-  const angle = Math.PI / 2 + index * Math.PI * 2 / (CSSFLOCKS_SOURCE.complexity + 2);
-  return Object.freeze([Math.cos(angle) * BUG_RADIUS, Math.sin(angle) * BUG_RADIUS, 0]);
-}));
-
-export const CSSFLOCKS_BUG_VERTICES = Object.freeze([
-  Object.freeze([0, 0, BUG_RADIUS]),
-  ...EQUATOR,
-  Object.freeze([0, 0, -BUG_RADIUS]),
-]);
-
-export const CSSFLOCKS_FACE_INDICES = Object.freeze([
-  Object.freeze([0, 1, 2]),
-  Object.freeze([0, 2, 3]),
-  Object.freeze([0, 3, 1]),
-  Object.freeze([4, 2, 1]),
-  Object.freeze([4, 3, 2]),
-  Object.freeze([4, 1, 3]),
-]);
+export { CSSFLOCKS_BUG_VERTICES, CSSFLOCKS_FACE_INDICES };
 
 export const CSSFLOCKS_FACE_LIGHT_FACTORS = Object.freeze([0.78, 0.9, 1, 0.82, 0.96, 0.86]);
 

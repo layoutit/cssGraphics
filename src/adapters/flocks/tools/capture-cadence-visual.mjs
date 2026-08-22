@@ -10,7 +10,7 @@ const repositoryRoot = resolve(import.meta.dirname, "../../../..");
 const outputRoot = resolve(repositoryRoot, "bench/results/cssflocks/cadence/visual");
 const port = 4196;
 const url = `http://127.0.0.1:${port}/flocks/?window=source-114s&palette=rotate-120`;
-const opaquePath = resolve(outputRoot, "opaque-flat-lighting.png");
+const opaquePath = resolve(outputRoot, "opaque-prepared-lighting.png");
 const alphaPath = resolve(outputRoot, "prior-alpha-lighting-reference.png");
 const globalContextPath = resolve(outputRoot, "prior-global-preserve-3d-reference.png");
 const lightingDifferencePath = resolve(outputRoot, "lighting-absolute-difference-8x.png");
@@ -39,8 +39,10 @@ try {
   const state = await page.evaluate(() => {
     window.__cssFlocksDebug.pause();
     window.__cssFlocksDebug.seekFrame(30);
-    document.querySelector(".site-header")?.remove();
-    const scene = document.querySelector("body > .polycss-camera > .polycss-scene");
+    document.querySelector(".examples-sidebar")?.remove();
+    document.querySelector(".example-info")?.remove();
+    document.querySelector(".example-stage")?.style.setProperty("inset", "0");
+    const scene = document.querySelector(".example-stage > .polycss-camera > .polycss-scene");
     const roots = [...scene.children];
     return {
       stats: window.__cssFlocksDebug.stats(),
@@ -57,7 +59,7 @@ try {
   const qualifiedRects = await readProjectedLeafRects(page);
   await page.screenshot({ path: opaquePath });
   await page.evaluate(() => {
-    const scene = document.querySelector("body > .polycss-camera > .polycss-scene");
+    const scene = document.querySelector(".example-stage > .polycss-camera > .polycss-scene");
     scene.style.display = "block";
     for (const root of scene.children) {
       root.style.left = "0";
@@ -70,7 +72,7 @@ try {
   const globalReferenceRects = await readProjectedLeafRects(page);
   await page.screenshot({ path: globalContextPath });
   await page.evaluate((factors) => {
-    const scene = document.querySelector("body > .polycss-camera > .polycss-scene");
+    const scene = document.querySelector(".example-stage > .polycss-camera > .polycss-scene");
     scene.style.removeProperty("display");
     for (const root of scene.children) {
       root.style.removeProperty("left");
@@ -89,7 +91,7 @@ try {
   const contextDifference = await compareImages(opaquePath, globalContextPath, contextDifferencePath);
   const projectionDifference = compareProjectedRects(qualifiedRects, globalReferenceRects);
   await makeComparison([
-    [opaquePath, "qualified opaque flat lighting"],
+    [opaquePath, "qualified opaque prepared lighting"],
     [alphaPath, "prior alpha reference"],
     [lightingDifferencePath, "absolute difference x8"],
   ], lightingComparisonPath);
@@ -99,7 +101,7 @@ try {
     [contextDifferencePath, "absolute difference x8"],
   ], contextComparisonPath);
   const report = Object.freeze({
-    schema: "cssflocks-flat-lighting-visual-comparison@1",
+    schema: "cssflocks-prepared-lighting-visual-comparison@1",
     browser: "installed Chrome via Playwright channel=chrome",
     url,
     explicitStartupWindow: "source-114s",
@@ -182,7 +184,7 @@ async function compareImages(leftPath, rightPath, outputPath) {
 }
 
 async function readProjectedLeafRects(page) {
-  return page.evaluate(() => [...document.querySelectorAll("body > .polycss-camera > .polycss-scene > div > *")].map((leaf) => {
+  return page.evaluate(() => [...document.querySelectorAll(".example-stage > .polycss-camera > .polycss-scene > div > *")].map((leaf) => {
     const rect = leaf.getBoundingClientRect();
     return {
       left: rect.left,

@@ -119,6 +119,10 @@ export async function mountCycloneClient(host) {
     state.blockLoader = blockLoader;
     state.mounted = mounted;
     state.player = player;
+    state.destroy = () => {
+      player.destroy();
+      blockLoader.destroy();
+    };
     document.body.classList.replace("loading", "priming");
     const primingFrameIndex = initialBlockFrameIndex + 1 < catalog.blockFrameCount
       ? initialBlockFrameIndex + 1

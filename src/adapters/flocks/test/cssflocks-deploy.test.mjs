@@ -52,6 +52,7 @@ test("Flocks deploy and cache policy are integrated without adding a landing pro
   assert.match(packageJson, /pnpm prepare:flocks[\s\S]*CSSFLOCKS_DEPLOY_BUILD=1 pnpm build:flocks/u);
   assert.match(packageJson, /"test:flocks:deploy"/u);
   assert.equal(JSON.parse(landingManifest).projects.some((project) => project.id === "flocks"), false);
+  assert.equal(JSON.parse(landingManifest).unlistedProjects.some((project) => project.id === "flocks"), true);
   assert.doesNotMatch(landingHtml, /href="\/flocks\/"/u);
 });
 

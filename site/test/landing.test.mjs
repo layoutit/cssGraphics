@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(siteRoot, "..");
 const expectedProjects = [
+  ["cyclone", 8, "Really Slick Screensavers", "2026-08-22", "Really Slick Cyclone rendered"],
   ["cloth", 7, "Three.js", "2026-08-20", "The Three.js cloth simulation"],
   ["solitaire", 6, "Classic Solitaire", "2026-08-17", "The classic Solitaire victory cascade"],
   ["electropaint", 5, "David Tristram", "2026-08-10", "ElectroPaint, originally written by David Tristram"],
@@ -17,6 +18,7 @@ const expectedProjects = [
 ];
 const projectsExcludedFromLanding = ["flowerbox", "gravitywell"];
 const expectedNumberTones = new Map([
+  ["cyclone", "light"],
   ["cloth", "dark"],
   ["solitaire", "light"],
   ["electropaint", "light"],
@@ -35,6 +37,8 @@ const projectAdapterDirectories = new Map([
   ["gears", "gears"],
   ["pipes", "3dpipes"],
   ["solitaire", "solitaire"],
+  ["flocks", "flocks"],
+  ["cyclone", "cyclone"],
 ]);
 
 test("landing presents the current deployed collection", async () => {
@@ -57,6 +61,8 @@ test("landing presents the current deployed collection", async () => {
   assert.equal(new Set(projectManifest.projects.map(({ id }) => id)).size, expectedProjects.length);
   assert.equal(new Set(projectManifest.projects.map(({ number }) => number)).size,
     expectedProjects.length);
+  assert.deepEqual(projectManifest.unlistedProjects.map(({ id, number }) => [id, number]), [["flocks", 9]]);
+  assert.equal(projectManifest.projects.some(({ id }) => id === "flocks"), false);
   assert.deepEqual(
     projectManifest.projects.filter(({ id }) => projectsExcludedFromLanding.includes(id)),
     [],
@@ -79,6 +85,8 @@ test("landing presents the current deployed collection", async () => {
   );
   assert.match(homePage, /<ProjectPage projectId="cloth" home \/>/u);
   assert.match(sceneRouter, /mountClothClient\(host\)/u);
+  assert.match(sceneRouter, /mountFlocksClient\(host\)/u);
+  assert.match(sceneRouter, /mountCycloneClient\(host\)/u);
   assert.doesNotMatch(sceneRouter, /createElement|appendChild|innerHTML/u);
   assert.match(shellRenderer, /<a class="project-thumbnail" href=/u);
   assert.match(shellRenderer, /href="\$\{escapeAttribute\(project\.route\)\}"/u);

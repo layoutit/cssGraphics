@@ -12,6 +12,7 @@ import {
   buildFlocksSourceBlocks,
 } from "../src/prepare/cssflocks/sourceModel.mjs";
 import { buildFlocksBugMatrix } from "../src/shared/cssflocks/bugTransform.mjs";
+import { resolveFlocksSourceVisibleIntensity } from "../src/shared/cssflocks/bugLighting.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "../../../..");
 const oraclePath = resolve(repositoryRoot, "bench/results/cssflocks/geometry/native-geometry.json");
@@ -57,7 +58,7 @@ test("source projection and prepared transform reproduce native projected vertic
   }
 });
 
-test("negative local Z is the source velocity axis and flat lighting is an explicit bounded deviation", async () => {
+test("negative local Z is the source velocity axis and prepared root brightness follows the source light", async () => {
   for (const velocity of [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 2, 3], [-1, -2, 4]]) {
     const transform = buildFlocksBugMatrix([0, 0, 0], velocity);
     const negativeLocalZ = [-transform.matrix[8] / transform.stretch, -transform.matrix[9] / transform.stretch, -transform.matrix[10] / transform.stretch];
@@ -71,6 +72,12 @@ test("negative local Z is the source velocity axis and flat lighting is an expli
     position: [500, 500, 500, 0],
   });
   assert.ok(CSSFLOCKS_FACE_LIGHT_FACTORS.every((factor) => factor >= 0.75 && factor <= 1));
+  const intensities = [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 2, 3], [-1, -2, 4]].map((velocity) => {
+    const matrix = buildFlocksBugMatrix([0, 0, 0], velocity).matrix;
+    return resolveFlocksSourceVisibleIntensity(matrix);
+  });
+  assert.ok(Math.max(...intensities) - Math.min(...intensities) > 0.05);
+  assert.ok(intensities.every((intensity) => intensity >= 0.45 && intensity <= 1));
 });
 
 function cyclicTriangleDelta(left, right) {

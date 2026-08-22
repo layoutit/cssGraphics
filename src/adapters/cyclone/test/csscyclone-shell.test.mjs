@@ -4,7 +4,7 @@ import test from "node:test";
 
 const adapter = new URL("../", import.meta.url);
 
-test("uses the cssGraphics shell without product UI or alternate renderers", async () => {
+test("uses the shared css.graphics examples shell without alternate renderers", async () => {
   const [html, client, preparedDom, playback, stream, worker, styles] = await Promise.all([
     readFile(new URL("index.html", adapter), "utf8"),
     readFile(new URL("src/csscyclone/client.mjs", adapter), "utf8"),
@@ -14,31 +14,28 @@ test("uses the cssGraphics shell without product UI or alternate renderers", asy
     readFile(new URL("src/csscyclone/preparedBlockWorker.mjs", adapter), "utf8"),
     readFile(new URL("src/csscyclone/styles.css", adapter), "utf8"),
   ]);
-  assert.match(html, /class="site-wordmark-svg" viewBox="0 0 190 30"/u);
-  assert.match(html, /<nav class="site-actions" aria-label="Scene actions">/u);
-  assert.doesNotMatch(html, /<main\b/u);
+  assert.match(html, /<body class="loading">/u);
+  assert.match(html, /cssgraphics-examples-sidebar/u);
+  assert.match(html, /<main class="example-stage"><\/main>/u);
+  assert.match(html, /<link rel="stylesheet" href="\/site\.css"/u);
+  assert.doesNotMatch(html, /site-header|iframe/iu);
   assert.doesNotMatch(html, /<canvas\b|<svg\b[^>]*class="scene|controls|button/u);
   assert.match(preparedDom, /mountPolyMorphModel/u);
   assert.match(preparedDom, /model\.render\.leaves\.every\(\(leaf\) => leaf\.strategy === "solid-triangle"\)/u);
   assert.match(preparedDom, /host\.append\(mounted\.cameraElement\)/u);
   assert.match(playback, /createPolyMorphPreparedDomTarget/u);
-  assert.match(styles, /\.site-wordmark-svg\s*\{[^}]*width:\s*190px;/su);
-  assert.match(styles, /\.site-actions\s*\{/u);
-  assert.equal(
-    [...styles.matchAll(/background: linear-gradient\(180deg, #0b1119 0%, #000 100%\);/gu)].length,
-    2,
-  );
-  assert.match(styles, /body > \.polycss-camera\s*\{[^}]*background:\s*transparent;/su);
-  assert.match(styles, /body > \.polycss-camera\s*\{[^}]*perspective:\s*var\(--cyclone-perspective\);/su);
+  assert.match(styles, /\.example-stage\s*\{[^}]*background:\s*linear-gradient\(180deg, #0b1119 0%, #000 100%\);/su);
+  assert.match(styles, /\.example-stage > \.polycss-camera\s*\{[^}]*background:\s*transparent;/su);
+  assert.match(styles, /\.example-stage > \.polycss-camera\s*\{[^}]*perspective:\s*var\(--cyclone-perspective\);/su);
   assert.match(
     styles,
-    /body > \.polycss-camera > \.polycss-scene\s*\{[^}]*transform:\s*translateZ\(var\(--cyclone-perspective\)\)\s*matrix3d\(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, -400, 1\);/su,
+    /\.example-stage > \.polycss-camera > \.polycss-scene\s*\{[^}]*transform:\s*translateZ\(var\(--cyclone-perspective\)\)\s*matrix3d\(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, -400, 1\);/su,
   );
   assert.doesNotMatch(styles, /background-image/u);
   assert.match(styles, /background-color:\s*transparent/u);
-  assert.match(styles, /body > \.polycss-camera :is\(u, b\)/u);
-  assert.match(styles, /body > \.polycss-camera u\s*\{[^}]*corner-top-left-shape:\s*bevel;/su);
-  assert.doesNotMatch(styles, /body > \.polycss-camera :is\(u, b\)\s*\{[^}]*corner-top-left-shape:/su);
+  assert.match(styles, /\.example-stage > \.polycss-camera :is\(u, b\)/u);
+  assert.match(styles, /\.example-stage > \.polycss-camera u\s*\{[^}]*corner-top-left-shape:\s*bevel;/su);
+  assert.doesNotMatch(styles, /\.example-stage > \.polycss-camera :is\(u, b\)\s*\{[^}]*corner-top-left-shape:/su);
   assert.doesNotMatch(styles, /color-mix|--cyclone-tone/u);
   assert.match(preparedDom, /cameraElement\.style\.removeProperty\("perspective"\)/u);
   assert.match(preparedDom, /sceneElement\.style\.removeProperty\("transform"\)/u);

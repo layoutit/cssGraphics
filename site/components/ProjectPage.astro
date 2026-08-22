@@ -1,6 +1,6 @@
 ---
 import ExamplesLayout from "../layouts/ExamplesLayout.astro";
-import { PROJECTS } from "../projects";
+import { ROUTE_PROJECTS } from "../projects";
 
 interface Props {
   projectId: string;
@@ -8,7 +8,7 @@ interface Props {
 }
 
 const { projectId, home = false } = Astro.props;
-const project = PROJECTS.find(({ id }) => id === projectId);
+const project = ROUTE_PROJECTS.find(({ id }) => id === projectId);
 if (!project) throw new Error(`Unknown css.graphics project: ${projectId}`);
 const stageId = projectId === "maze" || projectId === "gears" ? "scene" : undefined;
 ---

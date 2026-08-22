@@ -28,7 +28,7 @@ import {
   encodeFlocksPreparedBlock,
 } from "../../shared/cssflocks/preparedBlockTransport.mjs";
 import { writeFlocksJson } from "./writeManifest.mjs";
-import { CSSFLOCKS_STARTUP_WINDOWS } from "../../shared/cssflocks/startupWindows.mjs";
+import { getFlocksStartupWindows } from "../../shared/cssflocks/startupWindows.mjs";
 
 export async function prepareFlocks({ env = process.env } = {}) {
   const sourceLock = await verifyFlocksSourceIdentity();
@@ -173,7 +173,7 @@ export async function prepareFlocks({ env = process.env } = {}) {
           CSSFLOCKS_PREPARED_LOADER.startupMaterializedLookaheadBlockCount,
         loop: true,
         terminalSeam: state.terminalSeam,
-        startupWindows: CSSFLOCKS_STARTUP_WINDOWS,
+        startupWindows: getFlocksStartupWindows(state.profile.id),
         entries: Object.freeze(state.entries),
       });
       const catalogBytes = Buffer.from(`${JSON.stringify(catalog)}\n`);
@@ -210,7 +210,7 @@ export async function prepareFlocks({ env = process.env } = {}) {
           productFollowerCount: state.profile.followerCount,
           fieldOfViewDegrees: CSSFLOCKS_SOURCE.fieldOfViewDegrees,
           startupWarmupMilliseconds: CSSFLOCKS_SOURCE_BANK.warmupFrames / CSSFLOCKS_SOURCE_BANK.framesPerSecond * 1_000,
-          lighting: "fixed-flat-face-factors-currentColor",
+          lighting: "prepared-source-directional-root-brightness-with-flat-face-factors",
         }),
       });
     }
@@ -238,7 +238,7 @@ export async function prepareFlocks({ env = process.env } = {}) {
         mergeOutputCount: 0,
       }),
       warnings: Object.freeze([
-        "Native/source GL lighting and accepted fixed flat lighting differ; RGB comparison is diagnostic while prepared state, projection, and continuity gates are strict.",
+        "Native smooth/specular lighting is reduced to prepared source-directional root brightness plus fixed face factors; RGB comparison remains diagnostic.",
         "The final eight-second cubic-Hermite terminal bridge is a documented prepare-only source-behavior deviation.",
       ]),
     });

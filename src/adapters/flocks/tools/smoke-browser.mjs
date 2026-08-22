@@ -73,7 +73,7 @@ try {
   }
   const readyMilliseconds = performance.now() - startedAt;
   const initial = await page.evaluate(() => {
-    const camera = document.querySelector("body > .polycss-camera");
+    const camera = document.querySelector(".example-stage > .polycss-camera");
     const scene = camera?.querySelector(":scope > .polycss-scene");
     const roots = scene ? [...scene.children].filter((element) => element.tagName === "DIV") : [];
     const leaves = roots.flatMap((root) => [...root.children]);
@@ -82,7 +82,7 @@ try {
       bodyClass: document.body.className,
       debugErrors: window.__cssFlocksDebug.errors,
       stats: window.__cssFlocksDebug.stats(),
-      cameraCount: document.querySelectorAll("body > .polycss-camera").length,
+      cameraCount: document.querySelectorAll(".example-stage > .polycss-camera").length,
       sceneCount: camera?.querySelectorAll(":scope > .polycss-scene").length ?? 0,
       directRootCount: roots.length,
       leafCount: leaves.length,
@@ -95,7 +95,7 @@ try {
   });
   await page.waitForTimeout(2_200);
   const afterPlayback = await page.evaluate(() => {
-    const camera = document.querySelector("body > .polycss-camera");
+    const camera = document.querySelector(".example-stage > .polycss-camera");
     const scene = camera?.querySelector(":scope > .polycss-scene");
     const roots = scene ? [...scene.children].filter((element) => element.tagName === "DIV") : [];
     const leaves = roots.flatMap((root) => [...root.children]);

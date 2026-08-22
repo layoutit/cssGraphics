@@ -9,6 +9,6 @@ export const CSSFLOCKS_SLICE_PLAN = Object.freeze({
   defaultProfileId: "desktop",
   mobileProfileId: "mobile",
   geometry: "six-solid-triangle-glu-sphere-topology",
-  lighting: "fixed-flat-face-factors-currentColor",
+  lighting: "prepared-source-directional-root-brightness-with-flat-face-factors",
   sourceModes: Object.freeze({ geometry: true, dots: false, chromatek: false, connections: false }),
 });

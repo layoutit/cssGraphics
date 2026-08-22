@@ -53,7 +53,7 @@ The singular `capture:flocks:reference`, `capture:flocks:browser`, and `compare:
 - source hue ranks select one of the same three prepared analogous colors used by Cyclone; both adapters share the same weighted 24-load session palette cycle, with no adjacent repeat
 - at most three materialized blocks and twelve verified/decompressed blocks are resident
 
-The selected palette is expanded with each prepared block in the existing worker. Its three CSS color strings are precomputed; there is no per-frame color conversion or added DOM work. Dynamic OpenGL lighting is intentionally replaced by fixed per-face flat-light factors using `currentColor`, so Flocks and Cyclone share palette families while preserving their adapter-specific lighting. Dots, connections, Chromatek, and alternate geometry are not part of the route.
+The selected palette is expanded with each prepared block in the existing worker. The pinned directional light, smooth GLU normals, retained orientation, and camera-facing source faces produce a prepared per-root brightness value that is folded into each existing CSS color string. Six fixed face factors retain local form through `currentColor`; there is no main-thread lighting calculation, additional style field, or added DOM work. Dots, connections, Chromatek, and alternate geometry are not part of the route.
 
 Use `?palette=rotate-120` to pin a prepared palette for deterministic captures. With no selector, reloads advance through the shared weighted session cycle.
 
@@ -86,4 +86,4 @@ Reproducible ignored evidence is written to:
 - `bench/results/cssflocks/frame-comparison/native-browser-contact-sheet.png`
 - `bench/results/cssflocks/deploy/report.json`
 
-The compiled oracles include the pinned source and qualify state evolution, GL transforms, GLU topology, winding, camera projection, and the native reference sequence. Native/browser RGB differences remain diagnostic because source OpenGL lighting and the accepted fixed flat lighting intentionally differ. Real USB-phone cadence was explicitly skipped during this work and remains unproven; desktop emulation is not a substitute.
+The compiled oracles include the pinned source and qualify state evolution, GL transforms, GLU topology, winding, camera projection, and the native reference sequence. Native/browser RGB differences remain diagnostic because the browser keeps the shared product palette and reduces source smooth lighting to prepared root brightness plus fixed face factors; source specular interpolation is not reproduced. Real USB-phone cadence was explicitly skipped during this work and remains unproven; desktop emulation is not a substitute.

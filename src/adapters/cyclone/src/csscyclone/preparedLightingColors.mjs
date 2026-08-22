@@ -1,6 +1,6 @@
 export async function loadCyclonePreparedLightingColors(lighting, paletteVariantId) {
   const variant = lighting?.variants?.find((entry) => entry?.paletteVariantId === paletteVariantId);
-  if (lighting?.schema !== "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@19" ||
+  if (lighting?.schema !== "csscyclone-prepared-source-lit-three-color-vertex-lighting-colors@20" ||
       lighting.preparedMinimumSaturation !== 0.55 ||
       lighting.preparedMinimumValue !== 0.75 ||
       !isFinalLitColorProfileValid(lighting.finalLitColorProfile, lighting.paletteVariantIds) ||
@@ -86,23 +86,16 @@ async function verifyBytes(bytes, expectedLength, expectedSha256) {
 }
 
 function isFinalLitColorProfileValid(profile, paletteVariantIds) {
-  return profile?.schema === "csscyclone-prepared-final-lit-color-profile@2" &&
+  return profile?.schema === "csscyclone-prepared-final-lit-color-profile@3" &&
     profile.darkFaceValueThreshold === 0.4 &&
     profile.maximumDarkFaceShare === 0.2 &&
     profile.minimumMedianLitValue === 0.5 &&
-    profile.targetSrgbEnergyRatio === 0.8215 &&
-    profile.minimumTargetEnergyRatio === 1 &&
-    profile.maximumTargetEnergyRatio === 1.03 &&
-    profile.srgbLumaWeights?.length === 3 &&
-    profile.srgbLumaWeights.every((value, index) =>
-      value === [0.2126, 0.7152, 0.0722][index]) &&
+    profile.srgbExposure === 1.4 &&
     profile.variants?.length === paletteVariantIds?.length &&
     profile.variants.every((variant, index) =>
       variant?.paletteVariantId === paletteVariantIds[index] &&
       variant.medianLitValue >= profile.minimumMedianLitValue &&
-      variant.darkFaceShare <= profile.maximumDarkFaceShare &&
-      variant.minimumTargetEnergyRatio >= profile.minimumTargetEnergyRatio &&
-      variant.maximumTargetEnergyRatio <= profile.maximumTargetEnergyRatio);
+      variant.darkFaceShare <= profile.maximumDarkFaceShare);
 }
 
 function decodeColorSlotIndices(encoded, bytesPerIndex, count) {

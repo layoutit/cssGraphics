@@ -26,6 +26,7 @@ test("uses the shared css.graphics examples shell without alternate renderers", 
   assert.match(playback, /createPolyMorphPreparedDomTarget/u);
   assert.match(styles, /\.example-stage\s*\{[^}]*background:\s*linear-gradient\(180deg, #0b1119 0%, #000 100%\);/su);
   assert.match(styles, /\.example-stage > \.polycss-camera\s*\{[^}]*background:\s*transparent;/su);
+  assert.match(styles, /\.example-stage > \.polycss-camera\s*\{[^}]*pointer-events:\s*none;/su);
   assert.match(styles, /\.example-stage > \.polycss-camera\s*\{[^}]*perspective:\s*var\(--cyclone-perspective\);/su);
   assert.match(
     styles,

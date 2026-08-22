@@ -1,6 +1,25 @@
 ---
-import "../../src/adapters/cloth/src/csscloth/styles.css";
 import ProjectPage from "../components/ProjectPage.astro";
+import { PROJECT_ADAPTER_DIRECTORIES } from "../project-adapters";
+import { PROJECTS } from "../projects";
+
+const latestProject = PROJECTS[0];
+const adapterDirectory = PROJECT_ADAPTER_DIRECTORIES[latestProject.id];
+if (!adapterDirectory) {
+  throw new Error(`Missing adapter for latest css.graphics project: ${latestProject.id}`);
+}
+const adapterStyles = import.meta.glob<string>(
+  "../../src/adapters/*/src/*/styles.css",
+  { eager: true, import: "default", query: "?inline" },
+);
+const stylesheetPrefix = `../../src/adapters/${adapterDirectory}/`;
+const matchingStylesheets = Object.entries(adapterStyles)
+  .filter(([path]) => path.startsWith(stylesheetPrefix));
+if (matchingStylesheets.length !== 1) {
+  throw new Error(`Expected one stylesheet for latest css.graphics project: ${latestProject.id}`);
+}
+const latestProjectStyles = matchingStylesheets[0][1];
 ---
 
-<ProjectPage projectId="cloth" home />
+<style is:global set:html={latestProjectStyles} />
+<ProjectPage projectId={latestProject.id} home />

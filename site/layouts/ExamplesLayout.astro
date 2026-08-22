@@ -60,7 +60,12 @@ const backgroundClass = project.id === "cloth"
       <Fragment set:html={renderExamplesSidebar(project.id)} />
     </div>
     <Fragment set:html={renderExamplesInfo(project.id)} />
-    <main id={stageId} class="example-stage" aria-busy={stageId === "scene" ? "true" : undefined}></main>
+    <main
+      id={stageId}
+      class="example-stage"
+      data-project-id={project.id}
+      aria-busy={stageId === "scene" ? "true" : undefined}
+    ></main>
     <script>
       import "../examples-shell-client.mjs";
       import "../scene-router.mjs";

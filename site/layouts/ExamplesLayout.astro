@@ -8,11 +8,12 @@ import { PROJECTS } from "../projects";
 
 interface Props {
   project: LandingProject;
+  projectStyles?: string;
   home?: boolean;
   stageId?: string;
 }
 
-const { project, home = false, stageId } = Astro.props;
+const { project, projectStyles, home = false, stageId } = Astro.props;
 const canonicalPath = home ? "/" : project.route;
 const canonicalUrl = new URL(canonicalPath, "https://css.graphics/").href;
 const title = home
@@ -36,6 +37,7 @@ const backgroundClass = project.id === "cloth"
     <link rel="canonical" href={canonicalUrl} />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="stylesheet" href="/site.css" />
+    {projectStyles && <style is:global set:html={projectStyles} />}
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="css.graphics" />
     <meta property="og:title" content={title} />

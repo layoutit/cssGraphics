@@ -4,13 +4,14 @@ import { ROUTE_PROJECTS } from "../projects";
 
 interface Props {
   projectId: string;
+  projectStyles?: string;
   home?: boolean;
 }
 
-const { projectId, home = false } = Astro.props;
+const { projectId, projectStyles, home = false } = Astro.props;
 const project = ROUTE_PROJECTS.find(({ id }) => id === projectId);
 if (!project) throw new Error(`Unknown css.graphics project: ${projectId}`);
 const stageId = projectId === "maze" || projectId === "gears" ? "scene" : undefined;
 ---
 
-<ExamplesLayout project={project} home={home} stageId={stageId} />
+<ExamplesLayout project={project} projectStyles={projectStyles} home={home} stageId={stageId} />

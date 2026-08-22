@@ -63,6 +63,7 @@ export async function mountFlocksClient(host) {
       paletteVariantId: paletteSelection.paletteVariantId,
     });
     const startupWindow = selectFlocksStartupWindow({
+      profileId,
       requestedId: route.startupWindowId,
       previousId: readPreviousStartupWindowId(),
     });
@@ -103,8 +104,9 @@ export async function mountFlocksClient(host) {
         mounted.cameraElement.style.setProperty("--flocks-perspective", `${perspective}px`);
       },
     });
-    player.resize();
-    addEventListener("resize", () => player.resize(), { passive: true });
+    const resize = () => player.resize();
+    resize();
+    addEventListener("resize", resize, { passive: true });
     state.manifest = manifest;
     state.scene = scene;
     state.route = route;
@@ -114,6 +116,11 @@ export async function mountFlocksClient(host) {
     state.player = player;
     state.startupWindow = startupWindow;
     state.paletteSelection = paletteSelection;
+    state.destroy = () => {
+      removeEventListener("resize", resize);
+      player.destroy();
+      mounted.cameraElement.remove();
+    };
     writePreviousStartupWindowId(startupWindow.id);
     document.body.classList.replace("loading", "priming");
     await waitForPaint();

@@ -130,5 +130,25 @@
       "description": "CSS Pipes rendered entirely with HTML and CSS using PolyCSS.",
       "date": "2026-08-06"
     }
+  ],
+  "unlistedProjects": [
+    {
+      "number": 8,
+      "id": "flocks",
+      "name": "Flocks",
+      "route": "/flocks/",
+      "preview": "/landing/flocks.webp",
+      "numberTone": "light",
+      "source": "Really Slick Screensavers",
+      "credits": [
+        {
+          "relation": "Adapted from",
+          "name": "Really Slick Screensavers",
+          "url": "https://github.com/reallyslickscreensavers/reallyslickscreensavers/blob/a419fc4ecf4b9b19526448bf9f5dfc435e24ca4c/src/flocks/flocks.cpp"
+        }
+      ],
+      "description": "Really Slick Flocks rendered entirely with retained HTML and CSS using PolyCSS.",
+      "date": "2026-08-22"
+    }
   ]
 }

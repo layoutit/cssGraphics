@@ -176,7 +176,7 @@ async function captureRun(profile, observePlayback) {
     });
     await page.waitForFunction(() => window.__cssFlocksDebug.stats().pendingBlockCount === 0, null, { timeout: 5_000 });
     const settled = await page.evaluate(() => {
-      const scene = document.querySelector("body > .polycss-camera > .polycss-scene");
+      const scene = document.querySelector(".example-stage > .polycss-camera > .polycss-scene");
       const roots = [...scene.children];
       const leaves = roots.flatMap((root) => [...root.children]);
       window.__flocksStartupIdentity = { roots, leaves };
@@ -194,7 +194,7 @@ async function captureRun(profile, observePlayback) {
       await page.evaluate(() => window.__cssFlocksDebug.resume());
       await page.waitForTimeout(30_000);
       playback = await page.evaluate(({ playbackStartedAt }) => {
-        const scene = document.querySelector("body > .polycss-camera > .polycss-scene");
+        const scene = document.querySelector(".example-stage > .polycss-camera > .polycss-scene");
         const roots = [...scene.children];
         const leaves = roots.flatMap((root) => [...root.children]);
         const probe = window.__flocksStartupProbe;

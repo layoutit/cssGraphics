@@ -55,6 +55,10 @@ async function mountForProject(projectId, host) {
       const { resolveCssPipesRoute } = await import("../src/adapters/3dpipes/src/csspipes/routeState.mjs");
       return startCssPipesClient(host, resolveCssPipesRoute(location.href));
     }
+    case "flocks": {
+      const { mountFlocksClient } = await import("../src/adapters/flocks/src/cssflocks/client.mjs");
+      return mountFlocksClient(host);
+    }
     default:
       throw new Error(`Unknown css.graphics route: ${location.pathname}`);
   }

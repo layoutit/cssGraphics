@@ -4,7 +4,7 @@ import {
   CSSFLOCKS_PLAYBACK_SCHEMA,
   decodeFlocksPreparedBlock,
 } from "../shared/cssflocks/preparedBlockTransport.mjs";
-import { CSSFLOCKS_STARTUP_WINDOWS } from "../shared/cssflocks/startupWindows.mjs";
+import { getFlocksStartupWindows } from "../shared/cssflocks/startupWindows.mjs";
 
 const RUNTIME_LOOKAHEAD_BLOCK_COUNT = 11;
 const RUNTIME_MATERIALIZED_LOOKAHEAD_BLOCK_COUNT = 2;
@@ -416,6 +416,7 @@ function createWorkerMaterializer(catalog, paletteVariantId) {
 }
 
 function validateCatalog(catalog) {
+  const startupWindows = getFlocksStartupWindows(catalog?.streamId);
   if (catalog?.schema !== "cssflocks-prepared-stream-catalog@1" ||
       catalog.playbackSchema !== CSSFLOCKS_PLAYBACK_SCHEMA ||
       catalog.sourceDefaultBugCount !== 1_004 ||
@@ -435,9 +436,9 @@ function validateCatalog(catalog) {
       catalog.terminalSeam?.strategy !== "cubic-hermite-correspondence" ||
       catalog.terminalSeam?.sourceBehaviorDeviation !== true ||
       !isPermutation(catalog.terminalSeam?.correspondence, catalog.bugCount) ||
-      !Array.isArray(catalog.startupWindows) || catalog.startupWindows.length !== CSSFLOCKS_STARTUP_WINDOWS.length ||
+      !Array.isArray(catalog.startupWindows) || catalog.startupWindows.length !== startupWindows.length ||
       catalog.startupWindows.some((window, index) =>
-        window.id !== CSSFLOCKS_STARTUP_WINDOWS[index].id || window.blockIndex !== CSSFLOCKS_STARTUP_WINDOWS[index].blockIndex) ||
+        window.id !== startupWindows[index].id || window.blockIndex !== startupWindows[index].blockIndex) ||
       catalog.entries.some((entry, index) =>
         entry.index !== index || entry.encoding !== CSSFLOCKS_BLOCK_ENCODING ||
         entry.startFrameIndex !== index * catalog.blockFrameCount ||

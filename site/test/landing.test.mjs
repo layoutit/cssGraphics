@@ -35,6 +35,7 @@ const projectAdapterDirectories = new Map([
   ["gears", "gears"],
   ["pipes", "3dpipes"],
   ["solitaire", "solitaire"],
+  ["flocks", "flocks"],
 ]);
 
 test("landing presents the current deployed collection", async () => {
@@ -57,6 +58,8 @@ test("landing presents the current deployed collection", async () => {
   assert.equal(new Set(projectManifest.projects.map(({ id }) => id)).size, expectedProjects.length);
   assert.equal(new Set(projectManifest.projects.map(({ number }) => number)).size,
     expectedProjects.length);
+  assert.deepEqual(projectManifest.unlistedProjects.map(({ id, number }) => [id, number]), [["flocks", 8]]);
+  assert.equal(projectManifest.projects.some(({ id }) => id === "flocks"), false);
   assert.deepEqual(
     projectManifest.projects.filter(({ id }) => projectsExcludedFromLanding.includes(id)),
     [],
@@ -79,6 +82,7 @@ test("landing presents the current deployed collection", async () => {
   );
   assert.match(homePage, /<ProjectPage projectId="cloth" home \/>/u);
   assert.match(sceneRouter, /mountClothClient\(host\)/u);
+  assert.match(sceneRouter, /mountFlocksClient\(host\)/u);
   assert.doesNotMatch(sceneRouter, /createElement|appendChild|innerHTML/u);
   assert.match(shellRenderer, /<a class="project-thumbnail" href=/u);
   assert.match(shellRenderer, /href="\$\{escapeAttribute\(project\.route\)\}"/u);

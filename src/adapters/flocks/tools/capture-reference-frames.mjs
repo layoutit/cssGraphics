@@ -127,7 +127,7 @@ const report = Object.freeze({
   rawFrames,
   packaged,
   states: statesPath,
-  lightingBoundary: "Native reference uses the pinned source OpenGL light; browser uses the accepted fixed flat face factors, so RGB image diffs are diagnostic while state and projection gates are strict.",
+  lightingBoundary: "Native reference uses smooth OpenGL directional and specular lighting; browser uses prepared source-directional root brightness plus fixed face factors, so RGB image diffs remain diagnostic.",
 });
 requireTransportWithinTolerance(report);
 await writeFile(resolve(outputRoot, "report.json"), `${JSON.stringify(report, null, 2)}\n`);

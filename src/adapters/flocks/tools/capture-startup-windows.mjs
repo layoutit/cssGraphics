@@ -5,7 +5,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { chromium } from "playwright";
 import sharp from "sharp";
-import { CSSFLOCKS_STARTUP_WINDOWS } from "../src/shared/cssflocks/startupWindows.mjs";
+import { getFlocksStartupWindows } from "../src/shared/cssflocks/startupWindows.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "../../../..");
 const outputRoot = resolve(repositoryRoot, "bench/results/cssflocks/startup-windows");
@@ -33,7 +33,7 @@ try {
   for (const profile of profiles) {
     const profileRoot = resolve(outputRoot, profile.id);
     await mkdir(profileRoot, { recursive: true });
-    for (const startupWindow of CSSFLOCKS_STARTUP_WINDOWS) {
+    for (const startupWindow of getFlocksStartupWindows(profile.id)) {
       captures.push(...await captureWindow({ browser, profile, profileRoot, startupWindow }));
     }
     await makeContactSheet({ captures, profile });
@@ -44,7 +44,10 @@ try {
     baseUrl,
     captureFrames,
     paletteVariantId,
-    startupWindowOrder: CSSFLOCKS_STARTUP_WINDOWS.map(({ id, blockIndex, sourceFrameIndex }) => ({ id, blockIndex, sourceFrameIndex })),
+    startupWindowOrderByProfile: Object.fromEntries(profiles.map(({ id }) => [
+      id,
+      getFlocksStartupWindows(id).map(({ id: windowId, blockIndex, sourceFrameIndex }) => ({ id: windowId, blockIndex, sourceFrameIndex })),
+    ])),
     profiles: profiles.map(({ id, viewport, rootCount, leafCount }) => ({
       id,
       viewport,
@@ -129,13 +132,14 @@ function assertCaptureBinding({ errors, initial, profile, startupWindow, frameIn
 }
 
 async function makeContactSheet({ captures, profile }) {
+  const startupWindows = getFlocksStartupWindows(profile.id);
   const profileCaptures = captures.filter((capture) => capture.profileId === profile.id);
   const labelHeight = 24;
   const cellWidth = profile.cell.width;
   const cellHeight = profile.cell.height + labelHeight;
   const composites = [];
   for (const capture of profileCaptures) {
-    const column = CSSFLOCKS_STARTUP_WINDOWS.findIndex((window) => window.id === capture.startupWindowId);
+    const column = startupWindows.findIndex((window) => window.id === capture.startupWindowId);
     const row = captureFrames.indexOf(capture.blockFrameIndex);
     const image = await sharp(capture.path)
       .resize(cellWidth, profile.cell.height, { fit: "fill" })
@@ -150,7 +154,7 @@ async function makeContactSheet({ captures, profile }) {
   }
   await sharp({
     create: {
-      width: cellWidth * CSSFLOCKS_STARTUP_WINDOWS.length,
+      width: cellWidth * startupWindows.length,
       height: cellHeight * captureFrames.length,
       channels: 3,
       background: "#000",

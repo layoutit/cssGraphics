@@ -4,29 +4,20 @@ import { test } from "node:test";
 
 const adapterRoot = new URL("../", import.meta.url);
 
-test("Flocks uses the production css.graphics wordmark and repository action shell", async () => {
+test("Flocks uses the shared css.graphics examples shell without listing itself", async () => {
   const html = await readFile(new URL("index.html", adapterRoot), "utf8");
   assert.match(html, /<body class="loading">/u);
-  assert.match(html, /<h1 class="site-wordmark-heading">/u);
-  assert.match(html, /class="site-wordmark-svg"/u);
-  assert.match(html, /class="site-wordmark-css">css\.<\/tspan><tspan class="site-wordmark-graphics">graphics<\/tspan><tspan class="site-wordmark-path">\/flocks/u);
-  assert.match(html, /<nav class="site-actions" aria-label="Scene actions">/u);
-  assert.match(html, /class="site-action-icon-only" href="https:\/\/github\.com\/layoutit\/cssGraphics"/u);
-  assert.match(html, /aria-label="View cssGraphics on GitHub" title="View cssGraphics on GitHub"/u);
-  assert.doesNotMatch(html, /site-source|flowerbox/iu);
+  assert.match(html, /cssgraphics-examples-sidebar/u);
+  assert.match(html, /<main class="example-stage"><\/main>/u);
+  assert.match(html, /<link rel="stylesheet" href="\/site\.css"/u);
+  assert.doesNotMatch(html, /site-header|iframe/iu);
 });
 
-test("Flocks shell CSS matches the production responsive, focus, and stacking contract", async () => {
+test("Flocks CSS targets only the shared shell stage", async () => {
   const css = await readFile(new URL("src/cssflocks/styles.css", adapterRoot), "utf8");
-  assert.match(css, /\.site-header\s*\{[^}]*height:\s*50px;[^}]*padding:\s*0 12px 0 16px;[^}]*pointer-events:\s*none;/su);
-  assert.match(css, /\.site-wordmark-svg\s*\{[^}]*width:\s*190px;[^}]*height:\s*30px;/su);
-  assert.match(css, /\.site-wordmark-css\s*\{\s*font-weight:\s*500;/u);
-  assert.match(css, /\.site-wordmark-graphics\s*\{\s*font-weight:\s*200;/u);
-  assert.match(css, /\.site-wordmark-path\s*\{\s*font-weight:\s*100;/u);
-  assert.match(css, /\.site-wordmark:focus-visible\s*\{[^}]*outline:\s*1px solid currentColor;[^}]*outline-offset:\s*4px;/su);
-  assert.match(css, /@media \(max-width:\s*520px\)[\s\S]*?\.site-wordmark-svg\s*\{\s*width:\s*176px;/u);
-  assert.match(css, /@media \(max-width:\s*390px\)[\s\S]*?\.site-wordmark-svg\s*\{\s*width:\s*148px;/u);
-  assert.doesNotMatch(css, /site-source|flowerbox/iu);
+  assert.match(css, /\.example-stage\s*\{[^}]*background:\s*#000;/su);
+  assert.match(css, /\.example-stage > \.polycss-camera/u);
+  assert.doesNotMatch(css, /body > \.polycss-camera|site-header|site-wordmark|site-action/iu);
 });
 
 test("Flocks runtime keeps the prepared wrapper temporary and publishes currentColor on roots", async () => {
@@ -37,8 +28,8 @@ test("Flocks runtime keeps the prepared wrapper temporary and publishes currentC
   assert.match(scene, /mounted\.sceneElement\.append\(element\)/u);
   assert.match(playback, /element\.style\.color = color/u);
   assert.match(css, /background-color: currentColor/u);
-  assert.match(css, /body > \.polycss-camera > \.polycss-scene\s*\{[^}]*display:\s*contents;[^}]*transform-style:\s*preserve-3d;/su);
-  assert.match(css, /body > \.polycss-camera > \.polycss-scene > div\s*\{[^}]*left:\s*50%;[^}]*top:\s*50%;[^}]*translate:\s*0 0 calc\(var\(--flocks-perspective\) - 568px\);[^}]*scale:\s*1 -1 1;[^}]*transform-style:\s*preserve-3d;/su);
+  assert.match(css, /\.example-stage > \.polycss-camera > \.polycss-scene\s*\{[^}]*display:\s*contents;[^}]*transform-style:\s*preserve-3d;/su);
+  assert.match(css, /\.example-stage > \.polycss-camera > \.polycss-scene > div\s*\{[^}]*left:\s*50%;[^}]*top:\s*50%;[^}]*translate:\s*0 0 calc\(var\(--flocks-perspective\) - 568px\);[^}]*scale:\s*1 -1 1;[^}]*transform-style:\s*preserve-3d;/su);
   for (const percentage of [78, 90, 82, 96, 86]) {
     assert.match(css, new RegExp(`background-color: color-mix\\(in srgb, currentColor ${percentage}%, black\\)`, "u"));
   }

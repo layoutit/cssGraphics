@@ -49,7 +49,7 @@ try {
   for (const [id, frameIndex] of [["start", startFrame], ["end", endFrame]]) {
     const state = materialize(frames.get(frameIndex).bugs.slice(0, CSSFLOCKS_PRODUCT_PROFILES.desktop.bugCount));
     await page.evaluate(({ transforms, colors }) => {
-      const roots = [...document.querySelector("body > .polycss-camera > .polycss-scene").children];
+      const roots = [...document.querySelector(".example-stage > .polycss-camera > .polycss-scene").children];
       roots.forEach((root, index) => {
         root.style.transform = transforms[index];
         root.style.color = colors[index];

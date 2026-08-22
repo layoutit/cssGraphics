@@ -183,7 +183,7 @@ async function captureSteadyProbe({ profile: selectedProfile, url: targetUrl }) 
 
 async function readProbeState(page, rememberIdentity) {
   return page.evaluate((remember) => {
-    const roots = [...document.querySelectorAll("body > .polycss-camera > .polycss-scene > div")];
+    const roots = [...document.querySelectorAll(".example-stage > .polycss-camera > .polycss-scene > div")];
     const leaves = roots.flatMap((root) => [...root.children]);
     if (remember) window.__cssFlocksCadenceIdentity = { roots, leaves };
     const identity = window.__cssFlocksCadenceIdentity;

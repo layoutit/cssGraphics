@@ -148,9 +148,9 @@ async function captureColdStart(profile, runIndex, profileRoot) {
         })),
         navigation: performance.getEntriesByType("navigation")[0]?.toJSON() ?? null,
         dom: {
-          cameraCount: document.querySelectorAll("body > .polycss-camera").length,
-          rootCount: document.querySelectorAll("body > .polycss-camera > .polycss-scene > div").length,
-          leafCount: document.querySelectorAll("body > .polycss-camera > .polycss-scene > div > *").length,
+          cameraCount: document.querySelectorAll(".example-stage > .polycss-camera").length,
+          rootCount: document.querySelectorAll(".example-stage > .polycss-camera > .polycss-scene > div").length,
+          leafCount: document.querySelectorAll(".example-stage > .polycss-camera > .polycss-scene > div > *").length,
         },
       })),
       cdp.send("Runtime.getHeapUsage"),
@@ -221,7 +221,7 @@ async function captureTerminalWrap(profile) {
       resolve(frameRoot, "frame-007-terminal-after.png"),
     );
     const visualCoverage = await page.evaluate(() => {
-      const leaves = [...document.querySelectorAll("body > .polycss-camera > .polycss-scene > div > *")];
+      const leaves = [...document.querySelectorAll(".example-stage > .polycss-camera > .polycss-scene > div > *")];
       const rects = leaves.map((leaf) => leaf.getBoundingClientRect()).filter((rect) => rect.width > 0 && rect.height > 0);
       const visible = rects.filter((rect) => rect.right > 0 && rect.bottom > 0 && rect.left < innerWidth && rect.top < innerHeight);
       return {

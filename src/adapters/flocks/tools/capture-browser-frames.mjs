@@ -41,8 +41,10 @@ try {
   const initial = await page.evaluate(() => {
     const debug = window.__cssFlocksDebug;
     debug.pause();
-    document.querySelector(".site-header")?.style.setProperty("display", "none");
-    const roots = [...document.querySelectorAll("body > .polycss-camera > .polycss-scene > div")];
+    document.querySelector(".examples-sidebar")?.style.setProperty("display", "none");
+    document.querySelector(".example-info")?.style.setProperty("display", "none");
+    document.querySelector(".example-stage")?.style.setProperty("inset", "0");
+    const roots = [...document.querySelectorAll(".example-stage > .polycss-camera > .polycss-scene > div")];
     const leaves = roots.flatMap((root) => [...root.children]);
     window.__cssFlocksSequenceIdentity = { roots, leaves };
     return { stats: debug.stats(), roots: roots.length, leaves: leaves.length };
@@ -57,7 +59,7 @@ try {
       const expectedStreamFrameIndex = segment.frames[segmentOrdinal];
       const state = await page.evaluate(() => {
         const debug = window.__cssFlocksDebug;
-        const roots = [...document.querySelectorAll("body > .polycss-camera > .polycss-scene > div")];
+        const roots = [...document.querySelectorAll(".example-stage > .polycss-camera > .polycss-scene > div")];
         const leaves = roots.flatMap((root) => [...root.children]);
         const identity = window.__cssFlocksSequenceIdentity;
         return {
@@ -70,7 +72,7 @@ try {
           sameRootIdentity: roots.length === identity.roots.length && roots.every((root, index) => root === identity.roots[index]),
           sameLeafIdentity: leaves.length === identity.leaves.length && leaves.every((leaf, index) => leaf === identity.leaves[index]),
           canvasCount: document.querySelectorAll("canvas").length,
-          svgCount: document.querySelectorAll("body > .polycss-camera svg").length,
+          svgCount: document.querySelectorAll(".example-stage > .polycss-camera svg").length,
         };
       });
       if (state.stats.streamFrameIndex !== expectedStreamFrameIndex) {

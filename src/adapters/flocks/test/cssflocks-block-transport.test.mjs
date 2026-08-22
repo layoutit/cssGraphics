@@ -15,6 +15,8 @@ import {
   encodeFlocksPreparedBlock,
 } from "../src/shared/cssflocks/preparedBlockTransport.mjs";
 import { mapReallySlickHueToPreparedHex } from "../../shared/reallyslickPalette.mjs";
+import { buildFlocksBugMatrix } from "../src/shared/cssflocks/bugTransform.mjs";
+import { shadeFlocksPreparedHex } from "../src/shared/cssflocks/bugLighting.mjs";
 
 test("Flocks source-state block round-trips into prepared transforms and currentColor values", () => {
   const source = selectFlocksProductPrefix(buildFlocksSourceSequence({
@@ -63,10 +65,18 @@ test("Flocks source-state block round-trips into prepared transforms and current
   assert.equal(sharedPaletteBlock.playback.paletteVariantId, "rotate-120");
   assert.deepEqual(
     sharedPaletteBlock.playback.colors,
-    Array.from({ length: 328 }, (unused, index) =>
-      mapReallySlickHueToPreparedHex(sourceValues[index * 7 + 6], "rotate-120")),
+    Array.from({ length: 328 }, (unused, index) => {
+      const offset = index * 7;
+      const position = [...sourceValues.slice(offset, offset + 3)];
+      const velocity = [...sourceValues.slice(offset + 3, offset + 6)];
+      return shadeFlocksPreparedHex(
+        mapReallySlickHueToPreparedHex(sourceValues[offset + 6], "rotate-120"),
+        buildFlocksBugMatrix(position, velocity).matrix,
+      );
+    }),
   );
-  assert.ok(new Set(sharedPaletteBlock.playback.colors).size <= 3);
+  assert.ok(new Set(sharedPaletteBlock.playback.colors).size > 3);
+  assert.ok(new Set(sharedPaletteBlock.playback.colors).size < 100);
 
   const corruptHeader = bytes.slice();
   corruptHeader[12] ^= 1;

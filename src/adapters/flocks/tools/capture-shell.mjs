@@ -10,8 +10,8 @@ const outputRoot = resolve(repositoryRoot, "bench/results/cssflocks/shell");
 const port = 4189;
 const url = `http://127.0.0.1:${port}/flocks/?palette=rotate-120`;
 const profiles = [
-  { id: "desktop", viewport: { width: 1280, height: 800 }, expectedWordmarkWidth: 190 },
-  { id: "mobile", viewport: { width: 390, height: 844 }, expectedWordmarkWidth: 148 },
+  { id: "desktop", viewport: { width: 1280, height: 800 }, expectedHeaderHeight: 55 },
+  { id: "mobile", viewport: { width: 390, height: 844 }, expectedHeaderHeight: 50 },
 ];
 await mkdir(outputRoot, { recursive: true });
 const server = spawn("pnpm", ["exec", "vite", "--config", "src/adapters/flocks/vite.config.mjs", "--host", "127.0.0.1", "--port", String(port), "--strictPort"], {
@@ -33,12 +33,13 @@ try {
     await page.waitForFunction(() => window.__cssFlocksDebug?.ready === true, null, { timeout: 30_000 });
     const ready = await shellMetrics(page);
     await page.screenshot({ path: resolve(outputRoot, `${profile.id}-ready.png`) });
-    const report = { id: profile.id, viewport: profile.viewport, expectedWordmarkWidth: profile.expectedWordmarkWidth, loading, ready, errors };
-    if (errors.length || loading.header.height !== 50 || ready.header.height !== 50 ||
-        Math.abs(ready.wordmark.width - profile.expectedWordmarkWidth) > 0.1 ||
+    const report = { id: profile.id, viewport: profile.viewport, expectedHeaderHeight: profile.expectedHeaderHeight, loading, ready, errors };
+    if (errors.length || loading.header.height !== profile.expectedHeaderHeight ||
+        ready.header.height !== profile.expectedHeaderHeight || ready.wordmark.width !== 156 ||
         JSON.stringify(loading.header) !== JSON.stringify(ready.header) ||
         JSON.stringify(loading.wordmark) !== JSON.stringify(ready.wordmark) ||
-        ready.githubAccessibleName !== "View cssGraphics on GitHub" || ready.wordmarkAccessibleName !== "Flocks - css.graphics home") {
+        ready.githubAccessibleName !== "View cssGraphics on GitHub" || ready.wordmarkAccessibleName !== "css.graphics home" ||
+        ready.projectCount !== 7 || ready.flocksListed || ready.cameraCount !== 1) {
       throw new Error(`Flocks production shell capture failed: ${JSON.stringify(report)}`);
     }
     reports.push(report);
@@ -54,9 +55,9 @@ try {
 
 async function shellMetrics(page) {
   return page.evaluate(() => {
-    const header = document.querySelector(".site-header");
-    const wordmark = document.querySelector(".site-wordmark-svg");
-    const github = document.querySelector(".site-action-icon-only");
+    const header = document.querySelector(".examples-header");
+    const wordmark = document.querySelector(".examples-wordmark svg");
+    const github = document.querySelector(".examples-github-link");
     const box = (element) => {
       const rect = element.getBoundingClientRect();
       return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
@@ -66,10 +67,14 @@ async function shellMetrics(page) {
       header: box(header),
       wordmark: box(wordmark),
       github: box(github),
-      wordmarkAccessibleName: document.querySelector(".site-wordmark").getAttribute("aria-label"),
+      wordmarkAccessibleName: document.querySelector(".examples-wordmark").getAttribute("aria-label"),
       githubAccessibleName: github.getAttribute("aria-label"),
       githubHref: github.href,
       svgCount: header.querySelectorAll("svg").length,
+      projectCount: document.querySelectorAll("#asset-list .project-thumbnail").length,
+      flocksListed: [...document.querySelectorAll("#asset-list .project-thumbnail")]
+        .some((link) => new URL(link.href).pathname === "/flocks/"),
+      cameraCount: document.querySelectorAll(".example-stage > .polycss-camera").length,
     };
   });
 }

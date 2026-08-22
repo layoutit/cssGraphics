@@ -51,10 +51,11 @@
   "adapter": {
     "simulationLocation": "node-preparer",
     "browserPublication": "prepared-transform-and-currentColor-only",
-    "lighting": "accepted-fixed-flat-face-factors-deviation",
+    "lighting": "prepared-source-directional-root-brightness-with-flat-face-factors",
     "lightingDeviation": {
       "source": "directional GL_LIGHT0 with smooth GLU vertex normals and material specular",
-      "prepared": "six fixed face opacity factors from 0.78 through 1.0 with currentColor",
+      "prepared": "source-directional camera-visible aggregate brightness folded into currentColor plus six fixed face factors",
+      "runtimeRootLightingCalculations": 0,
       "runtimeLeafLightingUpdates": 0
     },
     "excludedSourceModes": ["dots", "unstretched-points", "chromatek", "connections"],

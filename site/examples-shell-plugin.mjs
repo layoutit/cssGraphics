@@ -24,17 +24,18 @@ if (typeof polycssVersion !== "string" || !/^\d+\.\d+\.\d+$/u.test(polycssVersio
 }
 
 const projects = Object.freeze(manifest.projects);
+const routeProjects = Object.freeze([...projects, ...(manifest.unlistedProjects ?? [])]);
 const localAssets = new Map([
   ["/site.css", Object.freeze({ path: resolve(siteRoot, "site.css"), mediaType: "text/css" })],
   ["/favicon.ico", Object.freeze({ path: resolve(publicRoot, "favicon.ico"), mediaType: "image/x-icon" })],
-  ...projects.map((project) => [
+  ...routeProjects.map((project) => [
     project.preview,
     Object.freeze({ path: resolve(publicRoot, project.preview.replace(/^\//u, "")), mediaType: "image/webp" }),
   ]),
 ]);
 
 export function createExamplesShellPlugin(activeProjectId) {
-  if (!projects.some((project) => project.id === activeProjectId)) {
+  if (!routeProjects.some((project) => project.id === activeProjectId)) {
     throw new Error(`Unknown css.graphics project: ${activeProjectId}`);
   }
 
@@ -104,7 +105,7 @@ export function renderExamplesSidebar(activeProjectId) {
 }
 
 export function renderExamplesInfo(activeProjectId) {
-  const project = projects.find(({ id }) => id === activeProjectId);
+  const project = routeProjects.find(({ id }) => id === activeProjectId);
   if (!project) {
     throw new Error(`Unknown css.graphics project: ${activeProjectId}`);
   }

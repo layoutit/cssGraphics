@@ -90,6 +90,11 @@ test("landing presents the current deployed collection", async () => {
   assert.match(sceneRouter, /mountClothClient\(host\)/u);
   assert.match(sceneRouter, /mountFlocksClient\(host\)/u);
   assert.match(sceneRouter, /mountCycloneClient\(host\)/u);
+  assert.match(sceneRouter, /addEventListener\("visibilitychange", syncSceneVisibility\)/u);
+  assert.match(sceneRouter, /activeMount\.pause\(\)/u);
+  assert.match(sceneRouter, /activeMount\?\.resume\(\)/u);
+  assert.match(sceneRouter, /if \(document\.hidden\)/u);
+  assert.match(sceneRouter, /scene mount does not implement pause, resume, and destroy/u);
   assert.doesNotMatch(sceneRouter, /createElement|appendChild|innerHTML/u);
   assert.match(shellRenderer, /<a class="project-thumbnail" href=/u);
   assert.match(shellRenderer, /href="\$\{escapeAttribute\(project\.route\)\}"/u);

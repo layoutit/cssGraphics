@@ -21,6 +21,7 @@ export function mountCssgearsClient() {
     errors: [],
   };
   let disposed = false;
+  let shouldPlay = true;
   const onError = (event) => {
     recordError(state, event.message || String(event.error || "error"));
   };
@@ -28,9 +29,18 @@ export function mountCssgearsClient() {
     recordError(state, String(event.reason?.message || event.reason || "unhandled rejection"));
   };
   const controller = Object.freeze({
+    pause() {
+      shouldPlay = false;
+      return state.mount?.player?.pause?.() ?? null;
+    },
+    resume() {
+      shouldPlay = true;
+      return state.mount?.player?.resume?.() ?? null;
+    },
     destroy() {
       if (disposed) return;
       disposed = true;
+      shouldPlay = false;
       state.mount?.destroy();
       window.removeEventListener("error", onError);
       window.removeEventListener("unhandledrejection", onUnhandledRejection);
@@ -160,7 +170,7 @@ export function mountCssgearsClient() {
       },
     });
     setBodyState("ready");
-    player.resume();
+    if (shouldPlay) player.resume();
     const unloadedIndices = entries.map((_, index) => index)
       .filter((index) => index !== selection.bankIndex);
     if (unloadedIndices.length === 0) {

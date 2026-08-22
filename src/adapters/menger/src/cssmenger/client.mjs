@@ -9,14 +9,24 @@ import { canonicalizeCssmengerRoute, createRouteState, MOBILE_SCENE_ID } from ".
 export function mountCssmengerClient(host) {
   const state = { ready: false, route: null, manifest: null, sceneData: null, mount: null, errors: [] };
   let disposed = false;
+  let shouldPlay = true;
   const onError = (event) =>
     recordError(state, event.message || String(event.error || "error"), host);
   const onUnhandledRejection = (event) =>
     recordError(state, String(event.reason?.message || event.reason || "unhandled rejection"), host);
   const controller = Object.freeze({
+    pause() {
+      shouldPlay = false;
+      return state.mount?.player?.pause?.() ?? null;
+    },
+    resume() {
+      shouldPlay = true;
+      return state.mount?.player?.resume?.() ?? null;
+    },
     destroy() {
       if (disposed) return;
       disposed = true;
+      shouldPlay = false;
       state.mount?.destroy();
       window.removeEventListener("error", onError);
       window.removeEventListener("unhandledrejection", onUnhandledRejection);
@@ -109,7 +119,9 @@ export function mountCssmengerClient(host) {
     if (disposed) return;
     state.ready = true;
     setStatus("ready");
-    requestAnimationFrame(() => player.resume());
+    requestAnimationFrame(() => {
+      if (!disposed && shouldPlay) player.resume();
+    });
   }
 }
 

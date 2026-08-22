@@ -36,14 +36,24 @@ const CLOTH_PACKAGE_RESOURCE_PATHS = Object.freeze([
 export function mountClothClient(host) {
   const state = { ready: false, errors: [], mounted: null, player: null, metadata: null };
   let disposed = false;
+  let shouldPlay = true;
   const onError = (event) => recordError(event.message || String(event.error || "error"));
   const onUnhandledRejection = (event) =>
     recordError(String(event.reason?.stack || event.reason || "unhandled rejection"));
   const onResize = () => state.player?.resize();
   const controller = Object.freeze({
+    pause() {
+      shouldPlay = false;
+      state.player?.pause();
+    },
+    resume() {
+      shouldPlay = true;
+      state.player?.resume();
+    },
     destroy() {
       if (disposed) return;
       disposed = true;
+      shouldPlay = false;
       state.player?.destroy();
       window.removeEventListener("error", onError);
       window.removeEventListener("unhandledrejection", onUnhandledRejection);
@@ -135,7 +145,7 @@ export function mountClothClient(host) {
     state.ready = true;
     setStatus("ready");
     playbackStream.resumeInitial();
-    player.resume();
+    if (shouldPlay) player.resume();
   }
 
   function recordError(message) {

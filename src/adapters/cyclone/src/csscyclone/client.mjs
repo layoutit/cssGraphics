@@ -17,6 +17,7 @@ import { selectCycloneStartupPaletteVariant } from "./startupPaletteSelection.mj
 const LAST_START_SELECTION_STORAGE_KEY = "csscyclone:last-start-selection";
 
 export async function mountCycloneClient(host) {
+  let shouldPlay = true;
   const state = {
     ready: false,
     errors: [],
@@ -119,7 +120,16 @@ export async function mountCycloneClient(host) {
     state.blockLoader = blockLoader;
     state.mounted = mounted;
     state.player = player;
+    state.pause = () => {
+      shouldPlay = false;
+      return player.pause();
+    };
+    state.resume = () => {
+      shouldPlay = true;
+      return player.resume();
+    };
     state.destroy = () => {
+      shouldPlay = false;
       player.destroy();
       blockLoader.destroy();
     };
@@ -134,7 +144,7 @@ export async function mountCycloneClient(host) {
     await waitForCycloneScenePaint();
     state.ready = true;
     document.body.classList.replace("priming", "ready");
-    player.resume();
+    if (shouldPlay) player.resume();
     return state;
   } catch (error) {
     lightingColors?.destroy();

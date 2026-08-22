@@ -2,6 +2,9 @@ import { requireExamplesStage } from "./examples-shell-client.mjs";
 
 let activeMount = null;
 let navigationId = 0;
+let pausedForVisibility = false;
+
+document.addEventListener("visibilitychange", syncSceneVisibility);
 
 document.addEventListener("astro:before-swap", () => {
   navigationId += 1;
@@ -16,12 +19,25 @@ document.addEventListener("astro:page-load", () => {
 async function mountActiveScene(id) {
   const projectId = projectIdFromPath(location.pathname);
   const host = requireExamplesStage();
-  const mount = await mountForProject(projectId, host);
+  const mount = requireSceneLifecycle(await mountForProject(projectId, host));
   if (id !== navigationId) {
     mount?.destroy?.();
     return;
   }
   activeMount = mount;
+  if (document.hidden) {
+    activeMount?.pause?.();
+    pausedForVisibility = true;
+  }
+}
+
+function requireSceneLifecycle(mount) {
+  if (mount === null) return null;
+  if (!mount || typeof mount.pause !== "function" || typeof mount.resume !== "function" ||
+      typeof mount.destroy !== "function") {
+    throw new Error("css.graphics scene mount does not implement pause, resume, and destroy");
+  }
+  return mount;
 }
 
 async function mountForProject(projectId, host) {
@@ -71,6 +87,19 @@ async function mountForProject(projectId, host) {
 function destroyActiveScene() {
   activeMount?.destroy?.();
   activeMount = null;
+  pausedForVisibility = false;
+}
+
+function syncSceneVisibility() {
+  if (document.hidden) {
+    if (!activeMount) return;
+    activeMount.pause();
+    pausedForVisibility = true;
+    return;
+  }
+  if (!pausedForVisibility) return;
+  pausedForVisibility = false;
+  activeMount?.resume();
 }
 
 function syncActiveThumbnail() {

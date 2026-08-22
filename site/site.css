@@ -327,6 +327,7 @@ html.example-background-solitaire {
   margin: 0;
   overflow: hidden;
   background: var(--examples-stage-background);
+  pointer-events: none;
 }
 
 .example-stage > [class$="-error-message"] {

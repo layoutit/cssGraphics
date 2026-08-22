@@ -25,6 +25,7 @@ export function mountCssmazeClient() {
   let preparedScenePrefetchCount = 0;
   let preparedTransitionFrameCallbackCount = 0;
   let destroyed = false;
+  let shouldPlay = true;
   const onError = (event) => {
     recordError(state, event.message || String(event.error || "error"), host);
   };
@@ -32,9 +33,18 @@ export function mountCssmazeClient() {
     recordError(state, String(event.reason?.message || event.reason || "unhandled rejection"), host);
   };
   const controller = Object.freeze({
+    pause() {
+      shouldPlay = false;
+      return state.player?.pause() ?? null;
+    },
+    resume() {
+      shouldPlay = true;
+      return state.player?.resume() ?? null;
+    },
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      shouldPlay = false;
       state.mount?.destroy();
       window.removeEventListener("error", onError);
       window.removeEventListener("unhandledrejection", onUnhandledRejection);
@@ -110,7 +120,9 @@ export function mountCssmazeClient() {
     });
     state.ready = true;
     setBodyState(host, "ready");
-    requestAnimationFrame(() => state.player.resume());
+    requestAnimationFrame(() => {
+      if (!destroyed && shouldPlay) state.player.resume();
+    });
     queueNextPreparedScene();
   }
 
@@ -167,7 +179,7 @@ export function mountCssmazeClient() {
       restoreCameraTransition();
     }
     if (destroyed) return;
-    state.player.resume();
+    if (shouldPlay) state.player.resume();
     queueNextPreparedScene();
   }
 

@@ -85,11 +85,20 @@ test("landing presents the current deployed collection", async () => {
   );
   assert.match(homePage, /const latestProject = PROJECTS\[0\];/u);
   assert.match(homePage, /PROJECT_ADAPTER_DIRECTORIES\[latestProject\.id\]/u);
-  assert.match(homePage, /<ProjectPage projectId=\{latestProject\.id\} home \/>/u);
+  assert.match(
+    homePage,
+    /<ProjectPage projectId=\{latestProject\.id\} projectStyles=\{latestProjectStyles\} home \/>/u,
+  );
+  assert.match(layout, /<link rel="stylesheet" href="\/site\.css" \/>[\s\S]*projectStyles/u);
   assert.doesNotMatch(homePage, /projectId="cloth"|adapters\/cloth/u);
   assert.match(sceneRouter, /mountClothClient\(host\)/u);
   assert.match(sceneRouter, /mountFlocksClient\(host\)/u);
   assert.match(sceneRouter, /mountCycloneClient\(host\)/u);
+  assert.match(sceneRouter, /addEventListener\("visibilitychange", syncSceneVisibility\)/u);
+  assert.match(sceneRouter, /activeMount\.pause\(\)/u);
+  assert.match(sceneRouter, /activeMount\?\.resume\(\)/u);
+  assert.match(sceneRouter, /if \(document\.hidden\)/u);
+  assert.match(sceneRouter, /scene mount does not implement pause, resume, and destroy/u);
   assert.doesNotMatch(sceneRouter, /createElement|appendChild|innerHTML/u);
   assert.match(shellRenderer, /<a class="project-thumbnail" href=/u);
   assert.match(shellRenderer, /href="\$\{escapeAttribute\(project\.route\)\}"/u);
@@ -170,6 +179,7 @@ test("landing uses the compact examples shell and mounts the latest scene direct
   assert.match(siteCss, /--examples-sidebar-width: 354px;/u);
   assert.equal(siteCss.match(/354px/gu)?.length, 1);
   assert.match(siteCss, /\.example-stage \{[\s\S]*?inset: 0 0 0 var\(--examples-sidebar-width\);/u);
+  assert.match(siteCss, /\.example-stage \{[\s\S]*?pointer-events: none;/u);
   assert.match(siteCss, /\.example-info \{[\s\S]*?left: var\(--examples-sidebar-width\);/u);
   assert.doesNotMatch(siteCss, /\.example-info \{[\s\S]*?text-shadow:/u);
   assert.doesNotMatch(siteCss, /mix-blend-mode/u);

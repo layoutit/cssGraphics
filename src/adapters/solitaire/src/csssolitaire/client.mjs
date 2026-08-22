@@ -13,13 +13,23 @@ export function mountCsssolitaireClient(host) {
     errors: [],
   };
   let disposed = false;
+  let shouldPlay = true;
   const onError = (event) => recordError(event.message || String(event.error || "error"));
   const onUnhandledRejection = (event) =>
     recordError(String(event.reason?.message || event.reason || "unhandled rejection"));
   const controller = Object.freeze({
+    pause() {
+      shouldPlay = false;
+      state.player?.pause();
+    },
+    resume() {
+      shouldPlay = true;
+      state.player?.resume();
+    },
     destroy() {
       if (disposed) return;
       disposed = true;
+      shouldPlay = false;
       state.resizeObserver?.disconnect();
       window.removeEventListener("resize", syncPresentation);
       window.removeEventListener("error", onError);
@@ -58,7 +68,7 @@ export function mountCsssolitaireClient(host) {
     });
     state.ready = true;
     setBodyState("ready");
-    state.player.resume();
+    if (shouldPlay) state.player.resume();
     state.resizeObserver = typeof ResizeObserver === "function"
       ? new ResizeObserver(syncPresentation)
       : null;

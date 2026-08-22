@@ -15,6 +15,7 @@ import { resolveFlocksRoute } from "./routeState.mjs";
 import { selectFlocksStartupWindow } from "../shared/cssflocks/startupWindows.mjs";
 
 export async function mountFlocksClient(host) {
+  let shouldPlay = true;
   const state = {
     ready: false,
     errors: [],
@@ -116,7 +117,16 @@ export async function mountFlocksClient(host) {
     state.player = player;
     state.startupWindow = startupWindow;
     state.paletteSelection = paletteSelection;
+    state.pause = () => {
+      shouldPlay = false;
+      return player.pause();
+    };
+    state.resume = () => {
+      shouldPlay = true;
+      return player.resume();
+    };
     state.destroy = () => {
+      shouldPlay = false;
       removeEventListener("resize", resize);
       player.destroy();
       mounted.cameraElement.remove();
@@ -127,7 +137,7 @@ export async function mountFlocksClient(host) {
     await waitForPaint();
     state.ready = true;
     document.body.classList.replace("priming", "ready");
-    player.resume();
+    if (shouldPlay) player.resume();
     return state;
   } catch (error) {
     state.errors.push(String(error?.stack || error));

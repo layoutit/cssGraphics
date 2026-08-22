@@ -21,5 +21,4 @@ if (matchingStylesheets.length !== 1) {
 const latestProjectStyles = matchingStylesheets[0][1];
 ---
 
-<style is:global set:html={latestProjectStyles} />
-<ProjectPage projectId={latestProject.id} home />
+<ProjectPage projectId={latestProject.id} projectStyles={latestProjectStyles} home />

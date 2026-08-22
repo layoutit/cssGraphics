@@ -10,6 +10,7 @@ const PRESENTATION_RULE_MARKER = "--cssselectropaint-presentation-rule";
 export async function mountElectropaintClient(host) {
   if (!(host instanceof HTMLElement)) throw new Error("Missing ElectroPaint host");
   const debug = { status: "loading" };
+  let shouldPlay = true;
   globalThis.__cssElectropaint = debug;
   const presentation = mountPresentation(host);
   try {
@@ -25,8 +26,14 @@ export async function mountElectropaintClient(host) {
       manifest: prepared.manifest,
       selectedVariant: prepared.selectedVariant,
       scene: prepared.sceneData,
-      pause: () => player.pause(),
-      resume: () => player.resume(),
+      pause() {
+        shouldPlay = false;
+        return player.pause();
+      },
+      resume() {
+        shouldPlay = true;
+        return player.resume();
+      },
       step: (count) => player.step(count),
       setState: (stateIndex) => player.setState(stateIndex),
       assertStableDomIdentity: () => mounted.assertStableDomIdentity() && player.assertStableDomIdentity(),
@@ -36,6 +43,7 @@ export async function mountElectropaintClient(host) {
         presentation: presentation.stats(),
       }),
       destroy() {
+        shouldPlay = false;
         presentation.destroy();
         player.destroy();
         mounted.destroy();
@@ -43,7 +51,7 @@ export async function mountElectropaintClient(host) {
       },
     });
     document.body.classList.remove("loading");
-    player.resume();
+    if (shouldPlay) player.resume();
     return debug;
   } catch (error) {
     presentation.destroy();

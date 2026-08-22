@@ -282,7 +282,7 @@ html.example-background-solitaire {
 }
 
 .example-info {
-  position: fixed;
+  position: absolute;
   z-index: 90;
   top: 0;
   right: 0;
@@ -320,7 +320,7 @@ html.example-background-solitaire {
 }
 
 .example-stage {
-  position: fixed;
+  position: absolute;
   inset: 0 0 0 var(--examples-sidebar-width);
   min-width: 0;
   min-height: 0;

@@ -10,12 +10,14 @@ import {
   CSSCYCLONE_FACE_INDICES,
   CSSCYCLONE_MODEL_IDS,
   buildCyclonePreparedModel,
+  buildCyclonePreparedPlayback,
 } from "../src/prepare/csscyclone/modelBuilder.mjs";
 import { createCyclonePreparedLightingStream } from "../src/prepare/csscyclone/preparedLighting.mjs";
 import {
   CSSCYCLONE_BLOCK_ENCODING,
   CSSCYCLONE_LIGHTING_BLOCK_SCHEMA,
   CSSCYCLONE_PLAYBACK_SCHEMA,
+  decodeCyclonePreparedBlock,
   encodeCyclonePreparedBlock,
 } from "../src/shared/csscyclone/preparedBlockTransport.mjs";
 import {
@@ -142,6 +144,26 @@ async function prepareProfile(profile) {
   if (!Number.isSafeInteger(blocksPerChunk)) {
     throw new Error(`Cyclone ${profile.id} prepared chunk must divide into exact transport blocks`);
   }
+  const transportCatalog = Object.freeze({
+    streamId: bank.id,
+    modelId: profile.modelId,
+    particleCount: bank.particleCount,
+    leafCount: bank.particleCount * CSSCYCLONE_FACE_INDICES.length,
+    frameMilliseconds: bank.frameMilliseconds,
+    framesPerSecond: bank.framesPerSecond,
+    chunkCount: bank.chunkCount,
+    blockCount,
+    blocksPerChunk,
+    playbackSchema: CSSCYCLONE_PLAYBACK_SCHEMA,
+    lightingBlockSchema: CSSCYCLONE_LIGHTING_BLOCK_SCHEMA,
+    sourceTransformProfile: Object.freeze({
+      controlPointCount: 6,
+      speed: CSSCYCLONE_SOURCE.speed,
+      complexity: CSSCYCLONE_SOURCE.complexity,
+      particleSize: CSSCYCLONE_SOURCE.particleSize,
+      radialOrbitScale: CSSCYCLONE_PRESENTATION.radialOrbitScale,
+    }),
+  });
   const lightingStream = createCyclonePreparedLightingStream();
   const blockEntries = [];
   const startupSelectionColorProfiles = new Map();
@@ -165,18 +187,8 @@ async function prepareProfile(profile) {
       maximumRawParticleCenterZ,
       guarded.metrics.maximumRawParticleCenterZ,
     );
-    maximumObservedParticleCenterZ = Math.max(
-      maximumObservedParticleCenterZ,
-      guarded.metrics.maximumGuardedParticleCenterZ,
-    );
     guardedParticleFrameCount += guarded.metrics.guardedParticleFrameCount;
     rawUnsafeParticleFrameCount += guarded.metrics.rawUnsafeParticleFrameCount;
-    unsafeParticleFrameCount += guarded.metrics.unsafeParticleFrameCount;
-    for (const frameIndex of guarded.metrics.unsafeFrameIndices) {
-      unsafeBlockIndices.add(Math.floor(
-        (source.bank.startFrameIndex + frameIndex) / blockFrameCount,
-      ));
-    }
     if (preparedModel === null) {
       const result = buildCyclonePreparedModel({ source, modelId: profile.modelId });
       preparedModel = Object.freeze({ model: result.model, metrics: result.metrics });
@@ -190,17 +202,51 @@ async function prepareProfile(profile) {
       const streamBlockIndex = source.bank.chunkIndex * blocksPerChunk + blockIndex;
       const localStartFrameIndex = blockIndex * blockFrameCount;
       const startFrameIndex = source.bank.startFrameIndex + localStartFrameIndex;
-      const decoded = Buffer.from(encodeCyclonePreparedBlock({
-        frames: source.frames.slice(localStartFrameIndex, localStartFrameIndex + blockFrameCount),
+      const blockFrames = source.frames.slice(localStartFrameIndex, localStartFrameIndex + blockFrameCount);
+      const decodedBytes = Buffer.from(encodeCyclonePreparedBlock({
+        frames: blockFrames,
         lightingRows: lighting.frameParticleColorStateIndices.slice(
           localStartFrameIndex,
           localStartFrameIndex + blockFrameCount,
         ),
         particleCount: source.bank.particleCount,
       }));
-      const encoded = gzipSync(decoded, { level: 9 });
+      const descriptor = Object.freeze({
+        index: streamBlockIndex,
+        chunkIndex: source.bank.chunkIndex,
+        blockIndex,
+        startFrameIndex,
+        frameCount: blockFrameCount,
+        encoding: CSSCYCLONE_BLOCK_ENCODING,
+      });
+      const decodedBlock = decodeCyclonePreparedBlock(decodedBytes, descriptor, transportCatalog);
+      const expectedTransforms = buildCyclonePreparedPlayback({
+        source: Object.freeze({ ...source, frames: Object.freeze(blockFrames) }),
+        modelId: profile.modelId,
+      }).playback.transforms;
+      if (decodedBlock.playback.transforms.length !== expectedTransforms.length ||
+          decodedBlock.playback.transforms.some((transform, index) => transform !== expectedTransforms[index])) {
+        throw new Error(`Cyclone ${profile.id} block ${streamBlockIndex} transport changed prepared geometry`);
+      }
+      const expectedOverrideCount = blockFrames.reduce((total, frame) => total +
+        frame.particles.filter((particle) => particle.preparedCenterZOverride !== undefined).length, 0);
+      if (decodedBlock.preparedCenterZOverrideCount !== expectedOverrideCount) {
+        throw new Error(`Cyclone ${profile.id} block ${streamBlockIndex} transport dropped camera-depth guards`);
+      }
+      for (const frame of blockFrames) {
+        for (const particle of frame.particles) {
+          const centerZ = particle.matrix[14];
+          maximumObservedParticleCenterZ = Math.max(maximumObservedParticleCenterZ, centerZ);
+          if (centerZ > CSSCYCLONE_SOURCE.viewDistance -
+              CSSCYCLONE_SOURCE_SAFETY.minimumParticleCenterDepth) {
+            unsafeParticleFrameCount += 1;
+            unsafeBlockIndices.add(streamBlockIndex);
+          }
+        }
+      }
+      const encoded = gzipSync(decodedBytes, { level: 9 });
       const encodedSha256 = sha256(encoded);
-      const decodedSha256 = sha256(decoded);
+      const decodedSha256 = sha256(decodedBytes);
       const assetUrl = `${profile.blockRoot}/block-${String(streamBlockIndex).padStart(3, "0")}-${encodedSha256}.bin`;
       await writeBytes(join(stagingRoot, assetUrl.replace(/^\/csscyclone\//u, "")), encoded);
       blockEntries.push(Object.freeze({
@@ -214,11 +260,11 @@ async function prepareProfile(profile) {
         encoding: CSSCYCLONE_BLOCK_ENCODING,
         byteLength: encoded.byteLength,
         sha256: encodedSha256,
-        decodedByteLength: decoded.byteLength,
+        decodedByteLength: decodedBytes.byteLength,
         decodedSha256,
       }));
       preparedBlockEncodedBytes += encoded.byteLength;
-      preparedBlockDecodedBytes += decoded.byteLength;
+      preparedBlockDecodedBytes += decodedBytes.byteLength;
     }
     preparedFrameCount += source.frames.length;
     uniquePreparedTransformCount += source.frames.length * source.bank.particleCount;
@@ -453,6 +499,7 @@ function applyCycloneCameraDepthGuard(source) {
       guardedParticles[particleIndex] = Object.freeze({
         ...particle,
         matrix: Object.freeze(matrix),
+        preparedCenterZOverride: matrix[14],
       });
     }
     return guardedParticles === null ? frame : Object.freeze({

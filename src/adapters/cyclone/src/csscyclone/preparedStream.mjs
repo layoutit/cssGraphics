@@ -772,6 +772,8 @@ function validateBlock(block, descriptor, catalog) {
       !(lighting.frameParticleColorStateIndices instanceof Uint16Array) ||
       lighting.frameParticleColorStateIndices.length !== descriptor.frameCount * playback.particleCount ||
       block.preparedMatrixExpansionCount !== playback.transforms.length ||
+      !Number.isSafeInteger(block.preparedCenterZOverrideCount) ||
+      block.preparedCenterZOverrideCount < 0 ||
       !Number.isSafeInteger(block.preparedCssStringByteLength) ||
       block.preparedCssStringByteLength < playback.transforms.length) {
     throw new Error(`Prepared Cyclone block ${descriptor.index} drifted`);

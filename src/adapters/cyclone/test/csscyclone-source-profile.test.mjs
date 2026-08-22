@@ -310,6 +310,7 @@ test("round-trips exact prepared matrices through compact source-state blocks", 
   });
   const decoded = decodeCyclonePreparedBlock(bytes, descriptor, catalog);
   assert.deepEqual(decoded.playback.transforms, expected.transforms);
+  assert.equal(decoded.preparedCenterZOverrideCount, 0);
   assert.deepEqual(
     [...decoded.lighting.frameParticleColorStateIndices],
     lightingRows.flat(),
@@ -348,6 +349,30 @@ test("round-trips exact prepared matrices through compact source-state blocks", 
     () => decodeCyclonePreparedBlock(bytes.slice(0, -1), descriptor, catalog),
     /binary byte length drifted/u,
   );
+
+  const guardedFrames = source.frames.map((frame, frameIndex) => {
+    if (frameIndex !== 2 && frameIndex !== 17) return frame;
+    const particleIndex = frameIndex === 2 ? 3 : 8;
+    const particles = [...frame.particles];
+    const matrix = [...particles[particleIndex].matrix];
+    matrix[14] = frameIndex === 2 ? 351.125 : 357.875;
+    particles[particleIndex] = Object.freeze({
+      ...particles[particleIndex],
+      matrix: Object.freeze(matrix),
+      preparedCenterZOverride: matrix[14],
+    });
+    return Object.freeze({ ...frame, particles: Object.freeze(particles) });
+  });
+  const guardedSource = Object.freeze({ ...source, frames: Object.freeze(guardedFrames) });
+  const guardedExpected = buildCyclonePreparedPlayback({ source: guardedSource }).playback;
+  const guardedBytes = encodeCyclonePreparedBlock({
+    frames: guardedFrames,
+    lightingRows,
+    particleCount: bank.particleCount,
+  });
+  const guardedDecoded = decodeCyclonePreparedBlock(guardedBytes, descriptor, catalog);
+  assert.deepEqual(guardedDecoded.playback.transforms, guardedExpected.transforms);
+  assert.equal(guardedDecoded.preparedCenterZOverrideCount, 2);
 });
 
 test("prepares source-vertex-averaged face lighting without a runtime lighting timeline", async () => {

@@ -87,7 +87,7 @@ const catalog = Object.freeze({
     startFrameIndex: index * 60,
     frameCount: 60,
     sourceContinuousFromPrevious: index > 0,
-    encoding: "gzip-cyclone-source-state-float64-uint16@1",
+    encoding: "gzip-cyclone-source-state-float64-uint16-float64@2",
     assetUrl: `/block-${index}.bin`,
     byteLength: 1,
     sha256: hash,

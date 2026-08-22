@@ -160,6 +160,7 @@ test("landing uses the compact examples shell and mounts the latest scene direct
   assert.match(siteCss, /\.example-info \{[\s\S]*?font-size: 14px;/u);
   assert.doesNotMatch(siteCss, /font-size: (?:11|12)px;/u);
   assert.doesNotMatch(siteCss, /box-shadow: 0 0 0 1px #9d7cff/u);
+  assert.doesNotMatch(siteCss, /(?:box|text)-shadow\s*:/u);
   assert.match(siteCss, /--examples-sidebar-width: 354px;/u);
   assert.equal(siteCss.match(/354px/gu)?.length, 1);
   assert.match(siteCss, /\.example-stage \{[\s\S]*?inset: 0 0 0 var\(--examples-sidebar-width\);/u);

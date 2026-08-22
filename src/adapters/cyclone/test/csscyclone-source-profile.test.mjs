@@ -342,7 +342,7 @@ test("prepares source-vertex-averaged face lighting without a runtime lighting t
   const bank = { ...CSSCYCLONE_BANK, particleCount: 3, warmupFrames: 20, frameCount: 4 };
   const source = buildCycloneSourceSequence({ bank });
   const prepared = await buildCyclonePreparedLighting({ source });
-  assert.equal(prepared.contract.schema, "csscyclone-prepared-source-lit-three-color-vertex-lighting-colors@20");
+  assert.equal(prepared.contract.schema, "csscyclone-prepared-source-lit-three-color-vertex-lighting-colors@21");
   assert.equal(prepared.contract.leafCount, 18);
   assert.equal(prepared.contract.colorStateCount, 3);
   assert.equal(prepared.contract.colorRestartCount, 0);
@@ -370,13 +370,28 @@ test("prepares source-vertex-averaged face lighting without a runtime lighting t
   );
   assert.equal(
     prepared.contract.finalLitColorProfile.schema,
-    "csscyclone-prepared-final-lit-color-profile@3",
+    "csscyclone-prepared-final-lit-color-profile@4",
   );
-  assert.equal(prepared.contract.finalLitColorProfile.darkFaceValueThreshold, 0.4);
+  assert.equal(prepared.contract.finalLitColorProfile.metric, "OKLab-lightness");
+  assert.equal(
+    prepared.contract.finalLitColorProfile.normalization,
+    "publication-weighted-groupwise-additive-lightness-to-brightest-variant-median-with-chroma-gamut-mapping",
+  );
+  assert.equal(prepared.contract.finalLitColorProfile.darkFaceLightnessThreshold, 0.45);
   assert.equal(prepared.contract.finalLitColorProfile.maximumDarkFaceShare, 0.2);
-  assert.equal(prepared.contract.finalLitColorProfile.minimumMedianLitValue, 0.5);
+  assert.equal(prepared.contract.finalLitColorProfile.minimumMedianLightness, 0.6);
   assert.equal(prepared.contract.finalLitColorProfile.srgbExposure, 1.4);
   assert.equal(prepared.contract.finalLitColorProfile.variants.length, 12);
+  assert.ok(prepared.contract.finalLitColorProfile.variants.every((variant) =>
+    variant.medianLightness >= prepared.contract.finalLitColorProfile.minimumMedianLightness &&
+    variant.lightnessLifts.length === 3 &&
+    variant.lightnessLifts.every((lightnessLift) => lightnessLift >= 0)));
+  assert.ok(
+    Math.max(...prepared.contract.finalLitColorProfile.variants.map(({ medianLightness }) =>
+      medianLightness)) -
+      Math.min(...prepared.contract.finalLitColorProfile.variants.map(({ medianLightness }) =>
+        medianLightness)) <= 0.003,
+  );
   assert.equal(prepared.contract.variants.length, 12);
   assert.ok(prepared.contract.variants.every((variant, index) =>
     variant.paletteVariantId === prepared.contract.paletteVariantIds[index] &&

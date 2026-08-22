@@ -6,9 +6,9 @@ import { CSSCYCLONE_PRESENTATION } from "./sourceModel.mjs";
 
 const PREPARED_MINIMUM_SATURATION = CSSCYCLONE_PRESENTATION.minimumSaturation;
 const PREPARED_MINIMUM_VALUE = 0.75;
-const PREPARED_DARK_FACE_VALUE = 0.4;
+const PREPARED_DARK_FACE_LIGHTNESS = 0.45;
 const PREPARED_MAXIMUM_DARK_FACE_SHARE = 0.2;
-const PREPARED_MINIMUM_MEDIAN_LIT_VALUE = 0.5;
+const PREPARED_MINIMUM_MEDIAN_LIGHTNESS = 0.6;
 const PREPARED_SRGB_EXPOSURE = 1.4;
 const PREPARED_THIRD_HUE_SHARE = 0.2;
 const SOURCE_VERTEX_NORMALS = Object.freeze(
@@ -35,6 +35,7 @@ export function createCyclonePreparedLightingStream({
   let previousColors = null;
   let colorRestartCount = 0;
   const colorStates = [];
+  const colorStateOccurrenceCounts = [];
 
   function add(source) {
     validateSourceChunk(source);
@@ -60,9 +61,12 @@ export function createCyclonePreparedLightingStream({
             particleIndex,
             baseColor: particle.colorRgb,
           }));
+          colorStateOccurrenceCounts.push(0);
           previousColors[particleIndex] = particle.color;
         }
-        return currentColorStateIndices[particleIndex];
+        const stateIndex = currentColorStateIndices[particleIndex];
+        colorStateOccurrenceCounts[stateIndex] += 1;
+        return stateIndex;
       }),
     ));
     const chunk = deepFreeze({
@@ -95,6 +99,7 @@ export function createCyclonePreparedLightingStream({
       sourceStreamFrameCount,
       frozenVertexNormals,
       colorStates,
+      colorStateOccurrenceCounts,
       colorRestartCount,
       enforceFinalColorProfile: enforceFinalColorProfile && !allowPartial,
     });
@@ -131,11 +136,16 @@ async function buildPreparedLightingColors({
   sourceStreamFrameCount,
   frozenVertexNormals,
   colorStates,
+  colorStateOccurrenceCounts,
   colorRestartCount,
   enforceFinalColorProfile,
 }) {
   const leafCount = particleCount * CSSCYCLONE_FACE_INDICES.length;
   const tileCount = colorStates.length * CSSCYCLONE_FACE_INDICES.length;
+  const colorEntryWeights = colorStateOccurrenceCounts.flatMap((count) =>
+    Array(CSSCYCLONE_FACE_INDICES.length).fill(count));
+  const colorEntryHueIndices = colorStates.flatMap((state) =>
+    Array(CSSCYCLONE_FACE_INDICES.length).fill(preparedPaletteHueIndex(state.baseColor)));
   const paletteVariants = CSSCYCLONE_PRESENTATION.preparedPaletteVariants;
   if (!Array.isArray(paletteVariants) || paletteVariants.length !== 12 ||
       new Set(paletteVariants.map(({ id }) => id)).size !== paletteVariants.length ||
@@ -171,18 +181,39 @@ async function buildPreparedLightingColors({
       colors: Object.freeze(colors),
     });
   });
-  const logicalVariants = sourceLitVariants.map((variant) => {
-    const colors = variant.colors.map((color) =>
-      rgbHex(exposeSrgb(color, PREPARED_SRGB_EXPOSURE)));
+  const exposedVariants = sourceLitVariants.map((variant) => Object.freeze({
+    ...variant,
+    colors: Object.freeze(variant.colors.map((color) =>
+      exposeSrgb(color, PREPARED_SRGB_EXPOSURE))),
+  }));
+  const targetMedianLightness = Math.max(...exposedVariants.map((variant) =>
+    weightedMedian(variant.colors.map(oklabLightness), colorEntryWeights)));
+  const logicalVariants = exposedVariants.map((variant) => {
+    const lightnessLifts = [0, 1, 2].map((hueIndex) => {
+      const groupColors = variant.colors.filter((unused, index) =>
+        colorEntryHueIndices[index] === hueIndex);
+      if (groupColors.length === 0) return 0;
+      const groupWeights = colorEntryWeights.filter((unused, index) =>
+        colorEntryHueIndices[index] === hueIndex);
+      return Math.max(
+        0,
+        targetMedianLightness - weightedMedian(groupColors.map(oklabLightness), groupWeights),
+      );
+    });
+    const colors = variant.colors.map((color, index) => rgbHex(
+      liftOklabLightness(color, lightnessLifts[colorEntryHueIndices[index]]),
+    ));
     return Object.freeze({
       paletteVariantId: variant.paletteVariantId,
       hueRotation: variant.hueRotation,
       preparedHues: variant.preparedHues,
+      lightnessLifts: Object.freeze(lightnessLifts),
       colors: Object.freeze(colors),
     });
   });
   const finalLitColorProfile = buildFinalLitColorProfile(
     logicalVariants,
+    colorEntryWeights,
     enforceFinalColorProfile,
   );
   const deduplication = deduplicateExactCrossVariantColors(logicalVariants, tileCount);
@@ -200,8 +231,8 @@ async function buildPreparedLightingColors({
       variant.colors[index])),
   }));
   const contract = deepFreeze({
-    schema: "csscyclone-prepared-source-lit-three-color-vertex-lighting-colors@20",
-    technique: "prepared-source-smooth-vertex-lighting-averaged-per-solid-face-with-curated-three-color-analogous-session-palettes-srgb-exposure-sparse-source-color-restarts-and-exact-cross-variant-deduplication",
+    schema: "csscyclone-prepared-source-lit-three-color-vertex-lighting-colors@21",
+    technique: "prepared-source-smooth-vertex-lighting-averaged-per-solid-face-with-curated-three-color-analogous-session-palettes-srgb-exposure-oklab-lightness-normalization-sparse-source-color-restarts-and-exact-cross-variant-deduplication",
     source: "src/cyclone/cyclone.cpp#particle::update+initSaver",
     streamId,
     encoding: "CSS-sRGB-hex-plus-little-endian-color-slot-indices-base64",
@@ -337,6 +368,18 @@ export function prepareCyclonePaletteColor(baseColor, paletteVariantId) {
     PREPARED_MINIMUM_SATURATION,
     maximum > 0 ? chroma / maximum : 0,
   );
+  const preparedHueIndex = preparedPaletteHueIndex(baseColor);
+  return hsvToRgb(
+    paletteVariant.preparedHues[preparedHueIndex],
+    saturation,
+    Math.max(PREPARED_MINIMUM_VALUE, maximum),
+  );
+}
+
+function preparedPaletteHueIndex(baseColor) {
+  const maximum = Math.max(...baseColor);
+  const minimum = Math.min(...baseColor);
+  const chroma = maximum - minimum;
   let hue = 0;
   if (chroma > 1e-12) {
     if (maximum === baseColor[0]) hue = ((baseColor[1] - baseColor[2]) / chroma) % 6;
@@ -345,16 +388,7 @@ export function prepareCyclonePaletteColor(baseColor, paletteVariantId) {
     hue = (hue / 6 + 1) % 1;
   }
   const primaryShare = (1 - PREPARED_THIRD_HUE_SHARE) / 2;
-  const preparedHue = hue < primaryShare
-    ? paletteVariant.preparedHues[0]
-    : hue < primaryShare * 2
-      ? paletteVariant.preparedHues[1]
-      : paletteVariant.preparedHues[2];
-  return hsvToRgb(
-    preparedHue,
-    saturation,
-    Math.max(PREPARED_MINIMUM_VALUE, maximum),
-  );
+  return hue < primaryShare ? 0 : hue < primaryShare * 2 ? 1 : 2;
 }
 
 function hsvToRgb(hue, saturation, value) {
@@ -398,38 +432,121 @@ function exposeSrgb(color, exposure) {
   return color.map((channel) => Math.min(255, Math.ceil(channel * exposure)));
 }
 
-function buildFinalLitColorProfile(variants, enforce) {
+function buildFinalLitColorProfile(variants, colorEntryWeights, enforce) {
   const profiles = variants.map((variant) => {
-    const values = variant.colors.map(colorValue).sort((left, right) => left - right);
-    const darkFaceCount = values.filter((value) => value < PREPARED_DARK_FACE_VALUE).length;
+    const lightnesses = variant.colors.map((color) => oklabLightness(parseHex(color)));
+    const totalWeight = colorEntryWeights.reduce((sum, weight) => sum + weight, 0);
+    const darkFaceWeight = lightnesses.reduce((sum, lightness, index) =>
+      sum + (lightness < PREPARED_DARK_FACE_LIGHTNESS ? colorEntryWeights[index] : 0), 0);
     return Object.freeze({
       paletteVariantId: variant.paletteVariantId,
-      medianLitValue: roundMetric(values[Math.floor((values.length - 1) / 2)]),
-      darkFaceShare: roundMetric(darkFaceCount / values.length),
+      medianLightness: roundMetric(weightedMedian(lightnesses, colorEntryWeights)),
+      darkFaceShare: roundMetric(darkFaceWeight / totalWeight),
+      lightnessLifts: Object.freeze(variant.lightnessLifts.map(roundMetric)),
     });
   });
   const invalidProfiles = profiles.filter((profile) =>
-    profile.medianLitValue < PREPARED_MINIMUM_MEDIAN_LIT_VALUE ||
+    profile.medianLightness < PREPARED_MINIMUM_MEDIAN_LIGHTNESS ||
     profile.darkFaceShare > PREPARED_MAXIMUM_DARK_FACE_SHARE);
   if (enforce && invalidProfiles.length > 0) {
     throw new Error(`Prepared Cyclone final lit colors are too dark: ${JSON.stringify(invalidProfiles)}`);
   }
   return deepFreeze({
-    schema: "csscyclone-prepared-final-lit-color-profile@3",
-    darkFaceValueThreshold: PREPARED_DARK_FACE_VALUE,
+    schema: "csscyclone-prepared-final-lit-color-profile@4",
+    metric: "OKLab-lightness",
+    normalization: "publication-weighted-groupwise-additive-lightness-to-brightest-variant-median-with-chroma-gamut-mapping",
+    darkFaceLightnessThreshold: PREPARED_DARK_FACE_LIGHTNESS,
     maximumDarkFaceShare: PREPARED_MAXIMUM_DARK_FACE_SHARE,
-    minimumMedianLitValue: PREPARED_MINIMUM_MEDIAN_LIT_VALUE,
+    minimumMedianLightness: PREPARED_MINIMUM_MEDIAN_LIGHTNESS,
     srgbExposure: PREPARED_SRGB_EXPOSURE,
+    targetMedianLightness: roundMetric(Math.max(...profiles.map(({ medianLightness }) =>
+      medianLightness))),
     variants: profiles,
   });
 }
 
-function colorValue(color) {
-  return Math.max(
-    Number.parseInt(color.slice(1, 3), 16),
-    Number.parseInt(color.slice(3, 5), 16),
-    Number.parseInt(color.slice(5, 7), 16),
-  ) / 255;
+function liftOklabLightness(color, lightnessLift) {
+  const [lightness, a, b] = oklabFromSrgb(color);
+  const target = [Math.min(1, lightness + lightnessLift), a, b];
+  let mapped = srgbFromOklab(target);
+  if (mapped.every((channel) => channel >= 0 && channel <= 255)) {
+    return mapped.map(clampByte);
+  }
+  let lower = 0;
+  let upper = 1;
+  for (let step = 0; step < 16; step += 1) {
+    const scale = (lower + upper) / 2;
+    const candidate = srgbFromOklab([target[0], a * scale, b * scale]);
+    if (candidate.every((channel) => channel >= 0 && channel <= 255)) {
+      lower = scale;
+      mapped = candidate;
+    } else {
+      upper = scale;
+    }
+  }
+  return mapped.map(clampByte);
+}
+
+function oklabLightness(color) {
+  return oklabFromSrgb(color)[0];
+}
+
+function oklabFromSrgb(color) {
+  const [red, green, blue] = color.map((channel) => linearSrgb(channel / 255));
+  const l = Math.cbrt(0.4122214708 * red + 0.5363325363 * green + 0.0514459929 * blue);
+  const m = Math.cbrt(0.2119034982 * red + 0.6806995451 * green + 0.1073969566 * blue);
+  const s = Math.cbrt(0.0883024619 * red + 0.2817188376 * green + 0.6299787005 * blue);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
+}
+
+function srgbFromOklab([lightness, a, b]) {
+  const l = lightness + 0.3963377774 * a + 0.2158037573 * b;
+  const m = lightness - 0.1055613458 * a - 0.0638541728 * b;
+  const s = lightness - 0.0894841775 * a - 1.291485548 * b;
+  const linearL = l ** 3;
+  const linearM = m ** 3;
+  const linearS = s ** 3;
+  return [
+    encodedSrgb(4.0767416621 * linearL - 3.3077115913 * linearM + 0.2309699292 * linearS),
+    encodedSrgb(-1.2684380046 * linearL + 2.6097574011 * linearM - 0.3413193965 * linearS),
+    encodedSrgb(-0.0041960863 * linearL - 0.7034186147 * linearM + 1.707614701 * linearS),
+  ];
+}
+
+function linearSrgb(channel) {
+  return channel <= 0.04045
+    ? channel / 12.92
+    : ((channel + 0.055) / 1.055) ** 2.4;
+}
+
+function encodedSrgb(channel) {
+  return 255 * (channel <= 0.0031308
+    ? 12.92 * channel
+    : 1.055 * channel ** (1 / 2.4) - 0.055);
+}
+
+function parseHex(color) {
+  return [1, 3, 5].map((offset) => Number.parseInt(color.slice(offset, offset + 2), 16));
+}
+
+function weightedMedian(values, weights) {
+  if (values.length < 1 || values.length !== weights.length ||
+      weights.some((weight) => !Number.isSafeInteger(weight) || weight < 1)) {
+    throw new Error("Cyclone lightness normalization requires positive publication weights");
+  }
+  const entries = values.map((value, index) => [value, weights[index]])
+    .sort(([left], [right]) => left - right);
+  const midpoint = weights.reduce((sum, weight) => sum + weight, 0) / 2;
+  let cumulative = 0;
+  for (const [value, weight] of entries) {
+    cumulative += weight;
+    if (cumulative >= midpoint) return value;
+  }
+  return entries.at(-1)[0];
 }
 
 function roundMetric(value) {

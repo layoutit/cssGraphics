@@ -12,10 +12,12 @@ so decompression stays outside long animation frames. The source fixed-function
 light is sampled at each particle's original smooth vertex normals in the first
 published frame, then the three lit vertex colors of every triangle are averaged
 into one prepared opaque CSS face color, then receives a prepared 1.4 sRGB
-exposure. The exposure clips channels at the gamut ceiling without mixing
-toward neutral, so green and blue palettes keep their saturation and hue ratios.
-A preparation guard rejects banks whose final lit palette becomes predominantly
-dark. Exact cross-palette color tuples
+exposure. The twelve variants are then normalized once in OKLab using visible
+frame-occurrence weights for each of their three hue groups. Chroma is reduced
+only where the adjusted color would
+leave the sRGB gamut, so every family keeps its hue and face-lighting contrast
+without blue and violet sessions becoming perceptually dark. A preparation guard
+checks OKLab lightness rather than the maximum RGB channel. Exact cross-palette color tuples
 are deduplicated into a compact prepared slot table. Initial leaf colors are
 bound once. Later color writes are limited to the six leaves of a particle when
 the source restarts it with a new color. The mounted graph is camera, scene,
@@ -35,7 +37,7 @@ restart remain unchanged. Twelve prepared variants use explicit audited
 three-hue sets; none combines opposing families such as red and blue. The
 palette definition is shared with Flocks. The browser selects one complete prepared color table and performs no color calculation. The same source RNG
 draws preserve RNG cadence, trajectory geometry, restart timing, and coherent
-color bands. The session palette and prepared exposure are
+color bands. The session palette, prepared exposure, and perceptual-lightness normalization are
 intentional presentation changes; they are not exact source colors.
 Startup is prebaked to ten audited 48-frame source windows. A 12-load
 session-shuffled cycle includes every prepared palette exactly once without

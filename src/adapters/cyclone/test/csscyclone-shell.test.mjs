@@ -34,7 +34,8 @@ test("uses the shared css.graphics examples shell without alternate renderers", 
   assert.doesNotMatch(styles, /background-image/u);
   assert.match(styles, /background-color:\s*transparent/u);
   assert.match(styles, /\.example-stage > \.polycss-camera :is\(u, b\)/u);
-  assert.match(styles, /\.example-stage > \.polycss-camera u\s*\{[^}]*corner-top-left-shape:\s*bevel;/su);
+  assert.match(styles, /\.example-stage > \.polycss-camera u\s*\{[^}]*corner-top-left-shape:\s*round;/su);
+  assert.match(styles, /\.example-stage > \.polycss-camera u\s*\{[^}]*corner-top-right-shape:\s*round;/su);
   assert.doesNotMatch(styles, /\.example-stage > \.polycss-camera :is\(u, b\)\s*\{[^}]*corner-top-left-shape:/su);
   assert.doesNotMatch(styles, /color-mix|--cyclone-tone/u);
   assert.match(preparedDom, /cameraElement\.style\.removeProperty\("perspective"\)/u);

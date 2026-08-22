@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { buildPolyMorphCatalog, buildPolyMorphPackage } from "@layoutit/polycss-morph/prepare";
 import {
+  CSSCYCLONE_FALLBACK_ATLAS_PAGES,
   CSSCYCLONE_FACE_INDICES,
   CSSCYCLONE_MODEL_IDS,
   buildCyclonePreparedModel,
@@ -257,7 +258,15 @@ async function prepareProfile(profile) {
     catalogBytes,
   );
   if (preparedModel === null) throw new Error(`Cyclone ${profile.id} stream produced no prepared model`);
-  const built = await buildPolyMorphPackage(preparedModel.model);
+  const built = await buildPolyMorphPackage(
+    preparedModel.model,
+    CSSCYCLONE_FALLBACK_ATLAS_PAGES.map((page) => ({
+      path: page.path,
+      role: "image",
+      mediaType: "image/png",
+      bytes: page.bytes,
+    })),
+  );
   const packageRoot = join(stagingRoot, "model", profile.modelId);
   await mkdir(packageRoot, { recursive: true });
   for (const [path, bytes] of built.files) await writeBytes(join(packageRoot, path), bytes);

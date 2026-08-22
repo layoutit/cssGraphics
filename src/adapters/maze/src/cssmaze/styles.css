@@ -10,8 +10,7 @@
 }
 
 html,
-body,
-#scene {
+body {
   width: 100%;
   height: 100%;
   margin: 0;
@@ -34,116 +33,7 @@ body.loading::after {
   border-radius: 50%;
 }
 
-.site-header {
-  position: fixed;
-  inset: 0 0 auto;
-  z-index: 21;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  height: 50px;
-  padding: 0 12px 0 16px;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-synthesis: none;
-  pointer-events: none;
-}
-
-.site-wordmark-heading {
-  margin: 0;
-  font: inherit;
-}
-
-.site-wordmark {
-  display: inline-flex;
-  align-items: center;
-  color: #aeb4bc;
-  opacity: 0.72;
-  pointer-events: auto;
-  text-decoration: none;
-}
-
-.site-wordmark-svg {
-  display: block;
-  width: 210px;
-  height: 30px;
-  overflow: visible;
-}
-
-.site-wordmark-svg text {
-  fill: currentColor;
-  font-family: inherit;
-  font-size: 24px;
-  font-weight: 400;
-  letter-spacing: 0.1px;
-}
-
-.site-wordmark-css {
-  font-weight: 500;
-}
-
-.site-wordmark-graphics {
-  font-weight: 200;
-}
-
-.site-wordmark-path {
-  font-weight: 100;
-}
-
-.site-action-icon-only {
-  display: inline-flex;
-  width: 36px;
-  min-width: 36px;
-  height: 50px;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  color: #f0f0f0;
-  background: transparent;
-  border: 0;
-  font: 400 13px/1 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-  opacity: 0.72;
-  pointer-events: auto;
-  text-decoration: none;
-}
-
-.site-action-icon {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
-.site-action-icon-outline {
-  stroke: rgb(0 0 0 / 60%);
-  stroke-width: 4;
-}
-
-.site-wordmark:hover,
-.site-wordmark:focus-visible,
-.site-action-icon-only:hover,
-.site-action-icon-only:focus-visible {
-  opacity: 1;
-}
-
-.site-wordmark:focus-visible {
-  outline: 1px solid currentColor;
-  outline-offset: 4px;
-}
-
-.site-action-icon-only:focus-visible {
-  outline: 1px solid currentColor;
-  outline-offset: -5px;
-}
-
 #scene {
-  position: absolute;
-  inset: 0;
   overflow: hidden;
   contain: layout paint size style;
   background: linear-gradient(180deg, #0b1119 0%, #000 100%);
@@ -185,21 +75,4 @@ body.loading::after {
   white-space: pre-wrap;
   color: #ffb5a7;
   background: rgb(0 0 0 / 88%);
-}
-
-@media (max-width: 520px) {
-  .site-header {
-    padding-inline: 12px;
-  }
-
-  .site-wordmark-svg {
-    width: 176px;
-  }
-
-}
-
-@media (max-width: 390px) {
-  .site-wordmark-svg {
-    width: 148px;
-  }
 }

@@ -42,110 +42,7 @@ body:not(.ready):not(.error)::before {
   background: rgb(0 0 0 / 99.999%);
 }
 
-.site-header {
-  position: fixed;
-  inset: 0 0 auto;
-  z-index: 21;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  height: 50px;
-  padding: 0 12px 0 16px;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-synthesis: none;
-}
-
-.site-wordmark-heading {
-  margin: 0;
-  font: inherit;
-}
-
-.site-wordmark {
-  display: inline-flex;
-  align-items: center;
-  color: #f0f0f0;
-  opacity: 0.72;
-  text-decoration: none;
-}
-
-.site-wordmark-svg {
-  display: block;
-  width: 210px;
-  height: 30px;
-  overflow: visible;
-}
-
-.site-wordmark-svg text {
-  fill: currentColor;
-  font-family: inherit;
-  font-size: 24px;
-  font-weight: 400;
-  letter-spacing: 0.1px;
-}
-
-.site-wordmark-css {
-  font-weight: 500;
-}
-
-.site-wordmark-graphics {
-  font-weight: 200;
-}
-
-.site-wordmark-path {
-  font-weight: 100;
-}
-
-.site-wordmark:hover,
-.site-wordmark:focus-visible,
-.site-action-icon-only:hover,
-.site-action-icon-only:focus-visible {
-  opacity: 1;
-}
-
-.site-wordmark:focus-visible {
-  outline: 1px solid currentColor;
-  outline-offset: 4px;
-}
-
-.site-actions {
-  display: flex;
-  align-items: center;
-  height: 100%;
-}
-
-.site-action-icon-only {
-  display: inline-flex;
-  width: 36px;
-  min-width: 36px;
-  height: 50px;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  color: #f0f0f0;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  opacity: 0.72;
-  text-decoration: none;
-}
-
-.site-action-icon {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
-.site-action-icon-only:focus-visible {
-  outline: 1px solid currentColor;
-  outline-offset: -5px;
-}
-
-body > .polycss-camera {
+.example-stage > .polycss-camera {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -154,12 +51,12 @@ body > .polycss-camera {
   background: transparent;
 }
 
-body > .polycss-camera > .polycss-scene {
+.example-stage > .polycss-camera > .polycss-scene {
   animation: cssmenger-prepared-rotation var(--cssmenger-rotation-duration) linear infinite normal both paused;
   will-change: transform;
 }
 
-body > .polycss-camera > .polycss-scene > b {
+.example-stage > .polycss-camera > .polycss-scene > b {
   position: absolute;
   display: block;
   width: var(--cssmenger-tile-width, 27px);
@@ -181,7 +78,7 @@ body > .polycss-camera > .polycss-scene > b {
   backface-visibility: hidden;
 }
 
-body:not(.ready):not(.error) > .polycss-camera > .polycss-scene > b {
+body:not(.ready):not(.error) .example-stage > .polycss-camera > .polycss-scene > b {
   backface-visibility: visible;
 }
 
@@ -198,17 +95,13 @@ body:not(.ready):not(.error) > .polycss-camera > .polycss-scene > b {
 }
 
 @media (max-width: 360px) {
-  .site-header {
-    padding-inline: 12px;
-  }
-
-  body > .polycss-camera > .polycss-scene {
+  .example-stage > .polycss-camera > .polycss-scene {
     scale: 0.82;
   }
 }
 
 @media (min-width: 361px) and (max-width: 430px) {
-  body > .polycss-camera > .polycss-scene {
+  .example-stage > .polycss-camera > .polycss-scene {
     scale: 0.88;
   }
 }

@@ -8,18 +8,14 @@ const adapterRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const html = readFileSync(join(adapterRoot, "index.html"), "utf8");
 const css = readFileSync(join(adapterRoot, "src/cssgears/styles.css"), "utf8");
 
-test("css.graphics/gears uses the cssPipes product shell", () => {
+test("css.graphics/gears uses the shared examples shell", () => {
   assert.match(html, /<title>Gears - Powered by PolyCSS<\/title>/u);
   assert.match(html, /rel="canonical" href="https:\/\/css\.graphics\/gears\/"/u);
-  assert.match(html, /class="site-header"/u);
-  assert.match(html, /class="site-wordmark" href="\/" aria-label="Gears - css\.graphics home"/u);
-  assert.match(html, /class="site-wordmark-path">\/gears<\/tspan>/u);
-  assert.match(html, /href="https:\/\/github\.com\/layoutit\/cssGraphics"/u);
-  assert.match(html, /<main id="scene"><\/main>/u);
+  assert.match(html, /cssgraphics-examples-sidebar/u);
+  assert.match(html, /<main id="scene" class="example-stage"><\/main>/u);
+  assert.doesNotMatch(html, /iframe|site-header/u);
   assert.doesNotMatch(html, /<nav\b|<section\b|<output\b|id="app"|id="status"/u);
-  assert.equal((html.match(/aria-label=/gu) ?? []).length, 2);
-  assert.match(css, /\.site-header \{/u);
-  assert.match(css, /\.site-action-icon \{/u);
+  assert.doesNotMatch(css, /\.site-(?:header|wordmark|action)/u);
   assert.equal(
     (
       css.match(

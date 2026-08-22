@@ -2,6 +2,7 @@ import { cp, mkdir, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
+import { createExamplesShellPlugin } from "../../../site/examples-shell-plugin.mjs";
 
 const adapterRoot = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(adapterRoot, "..", "..", "..");
@@ -15,7 +16,7 @@ export default defineConfig({
   base: deployBuild ? "/solitaire/" : "/",
   root: adapterRoot,
   publicDir: deployBuild ? false : generatedPublicDir,
-  plugins: deployBuild ? [{
+  plugins: [createExamplesShellPlugin("solitaire"), ...(deployBuild ? [{
     name: "csssolitaire-netlify-assets",
     async closeBundle() {
       await mkdir(resolve(repositoryRoot, "dist", "site"), { recursive: true });
@@ -26,7 +27,7 @@ export default defineConfig({
         { recursive: true, force: true },
       );
     },
-  }] : [],
+  }] : [])],
   server: { host: "127.0.0.1" },
   preview: { host: "127.0.0.1" },
   build: {

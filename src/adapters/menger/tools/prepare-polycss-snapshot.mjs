@@ -30,6 +30,7 @@ const scenePath = join(generatedPublicRoot, "scenes", `${sceneId}.json`);
 const privateScenePath = join(generatedPrivateRoot, "scenes", `${sceneId}.prepared.json`);
 const snapshotPath = join(generatedPublicRoot, "scenes", `${sceneId}.polycss.txt`);
 const snapshotUrl = `/cssmenger/scenes/${sceneId}.polycss.txt`;
+const preparedSceneSelector = ":is(body,.example-stage)>.polycss-camera>.polycss-scene";
 await stagePreparedScene();
 const port = await freePort();
 let output = "";
@@ -131,11 +132,11 @@ function bindFinalAtlasDimensions({
       `--cssmenger-atlas-height:${desktopAtlas.height}px;` +
       `--cssmenger-tile-width:${desktopAtlas.tileWidth}px;` +
       `--cssmenger-tile-height:${desktopAtlas.tileHeight}px}` +
-      `body>.polycss-camera>.polycss-scene>b{` +
+      `${preparedSceneSelector}>b{` +
       `background-image:url("${desktopAtlas.assetUrl}")}` +
       `.polycss-scene.cssmenger-mobile-atlas{--cssmenger-atlas-width:${mobileAtlas.width}px;` +
       `--cssmenger-atlas-height:${mobileAtlas.height}px}` +
-      `body>.polycss-camera>.polycss-scene.cssmenger-mobile-atlas>b{` +
+      `${preparedSceneSelector}.cssmenger-mobile-atlas>b{` +
       `background-image:url("${mobileAtlas.assetUrl}")}` +
       `${cssOpacityStyles}${rotationAnimationStyles}</style>`,
   );
@@ -159,7 +160,7 @@ function validCssOpacityShadowAtlas(atlas) {
 }
 
 function preparedCssOpacityStyles({ baseAtlas, shadowAtlas }) {
-  const scene = "body>.polycss-camera>.polycss-scene.cssmenger-css-opacity";
+  const scene = `${preparedSceneSelector}.cssmenger-css-opacity`;
   const rules = [
     `${scene}{--cssmenger-atlas-width:${shadowAtlas.width}px;` +
       `--cssmenger-atlas-height:${shadowAtlas.height}px}`,
@@ -312,7 +313,7 @@ function preparedRotationAnimationStyles(playback) {
     const percentage = (stateIndex / playback.stateCount * 100).toFixed(9).replace(/\.?0+$/u, "");
     return `${percentage}%{transform:${transform}}`;
   }).join("") + `100%{transform:${playback.cycleClosureTransform}}`;
-  return `body>.polycss-camera>.polycss-scene{--cssmenger-rotation-duration:${durationMilliseconds}ms}` +
+  return `${preparedSceneSelector}{--cssmenger-rotation-duration:${durationMilliseconds}ms}` +
     `@keyframes cssmenger-prepared-rotation{${keyframes}}`;
 }
 

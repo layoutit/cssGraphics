@@ -330,9 +330,9 @@ test("product runtime CSS stays on the fast browser path", async () => {
   const shellGradient = "linear-gradient(180deg, #0b1119 0%, #000 100%)";
   assert.equal(css.split(shellGradient).length - 1, 2);
   assert.doesNotMatch(css, /!important/iu);
-  assert.match(css, /body > \.polycss-camera > \.polycss-scene\s*\{[^}]*animation:\s*cssmenger-prepared-rotation var\(--cssmenger-rotation-duration\) linear infinite normal both paused;/su);
-  assert.match(css, /body > \.polycss-camera > \.polycss-scene\s*\{[^}]*will-change:\s*transform;/su);
-  assert.match(css, /body > \.polycss-camera > \.polycss-scene > b\s*\{/u);
+  assert.match(css, /\.example-stage > \.polycss-camera > \.polycss-scene\s*\{[^}]*animation:\s*cssmenger-prepared-rotation var\(--cssmenger-rotation-duration\) linear infinite normal both paused;/su);
+  assert.match(css, /\.example-stage > \.polycss-camera > \.polycss-scene\s*\{[^}]*will-change:\s*transform;/su);
+  assert.match(css, /\.example-stage > \.polycss-camera > \.polycss-scene > b\s*\{/u);
   assert.doesNotMatch(css, /background-image:\s*var\(--a\)/u);
   assert.match(css, /body:not\(\.ready\):not\(\.error\)::after/u);
   assert.doesNotMatch(css, /data-port-status/u);
@@ -342,10 +342,9 @@ test("product runtime CSS stays on the fast browser path", async () => {
 test("product index uses the css.graphics shell", async () => {
   const html = await readFile(join(root, "index.html"), "utf8");
   assert.match(html, /<title>Menger - Powered by PolyCSS<\/title>/u);
-  assert.match(html, /class="site-header"/u);
-  assert.match(html, /class="site-wordmark"[^>]+href="\/"/u);
-  assert.match(html, /site-wordmark-path">\/menger/u);
-  assert.match(html, /href="https:\/\/github\.com\/layoutit\/cssGraphics"/u);
+  assert.match(html, /cssgraphics-examples-sidebar/u);
+  assert.match(html, /<main class="example-stage"><\/main>/u);
+  assert.doesNotMatch(html, /iframe|site-header/u);
 });
 
 async function readJson(path) {

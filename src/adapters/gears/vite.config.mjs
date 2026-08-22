@@ -4,6 +4,7 @@ import { cp, mkdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
+import { createExamplesShellPlugin } from "../../../site/examples-shell-plugin.mjs";
 
 const adapterRoot = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(adapterRoot, "..", "..", "..");
@@ -45,7 +46,7 @@ export default defineConfig({
     __POLYCSS_VERSION__: JSON.stringify(polycssVersion()),
   },
   publicDir: deployBuild ? false : generatedPublicDir,
-  plugins: deployBuild ? [{
+  plugins: [createExamplesShellPlugin("gears"), ...(deployBuild ? [{
     name: "cssgears-netlify-assets",
     async closeBundle() {
       await mkdir(resolve(repositoryRoot, "dist/site"), { recursive: true });
@@ -55,7 +56,7 @@ export default defineConfig({
         { recursive: true, force: true },
       );
     },
-  }] : [],
+  }] : [])],
   server: { host: "127.0.0.1" },
   preview: { host: "127.0.0.1" },
   build: {

@@ -6,9 +6,10 @@ const root = new URL("../", import.meta.url);
 
 test("cloth uses the cssGraphics shell without source controls", async () => {
   const html = await readFile(new URL("index.html", root), "utf8");
-  assert.match(html, /site-wordmark-css[^>]*>css\.<[\s\S]*site-wordmark-graphics[^>]*>graphics</);
+  assert.match(html, /cssgraphics-examples-sidebar/u);
+  assert.match(html, /<main class="example-stage"><\/main>/u);
   assert.match(html, /\/cloth/);
-  assert.doesNotMatch(html, /canvas|dat\.gui|stats/i);
+  assert.doesNotMatch(html, /iframe|site-header|canvas|dat\.gui|stats/i);
   assert.equal((html.match(/<script\b/gu) ?? []).length, 1);
 });
 
@@ -75,7 +76,7 @@ test("runtime has no per-frame geometry or raster construction", async () => {
   assert.match(client, /metadata\.renderer\.lightingAtlas/u);
   assert.match(client, /sceneElement\.prepend\(groundShape\)/u);
   assert.doesNotMatch(client, /sceneElement\.prepend\(ground\)/u);
-  assert.match(styles, /body > \.polycss-camera > \.polycss-scene > :is\(s, u\)/u);
+  assert.match(styles, /\.example-stage > \.polycss-camera > \.polycss-scene > :is\(s, u\)/u);
   assert.match(styles, /clip-path: polygon\(50% 0, 100% 100%, 0 100%\)/u);
   assert.match(styles, /background-image: var\(--csscloth-logo-atlas\), var\(--csscloth-atlas\)/u);
   assert.match(styles, /background-size: var\(--csscloth-logo-atlas-size\), var\(--csscloth-atlas-size\)/u);

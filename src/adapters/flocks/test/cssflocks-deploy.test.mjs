@@ -34,7 +34,7 @@ test("Flocks deploy and cache policy are integrated without adding a landing pro
     readFile(resolve(repositoryRoot, "netlify.toml"), "utf8"),
     readFile(resolve(repositoryRoot, "package.json"), "utf8"),
     readFile(resolve(repositoryRoot, "site/public/projects.json"), "utf8"),
-    readFile(resolve(repositoryRoot, "site/index.html"), "utf8"),
+    readFile(resolve(repositoryRoot, "site/pages/index.astro"), "utf8"),
   ]);
   assert.match(vite, /publicDir:\s*deployBuild \? false : generatedPublicDir/u);
   assert.match(vite, /rm\(deployAssets,[^;]+force: true/u);

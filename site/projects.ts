@@ -6,7 +6,13 @@ export interface LandingProject {
   readonly name: string;
   readonly route: string;
   readonly preview: string;
+  readonly numberTone: "dark" | "light";
   readonly source: string;
+  readonly credits: readonly {
+    readonly relation: string;
+    readonly name: string;
+    readonly url?: string;
+  }[];
   readonly description: string;
   readonly date: string;
 }
@@ -21,12 +27,19 @@ const numbers = new Set<number>();
 export const PROJECTS: readonly LandingProject[] = Object.freeze(
   projectManifest.projects.map((project, index) => {
     const expectedNumber = projectManifest.projects.length - index;
+    const numberTone = project.numberTone;
     if (project.number !== expectedNumber ||
         !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(project.id) ||
         project.route !== `/${project.id}/` ||
         project.preview !== `/landing/${project.id}.webp` ||
+        (numberTone !== "dark" && numberTone !== "light") ||
         typeof project.name !== "string" || project.name.length === 0 ||
         typeof project.source !== "string" || project.source.length === 0 ||
+        !Array.isArray(project.credits) || project.credits.length === 0 ||
+        project.credits.some(({ relation, name, url }) =>
+          typeof relation !== "string" || relation.length === 0 ||
+          typeof name !== "string" || name.length === 0 ||
+          (url !== undefined && !/^https:\/\//u.test(url))) ||
         typeof project.description !== "string" || project.description.length < 40 ||
         !/^\d{4}-\d{2}-\d{2}$/u.test(project.date) ||
         ids.has(project.id) || numbers.has(project.number)) {
@@ -34,6 +47,6 @@ export const PROJECTS: readonly LandingProject[] = Object.freeze(
     }
     ids.add(project.id);
     numbers.add(project.number);
-    return Object.freeze(project);
+    return Object.freeze({ ...project, numberTone });
   }),
 );

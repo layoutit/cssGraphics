@@ -14,7 +14,9 @@ test("product shell identifies the route and avoids alternate or paint-heavy ren
     readFile(resolve(adapterRoot, "src/cssselectropaint/polycssScene.mjs"), "utf8"),
   ]);
   assert.match(html, /css\.graphics\/electropaint/u);
-  assert.doesNotMatch(html, /<main\b|id="scene"/iu);
+  assert.match(html, /cssgraphics-examples-sidebar/u);
+  assert.match(html, /<main class="example-stage"><\/main>/u);
+  assert.doesNotMatch(html, /iframe|site-header/iu);
   assert.doesNotMatch(html, /<canvas\b|<model-viewer\b/iu);
   assert.doesNotMatch(css, /clip-path|mask(?:-image)?|filter|box-shadow|text-shadow|mix-blend-mode/iu);
   assert.doesNotMatch(player, /Math\.random|requestAnimationFrame\s*\(|DOMMatrix|createElement/u);
@@ -26,11 +28,8 @@ test("product shell identifies the route and avoids alternate or paint-heavy ren
   assert.match(css, /perspective:\s*1000px/u);
   assert.match(css, /transform:\s*translateY\(135px\) rotateX\(45deg\)/u);
   assert.doesNotMatch(css, /@media \(pointer:\s*coarse\)/u);
-  assert.match(css, /\.site-header \{[^}]*pointer-events:\s*none;/u);
-  assert.doesNotMatch(css, /\.site-header \{[^}]*background:/u);
-  assert.match(css, /\.site-wordmark \{[^}]*pointer-events:\s*auto;/u);
-  assert.match(css, /\.site-action-icon-only \{[^}]*pointer-events:\s*auto;/u);
-  assert.match(css, /body > \.polycss-camera \{/u);
+  assert.doesNotMatch(css, /\.site-(?:header|wordmark|action)/u);
+  assert.match(css, /\.example-stage > \.polycss-camera \{/u);
   assert.match(css, /body\.loading::after \{[^}]*animation:\s*cssselectropaint-loading 0\.8s linear infinite;/u);
   assert.match(css, /@keyframes cssselectropaint-loading \{\s*to \{\s*transform:\s*rotate\(1turn\);/u);
   assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\) \{\s*body\.loading::after \{\s*animation:\s*none;/u);

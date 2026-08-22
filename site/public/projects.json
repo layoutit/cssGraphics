@@ -7,7 +7,15 @@
       "name": "Cloth",
       "route": "/cloth/",
       "preview": "/landing/cloth.webp",
+      "numberTone": "dark",
       "source": "Three.js",
+      "credits": [
+        {
+          "relation": "Adapted from",
+          "name": "three.js examples",
+          "url": "https://github.com/mrdoob/three.js/blob/e62b253081438c030d6af1ee3c3346a89124f277/examples/webgl_animation_cloth.html"
+        }
+      ],
       "description": "The Three.js cloth simulation rendered entirely with HTML and CSS using PolyCSS.",
       "date": "2026-08-20"
     },
@@ -17,7 +25,15 @@
       "name": "Solitaire",
       "route": "/solitaire/",
       "preview": "/landing/solitaire.webp",
+      "numberTone": "light",
       "source": "Classic Solitaire",
+      "credits": [
+        {
+          "relation": "Behavior from",
+          "name": "Microsoft Solitaire",
+          "url": "https://github.com/esc0rtd3w/xp-cards"
+        }
+      ],
       "description": "The classic Solitaire victory cascade rendered entirely with HTML and CSS using PolyCSS.",
       "date": "2026-08-17"
     },
@@ -27,7 +43,14 @@
       "name": "ElectroPaint",
       "route": "/electropaint/",
       "preview": "/landing/electropaint.webp",
+      "numberTone": "light",
       "source": "David Tristram",
+      "credits": [
+        {
+          "relation": "Original by",
+          "name": "David Tristram"
+        }
+      ],
       "description": "ElectroPaint, originally written by David Tristram, rendered entirely with HTML and CSS using PolyCSS.",
       "date": "2026-08-10"
     },
@@ -37,8 +60,16 @@
       "name": "Menger",
       "route": "/menger/",
       "preview": "/landing/menger.webp",
+      "numberTone": "light",
       "source": "XScreenSaver",
-      "description": "XScreenSaver Menger rendered entirely with HTML and CSS using PolyCSS.",
+      "credits": [
+        {
+          "relation": "Adapted from",
+          "name": "XScreenSaver",
+          "url": "https://github.com/Zygo/xscreensaver/blob/906693799e4fb7581436590cf84ecb2d3c9186ba/hacks/glx/menger.c"
+        }
+      ],
+      "description": "Menger rendered entirely with HTML and CSS using PolyCSS.",
       "date": "2026-08-13"
     },
     {
@@ -47,8 +78,16 @@
       "name": "Maze",
       "route": "/maze/",
       "preview": "/landing/maze.webp",
+      "numberTone": "light",
       "source": "XScreenSaver",
-      "description": "XScreenSaver Maze3D rendered entirely with HTML and CSS using PolyCSS.",
+      "credits": [
+        {
+          "relation": "Adapted from",
+          "name": "XScreenSaver",
+          "url": "https://github.com/Zygo/xscreensaver/blob/906693799e4fb7581436590cf84ecb2d3c9186ba/hacks/glx/maze3d.c"
+        }
+      ],
+      "description": "Maze3D rendered entirely with HTML and CSS using PolyCSS.",
       "date": "2026-08-09"
     },
     {
@@ -57,8 +96,16 @@
       "name": "Gears",
       "route": "/gears/",
       "preview": "/landing/gears.webp",
+      "numberTone": "light",
       "source": "XScreenSaver",
-      "description": "XScreenSaver Gears rendered entirely with HTML and CSS using PolyCSS.",
+      "credits": [
+        {
+          "relation": "Adapted from",
+          "name": "XScreenSaver",
+          "url": "https://github.com/Zygo/xscreensaver/blob/906693799e4fb7581436590cf84ecb2d3c9186ba/hacks/glx/gears.c"
+        }
+      ],
+      "description": "Gears rendered entirely with HTML and CSS using PolyCSS.",
       "date": "2026-08-07"
     },
     {
@@ -67,7 +114,19 @@
       "name": "Pipes",
       "route": "/pipes/",
       "preview": "/landing/pipes.webp",
+      "numberTone": "light",
       "source": "Original",
+      "credits": [
+        {
+          "relation": "Inspired by",
+          "name": "XScreenSaver",
+          "url": "https://github.com/Zygo/xscreensaver/blob/906693799e4fb7581436590cf84ecb2d3c9186ba/hacks/glx/pipes.c"
+        },
+        {
+          "relation": "and",
+          "name": "Windows 3D Pipes"
+        }
+      ],
       "description": "CSS Pipes rendered entirely with HTML and CSS using PolyCSS.",
       "date": "2026-08-06"
     }

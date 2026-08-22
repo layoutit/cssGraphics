@@ -49,3 +49,4 @@ src.zip
 
 # Local Netlify folder
 .netlify
+.astro/

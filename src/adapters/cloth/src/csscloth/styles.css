@@ -48,78 +48,7 @@ body.loading::after {
   body.loading::after { animation: none; }
 }
 
-.site-header {
-  position: fixed;
-  inset: 0 0 auto;
-  z-index: 21;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  height: 50px;
-  padding: 0 12px 0 16px;
-}
-
-.site-wordmark-heading { margin: 0; font: inherit; }
-
-.site-wordmark {
-  display: inline-flex;
-  align-items: center;
-  color: #182a3c;
-  opacity: 0.64;
-  text-decoration: none;
-}
-
-.site-wordmark-svg {
-  display: block;
-  width: 260px;
-  height: 30px;
-  overflow: visible;
-}
-
-.site-wordmark-svg text {
-  fill: currentColor;
-  font-family: inherit;
-  font-size: 24px;
-  font-weight: 400;
-  letter-spacing: 0.1px;
-}
-
-.site-wordmark-css { font-weight: 500; }
-.site-wordmark-graphics { font-weight: 200; }
-.site-wordmark-path { font-weight: 100; }
-
-.site-actions { display: flex; align-items: center; height: 100%; }
-
-.site-action-icon-only {
-  display: inline-flex;
-  width: 36px;
-  min-width: 36px;
-  height: 50px;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  color: #182a3c;
-  opacity: 0.64;
-  text-decoration: none;
-}
-
-.site-action-icon {
-  width: 18px;
-  height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
-.site-wordmark:hover,
-.site-wordmark:focus-visible,
-.site-action-icon-only:hover,
-.site-action-icon-only:focus-visible { opacity: 1; }
-
-body > .polycss-camera {
+.example-stage > .polycss-camera {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -129,19 +58,19 @@ body > .polycss-camera {
   perspective: 1200px;
 }
 
-body > .polycss-camera > .polycss-scene {
+.example-stage > .polycss-camera > .polycss-scene {
   transform: translateZ(0) scale(1) rotateX(0deg) rotate(0deg) translate3d(0, 0, 0);
 }
 
-body > .polycss-camera > .polycss-scene div {
+.example-stage > .polycss-camera > .polycss-scene div {
   position: absolute;
   transform-style: preserve-3d;
   transform-origin: 0 0 0;
 }
 
-body > .polycss-camera s,
-body > .polycss-camera b,
-body > .polycss-camera u {
+.example-stage > .polycss-camera s,
+.example-stage > .polycss-camera b,
+.example-stage > .polycss-camera u {
   position: absolute;
   display: block;
   backface-visibility: visible;
@@ -150,13 +79,13 @@ body > .polycss-camera u {
   transform-style: preserve-3d;
 }
 
-body > .polycss-camera s,
-body > .polycss-camera u {
+.example-stage > .polycss-camera s,
+.example-stage > .polycss-camera u {
   background-repeat: no-repeat;
   image-rendering: auto;
 }
 
-body > .polycss-camera > .polycss-scene > :is(s, u) {
+.example-stage > .polycss-camera > .polycss-scene > :is(s, u) {
   width: 28px;
   height: 28px;
   color: #fff;
@@ -174,11 +103,11 @@ body > .polycss-camera > .polycss-scene > :is(s, u) {
   corner-bottom-right-shape: initial;
 }
 
-body > .polycss-camera > .polycss-scene > s {
+.example-stage > .polycss-camera > .polycss-scene > s {
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 
-body > .polycss-camera b {
+.example-stage > .polycss-camera b {
   width: 64px;
   height: 64px;
   background: currentColor;

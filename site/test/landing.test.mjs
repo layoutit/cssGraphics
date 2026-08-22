@@ -83,7 +83,10 @@ test("landing presents the current deployed collection", async () => {
     `${homePage}\n${layout}\n${sceneRouter}\n${projectSource}\n${rendererSource}\n${projectManifestText}`,
     /animated-morph-sphere|webgl-morphtargets|morph-stress-test/u,
   );
-  assert.match(homePage, /<ProjectPage projectId="cloth" home \/>/u);
+  assert.match(homePage, /const latestProject = PROJECTS\[0\];/u);
+  assert.match(homePage, /PROJECT_ADAPTER_DIRECTORIES\[latestProject\.id\]/u);
+  assert.match(homePage, /<ProjectPage projectId=\{latestProject\.id\} home \/>/u);
+  assert.doesNotMatch(homePage, /projectId="cloth"|adapters\/cloth/u);
   assert.match(sceneRouter, /mountClothClient\(host\)/u);
   assert.match(sceneRouter, /mountFlocksClient\(host\)/u);
   assert.match(sceneRouter, /mountCycloneClient\(host\)/u);
@@ -101,6 +104,9 @@ test("landing presents the current deployed collection", async () => {
   assert.match(rendererSource, /"@type": "ItemList"/u);
   assert.match(layout, /renderExamplesSidebar\(project\.id\)/u);
   assert.match(layout, /renderExamplesInfo\(project\.id\)/u);
+  assert.match(layout, /data-project-id=\{project\.id\}/u);
+  assert.match(sceneRouter, /querySelector\("\.example-stage"\)\?\.dataset\.projectId/u);
+  assert.doesNotMatch(sceneRouter, /pathname === "\/" \? "cloth"/u);
   assert.match(layout, /transition:persist="examples-sidebar"/u);
   assert.match(layout, /transition:animate="none"/u);
   assert.match(astroConfig, /devToolbar: \{ enabled: false \}/u);

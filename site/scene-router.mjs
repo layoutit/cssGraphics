@@ -86,5 +86,8 @@ function syncActiveThumbnail() {
 }
 
 function projectIdFromPath(pathname) {
-  return pathname === "/" ? "cloth" : pathname.split("/").filter(Boolean)[0];
+  if (pathname !== "/") return pathname.split("/").filter(Boolean)[0];
+  const projectId = document.querySelector(".example-stage")?.dataset.projectId;
+  if (!projectId) throw new Error("Missing css.graphics home project.");
+  return projectId;
 }

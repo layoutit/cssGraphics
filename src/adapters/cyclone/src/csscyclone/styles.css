@@ -72,6 +72,7 @@ body.priming::after {
   height: 100%;
   overflow: hidden;
   background: transparent;
+  pointer-events: none;
   perspective: var(--cyclone-perspective);
   perspective-origin: 50% 50%;
 }

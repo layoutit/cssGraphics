@@ -24,6 +24,7 @@ import {
   CSSCYCLONE_PRESENTATION,
   CSSCYCLONE_SOURCE,
   CSSCYCLONE_SOURCE_BANK,
+  CSSCYCLONE_SOURCE_SAFETY,
   buildCycloneSourceChunks,
   selectCycloneSourceParticlePrefix,
 } from "../src/prepare/csscyclone/sourceModel.mjs";
@@ -74,6 +75,8 @@ await mkdir(stagingRoot, { recursive: true });
 
 const preparedProfiles = [];
 for (const profile of profileConfigs) preparedProfiles.push(await prepareProfile(profile));
+const sourceSeedSafety = preparedProfiles.find(({ profile }) => profile.id === "desktop")
+  .metadata.presentation.preparedStream.sourceSeedSafety;
 const modelCatalog = await buildPolyMorphCatalog(
   CSSCYCLONE_MODEL_IDS.desktop,
   preparedProfiles.map(({ profile, built }) => ({
@@ -112,6 +115,7 @@ await writeJson(join(stagingRoot, "prepared.json"), {
     [profile.id, metadata]))),
   oracle: {
     sourceState: "pinned-continuous-source-translation-with-fixed-mt19937-authoring-seed",
+    sourceSeedSafety,
     visual: "frame-zero-lighting-qualified-moving-highlight-approximate-full-scene-not-pixel-qualified"
   }
 });
@@ -147,8 +151,32 @@ async function prepareProfile(profile) {
   let shapeTransformSelections = 0;
   let preparedBlockEncodedBytes = 0;
   let preparedBlockDecodedBytes = 0;
+  let maximumRawParticleCenterZ = -Infinity;
+  let maximumObservedParticleCenterZ = -Infinity;
+  let guardedParticleFrameCount = 0;
+  let rawUnsafeParticleFrameCount = 0;
+  let unsafeParticleFrameCount = 0;
+  const unsafeBlockIndices = new Set();
   for (const desktopSource of buildCycloneSourceChunks({ bank: CSSCYCLONE_SOURCE_BANK })) {
-    const source = selectCycloneSourceParticlePrefix(desktopSource, bank);
+    const selectedSource = selectCycloneSourceParticlePrefix(desktopSource, bank);
+    const guarded = applyCycloneCameraDepthGuard(selectedSource);
+    const source = guarded.source;
+    maximumRawParticleCenterZ = Math.max(
+      maximumRawParticleCenterZ,
+      guarded.metrics.maximumRawParticleCenterZ,
+    );
+    maximumObservedParticleCenterZ = Math.max(
+      maximumObservedParticleCenterZ,
+      guarded.metrics.maximumGuardedParticleCenterZ,
+    );
+    guardedParticleFrameCount += guarded.metrics.guardedParticleFrameCount;
+    rawUnsafeParticleFrameCount += guarded.metrics.rawUnsafeParticleFrameCount;
+    unsafeParticleFrameCount += guarded.metrics.unsafeParticleFrameCount;
+    for (const frameIndex of guarded.metrics.unsafeFrameIndices) {
+      unsafeBlockIndices.add(Math.floor(
+        (source.bank.startFrameIndex + frameIndex) / blockFrameCount,
+      ));
+    }
     if (preparedModel === null) {
       const result = buildCyclonePreparedModel({ source, modelId: profile.modelId });
       preparedModel = Object.freeze({ model: result.model, metrics: result.metrics });
@@ -197,6 +225,23 @@ async function prepareProfile(profile) {
     shapeTransformSelections += source.frames.length * source.bank.particleCount;
   }
   const residentBlockWindowCount = runtimeLookaheadBlockCount + 1;
+  const sourceSeedSafety = Object.freeze({
+    schema: "csscyclone-source-seed-safety@1",
+    seed: bank.seed,
+    measuredParticleCount: bank.particleCount,
+    cameraDepthGuardStart: CSSCYCLONE_SOURCE_SAFETY.cameraDepthGuardStart,
+    minimumParticleCenterDepth: CSSCYCLONE_SOURCE_SAFETY.minimumParticleCenterDepth,
+    maximumRawParticleCenterZ: roundMetric(maximumRawParticleCenterZ),
+    maximumObservedParticleCenterZ: roundMetric(maximumObservedParticleCenterZ),
+    guardedParticleFrameCount,
+    rawUnsafeParticleFrameCount,
+    unsafeParticleFrameCount,
+    unsafeBlockIndices: Object.freeze([...unsafeBlockIndices]),
+    safe: unsafeParticleFrameCount === 0,
+  });
+  if (!sourceSeedSafety.safe) {
+    throw new Error(`Cyclone ${profile.id} source seed violates the prepared camera-depth contract: ${JSON.stringify(sourceSeedSafety)}`);
+  }
   const maximumResidentBlockWindowDecodedBytes = Math.max(...blockEntries.map((unused, startIndex) =>
     Array.from({ length: residentBlockWindowCount }, (ignored, offset) =>
       blockEntries[(startIndex + offset) % blockEntries.length].decodedByteLength)
@@ -294,6 +339,7 @@ async function prepareProfile(profile) {
       preparedStream: Object.freeze({
         id: bank.id,
         seed: bank.seed,
+        sourceSeedSafety,
         chunkCount: bank.chunkCount,
         chunkFrameCount: bank.frameCount,
         framesPerSecond: bank.framesPerSecond,
@@ -365,6 +411,64 @@ async function prepareProfile(profile) {
       maximumResidentBlockWindowDecodedBytes,
       ...preparedLighting.metrics,
       preparedLightingVariantAssetBytes: preparedLightingAssets.byteLength,
+    }),
+  });
+}
+
+function applyCycloneCameraDepthGuard(source) {
+  const guardStartZ = CSSCYCLONE_SOURCE.viewDistance -
+    CSSCYCLONE_SOURCE_SAFETY.cameraDepthGuardStart;
+  const maximumParticleCenterZ = CSSCYCLONE_SOURCE.viewDistance -
+    CSSCYCLONE_SOURCE_SAFETY.minimumParticleCenterDepth;
+  const compressionRange = CSSCYCLONE_SOURCE_SAFETY.cameraDepthGuardStart -
+    CSSCYCLONE_SOURCE_SAFETY.minimumParticleCenterDepth;
+  let maximumRawParticleCenterZ = -Infinity;
+  let maximumGuardedParticleCenterZ = -Infinity;
+  let guardedParticleFrameCount = 0;
+  let rawUnsafeParticleFrameCount = 0;
+  let unsafeParticleFrameCount = 0;
+  const unsafeFrameIndices = new Set();
+  const frames = source.frames.map((frame, frameIndex) => {
+    let guardedParticles = null;
+    for (let particleIndex = 0; particleIndex < frame.particles.length; particleIndex += 1) {
+      const particle = frame.particles[particleIndex];
+      const rawCenterZ = particle.matrix[14];
+      maximumRawParticleCenterZ = Math.max(maximumRawParticleCenterZ, rawCenterZ);
+      if (rawCenterZ <= guardStartZ) {
+        maximumGuardedParticleCenterZ = Math.max(maximumGuardedParticleCenterZ, rawCenterZ);
+        continue;
+      }
+      guardedParticleFrameCount += 1;
+      if (rawCenterZ > maximumParticleCenterZ) rawUnsafeParticleFrameCount += 1;
+      const guardedCenterZ = guardStartZ + compressionRange *
+        (1 - Math.exp(-(rawCenterZ - guardStartZ) / compressionRange));
+      maximumGuardedParticleCenterZ = Math.max(maximumGuardedParticleCenterZ, guardedCenterZ);
+      if (guardedCenterZ > maximumParticleCenterZ) {
+        unsafeParticleFrameCount += 1;
+        unsafeFrameIndices.add(frameIndex);
+      }
+      if (guardedParticles === null) guardedParticles = [...frame.particles];
+      const matrix = [...particle.matrix];
+      matrix[14] = roundMetric(guardedCenterZ);
+      guardedParticles[particleIndex] = Object.freeze({
+        ...particle,
+        matrix: Object.freeze(matrix),
+      });
+    }
+    return guardedParticles === null ? frame : Object.freeze({
+      ...frame,
+      particles: Object.freeze(guardedParticles),
+    });
+  });
+  return Object.freeze({
+    source: Object.freeze({ ...source, frames: Object.freeze(frames) }),
+    metrics: Object.freeze({
+      maximumRawParticleCenterZ,
+      maximumGuardedParticleCenterZ,
+      guardedParticleFrameCount,
+      rawUnsafeParticleFrameCount,
+      unsafeParticleFrameCount,
+      unsafeFrameIndices: Object.freeze([...unsafeFrameIndices]),
     }),
   });
 }

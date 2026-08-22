@@ -1,17 +1,18 @@
 import { formatMatrix3dValues } from "@layoutit/polycss";
 import { advanceCycloneParticleTransform } from "./particleTransform.mjs";
 
-export const CSSCYCLONE_BLOCK_ENCODING = "gzip-cyclone-source-state-float64-uint16@1";
+export const CSSCYCLONE_BLOCK_ENCODING = "gzip-cyclone-source-state-float64-uint16-float64@2";
 export const CSSCYCLONE_PLAYBACK_SCHEMA = "csscyclone-prepared-dom-playback@5";
 export const CSSCYCLONE_LIGHTING_BLOCK_SCHEMA = "csscyclone-prepared-lighting-block@2";
 
 const MAGIC = "CCST";
-const VERSION = 1;
+const VERSION = 2;
 const CONTROL_POINT_COUNT = 6;
 const PARTICLE_STATE_FIELD_COUNT = 3;
 const CYCLONE_FRAME_VALUE_COUNT = CONTROL_POINT_COUNT * 3 + CONTROL_POINT_COUNT;
 const HEADER_BYTES = 24;
 const RESET_EVENT_BYTES = 20;
+const CENTER_Z_OVERRIDE_BYTES = 12;
 
 export function encodeCyclonePreparedBlock({ frames, lightingRows, particleCount }) {
   if (!Array.isArray(frames) || frames.length < 1 || frames.length > 0xffff ||
@@ -23,6 +24,18 @@ export function encodeCyclonePreparedBlock({ frames, lightingRows, particleCount
     throw new TypeError("Complete prepared Cyclone source-state block inputs are required");
   }
   const resetEvents = [];
+  const centerZOverrides = [];
+  for (let frameIndex = 0; frameIndex < frames.length; frameIndex += 1) {
+    for (let particleIndex = 0; particleIndex < particleCount; particleIndex += 1) {
+      const centerZ = frames[frameIndex].particles?.[particleIndex]?.preparedCenterZOverride;
+      if (centerZ !== undefined) {
+        if (!Number.isFinite(centerZ)) {
+          throw new TypeError("Prepared Cyclone center-Z overrides must be finite");
+        }
+        centerZOverrides.push({ frameIndex, particleIndex, centerZ });
+      }
+    }
+  }
   for (let frameIndex = 1; frameIndex < frames.length; frameIndex += 1) {
     for (let particleIndex = 0; particleIndex < particleCount; particleIndex += 1) {
       const state = frames[frameIndex].transformState.particles[particleIndex];
@@ -32,9 +45,12 @@ export function encodeCyclonePreparedBlock({ frames, lightingRows, particleCount
   const cycloneBytes = frames.length * CYCLONE_FRAME_VALUE_COUNT * Float64Array.BYTES_PER_ELEMENT;
   const initialStateBytes = particleCount * PARTICLE_STATE_FIELD_COUNT * Float64Array.BYTES_PER_ELEMENT;
   const resetBytes = resetEvents.length * RESET_EVENT_BYTES;
+  const centerZOverrideBytes = centerZOverrides.length * CENTER_Z_OVERRIDE_BYTES;
   const lightingValueCount = frames.length * particleCount;
   const lightingBytes = lightingValueCount * Uint16Array.BYTES_PER_ELEMENT;
-  const bytes = new Uint8Array(HEADER_BYTES + cycloneBytes + initialStateBytes + resetBytes + lightingBytes);
+  const bytes = new Uint8Array(
+    HEADER_BYTES + cycloneBytes + initialStateBytes + resetBytes + centerZOverrideBytes + lightingBytes,
+  );
   const view = new DataView(bytes.buffer);
   for (let index = 0; index < MAGIC.length; index += 1) bytes[index] = MAGIC.charCodeAt(index);
   bytes[4] = VERSION;
@@ -45,7 +61,7 @@ export function encodeCyclonePreparedBlock({ frames, lightingRows, particleCount
   view.setUint16(10, frames.length, true);
   view.setUint32(12, resetEvents.length, true);
   view.setUint32(16, lightingValueCount, true);
-  view.setUint32(20, 0, true);
+  view.setUint32(20, centerZOverrides.length, true);
   let offset = HEADER_BYTES;
   for (const frame of frames) {
     for (const point of frame.transformState.points) {
@@ -71,6 +87,12 @@ export function encodeCyclonePreparedBlock({ frames, lightingRows, particleCount
     view.setFloat64(offset + 4, event.width, true);
     view.setFloat64(offset + 12, event.spinAngle, true);
     offset += RESET_EVENT_BYTES;
+  }
+  for (const event of centerZOverrides) {
+    view.setUint16(offset, event.frameIndex, true);
+    view.setUint16(offset + 2, event.particleIndex, true);
+    view.setFloat64(offset + 4, event.centerZ, true);
+    offset += CENTER_Z_OVERRIDE_BYTES;
   }
   for (const row of lightingRows) {
     for (const value of row) {
@@ -149,7 +171,8 @@ function* decodeCyclonePreparedBlockOperations(bytes, descriptor, catalog) {
   const frameCount = view.getUint16(10, true);
   const resetEventCount = view.getUint32(12, true);
   const lightingValueCount = view.getUint32(16, true);
-  if (view.getUint32(20, true) !== 0 || particleCount !== catalog.particleCount ||
+  const centerZOverrideCount = view.getUint32(20, true);
+  if (particleCount !== catalog.particleCount ||
       frameCount !== descriptor.frameCount || lightingValueCount !== particleCount * frameCount ||
       !validSourceProfile(catalog.sourceTransformProfile)) {
     throw new Error(`Prepared Cyclone block ${descriptor.index} source-state counts drifted`);
@@ -157,14 +180,17 @@ function* decodeCyclonePreparedBlockOperations(bytes, descriptor, catalog) {
   const cycloneBytes = frameCount * CYCLONE_FRAME_VALUE_COUNT * Float64Array.BYTES_PER_ELEMENT;
   const initialStateBytes = particleCount * PARTICLE_STATE_FIELD_COUNT * Float64Array.BYTES_PER_ELEMENT;
   const resetBytes = resetEventCount * RESET_EVENT_BYTES;
+  const centerZOverrideBytes = centerZOverrideCount * CENTER_Z_OVERRIDE_BYTES;
   const lightingBytes = lightingValueCount * Uint16Array.BYTES_PER_ELEMENT;
-  if (HEADER_BYTES + cycloneBytes + initialStateBytes + resetBytes + lightingBytes !== bytes.byteLength) {
+  if (HEADER_BYTES + cycloneBytes + initialStateBytes + resetBytes + centerZOverrideBytes + lightingBytes !==
+      bytes.byteLength) {
     throw new Error(`Prepared Cyclone block ${descriptor.index} binary byte length drifted`);
   }
   const cycloneOffset = HEADER_BYTES;
   const initialStateOffset = cycloneOffset + cycloneBytes;
   const resetOffset = initialStateOffset + initialStateBytes;
-  const lightingOffset = resetOffset + resetBytes;
+  const centerZOverrideOffset = resetOffset + resetBytes;
+  const lightingOffset = centerZOverrideOffset + centerZOverrideBytes;
   const states = Array.from({ length: particleCount }, (_, particleIndex) => {
     const offset = initialStateOffset + particleIndex * PARTICLE_STATE_FIELD_COUNT * Float64Array.BYTES_PER_ELEMENT;
     return {
@@ -197,8 +223,28 @@ function* decodeCyclonePreparedBlockOperations(bytes, descriptor, catalog) {
     previousParticleIndex = event.particleIndex;
     resetEvents.push(event);
   }
+  const centerZOverrides = [];
+  previousFrameIndex = 0;
+  previousParticleIndex = -1;
+  for (let eventIndex = 0; eventIndex < centerZOverrideCount; eventIndex += 1) {
+    const offset = centerZOverrideOffset + eventIndex * CENTER_Z_OVERRIDE_BYTES;
+    const event = {
+      frameIndex: view.getUint16(offset, true),
+      particleIndex: view.getUint16(offset + 2, true),
+      centerZ: view.getFloat64(offset + 4, true),
+    };
+    if (event.frameIndex >= frameCount || event.particleIndex >= particleCount ||
+        !Number.isFinite(event.centerZ) || event.frameIndex < previousFrameIndex ||
+        (event.frameIndex === previousFrameIndex && event.particleIndex <= previousParticleIndex)) {
+      throw new Error(`Prepared Cyclone block ${descriptor.index} center-Z override drifted`);
+    }
+    previousFrameIndex = event.frameIndex;
+    previousParticleIndex = event.particleIndex;
+    centerZOverrides.push(event);
+  }
   const transforms = new Array(frameCount * particleCount);
   let resetCursor = 0;
+  let centerZOverrideCursor = 0;
   let operationsSinceYield = 0;
   for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
     const frameOffset = cycloneOffset + frameIndex * CYCLONE_FRAME_VALUE_COUNT * Float64Array.BYTES_PER_ELEMENT;
@@ -214,6 +260,9 @@ function* decodeCyclonePreparedBlockOperations(bytes, descriptor, catalog) {
         states[particleIndex] = { width: reset.width, step: 0, spinAngle: reset.spinAngle };
         resetCursor += 1;
       }
+      const centerZOverride = centerZOverrides[centerZOverrideCursor];
+      const hasCenterZOverride = centerZOverride?.frameIndex === frameIndex &&
+        centerZOverride.particleIndex === particleIndex;
       const advanced = advanceCycloneParticleTransform({
         state: states[particleIndex],
         points,
@@ -223,7 +272,9 @@ function* decodeCyclonePreparedBlockOperations(bytes, descriptor, catalog) {
         complexity: catalog.sourceTransformProfile.complexity,
         particleSize: catalog.sourceTransformProfile.particleSize,
         radialOrbitScale: catalog.sourceTransformProfile.radialOrbitScale,
+        centerZOverride: hasCenterZOverride ? centerZOverride.centerZ : undefined,
       });
+      if (hasCenterZOverride) centerZOverrideCursor += 1;
       transforms[frameIndex * particleCount + particleIndex] =
         `matrix3d(${formatMatrix3dValues(advanced.matrix, 6)})`;
       states[particleIndex] = advanced.state;
@@ -237,6 +288,9 @@ function* decodeCyclonePreparedBlockOperations(bytes, descriptor, catalog) {
   if (operationsSinceYield > 0) yield operationsSinceYield;
   if (resetCursor !== resetEvents.length) {
     throw new Error(`Prepared Cyclone block ${descriptor.index} reset events were not consumed`);
+  }
+  if (centerZOverrideCursor !== centerZOverrides.length) {
+    throw new Error(`Prepared Cyclone block ${descriptor.index} center-Z overrides were not consumed`);
   }
   const lightingValues = new Uint16Array(lightingValueCount);
   for (let index = 0; index < lightingValues.length; index += 1) {
@@ -286,6 +340,7 @@ function* decodeCyclonePreparedBlockOperations(bytes, descriptor, catalog) {
       frameParticleColorStateIndices: lightingValues,
     }),
     preparedMatrixExpansionCount: transforms.length,
+    preparedCenterZOverrideCount: centerZOverrides.length,
     preparedCssStringByteLength,
   });
 }

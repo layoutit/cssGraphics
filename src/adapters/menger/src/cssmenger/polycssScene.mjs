@@ -1,4 +1,6 @@
 let mountedStyles = [];
+const preparedBodySceneSelector = "body>.polycss-camera>.polycss-scene";
+const preparedShellSceneSelector = ":is(body,.example-stage)>.polycss-camera>.polycss-scene";
 
 export function mountPreparedPolycssSnapshot({
   host,
@@ -50,6 +52,10 @@ export function mountPreparedPolycssSnapshot({
   removePreparedSnapshotStyles();
   for (const style of styles) {
     const imported = document.importNode(style, true);
+    imported.textContent = imported.textContent.replaceAll(
+      preparedBodySceneSelector,
+      preparedShellSceneSelector,
+    );
     document.head.append(imported);
     mountedStyles.push(imported);
   }

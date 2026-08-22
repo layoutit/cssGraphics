@@ -11,14 +11,11 @@ transform states. The stream is transported as 216 one-second prepared blocks
 so decompression stays outside long animation frames. The source fixed-function
 light is sampled at each particle's original smooth vertex normals in the first
 published frame, then the three lit vertex colors of every triangle are averaged
-into one prepared opaque CSS face color. Every face is normalized to the
-encoded-sRGB midpoint between its green and yellow channel references.
-Higher-energy hues are dimmed without changing their channel ratio. Lower-energy hues are first
-exposed without changing hue or saturation; only colors that reach the sRGB
-gamut ceiling before the target mix toward neutral by the minimum remaining
-amount.
+into one prepared opaque CSS face color, then receives a prepared 1.4 sRGB
+exposure. The exposure clips channels at the gamut ceiling without mixing
+toward neutral, so green and blue palettes keep their saturation and hue ratios.
 A preparation guard rejects banks whose final lit palette becomes predominantly
-dark or falls outside that prepared energy range. Exact cross-palette color tuples
+dark. Exact cross-palette color tuples
 are deduplicated into a compact prepared slot table. Initial leaf colors are
 bound once. Later color writes are limited to the six leaves of a particle when
 the source restarts it with a new color. The mounted graph is camera, scene,
@@ -36,14 +33,14 @@ assign 40% of particle colors to each primary and 20% to the secondary. The sour
 random hue-target timing and rule that particles change color only when they
 restart remain unchanged. Twelve prepared variants use explicit audited
 three-hue sets; none combines opposing families such as red and blue. The
-palette definition and weighted session cycle are shared with Flocks. The browser selects one complete prepared color table and performs no color calculation. The same source RNG
+palette definition is shared with Flocks. The browser selects one complete prepared color table and performs no color calculation. The same source RNG
 draws preserve RNG cadence, trajectory geometry, restart timing, and coherent
-color bands. The session palette and midpoint energy normalization are
+color bands. The session palette and prepared exposure are
 intentional presentation changes; they are not exact source colors.
-Startup is prebaked to ten audited 48-frame source windows. A 24-load
-session-shuffled cycle includes every prepared palette without adjacent
-repeats: 16 loads use green-through-blue primaries, four use violet primaries,
-and four use magenta-through-red primaries. It independently
+Startup is prebaked to ten audited 48-frame source windows. A 12-load
+session-shuffled cycle includes every prepared palette exactly once without
+adjacent repeats, so red rotations have the same reload odds as every other
+rotation. It independently
 chooses one expressive browser-reviewed source window while excluding the
 previous exact window.
 It never phases individual particles around a full hue wheel. This is an

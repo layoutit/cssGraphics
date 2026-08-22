@@ -59,6 +59,10 @@ async function mountForProject(projectId, host) {
       const { mountFlocksClient } = await import("../src/adapters/flocks/src/cssflocks/client.mjs");
       return mountFlocksClient(host);
     }
+    case "cyclone": {
+      const { mountCycloneClient } = await import("../src/adapters/cyclone/src/csscyclone/client.mjs");
+      return mountCycloneClient(host);
+    }
     default:
       throw new Error(`Unknown css.graphics route: ${location.pathname}`);
   }

@@ -4,9 +4,9 @@ import { selectCycloneStartupPaletteVariant } from "../src/csscyclone/startupPal
 
 const variantIds = Object.freeze(Array.from({ length: 12 }, (_, index) =>
   `rotate-${String(index * 30).padStart(3, "0")}`));
-const weights = Object.freeze([3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1]);
+const weights = Object.freeze(Array(12).fill(1));
 
-test("biases reloads toward cool rotations without adjacent repeats", () => {
+test("gives every prepared rotation equal reload odds without adjacent repeats", () => {
   const storage = fixtureStorage();
   let randomValue = 0;
   const options = { storage, weights, randomUint32: () => randomValue++ };
@@ -24,11 +24,7 @@ test("biases reloads toward cool rotations without adjacent repeats", () => {
   const combined = [...firstCycle, ...secondCycle];
   assert.ok(combined.every((variantId, index) =>
     index === 0 || variantId !== combined[index - 1]));
-  assert.equal(firstCycle.filter((variantId) =>
-    ["rotate-000", "rotate-030", "rotate-060", "rotate-090", "rotate-120", "rotate-150"]
-      .includes(variantId)).length, 16);
-  assert.equal(firstCycle.filter((variantId) =>
-    ["rotate-240", "rotate-270", "rotate-300", "rotate-330"].includes(variantId)).length, 4);
+  assert.equal(new Set(firstCycle).size, variantIds.length);
 });
 
 test("rejects a broken palette bank or random source", () => {

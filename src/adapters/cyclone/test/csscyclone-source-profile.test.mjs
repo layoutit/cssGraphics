@@ -84,8 +84,8 @@ test("pins the current Really Slick Cyclone source profile", () => {
     startupWeight: 2,
   });
   assert.deepEqual(
-    CSSCYCLONE_PRESENTATION.preparedPaletteVariants.map(({ startupWeight }) => startupWeight),
-    [3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1],
+    CSSCYCLONE_PRESENTATION.startupPaletteWeights,
+    Array(12).fill(1),
   );
   assert.equal(CSSCYCLONE_PRESENTATION.maximumColorFamilyCount, 3);
   assert.deepEqual(
@@ -342,7 +342,7 @@ test("prepares source-vertex-averaged face lighting without a runtime lighting t
   const bank = { ...CSSCYCLONE_BANK, particleCount: 3, warmupFrames: 20, frameCount: 4 };
   const source = buildCycloneSourceSequence({ bank });
   const prepared = await buildCyclonePreparedLighting({ source });
-  assert.equal(prepared.contract.schema, "csscyclone-prepared-energy-balanced-three-color-vertex-lighting-colors@19");
+  assert.equal(prepared.contract.schema, "csscyclone-prepared-source-lit-three-color-vertex-lighting-colors@20");
   assert.equal(prepared.contract.leafCount, 18);
   assert.equal(prepared.contract.colorStateCount, 3);
   assert.equal(prepared.contract.colorRestartCount, 0);
@@ -370,20 +370,12 @@ test("prepares source-vertex-averaged face lighting without a runtime lighting t
   );
   assert.equal(
     prepared.contract.finalLitColorProfile.schema,
-    "csscyclone-prepared-final-lit-color-profile@2",
+    "csscyclone-prepared-final-lit-color-profile@3",
   );
   assert.equal(prepared.contract.finalLitColorProfile.darkFaceValueThreshold, 0.4);
   assert.equal(prepared.contract.finalLitColorProfile.maximumDarkFaceShare, 0.2);
   assert.equal(prepared.contract.finalLitColorProfile.minimumMedianLitValue, 0.5);
-  assert.deepEqual(
-    prepared.contract.finalLitColorProfile.srgbLumaWeights,
-    [0.2126, 0.7152, 0.0722],
-  );
-  assert.equal(prepared.contract.finalLitColorProfile.targetSrgbEnergyRatio, 0.8215);
-  assert.equal(prepared.contract.finalLitColorProfile.minimumTargetEnergyRatio, 1);
-  assert.equal(prepared.contract.finalLitColorProfile.maximumTargetEnergyRatio, 1.03);
-  assert.ok(prepared.contract.finalLitColorProfile.variants.every((variant) =>
-    variant.minimumTargetEnergyRatio >= 1 && variant.maximumTargetEnergyRatio <= 1.03));
+  assert.equal(prepared.contract.finalLitColorProfile.srgbExposure, 1.4);
   assert.equal(prepared.contract.finalLitColorProfile.variants.length, 12);
   assert.equal(prepared.contract.variants.length, 12);
   assert.ok(prepared.contract.variants.every((variant, index) =>

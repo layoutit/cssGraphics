@@ -4,7 +4,7 @@ import { test } from "node:test";
 
 const adapterRoot = new URL("../", import.meta.url);
 
-test("Flocks uses the shared css.graphics examples shell without listing itself", async () => {
+test("Flocks uses the shared css.graphics examples shell", async () => {
   const html = await readFile(new URL("index.html", adapterRoot), "utf8");
   assert.match(html, /<body class="loading">/u);
   assert.match(html, /cssgraphics-examples-sidebar/u);

@@ -71,6 +71,7 @@ export const CSSCYCLONE_PRESENTATION = Object.freeze({
   particleColorAssignment: "source-hue-at-particle-restart",
   preparedPaletteAssignment: "source-hue-ranked-curated-three-color-analogous-palette",
   preparedPaletteVariants: CSSGRAPHICS_REALLYSLICK_PALETTE_VARIANTS,
+  startupPaletteWeights: Object.freeze(CSSGRAPHICS_REALLYSLICK_PALETTE_VARIANTS.map(() => 1)),
   maximumColorFamilyCount: 3,
   startupPaletteFamilies: Object.freeze(["blue", "yellow", "red", "magenta", "green"]),
   startupSelections: Object.freeze([

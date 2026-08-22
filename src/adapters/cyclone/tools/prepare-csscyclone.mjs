@@ -42,7 +42,7 @@ const startupPaletteVariantIds = Object.freeze(
   CSSCYCLONE_PRESENTATION.preparedPaletteVariants.map(({ id }) => id),
 );
 const startupPaletteVariantWeights = Object.freeze(
-  CSSCYCLONE_PRESENTATION.preparedPaletteVariants.map(({ startupWeight }) => startupWeight),
+  CSSCYCLONE_PRESENTATION.startupPaletteWeights,
 );
 const startupSilhouetteSampleFrameOffsets = CSSCYCLONE_PRESENTATION.startupSilhouetteSampleFrameOffsets;
 const hueSectorNames = Object.freeze(["red", "yellow", "green", "cyan", "blue", "magenta"]);

@@ -3,6 +3,7 @@ import {
   computeSolidTrianglePlanFromCssPoints,
   formatMatrix3dValues,
 } from "@layoutit/polycss";
+import { buildPolyMorphSolidTriangleAtlas } from "@layoutit/polycss-morph/prepare";
 import {
   CSSCYCLONE_BANK,
   CSSCYCLONE_SOURCE,
@@ -45,6 +46,14 @@ const CSSCYCLONE_FACE_PLANS = Object.freeze(CSSCYCLONE_FACE_INDICES.map((localIn
       })
     : trianglePlan(vertices, `particle-face-${faceIndex}`);
 }));
+const CSSCYCLONE_FALLBACK_ATLAS = buildPolyMorphSolidTriangleAtlas(
+  CSSCYCLONE_FACE_INDICES.map((localIndices, faceIndex) => ({
+    vertexIndices: localIndices,
+    vertices: localIndices.map((index) => CSSCYCLONE_PARTICLE_VERTICES[index]),
+    materialId: "particle",
+    leafMatrix: CSSCYCLONE_FACE_PLANS[faceIndex].matrix,
+  })),
+);
 export const CSSCYCLONE_FACE_TILE_VERTEX_ORDERS = Object.freeze(
   CSSCYCLONE_FACE_PLANS.map(({ tileVertexOrder }) => tileVertexOrder),
 );
@@ -84,7 +93,7 @@ export function buildCyclonePreparedModel({
         height: SOLID_TRIANGLE_CANONICAL_SIZE,
         matrix: CSSCYCLONE_FACE_PLANS[faceIndex].matrix,
         atlas: null,
-        fallback: null,
+        fallback: CSSCYCLONE_FALLBACK_ATLAS.fallbacks[faceIndex],
       }));
     }
   }
@@ -99,7 +108,7 @@ export function buildCyclonePreparedModel({
       maxLeaves: leaves.length,
       maxFrames: 0,
       maxJoints: 0,
-      maxResources: 1,
+      maxResources: 2,
       maxBytes: 64 * 1024 * 1024,
     }),
     topology: Object.freeze({
@@ -138,12 +147,20 @@ export function buildCyclonePreparedModel({
       retainedPolygonLeafCount: leaves.length,
       sourceParticleCount: source.bank.particleCount,
       polygonsPerParticle: CSSCYCLONE_FACE_INDICES.length,
+      preparedFallbackAtlasPageCount: CSSCYCLONE_FALLBACK_ATLAS.pages.length,
+      preparedFallbackAtlasBytes: CSSCYCLONE_FALLBACK_ATLAS.pages.reduce(
+        (total, page) => total + page.bytes.byteLength,
+        0,
+      ),
+      preparedFallbackSliceCount: CSSCYCLONE_FALLBACK_ATLAS.fallbacks.length,
       runtimeGeometryConstructionCount: 0,
       runtimeAtlasRasterizationCount: 0,
       runtimeDomGrowth: false,
     }),
   });
 }
+
+export const CSSCYCLONE_FALLBACK_ATLAS_PAGES = CSSCYCLONE_FALLBACK_ATLAS.pages;
 
 export function buildCyclonePreparedPlayback({
   source = buildCycloneSourceSequence(),

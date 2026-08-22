@@ -11,6 +11,7 @@ import {
   selectCycloneSourceParticlePrefix,
 } from "../src/prepare/csscyclone/sourceModel.mjs";
 import {
+  CSSCYCLONE_FALLBACK_ATLAS_PAGES,
   CSSCYCLONE_FACE_INDICES,
   CSSCYCLONE_FACE_TILE_VERTEX_ORDERS,
   CSSCYCLONE_MODEL_IDS,
@@ -172,6 +173,13 @@ test("builds a stable retained particle graph and prepared state bank", () => {
     preparedModel.model.render.leaves.slice(0, 6).map(({ strategy }) => strategy),
     Array(6).fill("solid-triangle"),
   );
+  assert.equal(preparedModel.model.render.leaves.every(({ fallback }) => fallback !== null), true);
+  assert.equal(CSSCYCLONE_FALLBACK_ATLAS_PAGES.length, 1);
+  assert.equal(preparedModel.metrics.preparedFallbackAtlasPageCount, 1);
+  assert.equal(preparedModel.metrics.preparedFallbackSliceCount, 6);
+  assert.equal(preparedModel.metrics.preparedFallbackAtlasBytes > 0, true);
+  assert.equal(new Set(preparedModel.model.render.leaves.map(({ fallback }) =>
+    `${fallback.atlas.x}:${fallback.atlas.y}:${fallback.atlas.width}:${fallback.atlas.height}`)).size, 6);
   assert.deepEqual(CSSCYCLONE_PARTICLE_VERTICES[0], [0, 0, CSSCYCLONE_SOURCE.particleSize / 4]);
   assert.deepEqual(CSSCYCLONE_PARTICLE_VERTICES.at(-1), [0, 0, -CSSCYCLONE_SOURCE.particleSize / 4]);
   assert.equal(CSSCYCLONE_PARTICLE_VERTICES.slice(1, -1).every((vertex) => vertex[2] === 0), true);

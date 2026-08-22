@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@layoutit/polycss-morph@0.2.11':
-    hash: 6a5584d96f7c523d9b588757560cc72db52adeb03c00f757ee9d7a842692f8ea
+    hash: a080b2306188a3abc9cc4ba39d7c4859eb6f488f20bf8f3d2ea3ad1d4036dd39
     path: patches/@layoutit__polycss-morph@0.2.11.patch
 
 importers:
@@ -18,7 +18,7 @@ importers:
         version: 0.2.11
       '@layoutit/polycss-morph':
         specifier: 0.2.11
-        version: 0.2.11(patch_hash=6a5584d96f7c523d9b588757560cc72db52adeb03c00f757ee9d7a842692f8ea)
+        version: 0.2.11(patch_hash=a080b2306188a3abc9cc4ba39d7c4859eb6f488f20bf8f3d2ea3ad1d4036dd39)
       prismjs:
         specifier: 1.30.0
         version: 1.30.0
@@ -2284,7 +2284,7 @@ snapshots:
 
   '@layoutit/polycss-core@0.2.11': {}
 
-  '@layoutit/polycss-morph@0.2.11(patch_hash=6a5584d96f7c523d9b588757560cc72db52adeb03c00f757ee9d7a842692f8ea)':
+  '@layoutit/polycss-morph@0.2.11(patch_hash=a080b2306188a3abc9cc4ba39d7c4859eb6f488f20bf8f3d2ea3ad1d4036dd39)':
     dependencies:
       '@layoutit/polycss': 0.2.11
 

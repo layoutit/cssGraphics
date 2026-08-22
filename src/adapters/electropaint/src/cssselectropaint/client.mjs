@@ -7,8 +7,7 @@ const SOURCE_VIEWPORT = Object.freeze({ width: 960, height: 540 });
 const PRESENTATION_ARTWORK_SAFE_FRAME_WIDTH = 640;
 const PRESENTATION_RULE_MARKER = "--cssselectropaint-presentation-rule";
 
-export async function mountElectropaintClient(body = document.body) {
-  const host = body;
+export async function mountElectropaintClient(host) {
   if (!(host instanceof HTMLElement)) throw new Error("Missing ElectroPaint host");
   const debug = { status: "loading" };
   globalThis.__cssElectropaint = debug;
@@ -43,14 +42,14 @@ export async function mountElectropaintClient(body = document.body) {
         debug.status = "destroyed";
       },
     });
-    body.classList.remove("loading");
+    document.body.classList.remove("loading");
     player.resume();
     return debug;
   } catch (error) {
     presentation.destroy();
     debug.status = "error";
     debug.error = error.stack || error.message || String(error);
-    body.classList.remove("loading");
+    document.body.classList.remove("loading");
     const message = document.createElement("pre");
     message.className = "cssselectropaint-error-message";
     message.textContent = debug.error;

@@ -1,5 +1,6 @@
 import "./csspipes/styles.css";
+import { requireExamplesStage } from "../../../../site/examples-shell-client.mjs";
 import { startCssPipesClient } from "./csspipes/client.mjs";
 import { resolveCssPipesRoute } from "./csspipes/routeState.mjs";
 
-await startCssPipesClient(document.body, resolveCssPipesRoute(globalThis.location.href));
+await startCssPipesClient(requireExamplesStage(), resolveCssPipesRoute(globalThis.location.href));

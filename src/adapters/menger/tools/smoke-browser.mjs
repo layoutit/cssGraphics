@@ -104,7 +104,7 @@ try {
         bCount: leaves.length,
         iCount: document.querySelectorAll(".polycss-camera > .polycss-scene > i").length,
         sCount: document.querySelectorAll(".polycss-camera > .polycss-scene > s").length,
-        forbiddenRendererCount: document.querySelectorAll("canvas, svg:not(.site-wordmark-svg):not(.site-action-icon)").length,
+        forbiddenRendererCount: document.querySelectorAll(".example-stage canvas, .example-stage svg").length,
         leafImportantInlineCount: leaves.filter((leaf) => leaf.getAttribute("style")?.includes("important")).length,
         leafBackgroundSizeInlineCount: leaves.filter((leaf) => leaf.style.backgroundSize).length,
         leafImageRenderingInlineCount: leaves.filter((leaf) => leaf.style.imageRendering).length,

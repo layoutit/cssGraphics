@@ -8,10 +8,27 @@ import { canonicalizeCssmengerRoute, createRouteState, MOBILE_SCENE_ID } from ".
 
 export function mountCssmengerClient(host) {
   const state = { ready: false, route: null, manifest: null, sceneData: null, mount: null, errors: [] };
+  let disposed = false;
+  const onError = (event) =>
+    recordError(state, event.message || String(event.error || "error"), host);
+  const onUnhandledRejection = (event) =>
+    recordError(state, String(event.reason?.message || event.reason || "unhandled rejection"), host);
+  const controller = Object.freeze({
+    destroy() {
+      if (disposed) return;
+      disposed = true;
+      state.mount?.destroy();
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onUnhandledRejection);
+    },
+  });
   installCssmengerDebugApi(state);
-  window.addEventListener("error", (event) => recordError(state, event.message || String(event.error || "error"), host));
-  window.addEventListener("unhandledrejection", (event) => recordError(state, String(event.reason?.message || event.reason || "unhandled rejection"), host));
-  main().catch((error) => recordError(state, error.stack || error.message || String(error), host));
+  window.addEventListener("error", onError);
+  window.addEventListener("unhandledrejection", onUnhandledRejection);
+  main().catch((error) => {
+    if (!disposed) recordError(state, error.stack || error.message || String(error), host);
+  });
+  return controller;
 
   async function main() {
     if (!(host instanceof HTMLElement)) throw new Error("Missing cssMenger host");
@@ -32,6 +49,10 @@ export function mountCssmengerClient(host) {
       ? [sceneData.cssOpacityBaseAtlas, sceneData.cssOpacityShadowAtlas]
       : [planeAtlas];
     const renderAtlasAssets = await Promise.all(renderAtlases.map(loadPreparedMengerPlaneAtlasAsset));
+    if (disposed) {
+      for (const asset of renderAtlasAssets) asset.destroy();
+      return;
+    }
     state.sceneData = sceneData;
     state.route = Object.freeze({
       ...route,
@@ -85,6 +106,7 @@ export function mountCssmengerClient(host) {
       },
     });
     await waitForPreparedCssPaint(snapshot.leaves);
+    if (disposed) return;
     state.ready = true;
     setStatus("ready");
     requestAnimationFrame(() => player.resume());

@@ -25,18 +25,30 @@ export function mountCssmazeClient() {
   let preparedScenePrefetchCount = 0;
   let preparedTransitionFrameCallbackCount = 0;
   let destroyed = false;
+  const onError = (event) => {
+    recordError(state, event.message || String(event.error || "error"), host);
+  };
+  const onUnhandledRejection = (event) => {
+    recordError(state, String(event.reason?.message || event.reason || "unhandled rejection"), host);
+  };
+  const controller = Object.freeze({
+    destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      state.mount?.destroy();
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onUnhandledRejection);
+    },
+  });
   installCssmazeDebugApi(state);
 
-  window.addEventListener("error", (event) => {
-    recordError(state, event.message || String(event.error || "error"), host);
-  });
-  window.addEventListener("unhandledrejection", (event) => {
-    recordError(state, String(event.reason?.message || event.reason || "unhandled rejection"), host);
-  });
+  window.addEventListener("error", onError);
+  window.addEventListener("unhandledrejection", onUnhandledRejection);
 
   main().catch((error) => {
-    recordError(state, error.stack || error.message || String(error), host);
+    if (!destroyed) recordError(state, error.stack || error.message || String(error), host);
   });
+  return controller;
 
   async function main() {
     if (!(host instanceof HTMLElement)) throw new Error("Missing #scene host");
@@ -48,6 +60,7 @@ export function mountCssmazeClient() {
       ? null
       : (shuffledBag = createPreparedSceneShuffledBag(state.manifest)).nextEntry();
     const prepared = await loadPreparedScene(state.manifest, route, { entry });
+    if (destroyed) return;
     await mountInitialPreparedScene(prepared, route.selection);
   }
 

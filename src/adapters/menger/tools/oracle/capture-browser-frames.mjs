@@ -11,7 +11,8 @@ import { resolveCssmengerOracleTicks } from "./cssmenger-frame-schedule.mjs";
 
 const CAPTURE_ONLY_CSS = `
   :root, html, body { background: #000 !important; }
-  .site-header, .cssmenger-error-message { display: none !important; }
+  .examples-sidebar, .cssmenger-error-message { display: none !important; }
+  .example-stage { inset: 0 !important; }
 `;
 
 export async function captureBrowserMengerFrames(options = {}) {

@@ -20,20 +20,33 @@ export function mountCssgearsClient() {
     bankLoading: true,
     errors: [],
   };
+  let disposed = false;
+  const onError = (event) => {
+    recordError(state, event.message || String(event.error || "error"));
+  };
+  const onUnhandledRejection = (event) => {
+    recordError(state, String(event.reason?.message || event.reason || "unhandled rejection"));
+  };
+  const controller = Object.freeze({
+    destroy() {
+      if (disposed) return;
+      disposed = true;
+      state.mount?.destroy();
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onUnhandledRejection);
+    },
+  });
 
   installCssgearsDebugApi(state);
   setBodyState("loading");
 
-  window.addEventListener("error", (event) => {
-    recordError(state, event.message || String(event.error || "error"));
-  });
-  window.addEventListener("unhandledrejection", (event) => {
-    recordError(state, String(event.reason?.message || event.reason || "unhandled rejection"));
-  });
+  window.addEventListener("error", onError);
+  window.addEventListener("unhandledrejection", onUnhandledRejection);
 
   main().catch((error) => {
-    recordError(state, error.stack || error.message || String(error));
+    if (!disposed) recordError(state, error.stack || error.message || String(error));
   });
+  return controller;
 
   async function main() {
     const route = createRouteState();
@@ -59,6 +72,10 @@ export function mountCssgearsClient() {
     const lightingAssets = Array(entries.length).fill(null);
     scenes[selection.bankIndex] = sceneData;
     lightingAssets[selection.bankIndex] = await loadPreparedLightingAsset(sceneData.lighting);
+    if (disposed) {
+      lightingAssets[selection.bankIndex]?.destroy();
+      return;
+    }
     const snapshot = mountPreparedPolycssSnapshot({
       host,
       sceneData,
@@ -155,9 +172,11 @@ export function mountCssgearsClient() {
       concurrency: 4,
       async onLoad(_, bankIndex) {
         const loaded = await loadBank(bankIndex);
+        if (disposed) return;
         player.installBank(bankIndex, loaded);
       },
     }).then(() => {
+      if (disposed) return;
       state.bankLoading = false;
       state.ready = true;
     }).catch((error) => {

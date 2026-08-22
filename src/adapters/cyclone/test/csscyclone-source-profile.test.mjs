@@ -24,6 +24,7 @@ import {
   prepareCyclonePaletteColor,
 } from "../src/prepare/csscyclone/preparedLighting.mjs";
 import { resolveCyclonePerspective } from "../src/csscyclone/preparedPlayback.mjs";
+import { CSSGRAPHICS_REALLYSLICK_PALETTE_VARIANTS } from "../../shared/reallyslickPalette.mjs";
 import {
   CSSCYCLONE_BLOCK_ENCODING,
   CSSCYCLONE_LIGHTING_BLOCK_SCHEMA,
@@ -72,6 +73,10 @@ test("pins the current Really Slick Cyclone source profile", () => {
     "source-hue-ranked-curated-three-color-analogous-palette",
   );
   assert.equal(CSSCYCLONE_PRESENTATION.preparedPaletteVariants.length, 12);
+  assert.equal(
+    CSSCYCLONE_PRESENTATION.preparedPaletteVariants,
+    CSSGRAPHICS_REALLYSLICK_PALETTE_VARIANTS,
+  );
   assert.deepEqual(CSSCYCLONE_PRESENTATION.preparedPaletteVariants[4], {
     id: "rotate-120",
     hueRotation: 1 / 3,

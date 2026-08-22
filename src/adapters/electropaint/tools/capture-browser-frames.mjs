@@ -45,7 +45,7 @@ try {
     if (await page.evaluate(() => window.__cssElectropaint.status) !== "ready") {
       throw new Error(await page.evaluate(() => window.__cssElectropaint.error || "ElectroPaint client failed"));
     }
-    await page.addStyleTag({ content: ".site-header{display:none!important}" });
+    await page.addStyleTag({ content: ".examples-sidebar{display:none!important}.example-stage{inset:0!important}" });
     await page.evaluate(async (index) => {
       window.__cssElectropaint.pause();
       await window.__cssElectropaint.setState(index);

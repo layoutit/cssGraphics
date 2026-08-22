@@ -1,0 +1,4 @@
+#ifndef CSSFLOCKS_NATIVE_PLATFORM_GLU_H
+#define CSSFLOCKS_NATIVE_PLATFORM_GLU_H
+#include <OpenGL/glu.h>
+#endif

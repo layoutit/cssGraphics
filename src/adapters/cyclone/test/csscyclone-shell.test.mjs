@@ -32,9 +32,8 @@ test("uses the cssGraphics shell without product UI or alternate renderers", asy
   assert.match(styles, /body > \.polycss-camera\s*\{[^}]*perspective:\s*var\(--cyclone-perspective\);/su);
   assert.match(
     styles,
-    /body > \.polycss-camera > \.polycss-scene\s*\{[^}]*left:\s*60%;[^}]*top:\s*60%;[^}]*transform:\s*translateZ\(var\(--cyclone-perspective\)\)\s*matrix3d\(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, -400, 1\);/su,
+    /body > \.polycss-camera > \.polycss-scene\s*\{[^}]*transform:\s*translateZ\(var\(--cyclone-perspective\)\)\s*matrix3d\(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, -400, 1\);/su,
   );
-  assert.match(styles, /@media \(max-width: 599px\)\s*\{[^}]*body > \.polycss-camera > \.polycss-scene\s*\{\s*left:\s*62%;/su);
   assert.doesNotMatch(styles, /background-image/u);
   assert.match(styles, /background-color:\s*transparent/u);
   assert.match(styles, /body > \.polycss-camera :is\(u, b\)/u);

@@ -35,11 +35,27 @@ const CLOTH_PACKAGE_RESOURCE_PATHS = Object.freeze([
 
 export function mountClothClient(host) {
   const state = { ready: false, errors: [], mounted: null, player: null, metadata: null };
-  installDebugApi(state);
-  window.addEventListener("error", (event) => recordError(event.message || String(event.error || "error")));
-  window.addEventListener("unhandledrejection", (event) => recordError(String(event.reason?.stack || event.reason || "unhandled rejection")));
-  window.addEventListener("resize", () => state.player?.resize(), { passive: true });
+  let disposed = false;
+  const onError = (event) => recordError(event.message || String(event.error || "error"));
+  const onUnhandledRejection = (event) =>
+    recordError(String(event.reason?.stack || event.reason || "unhandled rejection"));
+  const onResize = () => state.player?.resize();
+  const controller = Object.freeze({
+    destroy() {
+      if (disposed) return;
+      disposed = true;
+      state.player?.destroy();
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onUnhandledRejection);
+      window.removeEventListener("resize", onResize);
+    },
+  });
+  installDebugApi(state, controller);
+  window.addEventListener("error", onError);
+  window.addEventListener("unhandledrejection", onUnhandledRejection);
+  window.addEventListener("resize", onResize, { passive: true });
   main().catch((error) => recordError(error.stack || error.message || String(error)));
+  return controller;
 
   async function main() {
     if (!(host instanceof HTMLElement)) throw new Error("Missing Cloth host");
@@ -75,6 +91,10 @@ export function mountClothClient(host) {
       loadedPromise,
       playbackPromise,
     ]);
+    if (disposed) {
+      playbackStream.destroy();
+      return;
+    }
     const loadMilliseconds = performance.now() - loadStartedAt;
     if (loaded.model.identity.id !== metadata.renderer.modelId ||
         metadata?.schema !== "csscloth-prepared-scene@1" ||
@@ -119,6 +139,7 @@ export function mountClothClient(host) {
   }
 
   function recordError(message) {
+    if (disposed) return;
     state.errors.push(message);
     setStatus("error");
     if (document.querySelector(".csscloth-error-message")) return;
@@ -609,7 +630,7 @@ function cleanPreparedDom(mounted, triangleCount) {
   mounted.modelElement.remove();
 }
 
-function installDebugApi(state) {
+function installDebugApi(state, controller) {
   Object.defineProperty(window, "__cssClothDebug", {
     configurable: true,
     value: Object.freeze({
@@ -617,6 +638,7 @@ function installDebugApi(state) {
       get errors() { return Object.freeze([...state.errors]); },
       pause() { state.player?.pause(); },
       resume() { state.player?.resume(); },
+      destroy() { controller.destroy(); },
       seekFrame(index) { return state.player?.seekFrame(index); },
       state() { return state.player?.snapshot() ?? null; },
       metadata() { return state.metadata; },

@@ -17,23 +17,17 @@ test("product shell is the standard css.graphics route without demo controls", a
   assert.match(html, /<title>Solitaire - Powered by PolyCSS<\/title>/u);
   assert.match(html, /property="og:title" content="Solitaire - Powered by PolyCSS"/u);
   assert.match(html, /name="twitter:title" content="Solitaire - Powered by PolyCSS"/u);
-  assert.match(html, /class="site-header"/u);
-  assert.match(html, /class="site-wordmark-svg"/u);
-  assert.match(html, /href="https:\/\/github\.com\/layoutit\/cssGraphics"/u);
-  assert.doesNotMatch(html, /<main\b|id="scene"/iu);
-  assert.equal((html.match(/\saria-label=/gu) ?? []).length, 1);
+  assert.match(html, /cssgraphics-examples-sidebar/u);
+  assert.match(html, /<main class="example-stage"><\/main>/u);
   assert.doesNotMatch(html, /aria-busy/u);
-  assert.doesNotMatch(html, /<button\b|<nav\b|<section\b|<output\b|<canvas\b/u);
-  assert.match(css, /\.site-header \{[^}]*position: fixed;[^}]*pointer-events: none;/u);
-  assert.match(css, /\.site-wordmark \{[^}]*pointer-events: auto;/u);
-  assert.match(css, /\.site-wordmark \{[^}]*color: #aeb4bc;/u);
-  assert.match(css, /\.site-action-icon-only \{[^}]*pointer-events: auto;/u);
+  assert.doesNotMatch(html, /iframe|site-header|<button\b|<nav\b|<section\b|<output\b|<canvas\b/u);
+  assert.doesNotMatch(css, /\.site-(?:header|wordmark|action)/u);
   assert.equal(
     (css.match(/background: linear-gradient\(180deg, #008000 0%, #003d00 100%\);/gu) ?? []).length,
     2,
   );
   assert.match(css,
-    /body > \.polycss-camera \{[^}]*position: absolute;[^}]*inset: 0;[^}]*contain: layout paint size style;/u);
+    /\.example-stage > \.polycss-camera \{[^}]*position: absolute;[^}]*inset: 0;[^}]*contain: layout paint size style;/u);
   assert.doesNotMatch(css, /clip-path|mask(?:-image)?|filter|box-shadow|text-shadow|mix-blend-mode/iu);
   assert.match(client, /loadPreparedSolitaire/u);
   assert.match(client, /state\.player\.resume\(\)/u);

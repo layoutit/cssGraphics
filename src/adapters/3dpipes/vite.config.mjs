@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import { cp, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createExamplesShellPlugin } from "../../../site/examples-shell-plugin.mjs";
 
 const adapterRoot = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(adapterRoot, "..", "..", "..");
@@ -15,7 +16,7 @@ export default defineConfig({
   base: deployBuild ? "/pipes/" : "/",
   root: adapterRoot,
   publicDir: deployBuild ? resolve(adapterRoot, "public") : generatedPublicDir,
-  plugins: deployBuild ? [{
+  plugins: [createExamplesShellPlugin("pipes"), ...(deployBuild ? [{
     name: "csspipes-netlify-assets",
     async buildStart() {
       await rm(resolve(repositoryRoot, "dist/site"), { recursive: true, force: true });
@@ -33,7 +34,7 @@ export default defineConfig({
         );
       }
     },
-  }] : [],
+  }] : [])],
   server: { host: "127.0.0.1" },
   preview: { host: "127.0.0.1" },
   build: {

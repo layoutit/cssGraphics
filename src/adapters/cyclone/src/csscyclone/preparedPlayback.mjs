@@ -7,7 +7,7 @@ import {
 
 const CATALOG_SCHEMA = "csscyclone-prepared-stream-catalog@3";
 const BLOCK_SCHEMA = "csscyclone-prepared-stream-block@2";
-const LIGHTING_SCHEMA = "csscyclone-prepared-source-lit-three-color-vertex-lighting-colors@20";
+const LIGHTING_SCHEMA = "csscyclone-prepared-source-lit-three-color-vertex-lighting-colors@21";
 const SOURCE_FIELD_OF_VIEW_DEGREES = 80;
 const MOBILE_FIELD_OF_VIEW_DEGREES = 90;
 const MOBILE_MAX_WIDTH = 600;

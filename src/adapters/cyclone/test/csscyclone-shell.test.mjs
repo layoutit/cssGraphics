@@ -24,7 +24,8 @@ test("uses the shared css.graphics examples shell without alternate renderers", 
   assert.match(preparedDom, /model\.render\.leaves\.every\(\(leaf\) => leaf\.strategy === "solid-triangle"\)/u);
   assert.match(preparedDom, /host\.append\(mounted\.cameraElement\)/u);
   assert.match(playback, /createPolyMorphPreparedDomTarget/u);
-  assert.match(styles, /\.example-stage\s*\{[^}]*background:\s*linear-gradient\(180deg, #0b1119 0%, #000 100%\);/su);
+  assert.match(styles, /\.example-stage\s*\{[^}]*background:\s*#000;/su);
+  assert.doesNotMatch(styles, /linear-gradient/u);
   assert.match(styles, /\.example-stage > \.polycss-camera\s*\{[^}]*background:\s*transparent;/su);
   assert.match(styles, /\.example-stage > \.polycss-camera\s*\{[^}]*pointer-events:\s*none;/su);
   assert.match(styles, /\.example-stage > \.polycss-camera\s*\{[^}]*perspective:\s*var\(--cyclone-perspective\);/su);

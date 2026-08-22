@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  background: linear-gradient(180deg, #0b1119 0%, #000 100%);
+  background: #000;
   color: #eef2f4;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
@@ -17,7 +17,7 @@ body {
 body {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(180deg, #0b1119 0%, #000 100%);
+  background: #000;
 }
 
 body.loading::before,
@@ -62,7 +62,7 @@ body.priming::after {
 }
 
 .example-stage {
-  background: linear-gradient(180deg, #0b1119 0%, #000 100%);
+  background: #000;
 }
 
 .example-stage > .polycss-camera {

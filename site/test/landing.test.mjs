@@ -164,7 +164,7 @@ test("landing uses the compact examples shell and mounts the latest scene direct
   assert.match(layout, /css\.graphics - Powered by PolyCSS/u);
   assert.match(layout, /Self-contained 3D scenes rendered with HTML and CSS\./u);
   assert.match(layout, /property="og:image"/u);
-  assert.match(layout, /home \? "\/pipes\/pipes-social\.png" : project\.preview/u);
+  assert.match(layout, /home \? "\/og\/css-graphics\.png" : project\.preview/u);
   assert.match(layout, /const socialImageType = home \? "image\/png" : "image\/webp"/u);
   assert.match(layout, /const socialImageWidth = home \? 1200 : 960/u);
   assert.match(layout, /const socialImageHeight = home \? 630 : 540/u);

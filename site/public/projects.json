@@ -8,11 +8,11 @@
       "route": "/cyclone/",
       "preview": "/landing/cyclone.webp",
       "numberTone": "light",
-      "source": "Really Slick Screensavers",
+      "source": "Really Slick",
       "credits": [
         {
           "relation": "Adapted from",
-          "name": "Really Slick Screensavers",
+          "name": "Really Slick",
           "url": "https://github.com/reallyslickscreensavers/reallyslickscreensavers/blob/5f0a788bf0cc47f66a233ed528919295cd1e7500/src/cyclone/cyclone.cpp"
         }
       ],
@@ -26,11 +26,11 @@
       "route": "/cloth/",
       "preview": "/landing/cloth.webp",
       "numberTone": "dark",
-      "source": "Three.js",
+      "source": "three.js",
       "credits": [
         {
           "relation": "Adapted from",
-          "name": "three.js examples",
+          "name": "three.js",
           "url": "https://github.com/mrdoob/three.js/blob/e62b253081438c030d6af1ee3c3346a89124f277/examples/webgl_animation_cloth.html"
         }
       ],
@@ -62,20 +62,21 @@
       "route": "/electropaint/",
       "preview": "/landing/electropaint.webp",
       "numberTone": "light",
-      "source": "David Tristram",
+      "source": "David A. Tristram",
       "credits": [
         {
           "relation": "Original by",
-          "name": "David Tristram"
+          "name": "David A. Tristram",
+          "url": "https://github.com/sgi-demos/sgi-demos"
         }
       ],
-      "description": "ElectroPaint, originally written by David Tristram, rendered entirely with HTML and CSS using PolyCSS.",
+      "description": "ElectroPaint, originally written by David A. Tristram, rendered entirely with HTML and CSS using PolyCSS.",
       "date": "2026-08-10"
     },
     {
       "number": 4,
       "id": "menger",
-      "name": "Menger",
+      "name": "Menger Sponge",
       "route": "/menger/",
       "preview": "/landing/menger.webp",
       "numberTone": "light",
@@ -87,7 +88,7 @@
           "url": "https://github.com/Zygo/xscreensaver/blob/906693799e4fb7581436590cf84ecb2d3c9186ba/hacks/glx/menger.c"
         }
       ],
-      "description": "Menger rendered entirely with HTML and CSS using PolyCSS.",
+      "description": "Menger Sponge rendered entirely with HTML and CSS using PolyCSS.",
       "date": "2026-08-13"
     },
     {
@@ -139,10 +140,6 @@
           "relation": "Inspired by",
           "name": "XScreenSaver",
           "url": "https://github.com/Zygo/xscreensaver/blob/906693799e4fb7581436590cf84ecb2d3c9186ba/hacks/glx/pipes.c"
-        },
-        {
-          "relation": "and",
-          "name": "Windows 3D Pipes"
         }
       ],
       "description": "CSS Pipes rendered entirely with HTML and CSS using PolyCSS.",

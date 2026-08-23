@@ -109,7 +109,7 @@ export function renderExamplesInfo(activeProjectId) {
   if (!project) {
     throw new Error(`Unknown css.graphics project: ${activeProjectId}`);
   }
-  return `<div class="example-info example-info-${project.numberTone}">${escapeText(project.name)} - <a href="https://github.com/layoutit/polycss" target="_blank" rel="noopener">PolyCSS ${polycssVersion}</a><br>${renderCredits(project.credits)}</div>`;
+  return `<div class="example-info example-info-${project.numberTone}">${escapeText(project.name)} · <a href="https://github.com/layoutit/polycss" target="_blank" rel="noopener">PolyCSS ${polycssVersion}</a> · ${renderCredits(project.credits)}</div>`;
 }
 
 function renderCredits(credits) {

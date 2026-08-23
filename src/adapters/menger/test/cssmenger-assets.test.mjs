@@ -343,7 +343,7 @@ test("product runtime CSS stays on the fast browser path", async () => {
 
 test("product index uses the css.graphics shell", async () => {
   const html = await readFile(join(root, "index.html"), "utf8");
-  assert.match(html, /<title>Menger - Powered by PolyCSS<\/title>/u);
+  assert.match(html, /<title>Menger Sponge - Powered by PolyCSS<\/title>/u);
   assert.match(html, /cssgraphics-examples-sidebar/u);
   assert.match(html, /<main class="example-stage"><\/main>/u);
   assert.doesNotMatch(html, /iframe|site-header/u);

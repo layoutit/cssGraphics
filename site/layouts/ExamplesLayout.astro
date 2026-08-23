@@ -37,6 +37,13 @@ const backgroundClass = project.id === "cloth"
     <link rel="canonical" href={canonicalUrl} />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="stylesheet" href="/site.css" />
+    <script async is:inline src="https://www.googletagmanager.com/gtag/js?id=G-XV72TXWTM5"></script>
+    <script is:inline>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", "G-XV72TXWTM5");
+    </script>
     {projectStyles && <style is:global set:html={projectStyles} />}
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="css.graphics" />

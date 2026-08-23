@@ -21,5 +21,7 @@ test("css.graphics/maze uses the shipped cssGraphics product shell", () => {
     2,
   );
   assert.doesNotMatch(css, /#scene \{[^}]*(?:position|inset):/u);
-  assert.doesNotMatch(css, /@keyframes|will-change/u);
+  assert.match(css, /animation: cssmaze-loading 0\.8s linear infinite;/u);
+  assert.match(css, /@keyframes cssmaze-loading/u);
+  assert.doesNotMatch(css, /will-change/u);
 });

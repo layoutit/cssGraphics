@@ -32,6 +32,19 @@ body:not(.ready):not(.error)::after {
   border: 1px solid rgb(240 240 240 / 18%);
   border-top-color: rgb(240 240 240 / 70%);
   border-radius: 50%;
+  animation: cssmenger-loading 0.8s linear infinite;
+}
+
+@keyframes cssmenger-loading {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body:not(.ready):not(.error)::after {
+    animation: none;
+  }
 }
 
 body:not(.ready):not(.error)::before {

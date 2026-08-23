@@ -31,6 +31,19 @@ body.loading::after {
   border: 1px solid rgb(240 240 240 / 18%);
   border-top-color: rgb(240 240 240 / 70%);
   border-radius: 50%;
+  animation: cssmaze-loading 0.8s linear infinite;
+}
+
+@keyframes cssmaze-loading {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.loading::after {
+    animation: none;
+  }
 }
 
 #scene {

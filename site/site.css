@@ -337,7 +337,18 @@ html.example-background-solitaire {
 html body.loading::after,
 html body:not(.ready):not(.error)::after {
   inset: 0 0 0 var(--examples-sidebar-width);
+  width: 30px;
+  height: 30px;
   margin: auto;
+  border-width: 2px;
+  border-color: rgb(240 240 240 / 35%);
+  border-top-color: rgb(240 240 240);
+}
+
+html.example-background-cloth body.loading::after,
+html.example-background-cloth body:not(.ready):not(.error)::after {
+  border-color: rgb(32 54 78 / 35%);
+  border-top-color: rgb(32 54 78);
 }
 
 @media (max-width: 760px) {

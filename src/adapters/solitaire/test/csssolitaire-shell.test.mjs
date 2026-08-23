@@ -26,6 +26,8 @@ test("product shell is the standard css.graphics route without demo controls", a
     (css.match(/background: linear-gradient\(180deg, #008000 0%, #003d00 100%\);/gu) ?? []).length,
     2,
   );
+  assert.match(css, /animation: csssolitaire-loading 0\.8s linear infinite;/u);
+  assert.match(css, /@keyframes csssolitaire-loading/u);
   assert.match(css,
     /\.example-stage > \.polycss-camera \{[^}]*position: absolute;[^}]*inset: 0;[^}]*contain: layout paint size style;/u);
   assert.doesNotMatch(css, /clip-path|mask(?:-image)?|filter|box-shadow|text-shadow|mix-blend-mode/iu);

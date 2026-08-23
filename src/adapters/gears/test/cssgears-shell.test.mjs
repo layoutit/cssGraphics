@@ -24,5 +24,7 @@ test("css.graphics/gears uses the shared examples shell", () => {
     ).length,
     2,
   );
-  assert.doesNotMatch(css, /@keyframes|will-change/u);
+  assert.match(css, /animation: cssgears-loading 0\.8s linear infinite;/u);
+  assert.match(css, /@keyframes cssgears-loading/u);
+  assert.doesNotMatch(css, /will-change/u);
 });

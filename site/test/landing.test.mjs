@@ -159,6 +159,8 @@ test("landing uses the compact examples shell and mounts the latest scene direct
   assert.match(shellRenderer, /id="asset-list"/u);
   assert.doesNotMatch(`${layout}\n${shellRenderer}`, /code-panel|controls-panel|asset-stage|landing-mark/u);
   assert.doesNotMatch(siteCss, /\.project-thumbnail::after/u);
+  assert.doesNotMatch(siteCss, /examples-loading-copy|Reticulating splines/u);
+  assert.match(siteCss, /html body\.loading::after,[\s\S]*?width: 30px;[\s\S]*?height: 30px;[\s\S]*?border-width: 2px;[\s\S]*?border-color: rgb\(240 240 240 \/ 35%\);[\s\S]*?border-top-color: rgb\(240 240 240\);/u);
   assert.match(siteCss, /\.project-thumbnail img \{[\s\S]*?height: auto;[\s\S]*?object-fit: cover;/u);
   assert.match(siteCss, /\[hidden\] \{[\s\S]*?display: none !important;/u);
   assert.match(siteCss, /\.project-thumbnail\[aria-current="page"\]/u);

@@ -330,6 +330,8 @@ test("product runtime CSS stays on the fast browser path", async () => {
   const shellGradient = "linear-gradient(180deg, #0b1119 0%, #000 100%)";
   assert.equal(css.split(shellGradient).length - 1, 2);
   assert.doesNotMatch(css, /!important/iu);
+  assert.match(css, /animation: cssmenger-loading 0\.8s linear infinite;/u);
+  assert.match(css, /@keyframes cssmenger-loading/u);
   assert.match(css, /\.example-stage > \.polycss-camera > \.polycss-scene\s*\{[^}]*animation:\s*cssmenger-prepared-rotation var\(--cssmenger-rotation-duration\) linear infinite normal both paused;/su);
   assert.match(css, /\.example-stage > \.polycss-camera > \.polycss-scene\s*\{[^}]*will-change:\s*transform;/su);
   assert.match(css, /\.example-stage > \.polycss-camera > \.polycss-scene > b\s*\{/u);

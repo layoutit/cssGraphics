@@ -16,7 +16,7 @@ interface Props {
 const { project, projectStyles, home = false, stageId } = Astro.props;
 const canonicalPath = home ? "/" : project.route;
 const canonicalUrl = new URL(canonicalPath, "https://css.graphics/").href;
-const socialImage = new URL(home ? "/pipes/pipes-social.png" : project.preview, "https://css.graphics/").href;
+const socialImage = new URL(home ? "/og/css-graphics.png" : project.preview, "https://css.graphics/").href;
 const socialImageType = home ? "image/png" : "image/webp";
 const socialImageWidth = home ? 1200 : 960;
 const socialImageHeight = home ? 630 : 540;

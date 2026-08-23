@@ -569,7 +569,11 @@ function paletteIndex(palette, indices, color) {
   let index = indices.get(fill);
   if (index === undefined) {
     index = palette.length;
-    palette.push(Object.freeze({ fill, outline: "rgb(255 255 255)", className: `cp${index}` }));
+    palette.push(Object.freeze({
+      fill,
+      outline: "rgb(255 255 255)",
+      className: `c${String(index).padStart(5, "0")}`,
+    }));
     indices.set(fill, index);
   }
   return index;

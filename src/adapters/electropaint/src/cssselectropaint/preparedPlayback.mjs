@@ -400,7 +400,8 @@ function validate(playback, sceneRoot, quads) {
       playback.metrics.maximumColorAssignmentsPerSequentialState !== 1 ||
       playback.metrics.innerChunkBoundaryResetCount !== 0 ||
       !Array.isArray(playback.palette) || playback.palette.length < 1 ||
-      playback.palette.some((entry, index) => entry?.className !== `cp${index}`) ||
+      playback.palette.some((entry, index) =>
+        entry?.className !== `c${String(index).padStart(5, "0")}`) ||
       playback.initial.colorIndices.some((index) => !validPaletteIndex(index, playback.palette.length)) ||
       playback.restart.colorIndices.some((index) => !validPaletteIndex(index, playback.palette.length))) {
     throw new Error("Prepared ElectroPaint playback target is invalid");

@@ -85,7 +85,7 @@ test("prepared Kent variants are random-selectable, compact, hash-bound retained
     assert.equal((snapshot.match(/<b\b/gu) ?? []).length, 40);
     assert.equal((snapshot.match(/<div\b/gu) ?? []).length, 2);
     assert.doesNotMatch(snapshot, /polycss-mesh|<b[^>]*>\s*<b\b/iu);
-    assert.equal((snapshot.match(/\.cp\d+\{/gu) ?? []).length, scene.playback.palette.length);
+    assert.equal((snapshot.match(/\.c\d{5}\{/gu) ?? []).length, scene.playback.palette.length);
     assert.doesNotMatch(snapshot, /@keyframes|animation-name|<script\b|<canvas\b|<svg\b/iu);
     assert.doesNotMatch(snapshot, /background:#000|\/(?:Users|home)\//iu);
 

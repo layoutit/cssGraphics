@@ -69,10 +69,12 @@ test("prepared Kent motion is one continuous forty-wing stream split into seamle
     "matrix3d(1,0.002,-0.001,0,-0.002,1,-0.001,0,0.001,0.001,1,0,0.026,0,4.32,1)",
   );
   assert.deepEqual(scene.playback.palette.slice(0, 3), [
-    { fill: "rgb(0 1 1)", outline: "rgb(255 255 255)", className: "cp0" },
-    { fill: "rgb(0 3 3)", outline: "rgb(255 255 255)", className: "cp1" },
-    { fill: "rgb(0 6 5)", outline: "rgb(255 255 255)", className: "cp2" },
+    { fill: "rgb(0 1 1)", outline: "rgb(255 255 255)", className: "c00000" },
+    { fill: "rgb(0 3 3)", outline: "rgb(255 255 255)", className: "c00001" },
+    { fill: "rgb(0 6 5)", outline: "rgb(255 255 255)", className: "c00002" },
   ]);
+  assert.ok(scene.playback.palette.every(({ className }, index) =>
+    className === `c${String(index).padStart(5, "0")}`));
   assert.equal(scene.playback.chunks.schema, "cssselectropaint-prepared-timeline-chunks@1");
   assert.equal(scene.playback.chunks.continuity, "single-prepared-state-stream-split-without-inner-resets");
   assert.equal(scene.playback.chunks.count, 20);

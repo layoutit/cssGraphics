@@ -154,6 +154,9 @@ test("landing uses the compact examples shell and mounts the latest scene direct
   assert.match(shellRenderer, /href="https:\/\/github\.com\/layoutit\/cssGraphics"/u);
   assert.match(shellRenderer, /id="example-search"/u);
   assert.match(layout, /<link rel="stylesheet" href="\/site\.css"/u);
+  assert.match(layout, /https:\/\/www\.googletagmanager\.com\/gtag\/js\?id=G-XV72TXWTM5/u);
+  assert.match(layout, /gtag\("config", "G-XV72TXWTM5"\);/u);
+  assert.equal(layout.match(/G-XV72TXWTM5/gu)?.length, 2);
   assert.doesNotMatch(shellRenderer, /class="examples-list-heading"/u);
   assert.doesNotMatch(shellRenderer, /cssgraphics-project-count/u);
   assert.match(layout, /class="example-stage"/u);

@@ -287,11 +287,8 @@ html.example-background-solitaire {
   top: 0;
   right: 0;
   left: var(--examples-sidebar-width);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   height: var(--examples-header-height);
-  padding: 0 10px;
+  padding: calc((var(--examples-header-height) - 24px) / 2) 10px;
   margin: 0;
   font-family: monospace;
   font-size: 14px;

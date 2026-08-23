@@ -197,7 +197,7 @@ test("landing uses the compact examples shell and mounts the latest scene direct
   assert.match(siteCss, /\.example-info-dark a:hover \{[\s\S]*?color: #282828;/u);
   assert.match(siteCss, /\.example-info-light \{[\s\S]*?color: rgb\(223 223 223 \/ 80%\);/u);
   assert.match(siteCss, /\.example-info-light a:hover \{[\s\S]*?color: var\(--examples-shell-text\);/u);
-  assert.match(siteCss, /\.example-info \{[\s\S]*?display: flex;[\s\S]*?align-items: center;[\s\S]*?height: var\(--examples-header-height\);[\s\S]*?padding: 0 10px;[\s\S]*?font-size: 14px;[\s\S]*?line-height: 24px;/u);
+  assert.match(siteCss, /\.example-info \{[\s\S]*?height: var\(--examples-header-height\);[\s\S]*?padding: calc\(\(var\(--examples-header-height\) - 24px\) \/ 2\) 10px;[\s\S]*?font-size: 14px;[\s\S]*?line-height: 24px;/u);
   assert.match(siteCss, /\.example-info a \{[\s\S]*?color: inherit;[\s\S]*?text-decoration: underline;/u);
   assert.doesNotMatch(siteCss, /color: #f00/u);
   assert.doesNotMatch(`${siteCss}\n${shellClient}`, /examples-performance|stats\.js|stats\.update/u);

@@ -161,8 +161,13 @@ test("landing uses the compact examples shell and mounts the latest scene direct
   assert.doesNotMatch(shellRenderer, /cssgraphics-project-count/u);
   assert.match(layout, /class="example-stage"/u);
   assert.match(layout, /<body class="loading">/u);
-  assert.match(layout, /css\.graphics examples - Powered by PolyCSS/u);
+  assert.match(layout, /css\.graphics - Powered by PolyCSS/u);
+  assert.match(layout, /Self-contained 3D scenes rendered with HTML and CSS\./u);
   assert.match(layout, /property="og:image"/u);
+  assert.match(layout, /home \? "\/pipes\/pipes-social\.png" : project\.preview/u);
+  assert.match(layout, /const socialImageType = home \? "image\/png" : "image\/webp"/u);
+  assert.match(layout, /const socialImageWidth = home \? 1200 : 960/u);
+  assert.match(layout, /const socialImageHeight = home \? 630 : 540/u);
   assert.match(layout, /name="twitter:card" content="summary_large_image"/u);
   assert.match(shellRenderer, /id="asset-list"/u);
   assert.match(shellRenderer, /\$\{escapeText\(project\.name\)\} · <a[^>]+>PolyCSS \$\{polycssVersion\}<\/a> · \$\{renderCredits\(project\.credits\)\}/u);

@@ -16,8 +16,15 @@ interface Props {
 const { project, projectStyles, home = false, stageId } = Astro.props;
 const canonicalPath = home ? "/" : project.route;
 const canonicalUrl = new URL(canonicalPath, "https://css.graphics/").href;
+const socialImage = new URL(home ? "/pipes/pipes-social.png" : project.preview, "https://css.graphics/").href;
+const socialImageType = home ? "image/png" : "image/webp";
+const socialImageWidth = home ? 1200 : 960;
+const socialImageHeight = home ? 630 : 540;
+const description = home
+  ? "Self-contained 3D scenes rendered with HTML and CSS."
+  : project.description;
 const title = home
-  ? "css.graphics examples - Powered by PolyCSS"
+  ? "css.graphics - Powered by PolyCSS"
   : `${project.name} - Powered by PolyCSS`;
 const backgroundClass = project.id === "cloth"
   ? "example-background-cloth"
@@ -31,7 +38,7 @@ const backgroundClass = project.id === "cloth"
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content={project.description} />
+    <meta name="description" content={description} />
     <meta name="robots" content="index, follow" />
     <meta name="theme-color" content={project.id === "cloth" ? "#cce0ff" : project.id === "solitaire" ? "#008000" : "#0b1119"} />
     <link rel="canonical" href={canonicalUrl} />
@@ -48,18 +55,18 @@ const backgroundClass = project.id === "cloth"
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="css.graphics" />
     <meta property="og:title" content={title} />
-    <meta property="og:description" content={project.description} />
+    <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalUrl} />
-    <meta property="og:image" content={new URL(project.preview, "https://css.graphics/").href} />
-    <meta property="og:image:type" content="image/webp" />
-    <meta property="og:image:width" content="960" />
-    <meta property="og:image:height" content="540" />
-    <meta property="og:image:alt" content={project.description} />
+    <meta property="og:image" content={socialImage} />
+    <meta property="og:image:type" content={socialImageType} />
+    <meta property="og:image:width" content={socialImageWidth} />
+    <meta property="og:image:height" content={socialImageHeight} />
+    <meta property="og:image:alt" content={description} />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
-    <meta name="twitter:description" content={project.description} />
-    <meta name="twitter:image" content={new URL(project.preview, "https://css.graphics/").href} />
-    <meta name="twitter:image:alt" content={project.description} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={socialImage} />
+    <meta name="twitter:image:alt" content={description} />
     <title>{title}</title>
     <ClientRouter fallback="swap" />
     {home && <Fragment set:html={renderLandingStructuredData(PROJECTS)} />}

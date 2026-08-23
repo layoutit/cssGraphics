@@ -7,11 +7,11 @@ import { fileURLToPath } from "node:url";
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(siteRoot, "..");
 const expectedProjects = [
-  ["cyclone", 8, "Really Slick Screensavers", "2026-08-22", "Really Slick Cyclone rendered"],
-  ["cloth", 7, "Three.js", "2026-08-20", "The Three.js cloth simulation"],
+  ["cyclone", 8, "Really Slick", "2026-08-22", "Really Slick Cyclone rendered"],
+  ["cloth", 7, "three.js", "2026-08-20", "The Three.js cloth simulation"],
   ["solitaire", 6, "Classic Solitaire", "2026-08-17", "The classic Solitaire victory cascade"],
-  ["electropaint", 5, "David Tristram", "2026-08-10", "ElectroPaint, originally written by David Tristram"],
-  ["menger", 4, "XScreenSaver", "2026-08-13", "Menger rendered"],
+  ["electropaint", 5, "David A. Tristram", "2026-08-10", "ElectroPaint, originally written by David A. Tristram"],
+  ["menger", 4, "XScreenSaver", "2026-08-13", "Menger Sponge rendered"],
   ["maze", 3, "XScreenSaver", "2026-08-09", "Maze3D rendered"],
   ["gears", 2, "XScreenSaver", "2026-08-07", "Gears rendered"],
   ["pipes", 1, "Original", "2026-08-06", "CSS Pipes"],
@@ -54,6 +54,11 @@ test("landing presents the current deployed collection", async () => {
   ]);
   const projectManifest = JSON.parse(projectManifestText);
   assert.equal(projectManifest.schema, "cssgraphics.projects@2");
+  assert.doesNotMatch(projectManifestText, /Windows 3D Pipes/u);
+  assert.equal(projectManifest.projects.find(({ id }) => id === "cyclone").credits[0].name, "Really Slick");
+  assert.doesNotMatch(projectManifestText, /David Tristram/u);
+  assert.doesNotMatch(projectManifestText, /three\.js examples/u);
+  assert.match(projectManifestText, /David A\. Tristram/u);
   assert.deepEqual(
     projectManifest.projects.map(({ id, number, source, date }) => [id, number, source, date]),
     expectedProjects.map(([id, number, source, date]) => [id, number, source, date]),
@@ -157,6 +162,9 @@ test("landing uses the compact examples shell and mounts the latest scene direct
   assert.match(layout, /property="og:image"/u);
   assert.match(layout, /name="twitter:card" content="summary_large_image"/u);
   assert.match(shellRenderer, /id="asset-list"/u);
+  assert.match(shellRenderer, /\$\{escapeText\(project\.name\)\} · <a[^>]+>PolyCSS \$\{polycssVersion\}<\/a> · \$\{renderCredits\(project\.credits\)\}/u);
+  assert.doesNotMatch(shellRenderer, /<br>/u);
+  assert.doesNotMatch(shellRenderer, /Source:/u);
   assert.doesNotMatch(`${layout}\n${shellRenderer}`, /code-panel|controls-panel|asset-stage|landing-mark/u);
   assert.doesNotMatch(siteCss, /\.project-thumbnail::after/u);
   assert.doesNotMatch(siteCss, /examples-loading-copy|Reticulating splines/u);
@@ -189,7 +197,7 @@ test("landing uses the compact examples shell and mounts the latest scene direct
   assert.match(siteCss, /\.example-info-dark a:hover \{[\s\S]*?color: #282828;/u);
   assert.match(siteCss, /\.example-info-light \{[\s\S]*?color: rgb\(223 223 223 \/ 80%\);/u);
   assert.match(siteCss, /\.example-info-light a:hover \{[\s\S]*?color: var\(--examples-shell-text\);/u);
-  assert.match(siteCss, /\.example-info \{[\s\S]*?padding: 10px;[\s\S]*?font-size: 14px;[\s\S]*?line-height: 24px;/u);
+  assert.match(siteCss, /\.example-info \{[\s\S]*?display: flex;[\s\S]*?align-items: center;[\s\S]*?height: var\(--examples-header-height\);[\s\S]*?padding: 0 10px;[\s\S]*?font-size: 14px;[\s\S]*?line-height: 24px;/u);
   assert.match(siteCss, /\.example-info a \{[\s\S]*?color: inherit;[\s\S]*?text-decoration: underline;/u);
   assert.doesNotMatch(siteCss, /color: #f00/u);
   assert.doesNotMatch(`${siteCss}\n${shellClient}`, /examples-performance|stats\.js|stats\.update/u);

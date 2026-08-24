@@ -120,7 +120,9 @@ async function smokeProfile(specification) {
 }
 
 function assertSmoke(report) {
-  const assetRequests = report.requests.filter((path) => path.startsWith("/galaxy/assets/"));
+  const shellAssetRequests = report.requests.filter((path) => path.startsWith("/_astro/"));
+  const staleStandaloneAssetRequests = report.requests.filter((path) =>
+    path.startsWith("/galaxy/assets/"));
   const preparedRequests = report.requests.filter((path) => path.startsWith("/cssgalaxy/"));
   const fullLandingPreviewRequests = report.requests.filter((path) =>
     /^\/landing\/(?!sidebar\/)/u.test(path));
@@ -138,7 +140,8 @@ function assertSmoke(report) {
       report.initial.stats?.runtimeDomReconstructionCount !== 0 ||
       report.final.leafCount !== report.expectedStarCount || !report.final.stableIdentity ||
       report.final.changedTransformCount < 100 || report.final.stats?.runtimeDomGrowth !== false ||
-      assetRequests.length < 3 || preparedRequests.length < 4 ||
+      shellAssetRequests.length < 4 || staleStandaloneAssetRequests.length !== 0 ||
+      preparedRequests.length < 4 ||
       fullLandingPreviewRequests.length !== 0 ||
       report.pageErrors.length !== 0 || report.consoleErrors.length !== 0 ||
       report.failedResponses.length !== 0) {

@@ -10,23 +10,28 @@ const repositoryRoot = resolve(import.meta.dirname, "../../../..");
 const generatedRoot = resolve(repositoryRoot, "build/generated/cssgalaxy-product-public/cssgalaxy");
 const deployedAssetsRoot = resolve(repositoryRoot, "dist/site/cssgalaxy");
 const deployedRouteRoot = resolve(repositoryRoot, "dist/site/galaxy");
+const deployedAstroRoot = resolve(repositoryRoot, "dist/site/_astro");
 
-test("deploy build contains the exact prepared Galaxy tree and scoped route bundles", async () => {
-  const [generated, deployed, routeFiles, html] = await Promise.all([
+test("atomic site deploy contains the exact Galaxy tree and current shared shell", async () => {
+  const [generated, deployed, routeFiles, astroFiles, html] = await Promise.all([
     digestTree(generatedRoot),
     digestTree(deployedAssetsRoot),
     listFiles(deployedRouteRoot),
+    listFiles(deployedAstroRoot),
     readFile(resolve(deployedRouteRoot, "index.html"), "utf8"),
   ]);
   assert.equal(generated.size, 15);
   assert.deepEqual(deployed, generated);
-  assert.ok(routeFiles.includes("index.html"));
-  assert.ok(routeFiles.filter((path) => path !== "index.html").every((path) =>
-    /^assets\/[A-Za-z][A-Za-z0-9-]*-[A-Za-z0-9_-]{8,}\.(?:css|js)$/u.test(path)),
-  `unexpected Galaxy route output: ${routeFiles.join(", ")}`);
-  assert.equal(routeFiles.some((path) => path.startsWith("cssgalaxy/")), false);
-  assert.match(html, /(?:src|href)="\/galaxy\/assets\//u);
+  assert.deepEqual(routeFiles, ["index.html"]);
+  assert.match(html, /data-project-id="galaxy"/u);
+  assert.match(html, /(?:src|href)="\/_astro\//u);
   assert.doesNotMatch(html, /noindex|nofollow/u);
+  const deployedScripts = (await Promise.all(
+    astroFiles.filter((path) => path.endsWith(".js"))
+      .map((path) => readFile(resolve(deployedAstroRoot, path), "utf8")),
+  )).join("\n");
+  assert.match(deployedScripts, /mountGalaxyClient/u);
+  assert.match(deployedScripts, /\/cssgalaxy\/prepared\.json/u);
 });
 
 test("public Galaxy attribution, preview, source acquisition, and cache contracts are complete", async () => {
@@ -50,7 +55,7 @@ test("public Galaxy attribution, preview, source acquisition, and cache contract
   assert.equal(preview.height, 540);
   assert.match(packageJson, /"build:galaxy:deploy": "CSSGALAXY_DEPLOY_BUILD=1 pnpm build:galaxy"/u);
   assert.match(packageJson,
-    /pnpm prepare:galaxy[^\n]+CSSGALAXY_DEPLOY_BUILD=1 pnpm build:galaxy/u);
+    /pnpm prepare:galaxy:artifact[^\n]+node scripts\/copy-deploy-products\.mjs/u);
   assert.match(netlify,
     /for = "\/cssgalaxy\/g3\/1500\/seed-2298\/\*\.bin\.br"[\s\S]*?Content-Encoding = "br"/u);
   assert.match(netlify,

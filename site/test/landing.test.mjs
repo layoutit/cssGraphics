@@ -262,27 +262,32 @@ test("every deployed project is advertised for indexing while the landing remain
   }
 });
 
-test("deployment serves the landing at the root", async () => {
-  const [netlify, packageManifest, astroConfig] = await Promise.all([
+test("deployment serves only the current public products through the Astro shell", async () => {
+  const [netlify, packageManifest, astroConfig, productCopy] = await Promise.all([
     readFile(resolve(repositoryRoot, "netlify.toml"), "utf8"),
     readFile(resolve(repositoryRoot, "package.json"), "utf8"),
     readFile(resolve(repositoryRoot, "astro.config.mjs"), "utf8"),
+    readFile(resolve(repositoryRoot, "scripts/copy-deploy-products.mjs"), "utf8"),
   ]);
   const deployCommand = JSON.parse(packageManifest).scripts["build:deploy"];
   assert.doesNotMatch(netlify, /to\s*=\s*"\/pipes\/"/u);
   assert.match(netlify, /ignore = "node \.\/scripts\/netlify-ignore-build\.mjs"/u);
-  assert.match(
-    packageManifest,
-    /CSSGRAVITYWELL_DEPLOY_BUILD=1 pnpm build:gravitywell && CSSCYCLONE_DEPLOY_BUILD=1 pnpm build:cyclone && CSSGALAXY_DEPLOY_BUILD=1 pnpm build:galaxy && CSSMENGER_DEPLOY_BUILD=1 pnpm build:menger/u,
-  );
   assert.match(packageManifest, /pnpm prepare:cloth:artifact/u);
   for (const adapter of ["3dpipes", "cyclone", "galaxy", "solitaire"]) {
     assert.match(deployCommand, new RegExp(`pnpm prepare:${adapter}:artifact`, "u"));
     assert.doesNotMatch(deployCommand, new RegExp(`pnpm prepare:${adapter}(?: &&|$)`, "u"));
   }
-  assert.doesNotMatch(deployCommand, /(?:prepare|build):flocks/u);
+  for (const adapter of ["flocks", "flowerbox", "gravitywell"]) {
+    assert.doesNotMatch(deployCommand, new RegExp(`(?:prepare|build):${adapter}`, "u"));
+  }
+  assert.doesNotMatch(deployCommand, /CSS(?:PIPES|FLOWER|CLOTH|GEARS|GRAVITYWELL|CYCLONE|GALAXY|MENGER|MAZE|SELECTROPAINT|SOLITAIRE)_DEPLOY_BUILD/u);
   assert.doesNotMatch(deployCommand, /playwright install/u);
-  assert.match(packageManifest, /CSSCLOTH_DEPLOY_BUILD=1 pnpm build:cloth/u);
+  assert.match(deployCommand, /node scripts\/copy-deploy-products\.mjs && CSSGRAPHICS_DEPLOY_BUILD=1 pnpm build:site$/u);
+  for (const [projectId] of expectedProjects) {
+    const productDirectory = projectId === "pipes" ? "csspipes" :
+      projectId === "electropaint" ? "cssselectropaint" : `css${projectId}`;
+    assert.match(productCopy, new RegExp(`"${productDirectory}"`, "u"));
+  }
   assert.ok(
     netlify.indexOf('for = "/csscloth/*"') <
       netlify.indexOf('for = "/csscloth/playback-bank-*"'),

@@ -71,13 +71,13 @@ async function mountForProject(projectId, host) {
       const { resolveCssPipesRoute } = await import("../src/adapters/3dpipes/src/csspipes/routeState.mjs");
       return startCssPipesClient(host, resolveCssPipesRoute(location.href));
     }
-    case "flocks": {
-      const { mountFlocksClient } = await import("../src/adapters/flocks/src/cssflocks/client.mjs");
-      return mountFlocksClient(host);
-    }
     case "cyclone": {
       const { mountCycloneClient } = await import("../src/adapters/cyclone/src/csscyclone/client.mjs");
       return mountCycloneClient(host);
+    }
+    case "galaxy": {
+      const { mountGalaxyClient } = await import("../src/adapters/galaxy/src/cssgalaxy/client.mjs");
+      return mountGalaxyClient(host);
     }
     default:
       throw new Error(`Unknown css.graphics route: ${location.pathname}`);

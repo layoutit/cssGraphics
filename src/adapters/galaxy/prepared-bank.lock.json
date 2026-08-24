@@ -1,0 +1,13 @@
+{
+  "schema": "cssgraphics-prepared-product-lock@1",
+  "adapter": "galaxy",
+  "directory": "cssgalaxy",
+  "tag": "cssgalaxy-product-bank-v1",
+  "asset": "cssgalaxy-product-bank-v1.tar.gz",
+  "url": "https://github.com/layoutit/cssGraphics/releases/download/cssgalaxy-product-bank-v1/cssgalaxy-product-bank-v1.tar.gz",
+  "archiveByteLength": 8287878,
+  "archiveSha256": "d25f7c65d65b09272ae6079d73ccd037fe55d9fc38757761ac8a8f5a632adbb5",
+  "productFileCount": 15,
+  "productByteLength": 8333700,
+  "productSha256": "9ebb947ad0ff93fbde17e44913b06913f3ce62e606219035041503c1109e462e"
+}

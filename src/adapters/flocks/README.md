@@ -37,7 +37,7 @@ pnpm build:flocks:deploy
 pnpm test:flocks:deploy
 ```
 
-`pnpm dev:flocks` serves the adapter locally. The generated model, manifest, scene, catalogs, and playback blocks live under ignored `build/generated/public/cssflocks/`. The local deploy build writes only `dist/site/flocks/` and `dist/site/cssflocks/`; it does not publish or add Flocks to the curated landing page.
+`pnpm dev:flocks` serves the adapter locally. The generated model, manifest, scene, catalogs, and playback blocks live under ignored `build/generated/public/cssflocks/`. Flocks is retained as local work and is excluded from the production site and deploy build.
 
 The singular `capture:flocks:reference`, `capture:flocks:browser`, and `compare:flocks:visual` compatibility commands execute the same complete numbered sequence. There is no selected-still parity harness.
 

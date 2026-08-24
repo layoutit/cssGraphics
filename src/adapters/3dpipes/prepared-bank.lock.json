@@ -1,0 +1,13 @@
+{
+  "schema": "cssgraphics-prepared-product-lock@1",
+  "adapter": "3dpipes",
+  "directory": "csspipes",
+  "tag": "csspipes-product-bank-v1",
+  "asset": "csspipes-product-bank-v1.tar.gz",
+  "url": "https://github.com/layoutit/cssGraphics/releases/download/csspipes-product-bank-v1/csspipes-product-bank-v1.tar.gz",
+  "archiveByteLength": 28944764,
+  "archiveSha256": "1c21fc0891c49679ec3e32701c347206fd1b8b143591dd1e6d040f2d6edf2545",
+  "productFileCount": 68,
+  "productByteLength": 30556662,
+  "productSha256": "2bc5fbdbc3cfdfbf32882e70739d1c814ceff1713571fffe2a67c998cda455fc"
+}

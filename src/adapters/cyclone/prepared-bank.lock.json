@@ -1,0 +1,13 @@
+{
+  "schema": "cssgraphics-prepared-product-lock@1",
+  "adapter": "cyclone",
+  "directory": "csscyclone",
+  "tag": "csscyclone-product-bank-v1",
+  "asset": "csscyclone-product-bank-v1.tar.gz",
+  "url": "https://github.com/layoutit/cssGraphics/releases/download/csscyclone-product-bank-v1/csscyclone-product-bank-v1.tar.gz",
+  "archiveByteLength": 8701143,
+  "archiveSha256": "e2dd81a614e44e99cdbaef318ca9f789a54cd9c3f47efa401b59bb6d49771177",
+  "productFileCount": 466,
+  "productByteLength": 13139216,
+  "productSha256": "5f75b347587a13850eef258d574ad7b4d8fcbe51a4e64e982077be0c1fe7533c"
+}

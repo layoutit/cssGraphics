@@ -2,6 +2,24 @@
   "schema": "cssgraphics.projects@2",
   "projects": [
     {
+      "number": 9,
+      "id": "galaxy",
+      "name": "Galaxy",
+      "route": "/galaxy/",
+      "preview": "/landing/galaxy.webp",
+      "numberTone": "light",
+      "source": "XScreenSaver",
+      "credits": [
+        {
+          "relation": "Adapted from",
+          "name": "XScreenSaver",
+          "url": "https://github.com/Zygo/xscreensaver/blob/906693799e4fb7581436590cf84ecb2d3c9186ba/hacks/galaxy.c"
+        }
+      ],
+      "description": "XScreenSaver Galaxy rendered entirely with retained HTML and CSS using PolyCSS.",
+      "date": "2026-08-23"
+    },
+    {
       "number": 8,
       "id": "cyclone",
       "name": "Cyclone",
@@ -146,24 +164,5 @@
       "date": "2026-08-06"
     }
   ],
-  "unlistedProjects": [
-    {
-      "number": 9,
-      "id": "flocks",
-      "name": "Flocks",
-      "route": "/flocks/",
-      "preview": "/landing/flocks.webp",
-      "numberTone": "light",
-      "source": "Really Slick Screensavers",
-      "credits": [
-        {
-          "relation": "Adapted from",
-          "name": "Really Slick Screensavers",
-          "url": "https://github.com/reallyslickscreensavers/reallyslickscreensavers/blob/a419fc4ecf4b9b19526448bf9f5dfc435e24ca4c/src/flocks/flocks.cpp"
-        }
-      ],
-      "description": "Really Slick Flocks rendered entirely with retained HTML and CSS using PolyCSS.",
-      "date": "2026-08-22"
-    }
-  ]
+  "unlistedProjects": []
 }

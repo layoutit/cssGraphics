@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(siteRoot, "..");
 const expectedProjects = [
+  ["galaxy", 9, "XScreenSaver", "2026-08-23", "XScreenSaver Galaxy"],
   ["cyclone", 8, "Really Slick", "2026-08-22", "Really Slick Cyclone rendered"],
   ["cloth", 7, "three.js", "2026-08-20", "The Three.js cloth simulation"],
   ["solitaire", 6, "Classic Solitaire", "2026-08-17", "The classic Solitaire victory cascade"],
@@ -18,6 +19,7 @@ const expectedProjects = [
 ];
 const projectsExcludedFromLanding = ["flowerbox", "gravitywell"];
 const expectedNumberTones = new Map([
+  ["galaxy", "light"],
   ["cyclone", "light"],
   ["cloth", "dark"],
   ["solitaire", "light"],
@@ -39,6 +41,7 @@ const projectAdapterDirectories = new Map([
   ["solitaire", "solitaire"],
   ["flocks", "flocks"],
   ["cyclone", "cyclone"],
+  ["galaxy", "galaxy"],
 ]);
 
 test("landing presents the current deployed collection", async () => {
@@ -66,7 +69,7 @@ test("landing presents the current deployed collection", async () => {
   assert.equal(new Set(projectManifest.projects.map(({ id }) => id)).size, expectedProjects.length);
   assert.equal(new Set(projectManifest.projects.map(({ number }) => number)).size,
     expectedProjects.length);
-  assert.deepEqual(projectManifest.unlistedProjects.map(({ id, number }) => [id, number]), [["flocks", 9]]);
+  assert.deepEqual(projectManifest.unlistedProjects.map(({ id, number }) => [id, number]), [["flocks", 10]]);
   assert.equal(projectManifest.projects.some(({ id }) => id === "flocks"), false);
   assert.deepEqual(
     projectManifest.projects.filter(({ id }) => projectsExcludedFromLanding.includes(id)),
@@ -83,6 +86,7 @@ test("landing presents the current deployed collection", async () => {
     assert.ok(project.description.startsWith(descriptionPrefix));
     assert.ok(project.description.length >= 40);
     await readFile(resolve(siteRoot, `public/landing/${id}.webp`));
+    await readFile(resolve(siteRoot, `public/landing/sidebar/${id}.webp`));
   }
   assert.doesNotMatch(
     `${homePage}\n${layout}\n${sceneRouter}\n${projectSource}\n${rendererSource}\n${projectManifestText}`,
@@ -99,6 +103,7 @@ test("landing presents the current deployed collection", async () => {
   assert.match(sceneRouter, /mountClothClient\(host\)/u);
   assert.match(sceneRouter, /mountFlocksClient\(host\)/u);
   assert.match(sceneRouter, /mountCycloneClient\(host\)/u);
+  assert.match(sceneRouter, /mountGalaxyClient\(host\)/u);
   assert.match(sceneRouter, /addEventListener\("visibilitychange", syncSceneVisibility\)/u);
   assert.match(sceneRouter, /activeMount\.pause\(\)/u);
   assert.match(sceneRouter, /activeMount\?\.resume\(\)/u);
@@ -137,6 +142,7 @@ test("landing uses the compact examples shell and mounts the latest scene direct
     readFile(resolve(siteRoot, "examples-shell-client.mjs"), "utf8"),
   ]);
   assert.match(shellRenderer, /class="examples-sidebar"/u);
+  assert.match(shellRenderer, /\/landing\/sidebar\/\$\{project\.id\}\.webp/u);
   assert.match(shellRenderer, /class="examples-header"/u);
   assert.match(shellRenderer, /class="examples-wordmark"/u);
   assert.match(shellRenderer, /class="examples-wordmark-css"/u);
@@ -265,7 +271,7 @@ test("deployment serves the landing at the root", async () => {
   assert.doesNotMatch(netlify, /to\s*=\s*"\/pipes\/"/u);
   assert.match(
     packageManifest,
-    /CSSGRAVITYWELL_DEPLOY_BUILD=1 pnpm build:gravitywell && CSSCYCLONE_DEPLOY_BUILD=1 pnpm build:cyclone && CSSMENGER_DEPLOY_BUILD=1 pnpm build:menger/u,
+    /CSSGRAVITYWELL_DEPLOY_BUILD=1 pnpm build:gravitywell && CSSCYCLONE_DEPLOY_BUILD=1 pnpm build:cyclone && CSSGALAXY_DEPLOY_BUILD=1 pnpm build:galaxy && CSSMENGER_DEPLOY_BUILD=1 pnpm build:menger/u,
   );
   assert.match(packageManifest, /pnpm prepare:cloth:artifact/u);
   assert.match(packageManifest, /CSSCLOTH_DEPLOY_BUILD=1 pnpm build:cloth/u);

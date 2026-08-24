@@ -1,0 +1,12 @@
+{
+  "schema": "cssgalaxy-source-lock@1",
+  "repository": "https://github.com/Zygo/xscreensaver",
+  "revision": "906693799e4fb7581436590cf84ecb2d3c9186ba",
+  "path": "hacks/galaxy.c",
+  "sha256": "801b7a7ff3749b032974b8dfe9021c2e3998645f138f9beec7e09037e36d66d9",
+  "license": "HPND",
+  "referenceOnly": [
+    "https://www.youtube.com/watch?v=xBprAm9w-Fo",
+    "https://www.leshylabs.com/apps/galaxy/"
+  ]
+}

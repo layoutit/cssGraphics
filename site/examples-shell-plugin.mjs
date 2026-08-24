@@ -25,13 +25,14 @@ if (typeof polycssVersion !== "string" || !/^\d+\.\d+\.\d+$/u.test(polycssVersio
 
 const projects = Object.freeze(manifest.projects);
 const routeProjects = Object.freeze([...projects, ...(manifest.unlistedProjects ?? [])]);
+const sidebarPreviewPath = (project) => `/landing/sidebar/${project.id}.webp`;
 const localAssets = new Map([
   ["/site.css", Object.freeze({ path: resolve(siteRoot, "site.css"), mediaType: "text/css" })],
   ["/favicon.ico", Object.freeze({ path: resolve(publicRoot, "favicon.ico"), mediaType: "image/x-icon" })],
-  ...routeProjects.map((project) => [
-    project.preview,
-    Object.freeze({ path: resolve(publicRoot, project.preview.replace(/^\//u, "")), mediaType: "image/webp" }),
-  ]),
+  ...routeProjects.flatMap((project) => [project.preview, sidebarPreviewPath(project)].map((path) => [
+    path,
+    Object.freeze({ path: resolve(publicRoot, path.replace(/^\//u, "")), mediaType: "image/webp" }),
+  ])),
 ]);
 
 export function createExamplesShellPlugin(activeProjectId) {
@@ -129,7 +130,7 @@ function renderProjectCards(activeProjectId) {
     const priority = index === 0 ? 'fetchpriority="high"' : 'loading="lazy" fetchpriority="low"';
     const current = project.id === activeProjectId ? ' aria-current="page"' : "";
     return `<a class="project-thumbnail" href="${escapeAttribute(project.route)}" data-project-name="${escapeAttribute(project.name)}" data-project-source="${escapeAttribute(project.source)}"${current}>
-          <img src="${escapeAttribute(project.preview)}" alt="${escapeAttribute(project.description)}" width="960" height="540" decoding="async" ${priority}>
+          <img src="${escapeAttribute(sidebarPreviewPath(project))}" alt="${escapeAttribute(project.description)}" width="480" height="270" decoding="async" ${priority}>
           <span class="project-copy"><span class="project-title">${escapeText(project.name)}</span><span class="project-meta"><time datetime="${escapeAttribute(project.date)}">${date}</time></span></span>
           <span class="project-number project-number-${project.numberTone}" aria-hidden="true">#${number}</span>
         </a>`;

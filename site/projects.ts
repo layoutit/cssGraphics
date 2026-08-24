@@ -42,7 +42,11 @@ export const ROUTE_PROJECTS: readonly LandingProject[] = Object.freeze([
   ...UNLISTED_PROJECTS,
 ]);
 
-function validateProject(project: LandingProject, label: string, expectedNumber?: number) {
+function validateProject(
+  project: Omit<LandingProject, "numberTone"> & { readonly numberTone: string },
+  label: string,
+  expectedNumber?: number,
+): LandingProject {
   const numberTone = project.numberTone;
   if ((expectedNumber !== undefined && project.number !== expectedNumber) ||
       !Number.isSafeInteger(project.number) || project.number < 1 ||

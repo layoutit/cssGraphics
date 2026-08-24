@@ -7,17 +7,20 @@ import { defineConfig } from "astro/config";
 
 const repositoryRoot = import.meta.dirname;
 const generatedPublicRoot = resolve(repositoryRoot, "build/generated/public");
-const generatedAssetRoots = [
-  "csscloth/",
-  "csssolitaire/",
-  "cssselectropaint/",
-  "cssmenger/",
-  "cssmaze/",
-  "cssgears/",
-  "csspipes/",
-  "cssflocks/",
-  "csscyclone/",
-];
+const generatedAssetRoots = new Map([
+  ["cssgalaxy/", resolve(repositoryRoot, "build/generated/cssgalaxy-product-public")],
+  ...[
+    "csscloth/",
+    "csssolitaire/",
+    "cssselectropaint/",
+    "cssmenger/",
+    "cssmaze/",
+    "cssgears/",
+    "csspipes/",
+    "cssflocks/",
+    "csscyclone/",
+  ].map((prefix) => [prefix, generatedPublicRoot]),
+]);
 
 function generatedAssetsPlugin() {
   return {
@@ -32,14 +35,16 @@ function generatedAssetsPlugin() {
           new URL(request.url, "http://css.graphics").pathname,
         ).replace(/^\//u, "");
         const siteStylesheet = pathname === "site.css";
-        if (!siteStylesheet && !generatedAssetRoots.some((root) => pathname.startsWith(root))) {
+        const generatedAssetRoot = [...generatedAssetRoots]
+          .find(([prefix]) => pathname.startsWith(prefix))?.[1];
+        if (!siteStylesheet && !generatedAssetRoot) {
           next();
           return;
         }
         const path = siteStylesheet
           ? resolve(repositoryRoot, "site/site.css")
-          : resolve(generatedPublicRoot, pathname);
-        if (!siteStylesheet && !path.startsWith(`${generatedPublicRoot}${sep}`)) {
+          : resolve(generatedAssetRoot, pathname);
+        if (!siteStylesheet && !path.startsWith(`${generatedAssetRoot}${sep}`)) {
           next();
           return;
         }
@@ -47,6 +52,7 @@ function generatedAssetsPlugin() {
           const bytes = await readFile(path);
           response.statusCode = 200;
           response.setHeader("Content-Type", siteStylesheet ? "text/css" : mediaTypeForPath(pathname));
+          if (pathname.endsWith(".br")) response.setHeader("Content-Encoding", "br");
           response.setHeader("Content-Length", bytes.byteLength);
           response.end(request.method === "HEAD" ? undefined : bytes);
         } catch (error) {

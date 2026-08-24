@@ -79,6 +79,10 @@ async function mountForProject(projectId, host) {
       const { mountCycloneClient } = await import("../src/adapters/cyclone/src/csscyclone/client.mjs");
       return mountCycloneClient(host);
     }
+    case "galaxy": {
+      const { mountGalaxyClient } = await import("../src/adapters/galaxy/src/cssgalaxy/client.mjs");
+      return mountGalaxyClient(host);
+    }
     default:
       throw new Error(`Unknown css.graphics route: ${location.pathname}`);
   }

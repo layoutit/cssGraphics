@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import test from "node:test";
@@ -269,6 +270,7 @@ test("deployment serves the landing at the root", async () => {
     readFile(resolve(repositoryRoot, "astro.config.mjs"), "utf8"),
   ]);
   assert.doesNotMatch(netlify, /to\s*=\s*"\/pipes\/"/u);
+  assert.match(netlify, /ignore = "node \.\/scripts\/netlify-ignore-build\.mjs"/u);
   assert.match(
     packageManifest,
     /CSSGRAVITYWELL_DEPLOY_BUILD=1 pnpm build:gravitywell && CSSCYCLONE_DEPLOY_BUILD=1 pnpm build:cyclone && CSSGALAXY_DEPLOY_BUILD=1 pnpm build:galaxy && CSSMENGER_DEPLOY_BUILD=1 pnpm build:menger/u,
@@ -300,4 +302,20 @@ test("deployment serves the landing at the root", async () => {
     /"prepare:electropaint:deploy": "pnpm prepare:electropaint:artifact"/u,
   );
   assert.match(astroConfig, /emptyOutDir: process\.env\.CSSGRAPHICS_DEPLOY_BUILD !== "1"/u);
+});
+
+test("Netlify skips deploy previews without skipping production", () => {
+  const script = resolve(repositoryRoot, "scripts/netlify-ignore-build.mjs");
+  for (const [context, expectedStatus] of [
+    ["deploy-preview", 0],
+    ["production", 1],
+    ["branch-deploy", 1],
+  ]) {
+    const result = spawnSync(process.execPath, [script], {
+      cwd: repositoryRoot,
+      env: { ...process.env, CONTEXT: context },
+      encoding: "utf8",
+    });
+    assert.equal(result.status, expectedStatus, `${context}: ${result.stderr}`);
+  }
 });

@@ -1,5 +1,6 @@
 [build]
   command = "pnpm build:deploy"
+  ignore = "node ./scripts/netlify-ignore-build.mjs"
   publish = "dist/site"
 
 [build.environment]

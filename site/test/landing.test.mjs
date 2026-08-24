@@ -40,7 +40,6 @@ const projectAdapterDirectories = new Map([
   ["gears", "gears"],
   ["pipes", "3dpipes"],
   ["solitaire", "solitaire"],
-  ["flocks", "flocks"],
   ["cyclone", "cyclone"],
   ["galaxy", "galaxy"],
 ]);
@@ -70,7 +69,7 @@ test("landing presents the current deployed collection", async () => {
   assert.equal(new Set(projectManifest.projects.map(({ id }) => id)).size, expectedProjects.length);
   assert.equal(new Set(projectManifest.projects.map(({ number }) => number)).size,
     expectedProjects.length);
-  assert.deepEqual(projectManifest.unlistedProjects.map(({ id, number }) => [id, number]), [["flocks", 10]]);
+  assert.deepEqual(projectManifest.unlistedProjects, []);
   assert.equal(projectManifest.projects.some(({ id }) => id === "flocks"), false);
   assert.deepEqual(
     projectManifest.projects.filter(({ id }) => projectsExcludedFromLanding.includes(id)),
@@ -102,7 +101,7 @@ test("landing presents the current deployed collection", async () => {
   assert.match(layout, /<link rel="stylesheet" href="\/site\.css" \/>[\s\S]*projectStyles/u);
   assert.doesNotMatch(homePage, /projectId="cloth"|adapters\/cloth/u);
   assert.match(sceneRouter, /mountClothClient\(host\)/u);
-  assert.match(sceneRouter, /mountFlocksClient\(host\)/u);
+  assert.doesNotMatch(sceneRouter, /mountFlocksClient|cssflocks/u);
   assert.match(sceneRouter, /mountCycloneClient\(host\)/u);
   assert.match(sceneRouter, /mountGalaxyClient\(host\)/u);
   assert.match(sceneRouter, /addEventListener\("visibilitychange", syncSceneVisibility\)/u);
@@ -269,6 +268,7 @@ test("deployment serves the landing at the root", async () => {
     readFile(resolve(repositoryRoot, "package.json"), "utf8"),
     readFile(resolve(repositoryRoot, "astro.config.mjs"), "utf8"),
   ]);
+  const deployCommand = JSON.parse(packageManifest).scripts["build:deploy"];
   assert.doesNotMatch(netlify, /to\s*=\s*"\/pipes\/"/u);
   assert.match(netlify, /ignore = "node \.\/scripts\/netlify-ignore-build\.mjs"/u);
   assert.match(
@@ -276,6 +276,12 @@ test("deployment serves the landing at the root", async () => {
     /CSSGRAVITYWELL_DEPLOY_BUILD=1 pnpm build:gravitywell && CSSCYCLONE_DEPLOY_BUILD=1 pnpm build:cyclone && CSSGALAXY_DEPLOY_BUILD=1 pnpm build:galaxy && CSSMENGER_DEPLOY_BUILD=1 pnpm build:menger/u,
   );
   assert.match(packageManifest, /pnpm prepare:cloth:artifact/u);
+  for (const adapter of ["3dpipes", "cyclone", "galaxy", "solitaire"]) {
+    assert.match(deployCommand, new RegExp(`pnpm prepare:${adapter}:artifact`, "u"));
+    assert.doesNotMatch(deployCommand, new RegExp(`pnpm prepare:${adapter}(?: &&|$)`, "u"));
+  }
+  assert.doesNotMatch(deployCommand, /(?:prepare|build):flocks/u);
+  assert.doesNotMatch(deployCommand, /playwright install/u);
   assert.match(packageManifest, /CSSCLOTH_DEPLOY_BUILD=1 pnpm build:cloth/u);
   assert.ok(
     netlify.indexOf('for = "/csscloth/*"') <

@@ -79,41 +79,6 @@
     Cache-Control = "public, max-age=31536000, immutable"
 
 [[headers]]
-  for = "/cssflocks/*/blocks/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
-
-[[headers]]
-  for = "/cssflocks/model/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
-
-[[headers]]
-  for = "/cssflocks/manifest.json"
-  [headers.values]
-    Cache-Control = "no-cache"
-
-[[headers]]
-  for = "/cssflocks/prepared.json"
-  [headers.values]
-    Cache-Control = "no-cache"
-
-[[headers]]
-  for = "/cssflocks/*/catalog.json"
-  [headers.values]
-    Cache-Control = "no-cache"
-
-[[headers]]
-  for = "/cssflocks/model/catalog.json"
-  [headers.values]
-    Cache-Control = "no-cache"
-
-[[headers]]
-  for = "/cssflocks/scenes/*"
-  [headers.values]
-    Cache-Control = "no-cache"
-
-[[headers]]
   for = "/cssgalaxy/g3/1500/seed-2298/*.bin.br"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"

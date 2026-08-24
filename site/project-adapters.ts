@@ -2,7 +2,6 @@ export const PROJECT_ADAPTER_DIRECTORIES: Readonly<Record<string, string>> = Obj
   cloth: "cloth",
   cyclone: "cyclone",
   electropaint: "electropaint",
-  flocks: "flocks",
   galaxy: "galaxy",
   gears: "gears",
   maze: "maze",

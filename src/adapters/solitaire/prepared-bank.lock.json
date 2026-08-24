@@ -1,0 +1,13 @@
+{
+  "schema": "cssgraphics-prepared-product-lock@1",
+  "adapter": "solitaire",
+  "directory": "csssolitaire",
+  "tag": "csssolitaire-product-bank-v1",
+  "asset": "csssolitaire-product-bank-v1.tar.gz",
+  "url": "https://github.com/layoutit/cssGraphics/releases/download/csssolitaire-product-bank-v1/csssolitaire-product-bank-v1.tar.gz",
+  "archiveByteLength": 3551286,
+  "archiveSha256": "457fe09c945884387d454bdf34bf336f494838369e3e71c2ed7b088b94f175d3",
+  "productFileCount": 14,
+  "productByteLength": 16120452,
+  "productSha256": "2957a7573bf658868b1e1368a7efb6fb896dfac0b42edd62b3a8a285ce17e235"
+}

@@ -17,7 +17,6 @@ const generatedAssetRoots = new Map([
     "cssmaze/",
     "cssgears/",
     "csspipes/",
-    "cssflocks/",
     "csscyclone/",
   ].map((prefix) => [prefix, generatedPublicRoot]),
 ]);

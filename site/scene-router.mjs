@@ -71,10 +71,6 @@ async function mountForProject(projectId, host) {
       const { resolveCssPipesRoute } = await import("../src/adapters/3dpipes/src/csspipes/routeState.mjs");
       return startCssPipesClient(host, resolveCssPipesRoute(location.href));
     }
-    case "flocks": {
-      const { mountFlocksClient } = await import("../src/adapters/flocks/src/cssflocks/client.mjs");
-      return mountFlocksClient(host);
-    }
     case "cyclone": {
       const { mountCycloneClient } = await import("../src/adapters/cyclone/src/csscyclone/client.mjs");
       return mountCycloneClient(host);

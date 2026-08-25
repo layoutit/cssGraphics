@@ -45,7 +45,11 @@ test("Luminet keeps one retained point topology and no alternate renderer", asyn
     /createElement\(["']canvas|createElementNS|<svg|webgl/iu);
   assert.match(client, /installBlackHoleStagePresentation/u);
   assert.match(presentation, /CSSBLACKHOLE_PRESENTATION_PADDING_PIXELS = 90/u);
-  assert.match(presentation, /Math\.min\(width \/ paddedWidth, height \/ paddedHeight\)/u);
+  assert.match(presentation,
+    /CSSBLACKHOLE_PRESENTATION_VERTICAL_VIEWPORT_PADDING_PIXELS = 22/u);
+  assert.match(presentation, /availableHeight = Math\.max\(1, height -/u);
+  assert.match(presentation,
+    /Math\.min\(width \/ paddedWidth, availableHeight \/ paddedHeight\)/u);
   assert.match(presentation, /new ResizeObserverImpl\(refresh\)/u);
   assert.match(presentation, /presentationFit: "prepared-content-bounds-contain"/u);
   assert.match(presentation, /observer\?\.disconnect\(\)/u);

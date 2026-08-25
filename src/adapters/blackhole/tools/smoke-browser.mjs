@@ -106,6 +106,7 @@ async function smokeProfile(specification) {
         const cameraBounds = camera.getBoundingClientRect();
         const sourceBounds = window.__cssBlackHoleDebug.catalog().luminetPreparedState.bounds;
         const padding = 90;
+        const verticalViewportPadding = 22;
         const paddedBounds = {
           minimumX: Math.max(0, sourceBounds.minimumX - padding),
           maximumX: Math.min(800, sourceBounds.maximumX + padding),
@@ -123,7 +124,8 @@ async function smokeProfile(specification) {
         const offsetY = Number.parseFloat(getComputedStyle(camera)
           .getPropertyValue("--cssblackhole-presentation-offset-y"));
         const expectedScale = Math.min(
-          stageBounds.width / paddedWidth, stageBounds.height / paddedHeight);
+          stageBounds.width / paddedWidth,
+          Math.max(1, stageBounds.height - verticalViewportPadding * 2) / paddedHeight);
         const tolerance = 0.01;
         const projectedBounds = {
           left: stageBounds.left + stageBounds.width / 2 +
@@ -199,6 +201,15 @@ async function smokeProfile(specification) {
     const pausedFrame = window.__cssBlackHoleDebug.stats().publishedStreamFrame;
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 150));
     const pausedFrameAfterWait = window.__cssBlackHoleDebug.stats().publishedStreamFrame;
+    const topDownSlot = window.__cssBlackHoleDebug.catalog()
+      .configurationLoop.presentationSlots.find((slot) => slot.view === "top");
+    await window.__cssBlackHoleDebug.seekStreamFrame(topDownSlot.startFrameIndex);
+    const stageBounds = document.querySelector(".example-stage").getBoundingClientRect();
+    const leafBounds = leaves.map((leaf) => leaf.getBoundingClientRect());
+    const topDownVerticalMargins = {
+      top: Math.min(...leafBounds.map((bounds) => bounds.top)) - stageBounds.top,
+      bottom: stageBounds.bottom - Math.max(...leafBounds.map((bounds) => bounds.bottom)),
+    };
     window.__cssBlackHoleDebug.resume();
     return {
       stats,
@@ -209,6 +220,7 @@ async function smokeProfile(specification) {
         leaf.style.transform !== window.__cssBlackHoleSmokeInitialTransforms[index]), 0),
       pausedFrame,
       pausedFrameAfterWait,
+      topDownVerticalMargins,
     };
   });
   const screenshotPath = resolve(resultRoot, `route-${specification.id}.png`);
@@ -289,6 +301,7 @@ function assertSmoke(report) {
       report.initial.stats?.sourceViewport?.width !== 800 ||
       report.initial.stats?.sourceViewport?.height !== 600 ||
       report.initial.stats?.presentationPaddingPixels !== 90 ||
+      report.initial.stats?.presentationVerticalViewportPaddingPixels !== 22 ||
       presentation?.preparedBoundsContained !== true ||
       Math.abs(presentation.offset.x + presentation.center.x) > 0.000_1 ||
       Math.abs(presentation.offset.y + presentation.center.y) > 0.000_1 ||
@@ -306,6 +319,11 @@ function assertSmoke(report) {
       report.final.stats?.sourceFrameDropCount !== 0 ||
       report.final.stats?.schedulerNoopCallbackCount !== 0 ||
       report.final.stats?.runtimeDomGrowth !== false ||
+      report.final.topDownVerticalMargins?.top < 23 ||
+      report.final.topDownVerticalMargins?.bottom < 23 ||
+      (report.id === "monitor27" &&
+        (report.final.topDownVerticalMargins.top < 70 ||
+          report.final.topDownVerticalMargins.bottom < 70)) ||
       report.final.pausedFrame !== report.final.pausedFrameAfterWait ||
       !preparedRequests.includes(report.expectedSpaceContextPath) ||
       preparedRequests.length < 6 || report.pageErrors.length !== 0 ||

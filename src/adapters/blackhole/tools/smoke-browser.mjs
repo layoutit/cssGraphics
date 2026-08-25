@@ -255,6 +255,14 @@ function assertSmoke(report) {
       report.initial.stats?.runtimePhysicsCount !== 0 ||
       report.initial.stats?.runtimeRasterizationCount !== 0 ||
       report.initial.stats?.runtimeDomReconstructionCount !== 0 ||
+      report.initial.stats?.materializedBlockTransformCharacterLimit !== 3_200_000 ||
+      report.initial.stats?.materializedBlockScheduleByteLimit !== 260_000 ||
+      report.initial.stats?.maximumPreparedBlockTransformCharacters !== 3_159_406 ||
+      report.initial.stats?.maximumPreparedBlockScheduleBytes !== 253_720 ||
+      report.initial.stats?.retainedMaterializedBlockCount !== 1 ||
+      report.initial.stats?.retainedMaterializedTransformBytes > 3_200_000 ||
+      report.initial.stats?.retainedMaterializedScheduleBytes > 260_000 ||
+      report.initial.stats?.workerMaterializationMaximumResponseChunkCharacters > 112_000 ||
       report.initial.stats?.spaceContextSourceStarCountPerPlate !== 1000 ||
       report.initial.stats?.spaceContextPointPrimitive !== "axis-aligned-square" ||
       report.initial.stats?.spaceContextRuntimeDomNodeCount !== 0 ||
@@ -289,6 +297,13 @@ function assertSmoke(report) {
       report.final.leafCount !== 1979 || !report.final.stableIdentity ||
       report.final.changedTransformCount < 100 ||
       report.final.stats?.preparedConfigurationSwitchCount < 1 ||
+      report.final.stats?.retainedMaterializedBlockCount < 1 ||
+      report.final.stats?.retainedMaterializedBlockCount > 2 ||
+      report.final.stats?.retainedMaterializedTransformBytes > 6_400_000 ||
+      report.final.stats?.retainedMaterializedScheduleBytes > 520_000 ||
+      report.final.stats?.preparedBlockWaitCount !== 0 ||
+      report.final.stats?.preparedBankWaitCount !== 0 ||
+      report.final.stats?.sourceFrameDropCount !== 0 ||
       report.final.stats?.schedulerNoopCallbackCount !== 0 ||
       report.final.stats?.runtimeDomGrowth !== false ||
       report.final.pausedFrame !== report.final.pausedFrameAfterWait ||

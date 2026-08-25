@@ -87,8 +87,12 @@ test("Luminet adapter owns a standalone prepared cssblackhole contract", async (
   assert.equal(catalog.spaceContext.distribution.uniformPointCount, 600);
   assert.equal(catalog.spaceContext.distribution.broadGalacticBandPointCount, 400);
   assert.equal(catalog.spaceContext.distribution.centerDensityMode,
-    "uniform-sparse-no-static-center-hole");
-  assert.equal(catalog.spaceContext.distribution.minimumCenterDensity, 1);
+    "prepared-smooth-radial-sparsity-no-hard-cutout");
+  assert.equal(catalog.spaceContext.distribution.centerDensityCurve, "smoothstep");
+  assert.equal(catalog.spaceContext.distribution.minimumCenterDensity, 0.1);
+  assert.equal(catalog.spaceContext.distribution.fullDensityRadiusLogicalPixels, 360);
+  assert.equal(catalog.spaceContext.distribution.centerProbeRadiusLogicalPixels, 160);
+  assert.equal(catalog.spaceContext.distribution.coreRadiusLogicalPixels, 96);
   assert.deepEqual(catalog.spaceContext.palette, palette);
   assert.deepEqual(catalog.spaceContext.opacityPalette,
     ["0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8"]);
@@ -252,7 +256,9 @@ test("Luminet adapter owns a standalone prepared cssblackhole contract", async (
   }
   for (const plate of catalog.spaceContext.plates) {
     assert.equal(plate.sourceStarCount, 1_000);
-    assert.equal(plate.centerDensityFalloff, undefined);
+    assert.equal(plate.centralPointCountWithinCoreRadius, 0);
+    assert.ok(plate.centralPointCountWithinProbeRadius >= 1);
+    assert.ok(plate.centralPointCountWithinProbeRadius <= 16);
     for (const variant of plate.variants) {
       const path = resolve(generatedRoot, variant.assetUrl.split("/").at(-1));
       const bytes = await readFile(path);

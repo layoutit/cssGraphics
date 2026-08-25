@@ -752,8 +752,12 @@ function validSpaceContext(context) {
       context.distribution?.uniformPointCount !== 600 ||
       context.distribution.broadGalacticBandPointCount !== 400 ||
       context.distribution.centerDensityMode !==
-        "uniform-sparse-no-static-center-hole" ||
-      context.distribution.minimumCenterDensity !== 1 ||
+        "prepared-smooth-radial-sparsity-no-hard-cutout" ||
+      context.distribution.centerDensityCurve !== "smoothstep" ||
+      context.distribution.minimumCenterDensity !== 0.1 ||
+      context.distribution.fullDensityRadiusLogicalPixels !== 360 ||
+      context.distribution.centerProbeRadiusLogicalPixels !== 160 ||
+      context.distribution.coreRadiusLogicalPixels !== 96 ||
       context.lensing?.classification !==
         "thin-lens-compositional-context-not-luminet-source-parity" ||
       context.lensing.einsteinRadiusLogicalPixels !== 96 ||
@@ -768,7 +772,10 @@ function validSpaceContext(context) {
     const expected = expectedPlates[plateIndex];
     return plate?.id === expected.id && plate.logicalWidth === expected.logicalWidth &&
       plate.logicalHeight === expected.logicalHeight && plate.sourceStarCount === 1000 &&
-      plate.centerDensityFalloff === undefined &&
+      plate.centralPointCountWithinCoreRadius === 0 &&
+      Number.isSafeInteger(plate.centralPointCountWithinProbeRadius) &&
+      plate.centralPointCountWithinProbeRadius >= 1 &&
+      plate.centralPointCountWithinProbeRadius <= 16 &&
       Array.isArray(plate.variants) && plate.variants.length === 2 &&
       plate.variants.every((variant, variantIndex) => {
         const deviceScaleFactor = variantIndex + 1;

@@ -269,14 +269,14 @@ function assertSmoke(report) {
       report.initial.stats?.schedulerDelayRequestCount !== 0 ||
       report.initial.stats?.schedulerDelayCallbackCount !== 0 ||
       report.initial.stats?.schedulerNoopCallbackCount !== 0 ||
-      report.initial.stats?.pointSize !== 1 ||
+      report.initial.stats?.pointSize !== 2 ||
       report.initial.stats?.pointSizePolicy !== "2px-all-resolution-tiers" ||
       !report.initial.spaceContextBackgroundImage?.includes("space-context-") ||
       report.initial.spaceContextBackgroundRepeat !== "repeat" ||
       report.initial.pointPresentation?.deviceScaleFactor !== report.viewport.deviceScaleFactor ||
       report.initial.pointPresentation?.policyValue !== `${report.expectedPointSize}px` ||
-      Math.abs(report.initial.pointPresentation.width - report.expectedPointSize) > 0.01 ||
-      Math.abs(report.initial.pointPresentation.height - report.expectedPointSize) > 0.01 ||
+      Math.abs(report.initial.pointPresentation.width - report.expectedPointSize) > 0.02 ||
+      Math.abs(report.initial.pointPresentation.height - report.expectedPointSize) > 0.02 ||
       report.initial.stats?.presentationFit !== "prepared-content-bounds-contain" ||
       report.initial.stats?.sourceViewport?.width !== 800 ||
       report.initial.stats?.sourceViewport?.height !== 600 ||

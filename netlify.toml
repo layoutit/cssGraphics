@@ -6,6 +6,12 @@
 [build.environment]
   NODE_VERSION = "22.17.1"
 
+[[redirects]]
+  from = "/luminet/*"
+  to = "/blackhole/:splat"
+  status = 301
+  force = true
+
 [[headers]]
   for = "/cssflower/assets/*"
   [headers.values]

@@ -3,17 +3,21 @@
   "projects": [
     {
       "number": 10,
-      "id": "luminet",
-      "name": "Luminet",
-      "route": "/luminet/",
-      "preview": "/landing/luminet.webp",
+      "id": "blackhole",
+      "name": "Black Hole",
+      "route": "/blackhole/",
+      "preview": "/landing/blackhole.webp",
       "numberTone": "light",
       "source": "Luminet",
       "credits": [
         {
-          "relation": "Adapted from",
+          "relation": "Math from",
           "name": "Luminet",
           "url": "https://github.com/bgmeulem/luminet/tree/d31f8b481c485ac0ebe74789f8ed892eeb9b38a1"
+        },
+        {
+          "relation": "By",
+          "name": "Agustin Capeletto"
         }
       ],
       "description": "A Luminet Schwarzschild black hole rendered entirely with retained HTML and CSS using PolyCSS.",

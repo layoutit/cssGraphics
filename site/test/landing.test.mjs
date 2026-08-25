@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(siteRoot, "..");
 const expectedProjects = [
-  ["luminet", 10, "Luminet", "2026-08-24", "A Luminet Schwarzschild black hole"],
+  ["blackhole", 10, "Luminet", "2026-08-24", "A Luminet Schwarzschild black hole"],
   ["galaxy", 9, "XScreenSaver", "2026-08-23", "XScreenSaver Galaxy"],
   ["cyclone", 8, "Really Slick", "2026-08-22", "Really Slick Cyclone rendered"],
   ["cloth", 7, "three.js", "2026-08-20", "The Three.js cloth simulation"],
@@ -21,7 +21,7 @@ const expectedProjects = [
 ];
 const projectsExcludedFromLanding = ["flowerbox", "gravitywell"];
 const expectedNumberTones = new Map([
-  ["luminet", "light"],
+  ["blackhole", "light"],
   ["galaxy", "light"],
   ["cyclone", "light"],
   ["cloth", "dark"],
@@ -33,7 +33,7 @@ const expectedNumberTones = new Map([
   ["pipes", "light"],
 ]);
 const projectAdapterDirectories = new Map([
-  ["luminet", "blackhole"],
+  ["blackhole", "blackhole"],
   ["cloth", "cloth"],
   ["electropaint", "electropaint"],
   ["flowerbox", "flowerbox"],
@@ -61,6 +61,12 @@ test("landing presents the current deployed collection", async () => {
   const projectManifest = JSON.parse(projectManifestText);
   assert.equal(projectManifest.schema, "cssgraphics.projects@2");
   assert.doesNotMatch(projectManifestText, /Windows 3D Pipes/u);
+  const blackHole = projectManifest.projects.find(({ id }) => id === "blackhole");
+  assert.equal(blackHole.name, "Black Hole");
+  assert.deepEqual(blackHole.credits.map(({ relation, name }) => ({ relation, name })), [
+    { relation: "Math from", name: "Luminet" },
+    { relation: "By", name: "Agustin Capeletto" },
+  ]);
   assert.equal(projectManifest.projects.find(({ id }) => id === "cyclone").credits[0].name, "Really Slick");
   assert.doesNotMatch(projectManifestText, /David Tristram/u);
   assert.doesNotMatch(projectManifestText, /three\.js examples/u);
@@ -280,6 +286,8 @@ test("deployment serves only the current public products through the Astro shell
   ]);
   const deployCommand = JSON.parse(packageManifest).scripts["build:deploy"];
   assert.doesNotMatch(netlify, /to\s*=\s*"\/pipes\/"/u);
+  assert.match(netlify,
+    /from = "\/luminet\/\*"[\s\S]*to = "\/blackhole\/:splat"[\s\S]*status = 301/u);
   assert.match(netlify, /ignore = "node \.\/scripts\/netlify-ignore-build\.mjs"/u);
   assert.match(packageManifest, /pnpm prepare:cloth:artifact/u);
   for (const adapter of ["3dpipes", "cyclone", "galaxy", "solitaire"]) {
@@ -296,7 +304,7 @@ test("deployment serves only the current public products through the Astro shell
   for (const [projectId] of expectedProjects) {
     const productDirectory = projectId === "pipes" ? "csspipes" :
       projectId === "electropaint" ? "cssselectropaint" :
-        projectId === "luminet" ? "cssblackhole" : `css${projectId}`;
+        projectId === "blackhole" ? "cssblackhole" : `css${projectId}`;
     assert.match(productCopy, new RegExp(`"${productDirectory}"`, "u"));
   }
   assert.ok(

@@ -12,11 +12,11 @@ test("Luminet owns the shared css.graphics shell at its canonical route", async 
     readFile(new URL("src/main.mjs", adapterRoot), "utf8"),
   ]);
   assert.match(html, /cssgraphics-examples-sidebar/u);
-  assert.match(html, /https:\/\/css\.graphics\/luminet\//u);
+  assert.match(html, /https:\/\/css\.graphics\/blackhole\//u);
   assert.match(html, /<meta name="robots" content="index, follow">/u);
   assert.match(html, /<main class="example-stage"><\/main>/u);
-  assert.match(config, /createExamplesShellPlugin\("luminet"\)/u);
-  assert.match(config, /deployBuild \? "\/luminet\/" : "\/"/u);
+  assert.match(config, /createExamplesShellPlugin\("blackhole"\)/u);
+  assert.match(config, /deployBuild \? "\/blackhole\/" : "\/"/u);
   assert.match(main, /site\/examples-shell-client\.mjs/u);
 });
 
@@ -45,7 +45,11 @@ test("Luminet keeps one retained point topology and no alternate renderer", asyn
     /createElement\(["']canvas|createElementNS|<svg|webgl/iu);
   assert.match(client, /installBlackHoleStagePresentation/u);
   assert.match(presentation, /CSSBLACKHOLE_PRESENTATION_PADDING_PIXELS = 90/u);
-  assert.match(presentation, /Math\.min\(width \/ paddedWidth, height \/ paddedHeight\)/u);
+  assert.match(presentation,
+    /CSSBLACKHOLE_PRESENTATION_VERTICAL_VIEWPORT_PADDING_PIXELS = 22/u);
+  assert.match(presentation, /availableHeight = Math\.max\(1, height -/u);
+  assert.match(presentation,
+    /Math\.min\(width \/ paddedWidth, availableHeight \/ paddedHeight\)/u);
   assert.match(presentation, /new ResizeObserverImpl\(refresh\)/u);
   assert.match(presentation, /presentationFit: "prepared-content-bounds-contain"/u);
   assert.match(presentation, /observer\?\.disconnect\(\)/u);

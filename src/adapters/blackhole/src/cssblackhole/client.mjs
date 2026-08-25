@@ -170,8 +170,8 @@ function installDebugApi(state, controller) {
           transitionCadenceSecondsBySlot:
             state.catalog.configurationLoop.transitionCadenceSecondsBySlot,
           transitionDurationSeconds: state.catalog.configurationLoop.transitionSeconds,
-          pointSize: 1,
-          pointSizePolicy: "1px-default-2px-at-minimum-2dppx",
+          pointSize: 2,
+          pointSizePolicy: "2px-all-resolution-tiers",
           cameraMode: "fixed",
           domNodeCount: document.getElementsByTagName("*").length,
           runtimePhysicsCount: 0,

@@ -32,8 +32,6 @@ test("Luminet keeps one retained point topology and no alternate renderer", asyn
   assert.match(css, /--cssblackhole-presentation-scale/u);
   assert.match(css, /--cssblackhole-presentation-offset-x/u);
   assert.match(css, /--cssblackhole-presentation-offset-y/u);
-  assert.match(css, /--cssblackhole-point-size:\s*1px/u);
-  assert.match(css, /@media \(min-resolution:\s*2dppx\)/u);
   assert.match(css, /--cssblackhole-point-size:\s*2px/u);
   assert.match(css,
     /width:\s*calc\(var\(--cssblackhole-point-size\) \/ var\(--cssblackhole-presentation-scale\)\)/u);

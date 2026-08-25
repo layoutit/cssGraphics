@@ -85,7 +85,7 @@ test("Luminet adapter owns a standalone prepared cssblackhole contract", async (
   assert.equal(catalog.spaceContext.opacityMode,
     "prepared-original-dot-opacity-palette");
   assert.equal(catalog.spaceContext.pointPrimitive.shape, "axis-aligned-square");
-  assert.equal(catalog.spaceContext.pointPrimitive.cssPixelsAt1dppx, 1);
+  assert.equal(catalog.spaceContext.pointPrimitive.cssPixelsAt1dppx, 2);
   assert.equal(catalog.spaceContext.pointPrimitive.cssPixelsAtMinimum2dppx, 2);
   assert.equal(catalog.spaceContext.pointPrimitive.overlappingPreparedPointCount, 0);
   assert.equal(catalog.spaceContext.runtimeDomNodeCount, 0);
@@ -255,7 +255,7 @@ test("Luminet adapter owns a standalone prepared cssblackhole contract", async (
           `${variant.assetUrl} contains a non-Luminet-dot palette pixel ${pixel}`);
         nonBlackPixelCount += 1;
       }
-      const pixelsPerPoint = variant.deviceScaleFactor === 1 ? 1 : 16;
+      const pixelsPerPoint = 4 * variant.deviceScaleFactor ** 2;
       assert.equal(nonBlackPixelCount, plate.sourceStarCount * pixelsPerPoint);
     }
   }

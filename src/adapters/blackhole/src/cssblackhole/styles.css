@@ -25,7 +25,7 @@ body {
   --cssblackhole-presentation-scale: 1;
   --cssblackhole-presentation-offset-x: -400px;
   --cssblackhole-presentation-offset-y: -300px;
-  --cssblackhole-point-size: 1px;
+  --cssblackhole-point-size: 2px;
   position: absolute;
   left: 50%;
   top: 50%;
@@ -61,10 +61,6 @@ body {
   height: calc(var(--cssblackhole-point-size) / var(--cssblackhole-presentation-scale));
   border: 0;
   background: currentColor;
-}
-
-@media (min-resolution: 2dppx) {
-  .example-stage > .polycss-camera { --cssblackhole-point-size: 2px; }
 }
 
 @media (orientation: portrait) {

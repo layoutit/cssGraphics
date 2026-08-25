@@ -34,7 +34,7 @@ export async function prepareBlackHoleSpaceContext(outputRoot) {
         width,
         height,
         deviceScaleFactor,
-        pointSize: deviceScaleFactor === 1 ? 1 : 4,
+        pointSize: deviceScaleFactor * 2,
       });
       await writeFile(resolve(outputRoot, filename), bytes);
       variants.push(Object.freeze({
@@ -71,9 +71,9 @@ export async function prepareBlackHoleSpaceContext(outputRoot) {
     pointPrimitive: Object.freeze({
       shape: "axis-aligned-square",
       foregroundReference: ".polycss-scene > b",
-      cssPixelsAt1dppx: 1,
+      cssPixelsAt1dppx: 2,
       cssPixelsAtMinimum2dppx: 2,
-      devicePixelsAt1dppx: 1,
+      devicePixelsAt1dppx: 2,
       devicePixelsAt2dppx: 4,
       minimumLogicalChebyshevSeparationPixels: 2,
       overlappingPreparedPointCount: 0,

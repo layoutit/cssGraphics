@@ -35,11 +35,11 @@ try {
   browser = await chromium.launch({ channel: "chrome", headless: true });
   const profiles = [];
   for (const specification of [
-    { id: "desktop", viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, pointSize: 1,
+    { id: "desktop", viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1, pointSize: 2,
       spaceContextPath: "/cssblackhole/space-context-landscape.webp" },
-    { id: "monitor27", viewport: { width: 2206, height: 1233 }, deviceScaleFactor: 1, pointSize: 1,
+    { id: "monitor27", viewport: { width: 2206, height: 1233 }, deviceScaleFactor: 1, pointSize: 2,
       spaceContextPath: "/cssblackhole/space-context-landscape.webp" },
-    { id: "mobile", viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, pointSize: 1,
+    { id: "mobile", viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, pointSize: 2,
       spaceContextPath: "/cssblackhole/space-context-portrait.webp" },
     { id: "hidpi", viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, pointSize: 2,
       spaceContextPath: "/cssblackhole/space-context-portrait@2x.webp" },
@@ -270,7 +270,7 @@ function assertSmoke(report) {
       report.initial.stats?.schedulerDelayCallbackCount !== 0 ||
       report.initial.stats?.schedulerNoopCallbackCount !== 0 ||
       report.initial.stats?.pointSize !== 1 ||
-      report.initial.stats?.pointSizePolicy !== "1px-default-2px-at-minimum-2dppx" ||
+      report.initial.stats?.pointSizePolicy !== "2px-all-resolution-tiers" ||
       !report.initial.spaceContextBackgroundImage?.includes("space-context-") ||
       report.initial.spaceContextBackgroundRepeat !== "repeat" ||
       report.initial.pointPresentation?.deviceScaleFactor !== report.viewport.deviceScaleFactor ||

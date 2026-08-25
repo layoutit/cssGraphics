@@ -732,9 +732,9 @@ function validSpaceContext(context) {
         "prepared-srgb-over-opaque-black" ||
       context.pointPrimitive?.shape !== "axis-aligned-square" ||
       context.pointPrimitive.foregroundReference !== ".polycss-scene > b" ||
-      context.pointPrimitive.cssPixelsAt1dppx !== 1 ||
+      context.pointPrimitive.cssPixelsAt1dppx !== 2 ||
       context.pointPrimitive.cssPixelsAtMinimum2dppx !== 2 ||
-      context.pointPrimitive.devicePixelsAt1dppx !== 1 ||
+      context.pointPrimitive.devicePixelsAt1dppx !== 2 ||
       context.pointPrimitive.devicePixelsAt2dppx !== 4 ||
       context.pointPrimitive.minimumLogicalChebyshevSeparationPixels !== 2 ||
       context.pointPrimitive.overlappingPreparedPointCount !== 0 ||

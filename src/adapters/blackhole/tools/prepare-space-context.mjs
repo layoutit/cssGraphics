@@ -15,6 +15,10 @@ const SPACE_CONTEXT_OPACITY_PALETTE = Object.freeze([
 ]);
 const SPACE_CONTEXT_LAYER_OPACITY = 0.5;
 const SPACE_CONTEXT_OPACITY_SAMPLING_BUCKET_COUNT = 9;
+const SPACE_CONTEXT_MINIMUM_CENTER_DENSITY = 0.1;
+const SPACE_CONTEXT_FULL_DENSITY_RADIUS = 360;
+const SPACE_CONTEXT_CENTER_PROBE_RADIUS = 160;
+const SPACE_CONTEXT_CORE_RADIUS = 96;
 const SPACE_CONTEXT_PLATES = Object.freeze([
   Object.freeze({ id: "landscape", width: 2560, height: 1440, seedOffset: 0 }),
   Object.freeze({ id: "portrait", width: 1440, height: 2560, seedOffset: 0x51f15e }),
@@ -52,6 +56,10 @@ export async function prepareBlackHoleSpaceContext(outputRoot) {
       logicalWidth: specification.width,
       logicalHeight: specification.height,
       sourceStarCount: points.length,
+      centralPointCountWithinCoreRadius: countPointsWithinRadius(
+        points, specification, SPACE_CONTEXT_CORE_RADIUS),
+      centralPointCountWithinProbeRadius: countPointsWithinRadius(
+        points, specification, SPACE_CONTEXT_CENTER_PROBE_RADIUS),
       variants: Object.freeze(variants),
     }));
   }
@@ -85,8 +93,12 @@ export async function prepareBlackHoleSpaceContext(outputRoot) {
       uniformPointCount: SPACE_CONTEXT_UNIFORM_POINT_COUNT,
       broadGalacticBandPointCount: SPACE_CONTEXT_BAND_POINT_COUNT,
       bandClassification: "decorative-broad-density-context",
-      centerDensityMode: "uniform-sparse-no-static-center-hole",
-      minimumCenterDensity: 1,
+      centerDensityMode: "prepared-smooth-radial-sparsity-no-hard-cutout",
+      centerDensityCurve: "smoothstep",
+      minimumCenterDensity: SPACE_CONTEXT_MINIMUM_CENTER_DENSITY,
+      fullDensityRadiusLogicalPixels: SPACE_CONTEXT_FULL_DENSITY_RADIUS,
+      centerProbeRadiusLogicalPixels: SPACE_CONTEXT_CENTER_PROBE_RADIUS,
+      coreRadiusLogicalPixels: SPACE_CONTEXT_CORE_RADIUS,
     }),
     lensing: Object.freeze({
       classification: "thin-lens-compositional-context-not-luminet-source-parity",
@@ -118,6 +130,7 @@ function preparePlatePoints({ width, height, seedOffset }) {
     if (sourceY < 0 || sourceY >= height) continue;
     const lensed = lensPoint(sourceX, sourceY, width, height);
     if (lensed === null) continue;
+    if (random() > centerDensity(lensed.x, lensed.y, width, height)) continue;
     const x = Math.round(lensed.x);
     const y = Math.round(lensed.y);
     if (x < 0 || x >= width - 1 || y < 0 || y >= height - 1 ||
@@ -140,6 +153,21 @@ function preparePlatePoints({ width, height, seedOffset }) {
     }
   }
   return Object.freeze(points);
+}
+
+function centerDensity(x, y, width, height) {
+  const radius = Math.hypot(x - width / 2, y - height / 2);
+  const normalized = Math.min(1, radius / SPACE_CONTEXT_FULL_DENSITY_RADIUS);
+  const smoothstep = normalized * normalized * (3 - 2 * normalized);
+  return SPACE_CONTEXT_MINIMUM_CENTER_DENSITY +
+    (1 - SPACE_CONTEXT_MINIMUM_CENTER_DENSITY) * smoothstep;
+}
+
+function countPointsWithinRadius(points, { width, height }, radius) {
+  const centerX = width / 2;
+  const centerY = height / 2;
+  return points.filter((point) =>
+    Math.hypot(point.x - centerX, point.y - centerY) <= radius).length;
 }
 
 function bandY(random, x, width, height) {

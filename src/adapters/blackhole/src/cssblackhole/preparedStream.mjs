@@ -726,11 +726,10 @@ function validSpaceContext(context) {
       context.opacityDecimalPlaces !== 1 ||
       context.maximumBaseOpacity !== 0.8 ||
       context.opacitySamplingBucketCount !== 9 ||
-      context.globalOpacity !== 0.5 ||
       context.opacityMode !==
-        "prepared-original-dot-opacity-palette-times-global-half-opacity" ||
+        "prepared-original-dot-opacity-palette" ||
       context.opacityComposition !==
-        "prepared-srgb-over-opaque-black-after-global-half-opacity" ||
+        "prepared-srgb-over-opaque-black" ||
       context.pointPrimitive?.shape !== "axis-aligned-square" ||
       context.pointPrimitive.foregroundReference !== ".polycss-scene > b" ||
       context.pointPrimitive.cssPixelsAt1dppx !== 1 ||

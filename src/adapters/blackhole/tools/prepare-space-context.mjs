@@ -13,6 +13,7 @@ const SPACE_CONTEXT_BAND_POINT_COUNT = 400;
 const SPACE_CONTEXT_OPACITY_PALETTE = Object.freeze([
   "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8",
 ]);
+const SPACE_CONTEXT_LAYER_OPACITY = 0.5;
 const SPACE_CONTEXT_OPACITY_SAMPLING_BUCKET_COUNT = 9;
 const SPACE_CONTEXT_PLATES = Object.freeze([
   Object.freeze({ id: "landscape", width: 2560, height: 1440, seedOffset: 0 }),
@@ -65,9 +66,11 @@ export async function prepareBlackHoleSpaceContext(outputRoot) {
     opacityPalette: SPACE_CONTEXT_OPACITY_PALETTE,
     opacityDecimalPlaces: 1,
     maximumBaseOpacity: 0.8,
+    layerOpacity: SPACE_CONTEXT_LAYER_OPACITY,
+    maximumEffectiveOpacity: 0.4,
     opacitySamplingBucketCount: SPACE_CONTEXT_OPACITY_SAMPLING_BUCKET_COUNT,
     opacityMode: "prepared-original-dot-opacity-palette",
-    opacityComposition: "prepared-srgb-over-opaque-black",
+    opacityComposition: "prepared-srgb-base-opacity-times-layer-opacity-over-opaque-black",
     pointPrimitive: Object.freeze({
       shape: "axis-aligned-square",
       foregroundReference: ".polycss-scene > b",
@@ -128,7 +131,7 @@ function preparePlatePoints({ width, height, seedOffset }) {
     points.push(Object.freeze({
       x,
       y,
-      rgb: compositeOverBlack(color, Number(opacity)),
+      rgb: compositeOverBlack(color, Number(opacity) * SPACE_CONTEXT_LAYER_OPACITY),
     }));
     for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
       for (let offsetX = -1; offsetX <= 1; offsetX += 1) {

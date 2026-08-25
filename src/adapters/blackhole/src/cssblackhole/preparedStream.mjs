@@ -734,11 +734,13 @@ function validSpaceContext(context) {
         JSON.stringify(["0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8"]) ||
       context.opacityDecimalPlaces !== 1 ||
       context.maximumBaseOpacity !== 0.8 ||
+      context.layerOpacity !== 0.5 ||
+      context.maximumEffectiveOpacity !== 0.4 ||
       context.opacitySamplingBucketCount !== 9 ||
       context.opacityMode !==
         "prepared-original-dot-opacity-palette" ||
       context.opacityComposition !==
-        "prepared-srgb-over-opaque-black" ||
+        "prepared-srgb-base-opacity-times-layer-opacity-over-opaque-black" ||
       context.pointPrimitive?.shape !== "axis-aligned-square" ||
       context.pointPrimitive.foregroundReference !== ".polycss-scene > b" ||
       context.pointPrimitive.cssPixelsAt1dppx !== 2 ||

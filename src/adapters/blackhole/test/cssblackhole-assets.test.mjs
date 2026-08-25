@@ -93,6 +93,8 @@ test("Luminet adapter owns a standalone prepared cssblackhole contract", async (
   assert.deepEqual(catalog.spaceContext.opacityPalette,
     ["0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8"]);
   assert.equal(catalog.spaceContext.maximumBaseOpacity, 0.8);
+  assert.equal(catalog.spaceContext.layerOpacity, 0.5);
+  assert.equal(catalog.spaceContext.maximumEffectiveOpacity, 0.4);
   assert.equal(catalog.spaceContext.opacitySamplingBucketCount, 9);
   assert.equal(catalog.spaceContext.opacityMode,
     "prepared-original-dot-opacity-palette");
@@ -244,7 +246,8 @@ test("Luminet adapter owns a standalone prepared cssblackhole contract", async (
   const allowedPixels = new Set(["0,0,0"]);
   for (const color of palette) {
     for (const opacity of catalog.spaceContext.opacityPalette) {
-      allowedPixels.add(compositeOverBlack(color, Number(opacity)).join(","));
+      allowedPixels.add(compositeOverBlack(
+        color, Number(opacity) * catalog.spaceContext.layerOpacity).join(","));
     }
   }
   for (const plate of catalog.spaceContext.plates) {

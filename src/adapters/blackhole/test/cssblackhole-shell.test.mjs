@@ -21,11 +21,12 @@ test("Luminet owns the shared css.graphics shell at its canonical route", async 
 });
 
 test("Luminet keeps one retained point topology and no alternate renderer", async () => {
-  const [css, scene, client, presentation] = await Promise.all([
+  const [css, scene, client, presentation, stream] = await Promise.all([
     readFile(new URL("src/cssblackhole/styles.css", adapterRoot), "utf8"),
     readFile(new URL("src/cssblackhole/polycssScene.mjs", adapterRoot), "utf8"),
     readFile(new URL("src/cssblackhole/client.mjs", adapterRoot), "utf8"),
     readFile(new URL("src/cssblackhole/stagePresentation.mjs", adapterRoot), "utf8"),
+    readFile(new URL("src/cssblackhole/preparedStream.mjs", adapterRoot), "utf8"),
   ]);
   assert.match(css, /\.polycss-scene > b/u);
   assert.doesNotMatch(css, /\.example-stage\s*\{/u);
@@ -61,4 +62,5 @@ test("Luminet keeps one retained point topology and no alternate renderer", asyn
   assert.match(client, /pause\(\)/u);
   assert.match(client, /resume\(\)/u);
   assert.match(client, /destroy\(\)/u);
+  assert.doesNotMatch(stream, /requestIdleCallback|processResponseChunk|responseChunkQueue/u);
 });

@@ -56,13 +56,15 @@ const sourceFramesPerSecond = 60;
 const framesPerSecond = 60;
 const sourceFrameStep = sourceFramesPerSecond / framesPerSecond;
 const frameMilliseconds = 1000 / framesPerSecond;
-const blockFrameCount = 300 / sourceFrameStep;
-const blocksPerBank = 1;
+const blockFrameCount = 60 / sourceFrameStep;
+const blocksPerBank = 5;
 const bankFrameCount = blockFrameCount * blocksPerBank;
 const bankCount = 36;
 const blockCount = bankCount * blocksPerBank;
 const streamFrameCount = bankCount * bankFrameCount;
 const preparedOpacityPalette = CSSBLACKHOLE_OPACITY_PALETTE;
+const materializedBlockTransformCharacterLimit = 3_200_000;
+const materializedBlockScheduleByteLimit = 260_000;
 
 if (endianness() !== "LE") throw new Error("Luminet preparation requires little endian");
 await ensurePinnedSource();
@@ -99,6 +101,17 @@ const selectedGhostOrbitCounts = selectedSourcePointIndices.slice(directPointCou
 const selectedCoordinates = pointSelectionResult.selectedCoordinates;
 const selectedLuminances = selectSourcePoints(
   luminances, sourceState.frameCount, sourcePointCount, 1, selectedSourcePointIndices);
+const materialization = measureMaterializedBlockPayload({
+  coordinates: selectedCoordinates,
+  luminances: selectedLuminances,
+  starCount,
+  blockFrameCount,
+  blockCount,
+});
+if (materialization.maximumTransformCharacters > materializedBlockTransformCharacterLimit ||
+    materialization.maximumScheduleBytes > materializedBlockScheduleByteLimit) {
+  throw new Error("Luminet materialized block exceeds the bounded payload contract");
+}
 
 await rm(stagingRoot, { recursive: true, force: true });
 await mkdir(banksRoot, { recursive: true });
@@ -290,6 +303,14 @@ const catalog = Object.freeze({
   runtimeLookaheadBankCount: 1,
   runtimeMaterializedLookaheadBlockCount: 1,
   startupMaterializedLookaheadBlockCount: 0,
+  materialization: Object.freeze({
+    schema: "cssblackhole-bounded-materialized-block@1",
+    policy: "galaxy-style-multiple-playback-blocks-per-transport-bank",
+    maximumRetainedBlockCount: 2,
+    transformCharacterLimit: materializedBlockTransformCharacterLimit,
+    scheduleByteLimit: materializedBlockScheduleByteLimit,
+    ...materialization,
+  }),
   publication: Object.freeze({
     schema: "cssblackhole-prepared-useful-publication@1",
     mode: "complete-1979-point-state-at-sixty-hertz",
@@ -327,7 +348,7 @@ const catalog = Object.freeze({
     maximumCoordinateQuantizationErrorPixels:
       CSSBLACKHOLE_MAXIMUM_COORDINATE_QUANTIZATION_ERROR_PIXELS,
     predictor:
-      "independent-five-second-coordinate-second-difference-plus-prepared-sparse-opacity-ranges",
+      "independent-five-second-bank-one-second-block-coordinate-second-difference-plus-prepared-sparse-opacity-ranges",
   }),
   configurationLoop,
   luminetPreparedState: sourceState,
@@ -519,6 +540,65 @@ function maximumFrequency(values) {
     maximum = Math.max(maximum, frequency);
   }
   return maximum;
+}
+
+function measureMaterializedBlockPayload({
+  coordinates, luminances, starCount, blockFrameCount, blockCount,
+}) {
+  if (!(coordinates instanceof Int32Array) || !(luminances instanceof Uint8Array) ||
+      coordinates.length !== blockCount * blockFrameCount * starCount * 2 ||
+      luminances.length !== blockCount * blockFrameCount * starCount) {
+    throw new Error("Luminet materialized payload source cardinality drifted");
+  }
+  let maximumTransformAssignmentCount = 0;
+  let maximumOpacityAssignmentCount = 0;
+  let maximumTransformCharacters = 0;
+  let maximumScheduleBytes = 0;
+  let maximumTransformCharacterBlockIndex = -1;
+  for (let blockIndex = 0; blockIndex < blockCount; blockIndex += 1) {
+    const blockStartFrame = blockIndex * blockFrameCount;
+    let transformAssignmentCount = 0;
+    let opacityAssignmentCount = 0;
+    let transformCharacters = 0;
+    for (let localFrameIndex = 0; localFrameIndex < blockFrameCount; localFrameIndex += 1) {
+      const frameIndex = blockStartFrame + localFrameIndex;
+      for (let leafIndex = 0; leafIndex < starCount; leafIndex += 1) {
+        const sampleIndex = frameIndex * starCount + leafIndex;
+        const coordinateOffset = sampleIndex * 2;
+        const x = coordinates[coordinateOffset];
+        const y = coordinates[coordinateOffset + 1];
+        const previousCoordinateOffset = coordinateOffset - starCount * 2;
+        if (localFrameIndex === 0 || x !== coordinates[previousCoordinateOffset] ||
+            y !== coordinates[previousCoordinateOffset + 1]) {
+          transformAssignmentCount += 1;
+          transformCharacters += formatBlackHolePreparedTransform(x, y).length;
+        }
+        if (localFrameIndex === 0 ||
+            quantizeBlackHolePreparedOpacityIndex(luminances[sampleIndex]) !==
+              quantizeBlackHolePreparedOpacityIndex(luminances[sampleIndex - starCount])) {
+          opacityAssignmentCount += 1;
+        }
+      }
+    }
+    const scheduleBytes = (blockFrameCount + 1) * Uint32Array.BYTES_PER_ELEMENT * 2 +
+      transformAssignmentCount * Uint16Array.BYTES_PER_ELEMENT +
+      opacityAssignmentCount * (Uint16Array.BYTES_PER_ELEMENT + Uint8Array.BYTES_PER_ELEMENT);
+    maximumTransformAssignmentCount = Math.max(
+      maximumTransformAssignmentCount, transformAssignmentCount);
+    maximumOpacityAssignmentCount = Math.max(maximumOpacityAssignmentCount, opacityAssignmentCount);
+    maximumScheduleBytes = Math.max(maximumScheduleBytes, scheduleBytes);
+    if (transformCharacters > maximumTransformCharacters) {
+      maximumTransformCharacters = transformCharacters;
+      maximumTransformCharacterBlockIndex = blockIndex;
+    }
+  }
+  return Object.freeze({
+    maximumTransformAssignmentCount,
+    maximumOpacityAssignmentCount,
+    maximumTransformCharacters,
+    maximumScheduleBytes,
+    maximumTransformCharacterBlockIndex,
+  });
 }
 
 async function ensurePinnedSource() {

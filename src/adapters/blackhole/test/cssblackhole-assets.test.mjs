@@ -51,14 +51,26 @@ test("Luminet adapter owns a standalone prepared cssblackhole contract", async (
   assert.equal(catalog.transportSeed, 6477);
   assert.equal(catalog.sourceFramesPerSecond, 60);
   assert.equal(catalog.framesPerSecond, 60);
-  assert.equal(catalog.blockFrameCount, 300);
-  assert.equal(catalog.blocksPerBank, 1);
+  assert.equal(catalog.blockFrameCount, 60);
+  assert.equal(catalog.blocksPerBank, 5);
   assert.equal(catalog.bankFrameCount, 300);
   assert.equal(catalog.bankCount, 36);
-  assert.equal(catalog.blockCount, 36);
+  assert.equal(catalog.blockCount, 180);
+  assert.deepEqual(catalog.materialization, {
+    schema: "cssblackhole-bounded-materialized-block@1",
+    policy: "galaxy-style-multiple-playback-blocks-per-transport-bank",
+    maximumRetainedBlockCount: 2,
+    transformCharacterLimit: 3_200_000,
+    scheduleByteLimit: 260_000,
+    maximumTransformAssignmentCount: 118_740,
+    maximumOpacityAssignmentCount: 5_252,
+    maximumTransformCharacters: 3_159_406,
+    maximumScheduleBytes: 253_720,
+    maximumTransformCharacterBlockIndex: 176,
+  });
   assert.equal(catalog.streamFrameCount, 10800);
   assert.equal(catalog.streamDurationMilliseconds, 180_000);
-  assert.equal(prepared.cadence.blockSeconds, 5);
+  assert.equal(prepared.cadence.blockSeconds, 1);
   assert.equal(prepared.cadence.bankSeconds, 5);
   assert.equal(prepared.cadence.streamSeconds, 180);
   assert.equal(prepared.renderer.kind, "retained-dom-polycss-prepared-playback");

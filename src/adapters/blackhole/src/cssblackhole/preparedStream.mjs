@@ -63,11 +63,6 @@ export function createBlackHolePreparedStreamLoader(catalog) {
   const requests = new Map();
   const retainedBanks = new Uint8Array(catalog.bankCount);
   const retainedBlocks = new Uint8Array(catalog.blockCount);
-  const responseChunkQueue = [];
-  const requestIdle = globalThis.requestIdleCallback?.bind(globalThis) ??
-    ((callback) => setTimeout(() => callback({ didTimeout: true, timeRemaining: () => 0 }), 0));
-  const cancelIdle = globalThis.cancelIdleCallback?.bind(globalThis) ?? clearTimeout;
-  let responseIdleRequest = null;
   let requestId = 0;
   let destroyed = false;
   let transportBankFetchCount = 0;
@@ -99,25 +94,6 @@ export function createBlackHolePreparedStreamLoader(catalog) {
     requests.clear();
     registerPending.clear();
     materializePending.clear();
-    responseChunkQueue.length = 0;
-    if (responseIdleRequest !== null) cancelIdle(responseIdleRequest);
-    responseIdleRequest = null;
-  }
-
-  function scheduleResponseChunk() {
-    if (responseIdleRequest !== null || responseChunkQueue.length === 0) return;
-    responseIdleRequest = requestIdle(processResponseChunk, { timeout: 500 });
-  }
-
-  function processResponseChunk() {
-    responseIdleRequest = null;
-    const queued = responseChunkQueue.shift();
-    if (!queued) return;
-    const { data, request, response } = queued;
-    if (requests.get(data.requestId) === request && request.response === response) {
-      acceptTransformChunk(data, request, response, true);
-    }
-    scheduleResponseChunk();
   }
 
   function acceptTransformChunk(data, request, response, idleSlice) {
@@ -136,9 +112,16 @@ export function createBlackHolePreparedStreamLoader(catalog) {
   }
 
   function completeMaterializedResponse(data, request, response) {
+    const scheduleByteLength = response.frameOffsets.byteLength +
+      response.assignmentLeafIndices.byteLength + response.opacityFrameOffsets.byteLength +
+      response.opacityLeafIndices.byteLength + response.opacityIndices.byteLength;
     if (response.receivedChunkCount !== response.chunkCount ||
         response.receivedTransformCount !== response.assignmentCount ||
-        data.transformCharacterCount !== response.receivedTransformCharacterCount) {
+        data.transformCharacterCount !== response.receivedTransformCharacterCount ||
+        data.transformCharacterCount > catalog.materialization.maximumTransformCharacters ||
+        data.transformCharacterCount > catalog.materialization.transformCharacterLimit ||
+        scheduleByteLength > catalog.materialization.maximumScheduleBytes ||
+        scheduleByteLength > catalog.materialization.scheduleByteLimit) {
       rejectAll(new Error("BlackHole worker prepared transform completion drifted"));
       return;
     }
@@ -156,9 +139,7 @@ export function createBlackHolePreparedStreamLoader(catalog) {
       opacityFrameOffsets: response.opacityFrameOffsets,
       opacityLeafIndices: response.opacityLeafIndices,
       opacityIndices: response.opacityIndices,
-      scheduleByteLength: response.frameOffsets.byteLength + response.assignmentLeafIndices.byteLength +
-        response.opacityFrameOffsets.byteLength + response.opacityLeafIndices.byteLength +
-        response.opacityIndices.byteLength,
+      scheduleByteLength,
       workerDurationMilliseconds: data.workerDurationMilliseconds,
       workerMaximumSliceMilliseconds: data.workerMaximumSliceMilliseconds,
       workerSliceCount: data.workerSliceCount,
@@ -224,6 +205,7 @@ export function createBlackHolePreparedStreamLoader(catalog) {
           data.descriptor?.index !== request.index ||
           data.descriptor.frameCount !== catalog.blockFrameCount ||
           !Number.isSafeInteger(data.assignmentCount) || data.assignmentCount < catalog.starCount ||
+          data.assignmentCount > catalog.materialization.maximumTransformAssignmentCount ||
           data.assignmentCount > catalog.blockFrameCount * catalog.starCount ||
           !Number.isSafeInteger(data.chunkCount) || data.chunkCount < 1 ||
           !(data.frameOffsets instanceof Uint32Array) ||
@@ -234,6 +216,7 @@ export function createBlackHolePreparedStreamLoader(catalog) {
           data.assignmentLeafIndices.length !== data.assignmentCount ||
           !Number.isSafeInteger(data.opacityAssignmentCount) ||
           data.opacityAssignmentCount < catalog.starCount ||
+          data.opacityAssignmentCount > catalog.materialization.maximumOpacityAssignmentCount ||
           data.opacityAssignmentCount > catalog.blockFrameCount * catalog.starCount ||
           !(data.opacityFrameOffsets instanceof Uint32Array) ||
           data.opacityFrameOffsets.length !== catalog.blockFrameCount + 1 ||
@@ -282,11 +265,7 @@ export function createBlackHolePreparedStreamLoader(catalog) {
         return;
       }
       response.queuedChunkCount += 1;
-      if (request.eager) acceptTransformChunk(data, request, response, false);
-      else {
-        responseChunkQueue.push({ data, request, response });
-        scheduleResponseChunk();
-      }
+      acceptTransformChunk(data, request, response, false);
       return;
     }
     if (data.type !== "materialized-end" || !response ||
@@ -451,6 +430,12 @@ export function createBlackHolePreparedStreamLoader(catalog) {
         retainedMaterializedPackedCoordinateBytes: 0,
         retainedMaterializedTransformBytes: retainedTransformCharacters,
         retainedDecodedDictionaryBytes: 0,
+        materializedBlockTransformCharacterLimit:
+          catalog.materialization.transformCharacterLimit,
+        materializedBlockScheduleByteLimit: catalog.materialization.scheduleByteLimit,
+        maximumPreparedBlockTransformCharacters:
+          catalog.materialization.maximumTransformCharacters,
+        maximumPreparedBlockScheduleBytes: catalog.materialization.maximumScheduleBytes,
         pendingTransportBankCount: bankPending.size,
         pendingRegisteredBankCount: registerPending.size,
         pendingMaterializedBlockCount: materializePending.size,
@@ -524,11 +509,12 @@ function validateCatalog(catalog) {
         "fixed-zero-to-global-maximum-over-all-moving-source-configurations" ||
       !validSpaceContext(catalog.spaceContext) ||
       !validPreparedOpacityPalette(catalog.preparedOpacityPalette) ||
+      !validMaterialization(catalog.materialization) ||
       catalog.sourceFramesPerSecond !== 60 || catalog.framesPerSecond !== 60 ||
       Math.abs(catalog.frameMilliseconds - 1000 / 60) > 1e-9 ||
-      catalog.blockFrameCount !== 300 || catalog.blocksPerBank !== 1 ||
+      catalog.blockFrameCount !== 60 || catalog.blocksPerBank !== 5 ||
       catalog.bankFrameCount !== 300 || catalog.bankSeconds !== 5 ||
-      catalog.bankCount !== 36 || catalog.blockCount !== 36 ||
+      catalog.bankCount !== 36 || catalog.blockCount !== 180 ||
       catalog.streamFrameCount !== 10800 || catalog.streamDurationMilliseconds !== 180000 ||
       catalog.publication?.schema !== "cssblackhole-prepared-useful-publication@1" ||
       catalog.publication.mode !== "complete-1979-point-state-at-sixty-hertz" ||
@@ -544,7 +530,7 @@ function validateCatalog(catalog) {
       catalog.transport.maximumCoordinateQuantizationErrorPixels !==
         CSSBLACKHOLE_MAXIMUM_COORDINATE_QUANTIZATION_ERROR_PIXELS ||
       catalog.transport.predictor !==
-        "independent-five-second-coordinate-second-difference-plus-prepared-sparse-opacity-ranges" ||
+        "independent-five-second-bank-one-second-block-coordinate-second-difference-plus-prepared-sparse-opacity-ranges" ||
       catalog.configurationLoop?.schema !==
         "cssblackhole-luminet-moving-configuration-loop@4" ||
       catalog.configurationLoop.mode !==
@@ -707,6 +693,29 @@ function validateTransport(catalog) {
 function validPreparedOpacityPalette(palette) {
   return Array.isArray(palette) &&
     JSON.stringify(palette) === JSON.stringify(CSSBLACKHOLE_OPACITY_PALETTE);
+}
+
+function validMaterialization(materialization) {
+  return materialization?.schema === "cssblackhole-bounded-materialized-block@1" &&
+    materialization.policy === "galaxy-style-multiple-playback-blocks-per-transport-bank" &&
+    materialization.maximumRetainedBlockCount === 2 &&
+    materialization.transformCharacterLimit === 3_200_000 &&
+    materialization.scheduleByteLimit === 260_000 &&
+    Number.isSafeInteger(materialization.maximumTransformAssignmentCount) &&
+    materialization.maximumTransformAssignmentCount >= 1979 &&
+    materialization.maximumTransformAssignmentCount <= 60 * 1979 &&
+    Number.isSafeInteger(materialization.maximumOpacityAssignmentCount) &&
+    materialization.maximumOpacityAssignmentCount >= 1979 &&
+    materialization.maximumOpacityAssignmentCount <= 60 * 1979 &&
+    Number.isSafeInteger(materialization.maximumTransformCharacters) &&
+    materialization.maximumTransformCharacters > 0 &&
+    materialization.maximumTransformCharacters <= materialization.transformCharacterLimit &&
+    Number.isSafeInteger(materialization.maximumScheduleBytes) &&
+    materialization.maximumScheduleBytes > 0 &&
+    materialization.maximumScheduleBytes <= materialization.scheduleByteLimit &&
+    Number.isSafeInteger(materialization.maximumTransformCharacterBlockIndex) &&
+    materialization.maximumTransformCharacterBlockIndex >= 0 &&
+    materialization.maximumTransformCharacterBlockIndex < 180;
 }
 
 function validSpaceContext(context) {

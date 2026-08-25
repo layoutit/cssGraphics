@@ -12,6 +12,7 @@ export async function startCssPipesClient(host, route) {
   let presentation = null;
   let player = null;
   let shouldPlay = true;
+  setBodyState("loading");
   try {
     const manifest = await loadCssPipesManifest(route.manifestUrl);
     const descriptor = selectDefaultScene(manifest);
@@ -54,6 +55,7 @@ export async function startCssPipesClient(host, route) {
       },
     });
     host.classList.add("csspipes-ready");
+    setBodyState("ready");
     globalThis.requestAnimationFrame(() => {
       if (shouldPlay) player.resume();
     });
@@ -62,10 +64,16 @@ export async function startCssPipesClient(host, route) {
     player?.destroy();
     presentation?.destroy();
     host.classList.add("csspipes-error");
+    setBodyState("error");
     const message = document.createElement("p");
     message.className = "csspipes-error-message";
     message.textContent = `${PREPARE_FAILURE} ${error instanceof Error ? error.message : String(error)}`;
     host.append(message);
     return null;
   }
+}
+
+function setBodyState(kind) {
+  document.body.classList.remove("loading", "priming", "ready", "error");
+  document.body.classList.add(kind);
 }

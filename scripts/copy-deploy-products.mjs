@@ -12,6 +12,7 @@ const products = [
   [resolve(generatedPublicRoot, "cssgears"), "cssgears"],
   [resolve(generatedPublicRoot, "csscyclone"), "csscyclone"],
   [resolve(repositoryRoot, "build/generated/cssgalaxy-product-public/cssgalaxy"), "cssgalaxy"],
+  [resolve(generatedPublicRoot, "cssblackhole"), "cssblackhole"],
   [resolve(generatedPublicRoot, "cssmenger"), "cssmenger"],
   [resolve(generatedPublicRoot, "cssmaze"), "cssmaze"],
   [resolve(generatedPublicRoot, "cssselectropaint"), "cssselectropaint"],

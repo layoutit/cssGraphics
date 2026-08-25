@@ -18,6 +18,7 @@ const generatedAssetRoots = new Map([
     "cssgears/",
     "csspipes/",
     "csscyclone/",
+    "cssblackhole/",
   ].map((prefix) => [prefix, generatedPublicRoot]),
 ]);
 
@@ -52,6 +53,9 @@ function generatedAssetsPlugin() {
           response.statusCode = 200;
           response.setHeader("Content-Type", siteStylesheet ? "text/css" : mediaTypeForPath(pathname));
           if (pathname.endsWith(".br")) response.setHeader("Content-Encoding", "br");
+          if (/^cssblackhole\/banks\/bank-\d{2}-[a-f0-9]{64}\.bin\.br$/u.test(pathname)) {
+            response.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          }
           response.setHeader("Content-Length", bytes.byteLength);
           response.end(request.method === "HEAD" ? undefined : bytes);
         } catch (error) {

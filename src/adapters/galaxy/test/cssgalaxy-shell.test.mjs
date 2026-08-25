@@ -18,7 +18,9 @@ test("integrates Galaxy into the public landing and deploy build", async () => {
   assert.equal(project?.preview, "/landing/galaxy.webp");
   assert.match(project?.credits?.[0]?.url ?? "",
     /906693799e4fb7581436590cf84ecb2d3c9186ba\/hacks\/galaxy\.c$/u);
-  assert.match(packageJson, /pnpm prepare:galaxy[^\n]+CSSGALAXY_DEPLOY_BUILD=1 pnpm build:galaxy/u);
+  assert.match(packageJson, /pnpm prepare:galaxy:artifact/u);
+  assert.match(packageJson,
+    /node scripts\/copy-deploy-products\.mjs[^\n]+CSSGRAPHICS_DEPLOY_BUILD=1 pnpm build:site/u);
 });
 
 test("mounts a prepared flat point graph and uses no paint-heavy runtime effects", async () => {

@@ -17,34 +17,12 @@ body {
   background: #000;
 }
 
-body.loading::after {
-  content: "";
-  position: fixed;
-  inset: 50% auto auto 50%;
-  z-index: 20;
-  width: 18px;
-  height: 18px;
-  margin: -9px 0 0 -9px;
-  border: 1px solid rgb(240 240 240 / 18%);
-  border-top-color: rgb(240 240 240 / 72%);
-  border-radius: 50%;
-  animation: cssgalaxy-loading 0.8s linear infinite;
-}
-
 body.loading::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: 19;
   background: #000;
-}
-
-@keyframes cssgalaxy-loading {
-  to { transform: rotate(1turn); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  body.loading::after { animation: none; }
 }
 
 .example-stage {

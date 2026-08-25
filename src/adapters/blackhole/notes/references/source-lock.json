@@ -1,0 +1,22 @@
+{
+  "schema": "cssblackhole-luminet-source-lock@1",
+  "repository": "https://github.com/bgmeulem/luminet.git",
+  "commit": "d31f8b481c485ac0ebe74789f8ed892eeb9b38a1",
+  "license": {
+    "spdx": "MIT",
+    "path": "LICENSE.md",
+    "sha256": "1cfbc4a219190b1a5b4b8239c30d85c2dbd70ed81005fd7985d58be95f64588f"
+  },
+  "files": {
+    "luminet/__init__.py": "3cbb5d57b9a6cbf5b92fe38e40772fe0f23c638f51d2617a7cf71f5ef7b1f152",
+    "luminet/black_hole_math.py": "afe99732ffd23c2a6b8dd03b541d3269989e5087f89d9bc8b445b5f70b021f5b",
+    "luminet/photon.py": "b2f32ae1ef7ce9f371b3fae94bd373f5fa919cf9a660c95b38fc5cea7e0dfeef",
+    "luminet/solver.py": "17ae51d1ca6827494ab11552625e77e53e8d8842e3d2327cab0d3a1d3e99d8f9",
+    "luminet/spatial.py": "091084a18b5a187e5779c307e8924a494b2428b96ed1aa88afbd533a9e860b13"
+  },
+  "pythonDependencies": {
+    "matplotlib": "3.11.1",
+    "numpy": "2.5.2",
+    "scipy": "1.18.1"
+  }
+}

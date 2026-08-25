@@ -30,9 +30,8 @@ test("product shell identifies the route and avoids alternate or paint-heavy ren
   assert.doesNotMatch(css, /@media \(pointer:\s*coarse\)/u);
   assert.doesNotMatch(css, /\.site-(?:header|wordmark|action)/u);
   assert.match(css, /\.example-stage > \.polycss-camera \{/u);
-  assert.match(css, /body\.loading::after \{[^}]*animation:\s*cssselectropaint-loading 0\.8s linear infinite;/u);
-  assert.match(css, /@keyframes cssselectropaint-loading \{\s*to \{\s*transform:\s*rotate\(1turn\);/u);
-  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\) \{\s*body\.loading::after \{\s*animation:\s*none;/u);
+  assert.doesNotMatch(css,
+    /body\.loading::after|cssselectropaint-loading|prefers-reduced-motion/u);
   assert.match(client, /new ResizeObserver\(resize\)/u);
   assert.match(client, /rule\.style\.setProperty/u);
   assert.doesNotMatch(client, /CSS\?\.supports|(?:host|camera|scene)\.style\.setProperty/u);

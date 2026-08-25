@@ -81,8 +81,7 @@ test("runtime has no per-frame geometry or raster construction", async () => {
   assert.match(styles, /background-image: var\(--csscloth-logo-atlas\), var\(--csscloth-atlas\)/u);
   assert.match(styles, /background-size: var\(--csscloth-logo-atlas-size\), var\(--csscloth-atlas-size\)/u);
   assert.match(styles, /-webkit-backface-visibility: visible/u);
-  assert.match(styles, /body\.loading::after/u);
-  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/u);
+  assert.doesNotMatch(styles, /body\.loading::after|csscloth-loading|prefers-reduced-motion/u);
   assert.match(styles, /transform-style: preserve-3d/u);
   assert.match(client, /mounted\.sceneElement\.append\(leaf\)/u);
   assert.match(client, /shape\.remove\(\)/u);

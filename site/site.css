@@ -336,20 +336,33 @@ html.example-background-solitaire {
 }
 
 html body.loading::after,
-html body:not(.ready):not(.error)::after {
+html body.priming::after {
+  content: "";
+  position: fixed;
   inset: 0 0 0 var(--examples-sidebar-width);
+  z-index: 20;
+  display: block;
+  box-sizing: border-box;
   width: 30px;
   height: 30px;
   margin: auto;
-  border-width: 2px;
-  border-color: rgb(240 240 240 / 35%);
+  border: 2px solid rgb(240 240 240 / 35%);
   border-top-color: rgb(240 240 240);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: cssgraphics-loading 0.8s linear infinite;
 }
 
 html.example-background-cloth body.loading::after,
-html.example-background-cloth body:not(.ready):not(.error)::after {
+html.example-background-cloth body.priming::after {
   border-color: rgb(32 54 78 / 35%);
   border-top-color: rgb(32 54 78);
+}
+
+@keyframes cssgraphics-loading {
+  to {
+    transform: rotate(1turn);
+  }
 }
 
 @media (max-width: 760px) {
@@ -440,7 +453,7 @@ html.example-background-cloth body:not(.ready):not(.error)::after {
   }
 
   html body.loading::after,
-  html body:not(.ready):not(.error)::after {
+  html body.priming::after {
     inset:
       var(--examples-header-height)
       0

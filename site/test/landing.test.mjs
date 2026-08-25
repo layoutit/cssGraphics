@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(siteRoot, "..");
 const expectedProjects = [
+  ["luminet", 10, "Luminet", "2026-08-24", "A Luminet Schwarzschild black hole"],
   ["galaxy", 9, "XScreenSaver", "2026-08-23", "XScreenSaver Galaxy"],
   ["cyclone", 8, "Really Slick", "2026-08-22", "Really Slick Cyclone rendered"],
   ["cloth", 7, "three.js", "2026-08-20", "The Three.js cloth simulation"],
@@ -20,6 +21,7 @@ const expectedProjects = [
 ];
 const projectsExcludedFromLanding = ["flowerbox", "gravitywell"];
 const expectedNumberTones = new Map([
+  ["luminet", "light"],
   ["galaxy", "light"],
   ["cyclone", "light"],
   ["cloth", "dark"],
@@ -31,6 +33,7 @@ const expectedNumberTones = new Map([
   ["pipes", "light"],
 ]);
 const projectAdapterDirectories = new Map([
+  ["luminet", "blackhole"],
   ["cloth", "cloth"],
   ["electropaint", "electropaint"],
   ["flowerbox", "flowerbox"],
@@ -102,6 +105,7 @@ test("landing presents the current deployed collection", async () => {
   assert.doesNotMatch(homePage, /projectId="cloth"|adapters\/cloth/u);
   assert.match(sceneRouter, /mountClothClient\(host\)/u);
   assert.doesNotMatch(sceneRouter, /mountFlocksClient|cssflocks/u);
+  assert.match(sceneRouter, /mountBlackHoleClient\(host\)/u);
   assert.match(sceneRouter, /mountCycloneClient\(host\)/u);
   assert.match(sceneRouter, /mountGalaxyClient\(host\)/u);
   assert.match(sceneRouter, /addEventListener\("visibilitychange", syncSceneVisibility\)/u);
@@ -182,7 +186,12 @@ test("landing uses the compact examples shell and mounts the latest scene direct
   assert.doesNotMatch(`${layout}\n${shellRenderer}`, /code-panel|controls-panel|asset-stage|landing-mark/u);
   assert.doesNotMatch(siteCss, /\.project-thumbnail::after/u);
   assert.doesNotMatch(siteCss, /examples-loading-copy|Reticulating splines/u);
-  assert.match(siteCss, /html body\.loading::after,[\s\S]*?width: 30px;[\s\S]*?height: 30px;[\s\S]*?border-width: 2px;[\s\S]*?border-color: rgb\(240 240 240 \/ 35%\);[\s\S]*?border-top-color: rgb\(240 240 240\);/u);
+  assert.match(siteCss,
+    /html body\.loading::after,[\s\S]*?html body\.priming::after \{[\s\S]*?content: "";[\s\S]*?position: fixed;[\s\S]*?width: 30px;[\s\S]*?height: 30px;[\s\S]*?border: 2px solid rgb\(240 240 240 \/ 35%\);[\s\S]*?border-top-color: rgb\(240 240 240\);[\s\S]*?border-radius: 50%;[\s\S]*?animation: cssgraphics-loading 0\.8s linear infinite;/u);
+  assert.match(siteCss,
+    /@keyframes cssgraphics-loading \{\s*to \{\s*transform: rotate\(1turn\);/u);
+  assert.doesNotMatch(siteCss,
+    /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?cssgraphics-loading/u);
   assert.match(siteCss, /\.project-thumbnail img \{[\s\S]*?height: auto;[\s\S]*?object-fit: cover;/u);
   assert.match(siteCss, /\[hidden\] \{[\s\S]*?display: none !important;/u);
   assert.match(siteCss, /\.project-thumbnail\[aria-current="page"\]/u);
@@ -282,10 +291,12 @@ test("deployment serves only the current public products through the Astro shell
   }
   assert.doesNotMatch(deployCommand, /CSS(?:PIPES|FLOWER|CLOTH|GEARS|GRAVITYWELL|CYCLONE|GALAXY|MENGER|MAZE|SELECTROPAINT|SOLITAIRE)_DEPLOY_BUILD/u);
   assert.doesNotMatch(deployCommand, /playwright install/u);
+  assert.match(deployCommand, /pnpm prepare:luminet/u);
   assert.match(deployCommand, /node scripts\/copy-deploy-products\.mjs && CSSGRAPHICS_DEPLOY_BUILD=1 pnpm build:site$/u);
   for (const [projectId] of expectedProjects) {
     const productDirectory = projectId === "pipes" ? "csspipes" :
-      projectId === "electropaint" ? "cssselectropaint" : `css${projectId}`;
+      projectId === "electropaint" ? "cssselectropaint" :
+        projectId === "luminet" ? "cssblackhole" : `css${projectId}`;
     assert.match(productCopy, new RegExp(`"${productDirectory}"`, "u"));
   }
   assert.ok(

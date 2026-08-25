@@ -1,0 +1,74 @@
+:root {
+  --examples-stage-background:
+    #000 image-set(
+      url("/cssblackhole/space-context-landscape.webp") 1x,
+      url("/cssblackhole/space-context-landscape@2x.webp") 2x
+    ) center / auto repeat;
+  color-scheme: dark;
+  background: #000;
+  color: #f0f0f0;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.example-stage > .polycss-camera {
+  --cssblackhole-presentation-scale: 1;
+  --cssblackhole-presentation-offset-x: -400px;
+  --cssblackhole-presentation-offset-y: -300px;
+  --cssblackhole-point-size: 2px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 800px;
+  height: 600px;
+  margin: 0;
+  transform: scale(var(--cssblackhole-presentation-scale))
+    translate(
+      var(--cssblackhole-presentation-offset-x),
+      var(--cssblackhole-presentation-offset-y)
+    );
+  transform-origin: 0 0;
+  overflow: hidden;
+  contain: strict;
+  background: transparent;
+}
+
+.polycss-scene {
+  position: absolute;
+  inset: 0;
+  width: 800px;
+  height: 600px;
+  opacity: 1;
+  z-index: 1;
+}
+
+.polycss-scene > b {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  width: calc(var(--cssblackhole-point-size) / var(--cssblackhole-presentation-scale));
+  height: calc(var(--cssblackhole-point-size) / var(--cssblackhole-presentation-scale));
+  border: 0;
+  background: currentColor;
+}
+
+@media (orientation: portrait) {
+  :root {
+    --examples-stage-background:
+      #000 image-set(
+        url("/cssblackhole/space-context-portrait.webp") 1x,
+        url("/cssblackhole/space-context-portrait@2x.webp") 2x
+      ) center / auto repeat;
+  }
+}

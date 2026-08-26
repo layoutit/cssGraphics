@@ -121,14 +121,14 @@ test("Luminet adapter owns a standalone prepared cssblackhole contract", async (
   assert.equal(catalog.publication.runtimeIntermediateFrameGeneration, false);
   assert.equal(catalog.publication.runtimeCatchupPublication, false);
   assert.equal(catalog.configurationLoop.sourceFrameStep, 1);
-  assert.deepEqual(catalog.configurationLoop.presentationSlotHoldSeconds, [6, 2.5, 1, 2.5]);
-  assert.deepEqual(catalog.configurationLoop.presentationSlotDurationSeconds, [8, 4.5, 3, 4.5]);
-  assert.deepEqual(catalog.configurationLoop.presentationSlotFrameCounts, [480, 270, 180, 270]);
-  assert.deepEqual(catalog.configurationLoop.presentationSlotStartFrameIndices, [0, 480, 750, 930]);
-  assert.deepEqual(catalog.configurationLoop.transitionStartFrameIndices, [360, 150, 60, 150]);
+  assert.deepEqual(catalog.configurationLoop.presentationSlotHoldSeconds, [5, 2.75, 1.5, 2.75]);
+  assert.deepEqual(catalog.configurationLoop.presentationSlotDurationSeconds, [7, 4.75, 3.5, 4.75]);
+  assert.deepEqual(catalog.configurationLoop.presentationSlotFrameCounts, [420, 285, 210, 285]);
+  assert.deepEqual(catalog.configurationLoop.presentationSlotStartFrameIndices, [0, 420, 705, 915]);
+  assert.deepEqual(catalog.configurationLoop.transitionStartFrameIndices, [300, 165, 90, 165]);
   assert.equal(catalog.configurationLoop.transitionFrameCount, 120);
   assert.equal(catalog.configurationLoop.transitionSeconds, 2);
-  assert.deepEqual(catalog.configurationLoop.transitionCadenceSecondsBySlot, [8, 4.5, 3, 4.5]);
+  assert.deepEqual(catalog.configurationLoop.transitionCadenceSecondsBySlot, [7, 4.75, 3.5, 4.75]);
   assert.equal(catalog.configurationLoop.orbitalSpeedScale, 0.5);
   assert.equal(catalog.configurationLoop.sourceMotionReferenceSeconds, 10);
   assert.equal(catalog.configurationLoop.sourceLoopSeconds, 90);
@@ -155,11 +155,11 @@ test("Luminet adapter owns a standalone prepared cssblackhole contract", async (
   assert.equal(catalog.pointSelection.analyzedSourceFrameCount, 10800);
   assert.equal(catalog.pointSelection.selectedDirectMaximumPointsPerRadius, 110);
   assert.equal(catalog.pointSelection.selectedGhostMaximumPointsPerRadius, 55);
-  assert.equal(catalog.pointSelection.preparedCollisionSeparationCount, 229107);
+  assert.equal(catalog.pointSelection.preparedCollisionSeparationCount, 220039);
   assert.equal(catalog.pointSelection.maximumPreparedCollisionSeparationCount, 47);
   assert.equal(catalog.pointSelection.maximumPreparedCollisionSeparationPixels, 1.414);
   assert.equal(catalog.pointSelection.sourceCoordinateSampleCount, 21_373_200);
-  assert.equal(catalog.pointSelection.sourceExactCoordinateSampleCount, 21_144_093);
+  assert.equal(catalog.pointSelection.sourceExactCoordinateSampleCount, 21_153_161);
   assert.equal(catalog.pointSelection.selectedExactCoordinateConflictPairCount, 0);
   assert.equal(catalog.pointSelection.sourcePointIndices.length, 1979);
   assert.ok(catalog.pointSelection.sourcePointIndices.slice(0, 1319)
@@ -176,10 +176,10 @@ test("Luminet adapter owns a standalone prepared cssblackhole contract", async (
   assert.equal(state.periodicRadiusSelection,
     "source-valid-greedy-maximin-radius-coverage");
   assert.equal(state.particlePeriodicOrbitCounts.length, 3000);
-  assert.deepEqual(state.configurationSequence.presentationSlotHoldSeconds, [6, 2.5, 1, 2.5]);
-  assert.deepEqual(state.configurationSequence.presentationSlotDurationSeconds, [8, 4.5, 3, 4.5]);
+  assert.deepEqual(state.configurationSequence.presentationSlotHoldSeconds, [5, 2.75, 1.5, 2.75]);
+  assert.deepEqual(state.configurationSequence.presentationSlotDurationSeconds, [7, 4.75, 3.5, 4.75]);
   assert.deepEqual(state.configurationSequence.sourceMotionSecondsBeforeTransitionBySlot,
-    [6, 2.5, 1, 2.5]);
+    [5, 2.75, 1.5, 2.75]);
   assert.equal(state.configurationSequence.transitionSeconds, 2);
   assert.equal(state.configurationSequence.distinctConfigurationCount, 3);
   assert.equal(state.configurationSequence.presentationConfigurationCount, 4);
@@ -367,8 +367,8 @@ test("prepared transport reproduces the pinned moving coordinate and flux state"
   const coordinateFrameBytes = catalog.pointSelection.sourcePointCount * 2 * 4;
   const coordinateHashAt = (frame) => sha256(sourceCoordinates.subarray(
     frame * coordinateFrameBytes, (frame + 1) * coordinateFrameBytes));
-  assert.equal(new Set([0, 480, 750, 930].map(coordinateHashAt)).size, 4);
-  for (const startFrame of [0, 480, 750, 930]) {
+  assert.equal(new Set([0, 420, 705, 915].map(coordinateHashAt)).size, 4);
+  for (const startFrame of [0, 420, 705, 915]) {
     assert.equal(new Set([0, 30, 60, 120, 239]
       .map((offset) => coordinateHashAt(startFrame + offset))).size, 5);
   }
@@ -379,7 +379,7 @@ test("prepared transport reproduces the pinned moving coordinate and flux state"
         catalog.pointSelection.sourcePointCount));
   }
   for (let sequenceStart = 0; sequenceStart < sourceFrameCount; sequenceStart += 1200) {
-    for (const localBoundary of [479, 749, 929, 1199]) {
+    for (const localBoundary of [419, 704, 914, 1199]) {
       const transitionBoundary = sequenceStart + localBoundary;
       const nextFrame = (transitionBoundary + 1) % sourceFrameCount;
       assert.ok(maximumFrameDisplacement(

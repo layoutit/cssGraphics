@@ -447,9 +447,9 @@ async function readPreparedSourceState() {
         sourceState.sourceMotionReferenceSeconds !== 10 ||
         sourceState.naturalTimePerSourceMotionReference !== 1000 ||
         JSON.stringify(sourceState.naturalTimePerPresentationSlot) !==
-          JSON.stringify([800, 450, 300, 450]) ||
+          JSON.stringify([700, 475, 350, 475]) ||
         JSON.stringify(sourceState.naturalTimePerPresentationHold) !==
-          JSON.stringify([600, 250, 100, 250]) ||
+          JSON.stringify([500, 275, 150, 275]) ||
         sourceState.naturalTimePerSourceLoop !== 9000 ||
         sourceState.sourceLoopSeconds !== 90 || sourceState.sourceLoopFrameCount !== 5400 ||
         sourceState.combinedLoopSeconds !== 180 || sourceState.combinedLoopFrameCount !== 10800 ||
@@ -481,21 +481,21 @@ async function readPreparedSourceState() {
         sourceState.configurationSequence.presentationSequenceSeconds !== 20 ||
         sourceState.configurationSequence.presentationSequenceFrameCount !== 1200 ||
         JSON.stringify(sourceState.configurationSequence.presentationSlotHoldSeconds) !==
-          JSON.stringify([6, 2.5, 1, 2.5]) ||
+          JSON.stringify([5, 2.75, 1.5, 2.75]) ||
         JSON.stringify(sourceState.configurationSequence.presentationSlotDurationSeconds) !==
-          JSON.stringify([8, 4.5, 3, 4.5]) ||
+          JSON.stringify([7, 4.75, 3.5, 4.75]) ||
         JSON.stringify(sourceState.configurationSequence.presentationSlotFrameCounts) !==
-          JSON.stringify([480, 270, 180, 270]) ||
+          JSON.stringify([420, 285, 210, 285]) ||
         JSON.stringify(sourceState.configurationSequence.presentationSlotStartFrameIndices) !==
-          JSON.stringify([0, 480, 750, 930]) ||
+          JSON.stringify([0, 420, 705, 915]) ||
         JSON.stringify(sourceState.configurationSequence.transitionCadenceSecondsBySlot) !==
-          JSON.stringify([8, 4.5, 3, 4.5]) ||
+          JSON.stringify([7, 4.75, 3.5, 4.75]) ||
         JSON.stringify(sourceState.configurationSequence.sourceMotionSecondsBeforeTransitionBySlot) !==
-          JSON.stringify([6, 2.5, 1, 2.5]) ||
+          JSON.stringify([5, 2.75, 1.5, 2.75]) ||
         JSON.stringify(sourceState.configurationSequence.sourceMotionFrameCountsBeforeTransition) !==
-          JSON.stringify([360, 150, 60, 150]) ||
+          JSON.stringify([300, 165, 90, 165]) ||
         JSON.stringify(sourceState.configurationSequence.transitionStartFrameIndices) !==
-          JSON.stringify([360, 150, 60, 150]) ||
+          JSON.stringify([300, 165, 90, 165]) ||
         sourceState.configurationSequence.transitionSeconds !== 2 ||
         sourceState.configurationSequence.transitionFrameCount !== 120 ||
         sourceState.configurationSequence.states?.length !== configurationCount ||
@@ -514,15 +514,15 @@ async function readPreparedSourceState() {
             stateIndex, view, holdSeconds, durationSeconds, frameCount, startFrameIndex,
             transitionStartFrameIndex, transitionFrameCount,
           }))) !== JSON.stringify([
-          { stateIndex: 0, view: "side", holdSeconds: 6, durationSeconds: 8, frameCount: 480,
-            startFrameIndex: 0, transitionStartFrameIndex: 360, transitionFrameCount: 120 },
-          { stateIndex: 1, view: "angled", holdSeconds: 2.5, durationSeconds: 4.5,
-            frameCount: 270, startFrameIndex: 480, transitionStartFrameIndex: 150,
+          { stateIndex: 0, view: "side", holdSeconds: 5, durationSeconds: 7, frameCount: 420,
+            startFrameIndex: 0, transitionStartFrameIndex: 300, transitionFrameCount: 120 },
+          { stateIndex: 1, view: "angled", holdSeconds: 2.75, durationSeconds: 4.75,
+            frameCount: 285, startFrameIndex: 420, transitionStartFrameIndex: 165,
             transitionFrameCount: 120 },
-          { stateIndex: 2, view: "top", holdSeconds: 1, durationSeconds: 3, frameCount: 180,
-            startFrameIndex: 750, transitionStartFrameIndex: 60, transitionFrameCount: 120 },
-          { stateIndex: 1, view: "angled", holdSeconds: 2.5, durationSeconds: 4.5,
-            frameCount: 270, startFrameIndex: 930, transitionStartFrameIndex: 150,
+          { stateIndex: 2, view: "top", holdSeconds: 1.5, durationSeconds: 3.5, frameCount: 210,
+            startFrameIndex: 705, transitionStartFrameIndex: 90, transitionFrameCount: 120 },
+          { stateIndex: 1, view: "angled", holdSeconds: 2.75, durationSeconds: 4.75,
+            frameCount: 285, startFrameIndex: 915, transitionStartFrameIndex: 165,
             transitionFrameCount: 120 },
         ])) return null;
     return Object.freeze({ sourceState, coordinateBytes, luminanceBytes });

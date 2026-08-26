@@ -16,11 +16,11 @@ const TRANSFORM_RESPONSE_CHUNK_SIZE = 4_096;
 const EXPECTED_PERIODIC_ORBIT_COUNTS = Object.freeze([
   9, 10, 11, 12, 13, 14, 16, 19, 22, 25, 29, 35, 43, 54, 70, 97,
 ]);
-const EXPECTED_PRESENTATION_SLOT_HOLD_SECONDS = Object.freeze([6, 2.5, 1, 2.5]);
-const EXPECTED_PRESENTATION_SLOT_DURATION_SECONDS = Object.freeze([8, 4.5, 3, 4.5]);
-const EXPECTED_PRESENTATION_SLOT_FRAME_COUNTS = Object.freeze([480, 270, 180, 270]);
-const EXPECTED_PRESENTATION_SLOT_START_FRAME_INDICES = Object.freeze([0, 480, 750, 930]);
-const EXPECTED_TRANSITION_START_FRAME_INDICES = Object.freeze([360, 150, 60, 150]);
+const EXPECTED_PRESENTATION_SLOT_HOLD_SECONDS = Object.freeze([5, 2.75, 1.5, 2.75]);
+const EXPECTED_PRESENTATION_SLOT_DURATION_SECONDS = Object.freeze([7, 4.75, 3.5, 4.75]);
+const EXPECTED_PRESENTATION_SLOT_FRAME_COUNTS = Object.freeze([420, 285, 210, 285]);
+const EXPECTED_PRESENTATION_SLOT_START_FRAME_INDICES = Object.freeze([0, 420, 705, 915]);
+const EXPECTED_TRANSITION_START_FRAME_INDICES = Object.freeze([300, 165, 90, 165]);
 
 export async function loadBlackHolePreparedCatalog(descriptor) {
   validateCatalogDescriptor(descriptor);
@@ -582,9 +582,9 @@ function validateCatalog(catalog) {
       catalog.luminetPreparedState.sourceMotionReferenceSeconds !== 10 ||
       catalog.luminetPreparedState.naturalTimePerSourceMotionReference !== 1000 ||
       JSON.stringify(catalog.luminetPreparedState.naturalTimePerPresentationSlot) !==
-        JSON.stringify([800, 450, 300, 450]) ||
+        JSON.stringify([700, 475, 350, 475]) ||
       JSON.stringify(catalog.luminetPreparedState.naturalTimePerPresentationHold) !==
-        JSON.stringify([600, 250, 100, 250]) ||
+        JSON.stringify([500, 275, 150, 275]) ||
       catalog.luminetPreparedState.naturalTimePerSourceLoop !== 9000 ||
       catalog.luminetPreparedState.sourceLoopSeconds !== 90 ||
       catalog.luminetPreparedState.sourceLoopFrameCount !== 5400 ||
@@ -829,11 +829,11 @@ function validPointSelection(selection) {
       selection.analyzedSourceFrameCount !== 10800 ||
       selection.retainedStratifiedPointCount !== 1979 ||
       selection.framesWithPreparedCollisionSeparation !== 10800 ||
-      selection.preparedCollisionSeparationCount !== 229107 ||
+      selection.preparedCollisionSeparationCount !== 220039 ||
       selection.maximumPreparedCollisionSeparationCount !== 47 ||
       selection.maximumPreparedCollisionSeparationPixels !== 1.414 ||
       selection.sourceCoordinateSampleCount !== 21373200 ||
-      selection.sourceExactCoordinateSampleCount !== 21144093 ||
+      selection.sourceExactCoordinateSampleCount !== 21153161 ||
       selection.selectedExactCoordinateConflictPairCount !== 0 ||
       !Array.isArray(selection.sourcePointIndices) || selection.sourcePointIndices.length !== 1979) {
     return false;

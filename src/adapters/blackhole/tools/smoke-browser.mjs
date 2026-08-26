@@ -254,9 +254,9 @@ function assertSmoke(report) {
       report.initial.stats?.framesPerSecond !== 60 ||
       report.initial.stats?.orbitalSpeedScale !== 0.5 ||
       JSON.stringify(report.initial.stats?.presentationSlotHoldSeconds) !==
-        JSON.stringify([6, 2.5, 1, 2.5]) ||
+        JSON.stringify([5, 2.75, 1.5, 2.75]) ||
       JSON.stringify(report.initial.stats?.transitionCadenceSecondsBySlot) !==
-        JSON.stringify([8, 4.5, 3, 4.5]) ||
+        JSON.stringify([7, 4.75, 3.5, 4.75]) ||
       report.initial.stats?.transitionDurationSeconds !== 2 ||
       report.initial.leafCount !== 1979 ||
       report.initial.inlineTransformCount !== 1979 ||

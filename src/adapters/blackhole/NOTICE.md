@@ -10,7 +10,7 @@ License; the complete license is included in `LICENSE.LUMINET-MIT`.
 
 The adapter's selected inclinations, exact-loop radii, 2,000 direct and 1,000
 first-order ghost samples, five-second sequencing, two-second smooth transition,
-0.5 speed scale, fixed cross-configuration exposure, PowerNorm display transfer,
+0.25 speed scale, fixed cross-configuration exposure, PowerNorm display transfer,
 minimum opacity, viewport mapping, quantization, and white-to-purple palette are
 presentation or transport decisions. They are not scientific-default or
 pixel-parity claims.

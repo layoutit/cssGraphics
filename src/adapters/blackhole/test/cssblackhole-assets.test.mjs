@@ -22,7 +22,7 @@ const palette = ["#ffffff", "#f8f5ff", "#eee7ff", "#dfd1ff", "#c7abff", "#aa82ee
 const directImagePalette = palette.slice(0, 4);
 const ghostImagePalette = palette.slice(3);
 const periodicOrbitCounts = [
-  9, 10, 11, 12, 13, 14, 16, 19, 22, 25, 29, 35, 43, 54, 70, 97,
+  5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 18, 22, 27, 35, 41, 48,
 ];
 
 test("Luminet adapter owns a standalone prepared cssblackhole contract", async () => {
@@ -63,10 +63,10 @@ test("Luminet adapter owns a standalone prepared cssblackhole contract", async (
     transformCharacterLimit: 3_200_000,
     scheduleByteLimit: 260_000,
     maximumTransformAssignmentCount: 118_740,
-    maximumOpacityAssignmentCount: 5_252,
-    maximumTransformCharacters: 3_159_406,
-    maximumScheduleBytes: 253_720,
-    maximumTransformCharacterBlockIndex: 176,
+    maximumOpacityAssignmentCount: 3_876,
+    maximumTransformCharacters: 3_159_508,
+    maximumScheduleBytes: 249_592,
+    maximumTransformCharacterBlockIndex: 136,
   });
   assert.equal(catalog.streamFrameCount, 10800);
   assert.equal(catalog.streamDurationMilliseconds, 180_000);
@@ -121,16 +121,16 @@ test("Luminet adapter owns a standalone prepared cssblackhole contract", async (
   assert.equal(catalog.publication.runtimeIntermediateFrameGeneration, false);
   assert.equal(catalog.publication.runtimeCatchupPublication, false);
   assert.equal(catalog.configurationLoop.sourceFrameStep, 1);
-  assert.deepEqual(catalog.configurationLoop.presentationSlotHoldSeconds, [6, 2.5, 1, 2.5]);
-  assert.deepEqual(catalog.configurationLoop.presentationSlotDurationSeconds, [8, 4.5, 3, 4.5]);
-  assert.deepEqual(catalog.configurationLoop.presentationSlotFrameCounts, [480, 270, 180, 270]);
-  assert.deepEqual(catalog.configurationLoop.presentationSlotStartFrameIndices, [0, 480, 750, 930]);
-  assert.deepEqual(catalog.configurationLoop.transitionStartFrameIndices, [360, 150, 60, 150]);
+  assert.deepEqual(catalog.configurationLoop.presentationSlotHoldSeconds, [5, 2.5, 2, 2.5]);
+  assert.deepEqual(catalog.configurationLoop.presentationSlotDurationSeconds, [7, 4.5, 4, 4.5]);
+  assert.deepEqual(catalog.configurationLoop.presentationSlotFrameCounts, [420, 270, 240, 270]);
+  assert.deepEqual(catalog.configurationLoop.presentationSlotStartFrameIndices, [0, 420, 690, 930]);
+  assert.deepEqual(catalog.configurationLoop.transitionStartFrameIndices, [300, 150, 120, 150]);
   assert.equal(catalog.configurationLoop.transitionFrameCount, 120);
   assert.equal(catalog.configurationLoop.transitionSeconds, 2);
-  assert.deepEqual(catalog.configurationLoop.transitionCadenceSecondsBySlot, [8, 4.5, 3, 4.5]);
-  assert.equal(catalog.configurationLoop.orbitalSpeedScale, 0.5);
-  assert.equal(catalog.configurationLoop.sourceMotionReferenceSeconds, 10);
+  assert.deepEqual(catalog.configurationLoop.transitionCadenceSecondsBySlot, [7, 4.5, 4, 4.5]);
+  assert.equal(catalog.configurationLoop.orbitalSpeedScale, 0.25);
+  assert.equal(catalog.configurationLoop.sourceMotionReferenceSeconds, 20);
   assert.equal(catalog.configurationLoop.sourceLoopSeconds, 90);
   assert.equal(catalog.configurationLoop.sourceLoopFrameCount, 5400);
   assert.equal(catalog.configurationLoop.combinedLoopSeconds, 180);
@@ -153,33 +153,33 @@ test("Luminet adapter owns a standalone prepared cssblackhole contract", async (
   assert.equal(catalog.pointSelection.selectedDirectPeriodicRadiusCount, 16);
   assert.equal(catalog.pointSelection.selectedGhostPeriodicRadiusCount, 16);
   assert.equal(catalog.pointSelection.analyzedSourceFrameCount, 10800);
-  assert.equal(catalog.pointSelection.selectedDirectMaximumPointsPerRadius, 110);
-  assert.equal(catalog.pointSelection.selectedGhostMaximumPointsPerRadius, 55);
-  assert.equal(catalog.pointSelection.preparedCollisionSeparationCount, 229107);
-  assert.equal(catalog.pointSelection.maximumPreparedCollisionSeparationCount, 47);
+  assert.equal(catalog.pointSelection.selectedDirectMaximumPointsPerRadius, 230);
+  assert.equal(catalog.pointSelection.selectedGhostMaximumPointsPerRadius, 115);
+  assert.equal(catalog.pointSelection.preparedCollisionSeparationCount, 303464);
+  assert.equal(catalog.pointSelection.maximumPreparedCollisionSeparationCount, 54);
   assert.equal(catalog.pointSelection.maximumPreparedCollisionSeparationPixels, 1.414);
   assert.equal(catalog.pointSelection.sourceCoordinateSampleCount, 21_373_200);
-  assert.equal(catalog.pointSelection.sourceExactCoordinateSampleCount, 21_144_093);
+  assert.equal(catalog.pointSelection.sourceExactCoordinateSampleCount, 21_069_736);
   assert.equal(catalog.pointSelection.selectedExactCoordinateConflictPairCount, 0);
   assert.equal(catalog.pointSelection.sourcePointIndices.length, 1979);
   assert.ok(catalog.pointSelection.sourcePointIndices.slice(0, 1319)
     .every((sourceIndex) => sourceIndex < 2000));
   assert.ok(catalog.pointSelection.sourcePointIndices.slice(1319)
     .every((sourceIndex) => sourceIndex >= 2000));
-  assert.equal(state.orbitalSpeedScale, 0.5);
-  assert.equal(state.sourceMotionReferenceSeconds, 10);
+  assert.equal(state.orbitalSpeedScale, 0.25);
+  assert.equal(state.sourceMotionReferenceSeconds, 20);
   assert.equal(state.sourceLoopSeconds, 90);
   assert.equal(state.sourceLoopFrameCount, 5400);
-  assert.equal(state.availablePeriodicRadiusCount, 89);
+  assert.equal(state.availablePeriodicRadiusCount, 44);
   assert.equal(state.periodicRadiusCount, 16);
   assert.deepEqual(state.periodicOrbitCounts, periodicOrbitCounts);
   assert.equal(state.periodicRadiusSelection,
     "source-valid-greedy-maximin-radius-coverage");
   assert.equal(state.particlePeriodicOrbitCounts.length, 3000);
-  assert.deepEqual(state.configurationSequence.presentationSlotHoldSeconds, [6, 2.5, 1, 2.5]);
-  assert.deepEqual(state.configurationSequence.presentationSlotDurationSeconds, [8, 4.5, 3, 4.5]);
+  assert.deepEqual(state.configurationSequence.presentationSlotHoldSeconds, [5, 2.5, 2, 2.5]);
+  assert.deepEqual(state.configurationSequence.presentationSlotDurationSeconds, [7, 4.5, 4, 4.5]);
   assert.deepEqual(state.configurationSequence.sourceMotionSecondsBeforeTransitionBySlot,
-    [6, 2.5, 1, 2.5]);
+    [5, 2.5, 2, 2.5]);
   assert.equal(state.configurationSequence.transitionSeconds, 2);
   assert.equal(state.configurationSequence.distinctConfigurationCount, 3);
   assert.equal(state.configurationSequence.presentationConfigurationCount, 4);
@@ -367,8 +367,8 @@ test("prepared transport reproduces the pinned moving coordinate and flux state"
   const coordinateFrameBytes = catalog.pointSelection.sourcePointCount * 2 * 4;
   const coordinateHashAt = (frame) => sha256(sourceCoordinates.subarray(
     frame * coordinateFrameBytes, (frame + 1) * coordinateFrameBytes));
-  assert.equal(new Set([0, 480, 750, 930].map(coordinateHashAt)).size, 4);
-  for (const startFrame of [0, 480, 750, 930]) {
+  assert.equal(new Set([0, 420, 690, 930].map(coordinateHashAt)).size, 4);
+  for (const startFrame of [0, 420, 690, 930]) {
     assert.equal(new Set([0, 30, 60, 120, 239]
       .map((offset) => coordinateHashAt(startFrame + offset))).size, 5);
   }
@@ -379,7 +379,7 @@ test("prepared transport reproduces the pinned moving coordinate and flux state"
         catalog.pointSelection.sourcePointCount));
   }
   for (let sequenceStart = 0; sequenceStart < sourceFrameCount; sequenceStart += 1200) {
-    for (const localBoundary of [479, 749, 929, 1199]) {
+    for (const localBoundary of [419, 689, 929, 1199]) {
       const transitionBoundary = sequenceStart + localBoundary;
       const nextFrame = (transitionBoundary + 1) % sourceFrameCount;
       assert.ok(maximumFrameDisplacement(

@@ -15,15 +15,15 @@ color selection, morph calculation, or DOM reconstruction.
 The three moving source fields use Luminet at 85 degrees for the side view,
 60 degrees for the angled view, and 0 degrees for the top-down view. Their
 endless presentation sequence is side, angled, top, angled. A new configuration
-arrives after variable 8, 4.5, 3, and 4.5-second slots. Those slots hold their
-views for 6, 2.5, 1, and 2.5 seconds respectively, followed by a two-second
+arrives after variable 7, 4.5, 4, and 4.5-second slots. Those slots hold their
+views for 5, 2.5, 2, and 2.5 seconds respectively, followed by a two-second
 prepared smoothstep transition to the next concurrently moving field. Orbital
-motion remains at the accepted 0.5 presentation scale. The four-slot 20-second
+motion remains at the accepted 0.25 presentation scale. The four-slot 20-second
 view sequence and 90-second source motion close together exactly after 180 seconds.
 
 Luminet observed flux determines opacity. The fixed white, off-white, lavender,
 and purple palette, `PowerNorm(gamma=0.35)`, 0.22 opacity floor, prepare-time
-nearest-decile opacity, inclination sequence, and 0.5 speed are explicit
+nearest-decile opacity, inclination sequence, and 0.25 speed are explicit
 presentation choices. The browser receives only `0`, `0.1` through `0.9`, or
 `1`, and the sparse prepared schedule omits changes that remain in the same
 display decile. Sixteen source-valid periodic radii keep visible orbital rails

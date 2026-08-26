@@ -11,16 +11,13 @@ import {
   CSSBLACKHOLE_GALACTIC_DOT_COLORS,
   CSSBLACKHOLE_GHOST_IMAGE_DOT_COLORS,
 } from "../shared/cssblackhole/preparedColorPresentation.mjs";
+import { blackHolePresentationProfile } from
+  "../shared/cssblackhole/presentationProfiles.mjs";
 
 const TRANSFORM_RESPONSE_CHUNK_SIZE = 4_096;
 const EXPECTED_PERIODIC_ORBIT_COUNTS = Object.freeze([
-  9, 10, 11, 12, 13, 14, 16, 19, 22, 25, 29, 35, 43, 54, 70, 97,
+  5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 18, 22, 27, 35, 41, 48,
 ]);
-const EXPECTED_PRESENTATION_SLOT_HOLD_SECONDS = Object.freeze([6, 2.5, 1, 2.5]);
-const EXPECTED_PRESENTATION_SLOT_DURATION_SECONDS = Object.freeze([8, 4.5, 3, 4.5]);
-const EXPECTED_PRESENTATION_SLOT_FRAME_COUNTS = Object.freeze([480, 270, 180, 270]);
-const EXPECTED_PRESENTATION_SLOT_START_FRAME_INDICES = Object.freeze([0, 480, 750, 930]);
-const EXPECTED_TRANSITION_START_FRAME_INDICES = Object.freeze([360, 150, 60, 150]);
 
 export async function loadBlackHolePreparedCatalog(descriptor) {
   validateCatalogDescriptor(descriptor);
@@ -475,11 +472,15 @@ export function createBlackHolePreparedStreamLoader(catalog) {
 
 function validateCatalog(catalog) {
   const snapshot = catalog?.snapshot;
+  const profileId = catalog?.presentationProfile ?? "full";
+  const profile = blackHolePresentationProfile(profileId);
+  const assetRoot = catalog?.assetRoot ?? "/cssblackhole";
   if (catalog?.schema !== "cssblackhole-prepared-stream-catalog@1" ||
+      assetRoot !== profile.assetRoot ||
       catalog.starCount !== 1979 || catalog.configurationCount !== 3 ||
-      catalog.presentationConfigurationCount !== 4 ||
+      catalog.presentationConfigurationCount !== profile.presentationConfigurationCount ||
       catalog.transportSeed !== 6477 ||
-      !validPointSelection(catalog.pointSelection) ||
+      !validPointSelection(catalog.pointSelection, catalog.streamFrameCount, profileId) ||
       catalog.presentationColors?.schema !== "cssblackhole-galactic-color-source-luminance@4" ||
       catalog.presentationColors?.mode !==
         "prepared-source-image-color-with-source-luminance-opacity" ||
@@ -509,13 +510,14 @@ function validateCatalog(catalog) {
         "fixed-zero-to-global-maximum-over-all-moving-source-configurations" ||
       !validSpaceContext(catalog.spaceContext) ||
       !validPreparedOpacityPalette(catalog.preparedOpacityPalette) ||
-      !validMaterialization(catalog.materialization) ||
+      !validMaterialization(catalog.materialization, catalog.blockCount) ||
       catalog.sourceFramesPerSecond !== 60 || catalog.framesPerSecond !== 60 ||
       Math.abs(catalog.frameMilliseconds - 1000 / 60) > 1e-9 ||
       catalog.blockFrameCount !== 60 || catalog.blocksPerBank !== 5 ||
       catalog.bankFrameCount !== 300 || catalog.bankSeconds !== 5 ||
-      catalog.bankCount !== 36 || catalog.blockCount !== 180 ||
-      catalog.streamFrameCount !== 10800 || catalog.streamDurationMilliseconds !== 180000 ||
+      catalog.bankCount !== profile.bankCount || catalog.blockCount !== profile.blockCount ||
+      catalog.streamFrameCount !== profile.streamFrameCount ||
+      Math.abs(catalog.streamDurationMilliseconds - profile.streamFrameCount * 1000 / 60) > 1e-9 ||
       catalog.publication?.schema !== "cssblackhole-prepared-useful-publication@1" ||
       catalog.publication.mode !== "complete-1979-point-state-at-sixty-hertz" ||
       catalog.publication.sourceFrameStep !== 1 ||
@@ -533,41 +535,39 @@ function validateCatalog(catalog) {
         "independent-five-second-bank-one-second-block-coordinate-second-difference-plus-prepared-sparse-opacity-ranges" ||
       catalog.configurationLoop?.schema !==
         "cssblackhole-luminet-moving-configuration-loop@4" ||
-      catalog.configurationLoop.mode !==
-        "prepared-variable-dwell-side-angled-top-angled-luminet-photon-configuration-loop" ||
+      (catalog.configurationLoop.profile ?? "full") !== profile.id ||
+      catalog.configurationLoop.mode !== profile.mode ||
       catalog.configurationLoop.sourceFrameStep !== 1 ||
-      catalog.configurationLoop.presentationSequenceSeconds !== 20 ||
-      catalog.configurationLoop.presentationSequenceFrameCount !== 1200 ||
+      catalog.configurationLoop.presentationSequenceSeconds !== profile.sequenceSeconds ||
+      catalog.configurationLoop.presentationSequenceFrameCount !== profile.sequenceFrameCount ||
       JSON.stringify(catalog.configurationLoop.presentationSlotHoldSeconds) !==
-        JSON.stringify(EXPECTED_PRESENTATION_SLOT_HOLD_SECONDS) ||
+        JSON.stringify(profile.holdSeconds) ||
       JSON.stringify(catalog.configurationLoop.presentationSlotDurationSeconds) !==
-        JSON.stringify(EXPECTED_PRESENTATION_SLOT_DURATION_SECONDS) ||
+        JSON.stringify(profile.durationSeconds) ||
       JSON.stringify(catalog.configurationLoop.presentationSlotFrameCounts) !==
-        JSON.stringify(EXPECTED_PRESENTATION_SLOT_FRAME_COUNTS) ||
+        JSON.stringify(profile.frameCounts) ||
       JSON.stringify(catalog.configurationLoop.presentationSlotStartFrameIndices) !==
-        JSON.stringify(EXPECTED_PRESENTATION_SLOT_START_FRAME_INDICES) ||
+        JSON.stringify(profile.startFrameIndices) ||
       JSON.stringify(catalog.configurationLoop.transitionStartFrameIndices) !==
-        JSON.stringify(EXPECTED_TRANSITION_START_FRAME_INDICES) ||
-      catalog.configurationLoop.transitionFrameCount !== 120 ||
-      catalog.configurationLoop.transitionSeconds !== 2 ||
-      catalog.configurationLoop.configurationTransitionCount !== 36 ||
+        JSON.stringify(profile.transitionStartFrameIndices) ||
+      catalog.configurationLoop.transitionFrameCount !== profile.transitionFrameCount ||
+      catalog.configurationLoop.transitionSeconds !== profile.transitionSeconds ||
+      catalog.configurationLoop.configurationTransitionCount !==
+        profile.streamFrameCount / profile.sequenceFrameCount *
+        profile.presentationConfigurationCount ||
       JSON.stringify(catalog.configurationLoop.transitionCadenceSecondsBySlot) !==
-        JSON.stringify(EXPECTED_PRESENTATION_SLOT_DURATION_SECONDS) ||
+        JSON.stringify(profile.durationSeconds) ||
       JSON.stringify(catalog.configurationLoop.sourceMotionSecondsBeforeTransitionBySlot) !==
-        JSON.stringify(EXPECTED_PRESENTATION_SLOT_HOLD_SECONDS) ||
-      catalog.configurationLoop.orbitalSpeedScale !== 0.5 ||
-      catalog.configurationLoop.sourceMotionReferenceSeconds !== 10 ||
+        JSON.stringify(profile.holdSeconds) ||
+      catalog.configurationLoop.orbitalSpeedScale !== 0.25 ||
+      catalog.configurationLoop.sourceMotionReferenceSeconds !== 20 ||
       catalog.configurationLoop.sourceLoopSeconds !== 90 ||
       catalog.configurationLoop.sourceLoopFrameCount !== 5400 ||
-      catalog.configurationLoop.combinedLoopSeconds !== 180 ||
-      catalog.configurationLoop.combinedLoopFrameCount !== 10800 ||
-      catalog.configurationLoop.combinedSourceFrameCount !== 10800 ||
-      JSON.stringify(catalog.configurationLoop.configurationSequence) !== JSON.stringify([
-        "luminet-inclination-85deg",
-        "luminet-inclination-60deg",
-        "luminet-inclination-0deg",
-        "luminet-inclination-60deg",
-      ]) ||
+      catalog.configurationLoop.combinedLoopSeconds !== profile.combinedLoopSeconds ||
+      catalog.configurationLoop.combinedLoopFrameCount !== profile.streamFrameCount ||
+      catalog.configurationLoop.combinedSourceFrameCount !== profile.streamFrameCount ||
+      JSON.stringify(catalog.configurationLoop.configurationSequence) !==
+        JSON.stringify(profile.configurationSequence) ||
       catalog.configurationLoop.transitionMotion !==
         "prepared-smoothstep-between-concurrently-moving-source-geodesic-fields" ||
       catalog.configurationLoop.opacityOwner !==
@@ -578,19 +578,19 @@ function validateCatalog(catalog) {
       catalog.runtimeLookaheadBankCount !== 1 || catalog.runtimeMaterializedLookaheadBlockCount !== 1 ||
       catalog.startupMaterializedLookaheadBlockCount !== 0 ||
       catalog.luminetPreparedState?.schema !== "cssblackhole-luminet-prepared-state@9" ||
-      catalog.luminetPreparedState.orbitalSpeedScale !== 0.5 ||
-      catalog.luminetPreparedState.sourceMotionReferenceSeconds !== 10 ||
+      catalog.luminetPreparedState.orbitalSpeedScale !== 0.25 ||
+      catalog.luminetPreparedState.sourceMotionReferenceSeconds !== 20 ||
       catalog.luminetPreparedState.naturalTimePerSourceMotionReference !== 1000 ||
       JSON.stringify(catalog.luminetPreparedState.naturalTimePerPresentationSlot) !==
-        JSON.stringify([800, 450, 300, 450]) ||
+        JSON.stringify(profile.naturalTimePerSlot) ||
       JSON.stringify(catalog.luminetPreparedState.naturalTimePerPresentationHold) !==
-        JSON.stringify([600, 250, 100, 250]) ||
-      catalog.luminetPreparedState.naturalTimePerSourceLoop !== 9000 ||
+        JSON.stringify(profile.naturalTimePerHold) ||
+      catalog.luminetPreparedState.naturalTimePerSourceLoop !== 4500 ||
       catalog.luminetPreparedState.sourceLoopSeconds !== 90 ||
       catalog.luminetPreparedState.sourceLoopFrameCount !== 5400 ||
-      catalog.luminetPreparedState.combinedLoopSeconds !== 180 ||
-      catalog.luminetPreparedState.combinedLoopFrameCount !== 10800 ||
-      catalog.luminetPreparedState.availablePeriodicRadiusCount !== 89 ||
+      catalog.luminetPreparedState.combinedLoopSeconds !== profile.combinedLoopSeconds ||
+      catalog.luminetPreparedState.combinedLoopFrameCount !== profile.streamFrameCount ||
+      catalog.luminetPreparedState.availablePeriodicRadiusCount !== 44 ||
       catalog.luminetPreparedState.periodicRadiusCount !== EXPECTED_PERIODIC_ORBIT_COUNTS.length ||
       JSON.stringify(catalog.luminetPreparedState.periodicOrbitCounts) !==
         JSON.stringify(EXPECTED_PERIODIC_ORBIT_COUNTS) ||
@@ -609,28 +609,32 @@ function validateCatalog(catalog) {
         "prepared-source-luminance-used-as-colored-dot-opacity-over-black" ||
       catalog.luminetPreparedState.configurationSequence?.schema !==
         "cssblackhole-luminet-moving-configuration-sequence@3" ||
+      (catalog.luminetPreparedState.configurationSequence.profile ?? "full") !== profile.id ||
       catalog.luminetPreparedState.configurationSequence.distinctConfigurationCount !== 3 ||
-      catalog.luminetPreparedState.configurationSequence.presentationConfigurationCount !== 4 ||
-      catalog.luminetPreparedState.configurationSequence.presentationSequenceSeconds !== 20 ||
-      catalog.luminetPreparedState.configurationSequence.presentationSequenceFrameCount !== 1200 ||
+      catalog.luminetPreparedState.configurationSequence.presentationConfigurationCount !==
+        profile.presentationConfigurationCount ||
+      catalog.luminetPreparedState.configurationSequence.presentationSequenceSeconds !==
+        profile.sequenceSeconds ||
+      catalog.luminetPreparedState.configurationSequence.presentationSequenceFrameCount !==
+        profile.sequenceFrameCount ||
       JSON.stringify(
         catalog.luminetPreparedState.configurationSequence.presentationSlotHoldSeconds) !==
-        JSON.stringify(EXPECTED_PRESENTATION_SLOT_HOLD_SECONDS) ||
+        JSON.stringify(profile.holdSeconds) ||
       JSON.stringify(
         catalog.luminetPreparedState.configurationSequence.presentationSlotDurationSeconds) !==
-        JSON.stringify(EXPECTED_PRESENTATION_SLOT_DURATION_SECONDS) ||
+        JSON.stringify(profile.durationSeconds) ||
       JSON.stringify(
         catalog.luminetPreparedState.configurationSequence.presentationSlotFrameCounts) !==
-        JSON.stringify(EXPECTED_PRESENTATION_SLOT_FRAME_COUNTS) ||
+        JSON.stringify(profile.frameCounts) ||
       JSON.stringify(
         catalog.luminetPreparedState.configurationSequence.presentationSlotStartFrameIndices) !==
-        JSON.stringify(EXPECTED_PRESENTATION_SLOT_START_FRAME_INDICES) ||
+        JSON.stringify(profile.startFrameIndices) ||
       JSON.stringify(
         catalog.luminetPreparedState.configurationSequence.transitionStartFrameIndices) !==
-        JSON.stringify(EXPECTED_TRANSITION_START_FRAME_INDICES) ||
+        JSON.stringify(profile.transitionStartFrameIndices) ||
       JSON.stringify(
         catalog.luminetPreparedState.configurationSequence.presentationStateIndices) !==
-        JSON.stringify([0, 1, 2, 1]) ||
+        JSON.stringify(profile.stateIndices) ||
       JSON.stringify(catalog.luminetPreparedState.configurationSequence.states?.map(
         ({ id, view, inclinationDegrees }) => ({ id, view, inclinationDegrees }))) !==
         JSON.stringify([
@@ -639,7 +643,7 @@ function validateCatalog(catalog) {
           { id: "luminet-inclination-0deg", view: "top", inclinationDegrees: 0 },
         ]) ||
       snapshot?.schema !== "cssblackhole-prepared-polycss-snapshot@1" ||
-      snapshot.url !== `/cssblackhole/snapshot.html?sha256=${snapshot.sha256}` ||
+      snapshot.url !== `${assetRoot}/snapshot.html?sha256=${snapshot.sha256}` ||
       !/^[a-f0-9]{64}$/u.test(snapshot.sha256 ?? "") || snapshot.encoding !== "identity" ||
       !Number.isSafeInteger(snapshot.byteLength) || snapshot.byteLength < catalog.starCount * 7 ||
       snapshot.initialStreamFrame !== 0 || snapshot.preparedTransformCount !== catalog.starCount ||
@@ -683,7 +687,7 @@ function validateTransport(catalog) {
         !/^[a-f0-9]{64}$/u.test(bank.sha256 ?? "") ||
         !/^[a-f0-9]{64}$/u.test(bank.decodedSha256 ?? "") ||
         typeof bank.assetUrl !== "string" ||
-        !bank.assetUrl.startsWith("/cssblackhole/banks/") ||
+        !bank.assetUrl.startsWith(`${catalog.assetRoot ?? "/cssblackhole"}/banks/`) ||
         !/^bank-\d{2}-[a-f0-9]{64}\.bin\.br$/u.test(bank.assetUrl.split("/").at(-1))) {
       throw new Error(`BlackHole transport bank ${bankIndex} drifted`);
     }
@@ -695,7 +699,7 @@ function validPreparedOpacityPalette(palette) {
     JSON.stringify(palette) === JSON.stringify(CSSBLACKHOLE_OPACITY_PALETTE);
 }
 
-function validMaterialization(materialization) {
+function validMaterialization(materialization, blockCount) {
   return materialization?.schema === "cssblackhole-bounded-materialized-block@1" &&
     materialization.policy === "galaxy-style-multiple-playback-blocks-per-transport-bank" &&
     materialization.maximumRetainedBlockCount === 2 &&
@@ -715,7 +719,7 @@ function validMaterialization(materialization) {
     materialization.maximumScheduleBytes <= materialization.scheduleByteLimit &&
     Number.isSafeInteger(materialization.maximumTransformCharacterBlockIndex) &&
     materialization.maximumTransformCharacterBlockIndex >= 0 &&
-    materialization.maximumTransformCharacterBlockIndex < 180;
+    materialization.maximumTransformCharacterBlockIndex < blockCount;
 }
 
 function validSpaceContext(context) {
@@ -804,7 +808,7 @@ function validPresentationBounds(bounds, viewport) {
     bounds.minimumX < bounds.maximumX && bounds.minimumY < bounds.maximumY;
 }
 
-function validPointSelection(selection) {
+function validPointSelection(selection, streamFrameCount, profileId) {
   if (selection?.schema !== "cssblackhole-source-point-selection@3" ||
       selection.mode !==
         "publication-year-count-proportional-non-overlapping-prepared-source-identity-subset" ||
@@ -824,16 +828,14 @@ function validPointSelection(selection) {
       selection.sourcePeriodicRadiusCount !== 16 ||
       selection.selectedDirectPeriodicRadiusCount !== 16 ||
       selection.selectedGhostPeriodicRadiusCount !== 16 ||
-      selection.selectedDirectMaximumPointsPerRadius !== 110 ||
-      selection.selectedGhostMaximumPointsPerRadius !== 55 ||
-      selection.analyzedSourceFrameCount !== 10800 ||
+      selection.selectedDirectMaximumPointsPerRadius !== 230 ||
+      selection.selectedGhostMaximumPointsPerRadius !== 115 ||
+      selection.analyzedSourceFrameCount !== streamFrameCount ||
       selection.retainedStratifiedPointCount !== 1979 ||
-      selection.framesWithPreparedCollisionSeparation !== 10800 ||
-      selection.preparedCollisionSeparationCount !== 229107 ||
-      selection.maximumPreparedCollisionSeparationCount !== 47 ||
-      selection.maximumPreparedCollisionSeparationPixels !== 1.414 ||
-      selection.sourceCoordinateSampleCount !== 21373200 ||
-      selection.sourceExactCoordinateSampleCount !== 21144093 ||
+      !validPointSelectionCollisionReport(selection, streamFrameCount, profileId) ||
+      selection.sourceCoordinateSampleCount !== streamFrameCount * 1979 ||
+      selection.sourceExactCoordinateSampleCount !==
+        selection.sourceCoordinateSampleCount - selection.preparedCollisionSeparationCount ||
       selection.selectedExactCoordinateConflictPairCount !== 0 ||
       !Array.isArray(selection.sourcePointIndices) || selection.sourcePointIndices.length !== 1979) {
     return false;
@@ -846,12 +848,32 @@ function validPointSelection(selection) {
       (selectedIndex === 0 || sourceIndex > selection.sourcePointIndices[selectedIndex - 1]));
 }
 
+function validPointSelectionCollisionReport(selection, streamFrameCount, profileId) {
+  if (profileId === "full") {
+    return selection.framesWithPreparedCollisionSeparation === 10800 &&
+      selection.preparedCollisionSeparationCount === 303464 &&
+      selection.maximumPreparedCollisionSeparationCount === 54 &&
+      selection.maximumPreparedCollisionSeparationPixels === 1.414;
+  }
+  return Number.isSafeInteger(selection.framesWithPreparedCollisionSeparation) &&
+    selection.framesWithPreparedCollisionSeparation > 0 &&
+    selection.framesWithPreparedCollisionSeparation <= streamFrameCount &&
+    Number.isSafeInteger(selection.preparedCollisionSeparationCount) &&
+    selection.preparedCollisionSeparationCount >=
+      selection.framesWithPreparedCollisionSeparation &&
+    Number.isSafeInteger(selection.maximumPreparedCollisionSeparationCount) &&
+    selection.maximumPreparedCollisionSeparationCount > 0 &&
+    selection.maximumPreparedCollisionSeparationCount <= 1979 &&
+    selection.maximumPreparedCollisionSeparationPixels > 0 &&
+    selection.maximumPreparedCollisionSeparationPixels <= 8 * Math.SQRT2;
+}
+
 function validateCatalogDescriptor(descriptor) {
   if (descriptor?.schema !== "cssblackhole-prepared-catalog-descriptor@1" ||
       !Number.isSafeInteger(descriptor.byteLength) || descriptor.byteLength < 1 ||
       !/^[a-f0-9]{64}$/u.test(descriptor.sha256 ?? "") || typeof descriptor.url !== "string" ||
-      descriptor.url !== "/cssblackhole/catalog.json" +
-        `?sha256=${descriptor.sha256}` ||
+      !["/cssblackhole", "/cssblackhole-side-tilt"].some((assetRoot) =>
+        descriptor.url === `${assetRoot}/catalog.json?sha256=${descriptor.sha256}`) ||
       new URLSearchParams(descriptor.url.split("?")[1]).get("sha256") !== descriptor.sha256) {
     throw new Error("BlackHole catalog descriptor drifted");
   }

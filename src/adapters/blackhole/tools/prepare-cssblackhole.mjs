@@ -23,6 +23,8 @@ import {
   CSSBLACKHOLE_GHOST_IMAGE_DOT_COLORS,
   preparedBlackHoleColorAt,
 } from "../src/shared/cssblackhole/preparedColorPresentation.mjs";
+import { blackHolePresentationProfile } from
+  "../src/shared/cssblackhole/presentationProfiles.mjs";
 import { selectNonOverlappingLuminetPointFrames } from "./select-luminet-points.mjs";
 import { prepareBlackHoleSpaceContext } from "./prepare-space-context.mjs";
 
@@ -30,16 +32,24 @@ const execFileAsync = promisify(execFile);
 const repositoryRoot = resolve(import.meta.dirname, "../../../..");
 const generatedPublicDir = resolve(process.env.CSSBLACKHOLE_GENERATED_PUBLIC_DIR ??
   resolve(repositoryRoot, "build/generated/public"));
-const outputRoot = resolve(generatedPublicDir, "cssblackhole");
-const stagingRoot = resolve(generatedPublicDir, `.cssblackhole-${process.pid}`);
+const presentationProfile = blackHolePresentationProfile(
+  process.env.CSSBLACKHOLE_SEQUENCE ?? "full");
+const assetRoot = presentationProfile.assetRoot;
+const outputRoot = resolve(generatedPublicDir, presentationProfile.assetDirectory);
+const stagingRoot = resolve(
+  generatedPublicDir, `.${presentationProfile.assetDirectory}-${process.pid}`);
 const banksRoot = resolve(stagingRoot, "banks");
 const sourceRoot = resolve(repositoryRoot, `.local/sources/luminet-${sourceLock.commit.slice(0, 7)}`);
 const venvRoot = resolve(repositoryRoot, `.local/venvs/luminet-${sourceLock.commit.slice(0, 7)}`);
 const pythonPath = process.env.CSSBLACKHOLE_PYTHON || resolve(venvRoot, "bin/python");
-const coordinatePath = resolve(repositoryRoot, ".local/cache/cssblackhole-luminet-coordinates.bin");
-const luminancePath = resolve(repositoryRoot, ".local/cache/cssblackhole-luminet-luminance.bin");
-const stateMetadataPath = resolve(repositoryRoot, ".local/cache/cssblackhole-luminet-state.json");
-const oraclePpmPath = resolve(repositoryRoot, "build/oracle/cssblackhole/luminet-frame-0000.ppm");
+const coordinatePath = resolve(repositoryRoot,
+  `.local/cache/cssblackhole-luminet${presentationProfile.cacheSuffix}-coordinates.bin`);
+const luminancePath = resolve(repositoryRoot,
+  `.local/cache/cssblackhole-luminet${presentationProfile.cacheSuffix}-luminance.bin`);
+const stateMetadataPath = resolve(repositoryRoot,
+  `.local/cache/cssblackhole-luminet${presentationProfile.cacheSuffix}-state.json`);
+const oraclePpmPath = resolve(repositoryRoot,
+  `build/oracle/cssblackhole/luminet${presentationProfile.cacheSuffix}-frame-0000.ppm`);
 const transportSeed = 6477;
 const sourcePointCount = 3000;
 const sourceDirectPointCount = 2000;
@@ -48,10 +58,10 @@ const starCount = 1979;
 const directPointCount = 1319;
 const ghostPointCount = 660;
 const expectedPeriodicOrbitCounts = Object.freeze([
-  9, 10, 11, 12, 13, 14, 16, 19, 22, 25, 29, 35, 43, 54, 70, 97,
+  5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 18, 22, 27, 35, 41, 48,
 ]);
 const configurationCount = 3;
-const presentationConfigurationCount = 4;
+const presentationConfigurationCount = presentationProfile.presentationConfigurationCount;
 const sourceFramesPerSecond = 60;
 const framesPerSecond = 60;
 const sourceFrameStep = sourceFramesPerSecond / framesPerSecond;
@@ -59,7 +69,7 @@ const frameMilliseconds = 1000 / framesPerSecond;
 const blockFrameCount = 60 / sourceFrameStep;
 const blocksPerBank = 5;
 const bankFrameCount = blockFrameCount * blocksPerBank;
-const bankCount = 36;
+const bankCount = presentationProfile.bankCount;
 const blockCount = bankCount * blocksPerBank;
 const streamFrameCount = bankCount * bankFrameCount;
 const preparedOpacityPalette = CSSBLACKHOLE_OPACITY_PALETTE;
@@ -67,6 +77,10 @@ const materializedBlockTransformCharacterLimit = 3_200_000;
 const materializedBlockScheduleByteLimit = 260_000;
 
 if (endianness() !== "LE") throw new Error("Luminet preparation requires little endian");
+if (streamFrameCount !== presentationProfile.streamFrameCount ||
+    blockCount !== presentationProfile.blockCount) {
+  throw new Error("Luminet presentation profile transport cardinality drifted");
+}
 await ensurePinnedSource();
 await mkdir(resolve(repositoryRoot, ".local/cache"), { recursive: true });
 await mkdir(resolve(repositoryRoot, "build/oracle/cssblackhole"), { recursive: true });
@@ -159,7 +173,7 @@ for (let bankIndex = 0; bankIndex < bankCount; bankIndex += 1) {
     sourceLoopStartFrameIndex,
     sourceContinuousFromPrevious: true,
     presentationContinuousFromPrevious: true,
-    assetUrl: `/cssblackhole/banks/${filename}`,
+    assetUrl: `${assetRoot}/banks/${filename}`,
     byteLength: compressed.byteLength,
     sha256: hash,
     decodedByteLength: decoded.byteLength,
@@ -216,7 +230,8 @@ const presentationColors = Object.freeze({
 });
 const configurationLoop = Object.freeze({
   schema: "cssblackhole-luminet-moving-configuration-loop@4",
-  mode: "prepared-variable-dwell-side-angled-top-angled-luminet-photon-configuration-loop",
+  profile: presentationProfile.id,
+  mode: presentationProfile.mode,
   sourceFrameStep,
   presentationSequenceSeconds: sourceState.configurationSequence.presentationSequenceSeconds,
   presentationSequenceFrameCount:
@@ -285,6 +300,8 @@ const pointSelection = Object.freeze({
 });
 const catalog = Object.freeze({
   schema: "cssblackhole-prepared-stream-catalog@1",
+  presentationProfile: presentationProfile.id,
+  assetRoot,
   starCount,
   configurationCount,
   presentationConfigurationCount,
@@ -354,7 +371,7 @@ const catalog = Object.freeze({
   luminetPreparedState: sourceState,
   snapshot: Object.freeze({
     schema: "cssblackhole-prepared-polycss-snapshot@1",
-    url: `/cssblackhole/snapshot.html?sha256=${snapshotHash}`,
+    url: `${assetRoot}/snapshot.html?sha256=${snapshotHash}`,
     sha256: snapshotHash,
     encoding: "identity",
     byteLength: snapshotBytes.byteLength,
@@ -373,6 +390,8 @@ await writeFile(resolve(stagingRoot, "catalog.json"), catalogBytes);
 const prepared = Object.freeze({
   schema: "cssblackhole-prepared-scene@1",
   status: "ready",
+  presentationProfile: presentationProfile.id,
+  assetRoot,
   source: catalog.source,
   renderer: Object.freeze({
     kind: "retained-dom-polycss-prepared-playback",
@@ -391,6 +410,7 @@ const prepared = Object.freeze({
     streamSeconds: streamFrameCount / framesPerSecond,
   }),
   presentation: Object.freeze({
+    profile: presentationProfile.id,
     orbitalSpeedScale: sourceState.orbitalSpeedScale,
     slotHoldSeconds: sourceState.configurationSequence.presentationSlotHoldSeconds,
     slotDurationSeconds: sourceState.configurationSequence.presentationSlotDurationSeconds,
@@ -404,7 +424,7 @@ const prepared = Object.freeze({
   }),
   catalog: Object.freeze({
     schema: "cssblackhole-prepared-catalog-descriptor@1",
-    url: `/cssblackhole/catalog.json?sha256=${catalogHash}`,
+    url: `${assetRoot}/catalog.json?sha256=${catalogHash}`,
     sha256: catalogHash,
     byteLength: catalogBytes.byteLength,
   }),
@@ -443,17 +463,18 @@ async function readPreparedSourceState() {
         sourceState.ghostPointCount !== sourceGhostPointCount ||
         sourceState.frameCount !== streamFrameCount ||
         sourceState.framesPerSecond !== sourceFramesPerSecond ||
-        sourceState.orbitalSpeedScale !== 0.5 ||
-        sourceState.sourceMotionReferenceSeconds !== 10 ||
+        sourceState.orbitalSpeedScale !== 0.25 ||
+        sourceState.sourceMotionReferenceSeconds !== 20 ||
         sourceState.naturalTimePerSourceMotionReference !== 1000 ||
         JSON.stringify(sourceState.naturalTimePerPresentationSlot) !==
-          JSON.stringify([800, 450, 300, 450]) ||
+          JSON.stringify(presentationProfile.naturalTimePerSlot) ||
         JSON.stringify(sourceState.naturalTimePerPresentationHold) !==
-          JSON.stringify([600, 250, 100, 250]) ||
-        sourceState.naturalTimePerSourceLoop !== 9000 ||
+          JSON.stringify(presentationProfile.naturalTimePerHold) ||
+        sourceState.naturalTimePerSourceLoop !== 4500 ||
         sourceState.sourceLoopSeconds !== 90 || sourceState.sourceLoopFrameCount !== 5400 ||
-        sourceState.combinedLoopSeconds !== 180 || sourceState.combinedLoopFrameCount !== 10800 ||
-        sourceState.availablePeriodicRadiusCount !== 89 ||
+        sourceState.combinedLoopSeconds !== presentationProfile.combinedLoopSeconds ||
+        sourceState.combinedLoopFrameCount !== presentationProfile.streamFrameCount ||
+        sourceState.availablePeriodicRadiusCount !== 44 ||
         sourceState.periodicRadiusCount !== expectedPeriodicOrbitCounts.length ||
         sourceState.periodicOrbitCounts?.length !== expectedPeriodicOrbitCounts.length ||
         sourceState.periodicOrbitCounts.some(
@@ -475,56 +496,53 @@ async function readPreparedSourceState() {
         sourceState.photometry?.displayOpacityFloor !== 0.22 ||
         sourceState.configurationSequence?.schema !==
           "cssblackhole-luminet-moving-configuration-sequence@3" ||
+        sourceState.configurationSequence.profile !== presentationProfile.id ||
         sourceState.configurationSequence.distinctConfigurationCount !== configurationCount ||
         sourceState.configurationSequence.presentationConfigurationCount !==
           presentationConfigurationCount ||
-        sourceState.configurationSequence.presentationSequenceSeconds !== 20 ||
-        sourceState.configurationSequence.presentationSequenceFrameCount !== 1200 ||
+        sourceState.configurationSequence.presentationSequenceSeconds !==
+          presentationProfile.sequenceSeconds ||
+        sourceState.configurationSequence.presentationSequenceFrameCount !==
+          presentationProfile.sequenceFrameCount ||
         JSON.stringify(sourceState.configurationSequence.presentationSlotHoldSeconds) !==
-          JSON.stringify([6, 2.5, 1, 2.5]) ||
+          JSON.stringify(presentationProfile.holdSeconds) ||
         JSON.stringify(sourceState.configurationSequence.presentationSlotDurationSeconds) !==
-          JSON.stringify([8, 4.5, 3, 4.5]) ||
+          JSON.stringify(presentationProfile.durationSeconds) ||
         JSON.stringify(sourceState.configurationSequence.presentationSlotFrameCounts) !==
-          JSON.stringify([480, 270, 180, 270]) ||
+          JSON.stringify(presentationProfile.frameCounts) ||
         JSON.stringify(sourceState.configurationSequence.presentationSlotStartFrameIndices) !==
-          JSON.stringify([0, 480, 750, 930]) ||
+          JSON.stringify(presentationProfile.startFrameIndices) ||
         JSON.stringify(sourceState.configurationSequence.transitionCadenceSecondsBySlot) !==
-          JSON.stringify([8, 4.5, 3, 4.5]) ||
+          JSON.stringify(presentationProfile.durationSeconds) ||
         JSON.stringify(sourceState.configurationSequence.sourceMotionSecondsBeforeTransitionBySlot) !==
-          JSON.stringify([6, 2.5, 1, 2.5]) ||
+          JSON.stringify(presentationProfile.holdSeconds) ||
         JSON.stringify(sourceState.configurationSequence.sourceMotionFrameCountsBeforeTransition) !==
-          JSON.stringify([360, 150, 60, 150]) ||
+          JSON.stringify(presentationProfile.transitionStartFrameIndices) ||
         JSON.stringify(sourceState.configurationSequence.transitionStartFrameIndices) !==
-          JSON.stringify([360, 150, 60, 150]) ||
+          JSON.stringify(presentationProfile.transitionStartFrameIndices) ||
         sourceState.configurationSequence.transitionSeconds !== 2 ||
         sourceState.configurationSequence.transitionFrameCount !== 120 ||
         sourceState.configurationSequence.states?.length !== configurationCount ||
         sourceState.configurationSequence.states.some((state) => state.dynamic !== true) ||
         JSON.stringify(sourceState.configurationSequence.presentationStateIndices) !==
-          JSON.stringify([0, 1, 2, 1]) ||
-        JSON.stringify(sourceState.configurationSequence.presentationSequence) !== JSON.stringify([
-          "luminet-inclination-85deg",
-          "luminet-inclination-60deg",
-          "luminet-inclination-0deg",
-          "luminet-inclination-60deg",
-        ]) ||
+          JSON.stringify(presentationProfile.stateIndices) ||
+        JSON.stringify(sourceState.configurationSequence.presentationSequence) !==
+          JSON.stringify(presentationProfile.configurationSequence) ||
         JSON.stringify(sourceState.configurationSequence.presentationSlots?.map(
           ({ stateIndex, view, holdSeconds, durationSeconds, frameCount, startFrameIndex,
             transitionStartFrameIndex, transitionFrameCount }) => ({
             stateIndex, view, holdSeconds, durationSeconds, frameCount, startFrameIndex,
             transitionStartFrameIndex, transitionFrameCount,
-          }))) !== JSON.stringify([
-          { stateIndex: 0, view: "side", holdSeconds: 6, durationSeconds: 8, frameCount: 480,
-            startFrameIndex: 0, transitionStartFrameIndex: 360, transitionFrameCount: 120 },
-          { stateIndex: 1, view: "angled", holdSeconds: 2.5, durationSeconds: 4.5,
-            frameCount: 270, startFrameIndex: 480, transitionStartFrameIndex: 150,
-            transitionFrameCount: 120 },
-          { stateIndex: 2, view: "top", holdSeconds: 1, durationSeconds: 3, frameCount: 180,
-            startFrameIndex: 750, transitionStartFrameIndex: 60, transitionFrameCount: 120 },
-          { stateIndex: 1, view: "angled", holdSeconds: 2.5, durationSeconds: 4.5,
-            frameCount: 270, startFrameIndex: 930, transitionStartFrameIndex: 150,
-            transitionFrameCount: 120 },
-        ])) return null;
+          }))) !== JSON.stringify(presentationProfile.stateIndices.map((stateIndex, index) => ({
+          stateIndex,
+          view: stateIndex === 0 ? "side" : stateIndex === 1 ? "angled" : "top",
+          holdSeconds: presentationProfile.holdSeconds[index],
+          durationSeconds: presentationProfile.durationSeconds[index],
+          frameCount: presentationProfile.frameCounts[index],
+          startFrameIndex: presentationProfile.startFrameIndices[index],
+          transitionStartFrameIndex: presentationProfile.transitionStartFrameIndices[index],
+          transitionFrameCount: presentationProfile.transitionFrameCount,
+        })))) return null;
     return Object.freeze({ sourceState, coordinateBytes, luminanceBytes });
   } catch {
     return null;
@@ -640,6 +658,7 @@ async function ensurePythonEnvironment() {
 async function runPythonPreparation() {
   await new Promise((resolvePromise, rejectPromise) => {
     const child = spawn(pythonPath, [resolve(import.meta.dirname, "prepare-luminet-state.py"),
+      "--sequence", presentationProfile.id,
       "--source-root", sourceRoot, "--source-commit", sourceLock.commit,
       "--output", coordinatePath, "--luminance-output", luminancePath,
       "--metadata", stateMetadataPath, "--oracle", oraclePpmPath,

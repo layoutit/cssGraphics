@@ -67,9 +67,9 @@ export function mountBlackHoleClient(host) {
         metadata.viewport?.height !== 600 ||
         metadata.presentation?.orbitalSpeedScale !== 0.5 ||
         JSON.stringify(metadata.presentation?.slotHoldSeconds) !==
-          JSON.stringify([5, 2.75, 1.5, 2.75]) ||
+          JSON.stringify([6, 2.5, 1, 2.5]) ||
         JSON.stringify(metadata.presentation?.slotDurationSeconds) !==
-          JSON.stringify([7, 4.75, 3.5, 4.75]) ||
+          JSON.stringify([8, 4.5, 3, 4.5]) ||
         metadata.presentation?.transitionSeconds !== 2 ||
         metadata.presentation?.publicationYearPointCount !== 1979 ||
         metadata.presentation?.displayPowerGamma !== 0.35 ||

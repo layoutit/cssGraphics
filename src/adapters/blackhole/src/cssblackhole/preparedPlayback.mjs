@@ -50,6 +50,10 @@ export function createBlackHolePreparedPlayer({
   const transitionStreamFrames = new Uint32Array(
     catalog.configurationLoop.configurationTransitionCount + 2);
   const transitionOffsetsBySequenceFrame = createTransitionOffsetTable(catalog.configurationLoop);
+  const transitionStartSequenceFrames = catalog.configurationLoop.presentationSlotStartFrameIndices
+    .map((start, index) => start + catalog.configurationLoop.transitionStartFrameIndices[index]);
+  const transitionEndSequenceFrames = transitionStartSequenceFrames
+    .map((start) => start + catalog.configurationLoop.transitionFrameCount - 1);
   const blockWindowIndices = new Uint16Array(catalog.runtimeMaterializedLookaheadBlockCount + 1);
   const bankWindowIndices = new Uint16Array(catalog.runtimeLookaheadBankCount + 1);
   const retainedBlockFlags = new Uint8Array(catalog.blockCount);
@@ -68,6 +72,7 @@ export function createBlackHolePreparedPlayer({
   let transformWriteCount = 0;
   let opacityWriteCount = 0;
   let totalDomWriteCount = 0;
+  let sourceFrameDropCount = 0;
   let schedulerLateResetCount = 0;
   let schedulerFrameRequestCount = 0;
   let schedulerFrameCallbackCount = 0;
@@ -91,7 +96,7 @@ export function createBlackHolePreparedPlayer({
   if (!initialSnapshotPresented) publish(initialStreamFrame, readNow());
   queueWindows();
 
-  function publish(streamFrame, now) {
+  function publish(streamFrame, now, schedulerAdvanceFrameCount = 1) {
     const blockIndex = Math.floor(streamFrame / catalog.blockFrameCount);
     const localFrame = streamFrame % catalog.blockFrameCount;
     const isSequential = publishedStreamFrame >= 0 &&
@@ -100,10 +105,31 @@ export function createBlackHolePreparedPlayer({
     const sequenceFrame = streamFrame % catalog.configurationLoop.presentationSequenceFrameCount;
     const transitionOffset = transitionOffsetsBySequenceFrame[sequenceFrame];
     const isTransitionFrame = transitionOffset >= 0;
-    if (isTransitionFrame && transitionOffset === 0 && appliedFrameCount > 1 &&
+    let crossedTransitionStartStreamFrame = -1;
+    let crossedTransitionEnd = false;
+    if (publishedStreamFrame >= 0 && schedulerAdvanceFrameCount > 1 &&
+        schedulerAdvanceFrameCount < catalog.configurationLoop.presentationSequenceFrameCount) {
+      for (const start of transitionStartSequenceFrames) {
+        const distance = forwardSequenceDistance(publishedStreamFrame, start,
+          catalog.configurationLoop.presentationSequenceFrameCount);
+        if (distance <= schedulerAdvanceFrameCount) {
+          crossedTransitionStartStreamFrame =
+            (publishedStreamFrame + distance) % catalog.streamFrameCount;
+        }
+      }
+      for (const end of transitionEndSequenceFrames) {
+        if (forwardSequenceDistance(publishedStreamFrame, end,
+            catalog.configurationLoop.presentationSequenceFrameCount) <= schedulerAdvanceFrameCount) {
+          crossedTransitionEnd = true;
+        }
+      }
+    }
+    const transitionStarted = transitionOffset === 0 || crossedTransitionStartStreamFrame >= 0;
+    if (transitionStarted && appliedFrameCount > 1 &&
         transitionCount < transitionGaps.length) {
       activeTransitionIndex = transitionCount++;
-      transitionStreamFrames[activeTransitionIndex] = streamFrame;
+      transitionStreamFrames[activeTransitionIndex] = crossedTransitionStartStreamFrame >= 0
+        ? crossedTransitionStartStreamFrame : streamFrame;
       preparedConfigurationSwitchCount += 1;
       performance.mark(`cssblackhole-configuration-transition-${activeTransitionIndex + 1}-start`);
     }
@@ -133,10 +159,11 @@ export function createBlackHolePreparedPlayer({
         presentationSamples[presentationSampleCount - 1] ?? 0);
       transitionPublishDurations[activeTransitionIndex] = Math.max(
         transitionPublishDurations[activeTransitionIndex], duration);
-      if (transitionOffset + 1 === catalog.configurationLoop.transitionFrameCount) {
-        performance.mark(`cssblackhole-configuration-transition-${activeTransitionIndex + 1}-published`);
-        activeTransitionIndex = -1;
-      }
+    }
+    if (activeTransitionIndex >= 0 && (crossedTransitionEnd ||
+        transitionOffset + 1 === catalog.configurationLoop.transitionFrameCount)) {
+      performance.mark(`cssblackhole-configuration-transition-${activeTransitionIndex + 1}-published`);
+      activeTransitionIndex = -1;
     }
   }
 
@@ -290,7 +317,9 @@ export function createBlackHolePreparedPlayer({
     }
     lastAnimationFrameAt = now;
     if (waitingForBlock) return;
-    const next = (publishedStreamFrame + 1) % catalog.streamFrameCount;
+    const dueFrameCount = Math.max(1, Math.floor(
+      (now + schedulerEarlyToleranceMilliseconds - nextFrameAt) / catalog.frameMilliseconds) + 1);
+    const next = (publishedStreamFrame + dueFrameCount) % catalog.streamFrameCount;
     const nextBlockIndex = Math.floor(next / catalog.blockFrameCount);
     if (nextBlockIndex !== activeBlockIndex && !resolvedBlocks.has(nextBlockIndex)) {
       waitingForBlock = true;
@@ -311,16 +340,9 @@ export function createBlackHolePreparedPlayer({
       });
       return;
     }
-    publish(next, now);
-    if (schedulerCadenceMode === "high-refresh-deadline-gated") {
-      nextFrameAt += catalog.frameMilliseconds;
-      if (nextFrameAt + schedulerEarlyToleranceMilliseconds <= now) {
-        nextFrameAt = now + catalog.frameMilliseconds;
-        schedulerLateResetCount += 1;
-      }
-    } else {
-      nextFrameAt = now + catalog.frameMilliseconds;
-    }
+    publish(next, now, dueFrameCount);
+    sourceFrameDropCount += dueFrameCount - 1;
+    nextFrameAt += dueFrameCount * catalog.frameMilliseconds;
     schedule();
   }
 
@@ -405,9 +427,9 @@ export function createBlackHolePreparedPlayer({
       initialSnapshotDomWriteCount: initialSnapshotPresented ? 0 : catalog.starCount * 2,
       writesPerPublishedFrameMean: appliedFrameCount === 0 ? 0 : totalDomWriteCount / appliedFrameCount,
       writesPerPublishedFrameP95: percentile(writes, 0.95),
-      sourceFrameDropCount: 0,
+      sourceFrameDropCount,
       droppedFrameCauses: Object.freeze({
-        schedulerDeadlineCollapse: 0,
+        schedulerDeadlineCollapse: sourceFrameDropCount,
         preparedBlockWait: 0,
         preparedBankWait: 0,
         documentHidden: 0,
@@ -428,7 +450,7 @@ export function createBlackHolePreparedPlayer({
       schedulerHighRefreshThresholdMilliseconds,
       schedulerCadenceMode,
       runtimeSchedulerTransport:
-        "refresh-calibrated-requestAnimationFrame-prepared-publication-at-sixty-hertz",
+        "wall-clock-anchored-requestAnimationFrame-prepared-publication-at-up-to-sixty-hertz",
       preparedBlockWaitCount,
       preparedBankWaitCount,
       cadence: Object.freeze({
@@ -487,6 +509,12 @@ function percentile(sorted, fraction) {
   if (sorted.length === 0) return 0;
   return Number(sorted[Math.min(sorted.length - 1,
     Math.ceil(sorted.length * fraction) - 1)].toFixed(3));
+}
+
+function forwardSequenceDistance(streamFrame, targetSequenceFrame, sequenceFrameCount) {
+  const distance = (targetSequenceFrame - streamFrame % sequenceFrameCount + sequenceFrameCount) %
+    sequenceFrameCount;
+  return distance === 0 ? sequenceFrameCount : distance;
 }
 
 function preparedTransformAt(block, assignmentIndex) {

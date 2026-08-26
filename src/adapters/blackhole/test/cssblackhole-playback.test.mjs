@@ -108,7 +108,18 @@ test("Luminet publishes every nominal 60 Hz refresh despite callback jitter", ()
   assert.equal(stats.schedulerNoopCallbackCount, 0);
   assert.equal(stats.schedulerLeadMilliseconds, 0);
   assert.equal(stats.runtimeSchedulerTransport,
-    "refresh-calibrated-requestAnimationFrame-prepared-publication-at-sixty-hertz");
+    "wall-clock-anchored-requestAnimationFrame-prepared-publication-at-up-to-sixty-hertz");
+  assert.equal(stats.sourceFrameDropCount, 0);
+
+  now = 88.218;
+  frame = pendingFrame;
+  pendingFrame = null;
+  frame(now);
+  const thirtyHertzStats = player.stats();
+  assert.equal(thirtyHertzStats.publishedStreamFrame, 0);
+  assert.equal(thirtyHertzStats.appliedFrameCount, 3);
+  assert.equal(thirtyHertzStats.sourceFrameDropCount, 1);
+  assert.equal(thirtyHertzStats.droppedFrameCauses.schedulerDeadlineCollapse, 1);
 
   player.pause();
   assert.equal(canceledFrameCount, 1);

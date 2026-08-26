@@ -188,6 +188,7 @@ async function smokeProfile(specification) {
         ? getComputedStyle(stage).backgroundRepeat : null,
       presentation,
       pointPresentation,
+      measurementStartedAt: performance.now(),
       canonical: document.querySelector('link[rel="canonical"]')?.href ?? null,
       robots: document.querySelector('meta[name="robots"]')?.content ?? null,
     };
@@ -197,6 +198,7 @@ async function smokeProfile(specification) {
     const leaves = [...document.querySelectorAll(".polycss-scene > b")];
     const stable = window.__cssBlackHoleSmokeLeaves;
     const stats = window.__cssBlackHoleDebug.stats();
+    const measurementEndedAt = performance.now();
     window.__cssBlackHoleDebug.pause();
     const pausedFrame = window.__cssBlackHoleDebug.stats().publishedStreamFrame;
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 150));
@@ -213,6 +215,7 @@ async function smokeProfile(specification) {
     window.__cssBlackHoleDebug.resume();
     return {
       stats,
+      measurementEndedAt,
       leafCount: leaves.length,
       stableIdentity: leaves.length === stable.length &&
         leaves.every((leaf, index) => leaf === stable[index]),
@@ -246,6 +249,11 @@ async function smokeProfile(specification) {
 function assertSmoke(report) {
   const preparedRequests = report.requests.filter((path) => path.startsWith("/cssblackhole/"));
   const presentation = report.initial.presentation;
+  const measuredSeconds = (report.final.measurementEndedAt - report.initial.measurementStartedAt) /
+    1_000;
+  const measuredSourceFrames = report.final.stats.publishedStreamFrame -
+    report.initial.stats.publishedStreamFrame;
+  const measuredSourceFramesPerSecond = measuredSourceFrames / measuredSeconds;
   if (report.initial.bodyClass !== "ready" ||
       report.initial.stats?.adapterId !== "luminet" ||
       report.initial.stats?.starCount !== 1979 ||
@@ -284,7 +292,7 @@ function assertSmoke(report) {
       report.initial.stats?.initialSnapshotReuseCount !== 1 ||
       report.initial.stats?.initialSnapshotDomWriteCount !== 0 ||
       report.initial.stats?.runtimeSchedulerTransport !==
-        "refresh-calibrated-requestAnimationFrame-prepared-publication-at-sixty-hertz" ||
+        "wall-clock-anchored-requestAnimationFrame-prepared-publication-at-up-to-sixty-hertz" ||
       report.initial.stats?.schedulerLeadMilliseconds !== 0 ||
       report.initial.stats?.schedulerDelayRequestCount !== 0 ||
       report.initial.stats?.schedulerDelayCallbackCount !== 0 ||
@@ -316,7 +324,7 @@ function assertSmoke(report) {
       report.final.stats?.retainedMaterializedScheduleBytes > 520_000 ||
       report.final.stats?.preparedBlockWaitCount !== 0 ||
       report.final.stats?.preparedBankWaitCount !== 0 ||
-      report.final.stats?.sourceFrameDropCount !== 0 ||
+      Math.abs(measuredSourceFramesPerSecond - 60) > 2 ||
       report.final.stats?.schedulerNoopCallbackCount !== 0 ||
       report.final.stats?.runtimeDomGrowth !== false ||
       report.final.topDownVerticalMargins?.top < 23 ||

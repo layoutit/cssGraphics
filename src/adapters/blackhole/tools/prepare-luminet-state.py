@@ -23,7 +23,7 @@ GHOST_COUNT = 1_000
 SOURCE_CONFIGURATION_COUNT = 3
 TRANSITION_SECONDS = 2
 TRANSITION_FRAME_COUNT = TRANSITION_SECONDS * FRAMES_PER_SECOND
-ORBITAL_SPEED_SCALE = 0.5
+ORBITAL_SPEED_SCALE = 0.25
 SOURCE_MOTION_REFERENCE_SECONDS = 5 / ORBITAL_SPEED_SCALE
 NATURAL_TIME_PER_SOURCE_MOTION_REFERENCE = 1_000.0
 NATURAL_TIME_PER_SECOND = \
@@ -31,36 +31,8 @@ NATURAL_TIME_PER_SECOND = \
 SOURCE_LOOP_SECONDS = 90
 SOURCE_LOOP_FRAME_COUNT = round(SOURCE_LOOP_SECONDS * FRAMES_PER_SECOND)
 NATURAL_TIME_PER_SOURCE_LOOP = NATURAL_TIME_PER_SECOND * SOURCE_LOOP_SECONDS
-AVAILABLE_PERIODIC_RADIUS_COUNT = 89
+AVAILABLE_PERIODIC_RADIUS_COUNT = 44
 PERIODIC_RADIUS_COUNT = 16
-PRESENTATION_CONFIGURATION_SEQUENCE = (0, 1, 2, 1)
-PRESENTATION_CONFIGURATION_COUNT = len(PRESENTATION_CONFIGURATION_SEQUENCE)
-PRESENTATION_SLOT_HOLD_SECONDS = (6, 2.5, 1, 2.5)
-PRESENTATION_SLOT_DURATION_SECONDS = tuple(
-    hold_seconds + TRANSITION_SECONDS
-    for hold_seconds in PRESENTATION_SLOT_HOLD_SECONDS
-)
-PRESENTATION_SLOT_FRAME_COUNTS = tuple(
-    round(duration * FRAMES_PER_SECOND)
-    for duration in PRESENTATION_SLOT_DURATION_SECONDS
-)
-PRESENTATION_SLOT_TRANSITION_START_FRAME_INDICES = tuple(
-    frame_count - TRANSITION_FRAME_COUNT
-    for frame_count in PRESENTATION_SLOT_FRAME_COUNTS
-)
-PRESENTATION_SLOT_START_FRAME_INDICES = tuple(
-    sum(PRESENTATION_SLOT_FRAME_COUNTS[:index])
-    for index in range(PRESENTATION_CONFIGURATION_COUNT)
-)
-PRESENTATION_SEQUENCE_FRAME_COUNT = sum(PRESENTATION_SLOT_FRAME_COUNTS)
-PRESENTATION_SEQUENCE_SECONDS = \
-    PRESENTATION_SEQUENCE_FRAME_COUNT / FRAMES_PER_SECOND
-COMBINED_LOOP_FRAME_COUNT = math.lcm(
-    SOURCE_LOOP_FRAME_COUNT,
-    PRESENTATION_SEQUENCE_FRAME_COUNT,
-)
-COMBINED_LOOP_SECONDS = COMBINED_LOOP_FRAME_COUNT / FRAMES_PER_SECOND
-FRAME_COUNT = COMBINED_LOOP_FRAME_COUNT
 MASS = 1.0
 MINIMUM_RADIUS = 6.0
 MAXIMUM_RADIUS = 30.0
@@ -93,24 +65,22 @@ CONFIGURATIONS = (
         "sourceEvidence": "luminet/isoradial.py:0 degrees is top-down",
     },
 )
-if len(CONFIGURATIONS) != SOURCE_CONFIGURATION_COUNT or \
-        any(index < 0 or index >= SOURCE_CONFIGURATION_COUNT
-            for index in PRESENTATION_CONFIGURATION_SEQUENCE):
-    raise RuntimeError("Luminet source or presentation configuration count drifted")
+if len(CONFIGURATIONS) != SOURCE_CONFIGURATION_COUNT:
+    raise RuntimeError("Luminet source configuration count drifted")
 
 
 def main() -> None:
     arguments = parse_arguments()
+    presentation = presentation_profile(arguments.sequence)
     source_root = pathlib.Path(arguments.source_root).resolve()
     sys.path.insert(0, str(source_root))
     from luminet import black_hole_math as bhmath
     from luminet.spatial import polar_to_cartesian
 
-    if SOURCE_MOTION_REFERENCE_SECONDS != 10 or SOURCE_LOOP_FRAME_COUNT != 5_400 or \
-            PRESENTATION_SEQUENCE_FRAME_COUNT != 1_200 or \
-            COMBINED_LOOP_SECONDS != 180 or FRAME_COUNT != 10_800:
+    if SOURCE_MOTION_REFERENCE_SECONDS != 20 or SOURCE_LOOP_FRAME_COUNT != 5_400 or \
+            presentation["combinedLoopFrameCount"] != presentation["frameCount"]:
         raise RuntimeError(
-            "Variable-hold Luminet cadence did not produce the 180-second combined loop")
+            "Variable-hold Luminet cadence did not produce an exact combined loop")
 
     particles = create_particles()
     started_at = time.perf_counter()
@@ -132,7 +102,7 @@ def main() -> None:
     source_luminances = np.ascontiguousarray(rgba[..., 0], dtype=np.uint8)
 
     coordinates, luminances = prepare_moving_configuration_loop(
-        source_coordinates, source_luminances)
+        source_coordinates, source_luminances, presentation)
 
     for configuration_index, configuration in enumerate(CONFIGURATIONS):
         inclination = math.radians(configuration["inclinationDegrees"])
@@ -168,24 +138,24 @@ def main() -> None:
         "pointCount": POINT_COUNT,
         "directPointCount": DIRECT_COUNT,
         "ghostPointCount": GHOST_COUNT,
-        "frameCount": FRAME_COUNT,
+        "frameCount": presentation["frameCount"],
         "framesPerSecond": FRAMES_PER_SECOND,
         "orbitalSpeedScale": ORBITAL_SPEED_SCALE,
         "naturalTimePerSourceMotionReference": NATURAL_TIME_PER_SOURCE_MOTION_REFERENCE,
         "naturalTimePerPresentationSlot": [
             NATURAL_TIME_PER_SECOND * duration
-            for duration in PRESENTATION_SLOT_DURATION_SECONDS
+            for duration in presentation["slotDurationSeconds"]
         ],
         "naturalTimePerPresentationHold": [
             NATURAL_TIME_PER_SECOND * duration
-            for duration in PRESENTATION_SLOT_HOLD_SECONDS
+            for duration in presentation["slotHoldSeconds"]
         ],
         "sourceMotionReferenceSeconds": SOURCE_MOTION_REFERENCE_SECONDS,
         "naturalTimePerSourceLoop": NATURAL_TIME_PER_SOURCE_LOOP,
         "sourceLoopSeconds": SOURCE_LOOP_SECONDS,
         "sourceLoopFrameCount": SOURCE_LOOP_FRAME_COUNT,
-        "combinedLoopSeconds": COMBINED_LOOP_SECONDS,
-        "combinedLoopFrameCount": FRAME_COUNT,
+        "combinedLoopSeconds": presentation["combinedLoopSeconds"],
+        "combinedLoopFrameCount": presentation["combinedLoopFrameCount"],
         "mass": MASS,
         "minimumRadius": MINIMUM_RADIUS,
         "maximumRadius": MAXIMUM_RADIUS,
@@ -218,22 +188,23 @@ def main() -> None:
         },
         "configurationSequence": {
             "schema": "cssblackhole-luminet-moving-configuration-sequence@3",
+            "profile": presentation["id"],
             "distinctConfigurationCount": SOURCE_CONFIGURATION_COUNT,
-            "presentationConfigurationCount": PRESENTATION_CONFIGURATION_COUNT,
-            "presentationSequenceSeconds": PRESENTATION_SEQUENCE_SECONDS,
-            "presentationSequenceFrameCount": PRESENTATION_SEQUENCE_FRAME_COUNT,
-            "presentationSlotHoldSeconds": list(PRESENTATION_SLOT_HOLD_SECONDS),
-            "presentationSlotDurationSeconds": list(PRESENTATION_SLOT_DURATION_SECONDS),
-            "presentationSlotFrameCounts": list(PRESENTATION_SLOT_FRAME_COUNTS),
+            "presentationConfigurationCount": presentation["configurationCount"],
+            "presentationSequenceSeconds": presentation["sequenceSeconds"],
+            "presentationSequenceFrameCount": presentation["sequenceFrameCount"],
+            "presentationSlotHoldSeconds": list(presentation["slotHoldSeconds"]),
+            "presentationSlotDurationSeconds": list(presentation["slotDurationSeconds"]),
+            "presentationSlotFrameCounts": list(presentation["slotFrameCounts"]),
             "presentationSlotStartFrameIndices":
-                list(PRESENTATION_SLOT_START_FRAME_INDICES),
-            "transitionCadenceSecondsBySlot": list(PRESENTATION_SLOT_DURATION_SECONDS),
+                list(presentation["slotStartFrameIndices"]),
+            "transitionCadenceSecondsBySlot": list(presentation["slotDurationSeconds"]),
             "sourceMotionSecondsBeforeTransitionBySlot":
-                list(PRESENTATION_SLOT_HOLD_SECONDS),
+                list(presentation["slotHoldSeconds"]),
             "sourceMotionFrameCountsBeforeTransition":
-                list(PRESENTATION_SLOT_TRANSITION_START_FRAME_INDICES),
+                list(presentation["slotTransitionStartFrameIndices"]),
             "transitionStartFrameIndices":
-                list(PRESENTATION_SLOT_TRANSITION_START_FRAME_INDICES),
+                list(presentation["slotTransitionStartFrameIndices"]),
             "transitionSeconds": TRANSITION_SECONDS,
             "transitionFrameCount": TRANSITION_FRAME_COUNT,
             "orbitalSpeedScale": ORBITAL_SPEED_SCALE,
@@ -243,10 +214,10 @@ def main() -> None:
                 "prepared-smoothstep-between-concurrently-moving-source-geodesic-fields",
             "identityCorrespondence":
                 "same-source-emitter-radius-order-and-index-across-configurations",
-            "presentationStateIndices": list(PRESENTATION_CONFIGURATION_SEQUENCE),
+            "presentationStateIndices": list(presentation["configurationSequence"]),
             "presentationSequence": [
                 CONFIGURATIONS[index]["id"]
-                for index in PRESENTATION_CONFIGURATION_SEQUENCE
+                for index in presentation["configurationSequence"]
             ],
             "presentationSlots": [
                 {
@@ -254,16 +225,16 @@ def main() -> None:
                     "stateIndex": state_index,
                     "id": CONFIGURATIONS[state_index]["id"],
                     "view": CONFIGURATIONS[state_index]["view"],
-                    "holdSeconds": PRESENTATION_SLOT_HOLD_SECONDS[presentation_index],
-                    "durationSeconds": PRESENTATION_SLOT_DURATION_SECONDS[presentation_index],
-                    "frameCount": PRESENTATION_SLOT_FRAME_COUNTS[presentation_index],
-                    "startFrameIndex": PRESENTATION_SLOT_START_FRAME_INDICES[presentation_index],
+                    "holdSeconds": presentation["slotHoldSeconds"][presentation_index],
+                    "durationSeconds": presentation["slotDurationSeconds"][presentation_index],
+                    "frameCount": presentation["slotFrameCounts"][presentation_index],
+                    "startFrameIndex": presentation["slotStartFrameIndices"][presentation_index],
                     "transitionStartFrameIndex":
-                        PRESENTATION_SLOT_TRANSITION_START_FRAME_INDICES[presentation_index],
+                        presentation["slotTransitionStartFrameIndices"][presentation_index],
                     "transitionFrameCount": TRANSITION_FRAME_COUNT,
                 }
                 for presentation_index, state_index in
-                enumerate(PRESENTATION_CONFIGURATION_SEQUENCE)
+                enumerate(presentation["configurationSequence"])
             ],
             "states": [
                 {
@@ -305,34 +276,42 @@ def main() -> None:
 def prepare_moving_configuration_loop(
         source_coordinates: np.ndarray,
         source_luminances: np.ndarray,
+        presentation: dict[str, object],
 ) -> tuple[np.ndarray, np.ndarray]:
-    coordinates = np.empty((FRAME_COUNT, POINT_COUNT, 2), dtype="<i4")
-    luminances = np.empty((FRAME_COUNT, POINT_COUNT), dtype=np.uint8)
-    for global_frame_index in range(FRAME_COUNT):
-        sequence_frame_index = global_frame_index % PRESENTATION_SEQUENCE_FRAME_COUNT
+    frame_count = presentation["frameCount"]
+    configuration_sequence = presentation["configurationSequence"]
+    slot_start_frame_indices = presentation["slotStartFrameIndices"]
+    slot_frame_counts = presentation["slotFrameCounts"]
+    slot_transition_start_frame_indices = presentation["slotTransitionStartFrameIndices"]
+    sequence_frame_count = presentation["sequenceFrameCount"]
+    configuration_count = presentation["configurationCount"]
+    coordinates = np.empty((frame_count, POINT_COUNT, 2), dtype="<i4")
+    luminances = np.empty((frame_count, POINT_COUNT), dtype=np.uint8)
+    for global_frame_index in range(frame_count):
+        sequence_frame_index = global_frame_index % sequence_frame_count
         presentation_index = next(
             index
             for index, start_frame_index in
-            enumerate(PRESENTATION_SLOT_START_FRAME_INDICES)
+            enumerate(slot_start_frame_indices)
             if sequence_frame_index <
-            start_frame_index + PRESENTATION_SLOT_FRAME_COUNTS[index]
+            start_frame_index + slot_frame_counts[index]
         )
-        configuration_index = PRESENTATION_CONFIGURATION_SEQUENCE[presentation_index]
+        configuration_index = configuration_sequence[presentation_index]
         local_frame_index = sequence_frame_index - \
-            PRESENTATION_SLOT_START_FRAME_INDICES[presentation_index]
+            slot_start_frame_indices[presentation_index]
         source_loop_frame_index = global_frame_index % SOURCE_LOOP_FRAME_COUNT
         current_coordinates = source_coordinates[configuration_index, source_loop_frame_index]
         current_luminances = source_luminances[configuration_index, source_loop_frame_index]
         transition_start_frame_index = \
-            PRESENTATION_SLOT_TRANSITION_START_FRAME_INDICES[presentation_index]
+            slot_transition_start_frame_indices[presentation_index]
         if local_frame_index < transition_start_frame_index:
             coordinates[global_frame_index] = current_coordinates
             luminances[global_frame_index] = current_luminances
             continue
         next_presentation_index = \
-            (presentation_index + 1) % PRESENTATION_CONFIGURATION_COUNT
+            (presentation_index + 1) % configuration_count
         next_configuration_index = \
-            PRESENTATION_CONFIGURATION_SEQUENCE[next_presentation_index]
+            configuration_sequence[next_presentation_index]
         next_coordinates = source_coordinates[next_configuration_index, source_loop_frame_index]
         next_luminances = source_luminances[next_configuration_index, source_loop_frame_index]
         progress = (local_frame_index - transition_start_frame_index + 1) / \
@@ -343,6 +322,59 @@ def prepare_moving_configuration_loop(
         luminances[global_frame_index] = np.rint(
             current_luminances * (1 - eased) + next_luminances * eased).astype(np.uint8)
     return np.ascontiguousarray(coordinates), np.ascontiguousarray(luminances)
+
+
+def presentation_profile(sequence_id: str) -> dict[str, object]:
+    if sequence_id == "full":
+        configuration_sequence = (0, 1, 2, 1)
+        slot_hold_seconds = (5, 2.5, 2, 2.5)
+        expected_combined_loop_seconds = 180
+    elif sequence_id == "side-tilt":
+        configuration_sequence = (0, 1)
+        slot_hold_seconds = (6, 2.5)
+        expected_combined_loop_seconds = 450
+    else:
+        raise RuntimeError(f"Unsupported Luminet presentation sequence: {sequence_id}")
+    if any(index < 0 or index >= SOURCE_CONFIGURATION_COUNT
+           for index in configuration_sequence):
+        raise RuntimeError("Luminet presentation configuration index drifted")
+    slot_duration_seconds = tuple(
+        hold_seconds + TRANSITION_SECONDS
+        for hold_seconds in slot_hold_seconds
+    )
+    slot_frame_counts = tuple(
+        round(duration * FRAMES_PER_SECOND)
+        for duration in slot_duration_seconds
+    )
+    slot_transition_start_frame_indices = tuple(
+        frame_count - TRANSITION_FRAME_COUNT
+        for frame_count in slot_frame_counts
+    )
+    slot_start_frame_indices = tuple(
+        sum(slot_frame_counts[:index])
+        for index in range(len(configuration_sequence))
+    )
+    sequence_frame_count = sum(slot_frame_counts)
+    combined_loop_frame_count = math.lcm(
+        SOURCE_LOOP_FRAME_COUNT, sequence_frame_count)
+    combined_loop_seconds = combined_loop_frame_count / FRAMES_PER_SECOND
+    if combined_loop_seconds != expected_combined_loop_seconds:
+        raise RuntimeError("Luminet presentation combined-loop closure drifted")
+    return {
+        "id": sequence_id,
+        "configurationSequence": configuration_sequence,
+        "configurationCount": len(configuration_sequence),
+        "slotHoldSeconds": slot_hold_seconds,
+        "slotDurationSeconds": slot_duration_seconds,
+        "slotFrameCounts": slot_frame_counts,
+        "slotTransitionStartFrameIndices": slot_transition_start_frame_indices,
+        "slotStartFrameIndices": slot_start_frame_indices,
+        "sequenceFrameCount": sequence_frame_count,
+        "sequenceSeconds": sequence_frame_count / FRAMES_PER_SECOND,
+        "combinedLoopFrameCount": combined_loop_frame_count,
+        "combinedLoopSeconds": combined_loop_seconds,
+        "frameCount": combined_loop_frame_count,
+    }
 
 
 def available_periodic_orbits() -> tuple[np.ndarray, np.ndarray]:
@@ -532,6 +564,7 @@ def render_oracle(frame: np.ndarray, luminances: np.ndarray, output_path: pathli
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--sequence", choices=("full", "side-tilt"), default="full")
     parser.add_argument("--source-root", required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--output", required=True)

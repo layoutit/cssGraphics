@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 import { createBlackHolePreparedPlayer } from "./preparedPlayback.mjs";
+import { resolveBlackHoleLocalPlaybackMode } from "./localPlayback.mjs";
 import { mountPreparedBlackHoleSnapshot } from "./polycssScene.mjs";
 import {
   createBlackHolePreparedBankWindow,
@@ -9,10 +10,14 @@ import {
   loadBlackHolePreparedSnapshot,
 } from "./preparedStream.mjs";
 import { installBlackHoleStagePresentation } from "./stagePresentation.mjs";
+import { blackHolePresentationProfile } from
+  "../shared/cssblackhole/presentationProfiles.mjs";
 
 export function mountBlackHoleClient(host) {
   let shouldPlay = true;
   let destroyed = false;
+  const localPlaybackMode = resolveBlackHoleLocalPlaybackMode(window.location);
+  const presentationProfile = blackHolePresentationProfile(localPlaybackMode ?? "full");
   const state = {
     ready: false,
     errors: [],
@@ -22,6 +27,8 @@ export function mountBlackHoleClient(host) {
     player: null,
     dom: null,
     presentation: null,
+    localPlaybackMode,
+    presentationProfile: presentationProfile.id,
   };
   const controller = Object.freeze({
     pause() {
@@ -56,20 +63,23 @@ export function mountBlackHoleClient(host) {
   return controller;
 
   async function main() {
-    const metadata = await fetchJson("/cssblackhole/prepared.json");
+    const metadata = await fetchJson(`${presentationProfile.assetRoot}/prepared.json`);
     if (metadata?.schema !== "cssblackhole-prepared-scene@1" ||
         metadata.status !== "ready" ||
+        (metadata.presentationProfile ?? "full") !== presentationProfile.id ||
+        (metadata.assetRoot ?? "/cssblackhole") !== presentationProfile.assetRoot ||
         metadata.renderer?.kind !== "retained-dom-polycss-prepared-playback" ||
         metadata.renderer.runtimePhysics !== false ||
         metadata.renderer.runtimeRasterization !== false ||
         metadata.renderer.retainedPointLeafCount !== 1979 ||
         metadata.viewport?.width !== 800 ||
         metadata.viewport?.height !== 600 ||
-        metadata.presentation?.orbitalSpeedScale !== 0.5 ||
+        metadata.presentation?.orbitalSpeedScale !== 0.25 ||
+        (metadata.presentation?.profile ?? "full") !== presentationProfile.id ||
         JSON.stringify(metadata.presentation?.slotHoldSeconds) !==
-          JSON.stringify([6, 2.5, 1, 2.5]) ||
+          JSON.stringify(presentationProfile.holdSeconds) ||
         JSON.stringify(metadata.presentation?.slotDurationSeconds) !==
-          JSON.stringify([8, 4.5, 3, 4.5]) ||
+          JSON.stringify(presentationProfile.durationSeconds) ||
         metadata.presentation?.transitionSeconds !== 2 ||
         metadata.presentation?.publicationYearPointCount !== 1979 ||
         metadata.presentation?.displayPowerGamma !== 0.35 ||
@@ -170,6 +180,8 @@ function installDebugApi(state, controller) {
           transitionCadenceSecondsBySlot:
             state.catalog.configurationLoop.transitionCadenceSecondsBySlot,
           transitionDurationSeconds: state.catalog.configurationLoop.transitionSeconds,
+          localPlaybackMode: state.localPlaybackMode,
+          presentationProfile: state.presentationProfile,
           pointSize: 2,
           pointSizePolicy: "2px-all-resolution-tiers",
           cameraMode: "fixed",

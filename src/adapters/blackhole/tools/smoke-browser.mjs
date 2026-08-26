@@ -252,11 +252,11 @@ function assertSmoke(report) {
       report.initial.stats?.configurationCount !== 3 ||
       report.initial.stats?.sourceFramesPerSecond !== 60 ||
       report.initial.stats?.framesPerSecond !== 60 ||
-      report.initial.stats?.orbitalSpeedScale !== 0.5 ||
+      report.initial.stats?.orbitalSpeedScale !== 0.25 ||
       JSON.stringify(report.initial.stats?.presentationSlotHoldSeconds) !==
-        JSON.stringify([6, 2.5, 1, 2.5]) ||
+        JSON.stringify([5, 2.5, 2, 2.5]) ||
       JSON.stringify(report.initial.stats?.transitionCadenceSecondsBySlot) !==
-        JSON.stringify([8, 4.5, 3, 4.5]) ||
+        JSON.stringify([7, 4.5, 4, 4.5]) ||
       report.initial.stats?.transitionDurationSeconds !== 2 ||
       report.initial.leafCount !== 1979 ||
       report.initial.inlineTransformCount !== 1979 ||
@@ -269,8 +269,8 @@ function assertSmoke(report) {
       report.initial.stats?.runtimeDomReconstructionCount !== 0 ||
       report.initial.stats?.materializedBlockTransformCharacterLimit !== 3_200_000 ||
       report.initial.stats?.materializedBlockScheduleByteLimit !== 260_000 ||
-      report.initial.stats?.maximumPreparedBlockTransformCharacters !== 3_159_406 ||
-      report.initial.stats?.maximumPreparedBlockScheduleBytes !== 253_720 ||
+      report.initial.stats?.maximumPreparedBlockTransformCharacters !== 3_159_508 ||
+      report.initial.stats?.maximumPreparedBlockScheduleBytes !== 249_592 ||
       report.initial.stats?.retainedMaterializedBlockCount !== 1 ||
       report.initial.stats?.retainedMaterializedTransformBytes > 3_200_000 ||
       report.initial.stats?.retainedMaterializedScheduleBytes > 260_000 ||

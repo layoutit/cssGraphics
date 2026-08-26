@@ -8,11 +8,15 @@ import { brotliDecompressSync } from "node:zlib";
 import sharp from "sharp";
 import sourceLock from "../notes/references/source-lock.json" with { type: "json" };
 import {
-  CSSBLACKHOLE_OPACITY_ENCODING,
   CSSBLACKHOLE_OPACITY_PALETTE,
-  decodeBlackHolePreparedBank,
   quantizeBlackHolePreparedOpacityIndex,
 } from "../src/shared/cssblackhole/preparedBlockTransport.mjs";
+import {
+  CSSBLACKHOLE_RAIL_ENCODING,
+  readBlackHolePreparedRailAsset,
+  readBlackHolePreparedRepairBank,
+  unpackBlackHolePreparedRailDescriptor,
+} from "../src/shared/cssblackhole/preparedRailTransport.mjs";
 import { selectNonOverlappingLuminetPointFrames } from
   "../tools/select-luminet-points.mjs";
 
@@ -56,6 +60,19 @@ test("Luminet adapter owns a standalone prepared cssblackhole contract", async (
   assert.equal(catalog.bankFrameCount, 300);
   assert.equal(catalog.bankCount, 36);
   assert.equal(catalog.blockCount, 180);
+  assert.equal(catalog.transport.encoding, CSSBLACKHOLE_RAIL_ENCODING);
+  assert.equal(catalog.transport.runtimeSourcePhysics, false);
+  assert.equal(catalog.transport.runtimeCollisionSearch, false);
+  assert.equal(catalog.transport.workerRailLookupMaterialization, true);
+  assert.deepEqual(catalog.sourceRails.map(({ configurationIndex, byteLength }) =>
+    ({ configurationIndex, byteLength })), [
+    { configurationIndex: 0, byteLength: 189_802 },
+    { configurationIndex: 1, byteLength: 218_798 },
+    { configurationIndex: 2, byteLength: 230_258 },
+  ]);
+  assert.equal(catalog.banks.reduce((sum, bank) => sum + bank.byteLength, 0), 121_741);
+  assert.equal(catalog.banks.reduce(
+    (sum, bank) => sum + bank.preparedCollisionRepairCount, 0), 303_464);
   assert.deepEqual(catalog.materialization, {
     schema: "cssblackhole-bounded-materialized-block@1",
     policy: "galaxy-style-multiple-playback-blocks-per-transport-bank",
@@ -333,12 +350,28 @@ test("prepared transport reproduces the pinned moving coordinate and flux state"
   assert.deepEqual(catalog.banks.map(({ sourceLoopStartFrameIndex }) => sourceLoopStartFrameIndex),
     Array.from({ length: 36 }, (_, index) => index * 300));
   const descriptor = catalog.banks[0];
-  assert.equal(descriptor.opacityEncoding, CSSBLACKHOLE_OPACITY_ENCODING);
-  const expanded = brotliDecompressSync(await readFile(resolve(
-    generatedRoot, "banks", descriptor.assetUrl.split("/").at(-1))));
-  const bank = decodeBlackHolePreparedBank(expanded, descriptor, catalog);
-  const firstBlock = bank.decodedBlocks[0].coordinates;
-  const firstBlockBytes = Buffer.from(firstBlock.buffer, firstBlock.byteOffset, firstBlock.byteLength);
+  assert.equal(descriptor.opacityEncoding,
+    "prepared-source-rail-rgb8-to-nearest-decile-materialization");
+  const [expanded, ...expandedRailAssets] = await Promise.all([
+    brotliDecompressSync(await readFile(resolve(
+      generatedRoot, "banks", descriptor.assetUrl.split("/").at(-1)))),
+    ...catalog.sourceRails.map(async (railDescriptor) => brotliDecompressSync(await readFile(resolve(
+      generatedRoot, "rails", railDescriptor.assetUrl.split("/").at(-1))))),
+  ]);
+  const repairBank = readBlackHolePreparedRepairBank(expanded, descriptor, catalog);
+  const rails = expandedRailAssets.map((bytes, configurationIndex) =>
+    readBlackHolePreparedRailAsset(bytes, catalog.sourceRails[configurationIndex], catalog));
+  const firstBlock = reconstructRailBlock(catalog, rails, repairBank, 0, 0);
+  assert.equal(repairBank.frameOffsets.at(-1), descriptor.preparedCollisionRepairCount);
+  for (let configurationIndex = 0; configurationIndex < rails.length; configurationIndex += 1) {
+    assert.equal(sha256(expandedRailAssets[configurationIndex]),
+      catalog.sourceRails[configurationIndex].decodedSha256);
+  }
+  assert.equal(sha256(expanded), descriptor.decodedSha256);
+  const firstBlockBytes = Buffer.from(
+    firstBlock.coordinates.buffer,
+    firstBlock.coordinates.byteOffset,
+    firstBlock.coordinates.byteLength);
   const preparedFirstBlockBytes = Buffer.from(
     preparedSelection.selectedCoordinates.buffer,
     preparedSelection.selectedCoordinates.byteOffset,
@@ -347,7 +380,7 @@ test("prepared transport reproduces the pinned moving coordinate and flux state"
 
   const reconstructed = Buffer.alloc(catalog.blockFrameCount * catalog.starCount);
   const current = new Uint8Array(catalog.starCount);
-  const opacity = bank.decodedBlocks[0].opacitySchedule;
+  const opacity = firstBlock.opacitySchedule;
   for (let frameIndex = 0; frameIndex < catalog.blockFrameCount; frameIndex += 1) {
     for (let assignmentIndex = opacity.frameOffsets[frameIndex];
       assignmentIndex < opacity.frameOffsets[frameIndex + 1]; assignmentIndex += 1) {
@@ -362,6 +395,40 @@ test("prepared transport reproduces the pinned moving coordinate and flux state"
     selectedSourceLuminances, quantizeBlackHolePreparedOpacityIndex);
   assert.equal(sha256(reconstructed), sha256(expectedOpacityIndices));
   assert.ok(reconstructed.every((opacityIndex) => opacityIndex < 11));
+  for (const blockIndex of [5, 11, 12, 15, 19, 35, 179]) {
+    const bankIndex = Math.floor(blockIndex / catalog.blocksPerBank);
+    const bankBlockIndex = blockIndex % catalog.blocksPerBank;
+    const bankDescriptor = catalog.banks[bankIndex];
+    const repairBytes = brotliDecompressSync(await readFile(resolve(
+      generatedRoot, "banks", bankDescriptor.assetUrl.split("/").at(-1))));
+    const preparedRepairBank = readBlackHolePreparedRepairBank(
+      repairBytes, bankDescriptor, catalog);
+    const block = reconstructRailBlock(
+      catalog, rails, preparedRepairBank, blockIndex, bankBlockIndex);
+    const expectedCoordinateStart = blockIndex * catalog.blockFrameCount * catalog.starCount * 2;
+    const expectedCoordinateEnd = expectedCoordinateStart +
+      catalog.blockFrameCount * catalog.starCount * 2;
+    const expectedCoordinateBytes = Buffer.from(
+      preparedSelection.selectedCoordinates.buffer,
+      preparedSelection.selectedCoordinates.byteOffset + expectedCoordinateStart * 4,
+      (expectedCoordinateEnd - expectedCoordinateStart) * 4);
+    assert.equal(sha256(Buffer.from(block.coordinates.buffer)), sha256(expectedCoordinateBytes),
+      `rail coordinates diverged in block ${blockIndex}`);
+    const expandedOpacity = expandOpacitySchedule(
+      block.opacitySchedule, catalog.blockFrameCount, catalog.starCount);
+    const expectedLuminances = selectSourcePointFrames(
+      sourceLuminances,
+      blockIndex * catalog.blockFrameCount,
+      catalog.blockFrameCount,
+      catalog.pointSelection.sourcePointCount,
+      1,
+      catalog.pointSelection.sourcePointIndices,
+      catalog.publication.sourceFrameStep,
+    );
+    assert.equal(sha256(expandedOpacity), sha256(Uint8Array.from(
+      expectedLuminances, quantizeBlackHolePreparedOpacityIndex)),
+    `rail opacity diverged in block ${blockIndex}`);
+  }
   assert.ok(sourceLuminances.reduce((minimum, value) => Math.min(minimum, value), 255) >=
     Math.floor(0.22 * 255));
   const coordinateFrameBytes = catalog.pointSelection.sourcePointCount * 2 * 4;
@@ -433,4 +500,114 @@ function selectSourcePointFrames(
     }
   }
   return selected;
+}
+
+function reconstructRailBlock(catalog, rails, repairBank, blockIndex, bankBlockIndex) {
+  const identity = rails[0];
+  const coordinates = new Int32Array(catalog.blockFrameCount * catalog.starCount * 2);
+  const opacityValues = new Uint8Array(catalog.blockFrameCount * catalog.starCount);
+  const descriptors = Array.from(
+    identity.descriptors, unpackBlackHolePreparedRailDescriptor);
+  const repairDirections = [
+    [1, 0], [-1, 0], [0, 1], [0, -1],
+    [1, 1], [-1, 1], [1, -1], [-1, -1],
+  ];
+  for (let localFrameIndex = 0; localFrameIndex < catalog.blockFrameCount; localFrameIndex += 1) {
+    const globalFrameIndex = blockIndex * catalog.blockFrameCount + localFrameIndex;
+    const sequenceFrameIndex = globalFrameIndex %
+      catalog.configurationLoop.presentationSequenceFrameCount;
+    const presentationIndex = catalog.configurationLoop.presentationSlots.findIndex((slot) =>
+      sequenceFrameIndex >= slot.startFrameIndex &&
+      sequenceFrameIndex < slot.startFrameIndex + slot.frameCount);
+    const slot = catalog.configurationLoop.presentationSlots[presentationIndex];
+    const slotFrameIndex = sequenceFrameIndex - slot.startFrameIndex;
+    const transitionIndex = slotFrameIndex - slot.transitionStartFrameIndex;
+    const transitioning = transitionIndex >= 0;
+    const nextSlot = catalog.configurationLoop.presentationSlots[
+      (presentationIndex + 1) % catalog.configurationLoop.presentationSlots.length];
+    const eased = transitioning ? identity.easing[transitionIndex] : 0;
+    const repairFrameIndex = bankBlockIndex * catalog.blockFrameCount + localFrameIndex;
+    let repairIndex = repairBank.frameOffsets[repairFrameIndex];
+    const repairEnd = repairBank.frameOffsets[repairFrameIndex + 1];
+    for (let leafIndex = 0; leafIndex < catalog.starCount; leafIndex += 1) {
+      const particle = descriptors[leafIndex];
+      const sourceFrameIndex = globalFrameIndex % identity.sourceFrameCount;
+      const phaseFrameIndex = (particle.phaseFrameIndex +
+        identity.periodicOrbitCounts[particle.radiusIndex] * sourceFrameIndex) %
+        identity.sourceFrameCount;
+      const currentRails = rails[slot.stateIndex];
+      const currentIndex = railIndex(identity, particle, phaseFrameIndex);
+      let x = currentRails.coordinates[currentIndex * 2];
+      let y = currentRails.coordinates[currentIndex * 2 + 1];
+      let luminance = currentRails.luminances[currentIndex];
+      if (transitioning) {
+        const nextRails = rails[nextSlot.stateIndex];
+        const nextIndex = railIndex(identity, particle, phaseFrameIndex);
+        x = roundTiesToEven(x * (1 - eased) + nextRails.coordinates[nextIndex * 2] * eased);
+        y = roundTiesToEven(y * (1 - eased) + nextRails.coordinates[nextIndex * 2 + 1] * eased);
+        luminance = roundTiesToEven(
+          luminance * (1 - eased) + nextRails.luminances[nextIndex] * eased);
+      }
+      if (repairIndex < repairEnd && (repairBank.packedRepairs[repairIndex] & 0x7ff) === leafIndex) {
+        const repair = repairBank.packedRepairs[repairIndex];
+        const direction = repairDirections[repair >> 11 & 0x7];
+        const radius = (repair >> 14 & 0x7) + 1;
+        x += direction[0] * radius * 10;
+        y += direction[1] * radius * 10;
+        repairIndex += 1;
+      }
+      const sampleIndex = localFrameIndex * catalog.starCount + leafIndex;
+      coordinates[sampleIndex * 2] = x;
+      coordinates[sampleIndex * 2 + 1] = y;
+      opacityValues[sampleIndex] = quantizeBlackHolePreparedOpacityIndex(luminance);
+    }
+    assert.equal(repairIndex, repairEnd);
+  }
+  const frameOffsets = new Uint32Array(catalog.blockFrameCount + 1);
+  const leafIndices = [];
+  const opacityIndices = [];
+  for (let frameIndex = 0; frameIndex < catalog.blockFrameCount; frameIndex += 1) {
+    for (let leafIndex = 0; leafIndex < catalog.starCount; leafIndex += 1) {
+      const sampleIndex = frameIndex * catalog.starCount + leafIndex;
+      if (frameIndex > 0 && opacityValues[sampleIndex] ===
+          opacityValues[sampleIndex - catalog.starCount]) continue;
+      leafIndices.push(leafIndex);
+      opacityIndices.push(opacityValues[sampleIndex]);
+    }
+    frameOffsets[frameIndex + 1] = leafIndices.length;
+  }
+  return Object.freeze({
+    coordinates,
+    opacitySchedule: Object.freeze({
+      frameOffsets,
+      leafIndices: Uint16Array.from(leafIndices),
+      opacityIndices: Uint8Array.from(opacityIndices),
+    }),
+  });
+}
+
+function railIndex(rails, particle, phaseFrameIndex) {
+  return ((particle.order * rails.radiusCount + particle.radiusIndex) *
+    rails.sourceFrameCount + phaseFrameIndex);
+}
+
+function roundTiesToEven(value) {
+  const lower = Math.floor(value);
+  const fraction = value - lower;
+  if (fraction < 0.5) return lower;
+  if (fraction > 0.5) return lower + 1;
+  return lower % 2 === 0 ? lower : lower + 1;
+}
+
+function expandOpacitySchedule(schedule, frameCount, starCount) {
+  const result = new Uint8Array(frameCount * starCount);
+  const current = new Uint8Array(starCount);
+  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+    for (let assignmentIndex = schedule.frameOffsets[frameIndex];
+      assignmentIndex < schedule.frameOffsets[frameIndex + 1]; assignmentIndex += 1) {
+      current[schedule.leafIndices[assignmentIndex]] = schedule.opacityIndices[assignmentIndex];
+    }
+    result.set(current, frameIndex * starCount);
+  }
+  return result;
 }

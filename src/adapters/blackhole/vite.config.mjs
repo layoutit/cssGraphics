@@ -15,7 +15,7 @@ function createBlackHolePreparedBrotliPlugin() {
     server.middlewares.use(async (request, response, next) => {
       if (!request.url || !["GET", "HEAD"].includes(request.method ?? "GET")) return next();
       const pathname = new URL(request.url, "http://css.graphics").pathname;
-      if (!/^\/cssblackhole(?:-side-tilt)?\/banks\/bank-\d{2}-[a-f0-9]{64}\.bin\.br$/u
+      if (!/^\/cssblackhole(?:-side-tilt)?\/(?:banks\/bank-\d{2}|rails\/rails-\d)-[a-f0-9]{64}\.bin\.br$/u
         .test(pathname)) {
         return next();
       }

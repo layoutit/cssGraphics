@@ -6,10 +6,11 @@ import test from "node:test";
 const adapterRoot = new URL("../", import.meta.url);
 
 test("Luminet owns the shared css.graphics shell at its canonical route", async () => {
-  const [html, config, main] = await Promise.all([
+  const [html, config, main, netlify] = await Promise.all([
     readFile(new URL("index.html", adapterRoot), "utf8"),
     readFile(new URL("vite.config.mjs", adapterRoot), "utf8"),
     readFile(new URL("src/main.mjs", adapterRoot), "utf8"),
+    readFile(new URL("../../../netlify.toml", adapterRoot), "utf8"),
   ]);
   assert.match(html, /cssgraphics-examples-sidebar/u);
   assert.match(html, /https:\/\/css\.graphics\/luminet\//u);
@@ -17,7 +18,10 @@ test("Luminet owns the shared css.graphics shell at its canonical route", async 
   assert.match(html, /<main class="example-stage"><\/main>/u);
   assert.match(config, /createExamplesShellPlugin\("luminet"\)/u);
   assert.match(config, /deployBuild \? "\/luminet\/" : "\/"/u);
+  assert.match(config, /rails\\\/rails-\\d/u);
   assert.match(main, /site\/examples-shell-client\.mjs/u);
+  assert.match(netlify,
+    /for = "\/cssblackhole\/rails\/\*\.bin\.br"[\s\S]*?Content-Encoding = "br"/u);
 });
 
 test("Luminet keeps one retained point topology and no alternate renderer", async () => {

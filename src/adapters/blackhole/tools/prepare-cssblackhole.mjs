@@ -18,6 +18,13 @@ import {
   quantizeBlackHolePreparedOpacityIndex,
 } from "../src/shared/cssblackhole/preparedBlockTransport.mjs";
 import {
+  CSSBLACKHOLE_RAIL_ASSET_SCHEMA,
+  CSSBLACKHOLE_RAIL_ENCODING,
+  CSSBLACKHOLE_REPAIR_BANK_SCHEMA,
+  encodeBlackHolePreparedRailAsset,
+  encodeBlackHolePreparedRepairBank,
+} from "../src/shared/cssblackhole/preparedRailTransport.mjs";
+import {
   CSSBLACKHOLE_DIRECT_IMAGE_DOT_COLORS,
   CSSBLACKHOLE_GALACTIC_DOT_COLORS,
   CSSBLACKHOLE_GHOST_IMAGE_DOT_COLORS,
@@ -39,6 +46,7 @@ const outputRoot = resolve(generatedPublicDir, presentationProfile.assetDirector
 const stagingRoot = resolve(
   generatedPublicDir, `.${presentationProfile.assetDirectory}-${process.pid}`);
 const banksRoot = resolve(stagingRoot, "banks");
+const railsRoot = resolve(stagingRoot, "rails");
 const sourceRoot = resolve(repositoryRoot, `.local/sources/luminet-${sourceLock.commit.slice(0, 7)}`);
 const venvRoot = resolve(repositoryRoot, `.local/venvs/luminet-${sourceLock.commit.slice(0, 7)}`);
 const pythonPath = process.env.CSSBLACKHOLE_PYTHON || resolve(venvRoot, "bin/python");
@@ -48,6 +56,12 @@ const luminancePath = resolve(repositoryRoot,
   `.local/cache/cssblackhole-luminet${presentationProfile.cacheSuffix}-luminance.bin`);
 const stateMetadataPath = resolve(repositoryRoot,
   `.local/cache/cssblackhole-luminet${presentationProfile.cacheSuffix}-state.json`);
+const railCoordinatePath = resolve(repositoryRoot,
+  ".local/cache/cssblackhole-luminet-source-rail-coordinates-u16.bin");
+const railLuminancePath = resolve(repositoryRoot,
+  ".local/cache/cssblackhole-luminet-source-rail-luminance.bin");
+const railMetadataPath = resolve(repositoryRoot,
+  ".local/cache/cssblackhole-luminet-source-rails.json");
 const oraclePpmPath = resolve(repositoryRoot,
   `build/oracle/cssblackhole/luminet${presentationProfile.cacheSuffix}-frame-0000.ppm`);
 const transportSeed = 6477;
@@ -75,6 +89,8 @@ const streamFrameCount = bankCount * bankFrameCount;
 const preparedOpacityPalette = CSSBLACKHOLE_OPACITY_PALETTE;
 const materializedBlockTransformCharacterLimit = 3_200_000;
 const materializedBlockScheduleByteLimit = 260_000;
+const useRailTransport = presentationProfile.id === "full" &&
+  process.env.CSSBLACKHOLE_GENERIC_TRANSPORT !== "1";
 
 if (endianness() !== "LE") throw new Error("Luminet preparation requires little endian");
 if (streamFrameCount !== presentationProfile.streamFrameCount ||
@@ -129,11 +145,75 @@ if (materialization.maximumTransformCharacters > materializedBlockTransformChara
 
 await rm(stagingRoot, { recursive: true, force: true });
 await mkdir(banksRoot, { recursive: true });
+if (useRailTransport) await mkdir(railsRoot, { recursive: true });
 const spaceContext = await prepareBlackHoleSpaceContext(stagingRoot, {
   selectedCoordinates,
   starCount,
   sourceState,
 });
+let sourceRails = [];
+if (useRailTransport) {
+  let railCache = await readPreparedRailCache();
+  if (railCache === null) {
+    await ensurePythonEnvironment();
+    await runRailPreparation();
+    railCache = await readPreparedRailCache();
+  }
+  if (railCache === null) throw new Error("Exact prepared Luminet rail cache is unavailable");
+  const coordinateValuesPerConfiguration = railCache.metadata.imageOrderCount *
+    railCache.metadata.radiusCount * railCache.metadata.sourceFrameCount * 2;
+  const luminanceValuesPerConfiguration = railCache.metadata.imageOrderCount *
+    railCache.metadata.radiusCount * railCache.metadata.sourceFrameCount;
+  for (let configurationIndex = 0;
+    configurationIndex < configurationCount;
+    configurationIndex += 1) {
+    const decoded = encodeBlackHolePreparedRailAsset({
+      transportSeed,
+      starCount,
+      configurationCount,
+      sourceConfigurationIndex: configurationIndex,
+      imageOrderCount: railCache.metadata.imageOrderCount,
+      radiusCount: railCache.metadata.radiusCount,
+      sourceFrameCount: railCache.metadata.sourceFrameCount,
+      transitionFrameCount: presentationProfile.transitionFrameCount,
+      railCoordinates: railCache.coordinates.subarray(
+        configurationIndex * coordinateValuesPerConfiguration,
+        (configurationIndex + 1) * coordinateValuesPerConfiguration),
+      railLuminances: railCache.luminances.subarray(
+        configurationIndex * luminanceValuesPerConfiguration,
+        (configurationIndex + 1) * luminanceValuesPerConfiguration),
+      particleOrders: railCache.metadata.particleOrders,
+      particleRadiusIndices: railCache.metadata.particleRadiusIndices,
+      particlePhaseFrameIndices: railCache.metadata.particlePhaseFrameIndices,
+      particlePeriodicOrbitCounts: railCache.metadata.particlePeriodicOrbitCounts,
+      selectedSourcePointIndices,
+      periodicOrbitCounts: expectedPeriodicOrbitCounts,
+    });
+    const compressed = compressPreparedBytes(decoded);
+    const hash = sha256(compressed);
+    const filename = `rails-${configurationIndex}-${hash}.bin.br`;
+    await writeFile(resolve(railsRoot, filename), compressed);
+    sourceRails.push(Object.freeze({
+      schema: CSSBLACKHOLE_RAIL_ASSET_SCHEMA,
+      configurationIndex,
+      assetUrl: `${assetRoot}/rails/${filename}`,
+      byteLength: compressed.byteLength,
+      sha256: hash,
+      decodedByteLength: decoded.byteLength,
+      decodedSha256: sha256(decoded),
+      contentEncoding: "br",
+      imageOrderCount: railCache.metadata.imageOrderCount,
+      radiusCount: railCache.metadata.radiusCount,
+      sourceFrameCount: railCache.metadata.sourceFrameCount,
+      coordinateEncoding: railCache.metadata.coordinateEncoding,
+      luminanceEncoding: railCache.metadata.luminanceEncoding,
+      selectedParticleDescriptorEncoding: "u32-phase13-radius4-order1",
+      transitionEasingEncoding: "prepared-f64le-smoothstep-120-samples",
+      periodicOrbitCountEncoding: "radius-major-u8",
+    }));
+  }
+  sourceRails = Object.freeze(sourceRails);
+}
 const banks = [];
 for (let bankIndex = 0; bankIndex < bankCount; bankIndex += 1) {
   const sourceBankFrameCount = bankFrameCount * sourceFrameStep;
@@ -144,7 +224,23 @@ for (let bankIndex = 0; bankIndex < bankCount; bankIndex += 1) {
   const bankLuminances = selectSourceFrames(
     selectedLuminances, sourceLoopStartFrameIndex, bankFrameCount, starCount, sourceFrameStep,
     sourceState.frameCount);
-  const decoded = encodeBlackHolePreparedBank({
+  const decoded = useRailTransport ? encodeBlackHolePreparedRepairBank({
+    transportSeed,
+    starCount,
+    bankIndex,
+    startFrameIndex: bankIndex * bankFrameCount,
+    frameCount: bankFrameCount,
+    blockFrameCount,
+    rawCoordinates: selectSourcePointFrames(
+      coordinates,
+      sourceLoopStartFrameIndex,
+      bankFrameCount,
+      sourcePointCount,
+      selectedSourcePointIndices,
+      sourceState.frameCount,
+    ),
+    repairedCoordinates: bankCoordinates,
+  }) : encodeBlackHolePreparedBank({
     transportSeed,
     starCount,
     configurationCount,
@@ -156,13 +252,7 @@ for (let bankIndex = 0; bankIndex < bankCount; bankIndex += 1) {
     luminances: bankLuminances,
   });
   const decodedView = new DataView(decoded.buffer, decoded.byteOffset, decoded.byteLength);
-  const compressed = brotliCompressSync(decoded, {
-    params: {
-      [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
-      [zlibConstants.BROTLI_PARAM_MODE]: zlibConstants.BROTLI_MODE_GENERIC,
-      [zlibConstants.BROTLI_PARAM_SIZE_HINT]: decoded.byteLength,
-    },
-  });
+  const compressed = compressPreparedBytes(decoded);
   const hash = sha256(compressed);
   const filename = `bank-${String(bankIndex).padStart(2, "0")}-${hash}.bin.br`;
   await writeFile(resolve(banksRoot, filename), compressed);
@@ -182,13 +272,23 @@ for (let bankIndex = 0; bankIndex < bankCount; bankIndex += 1) {
     maximumCoordinateQuantizationErrorPixels:
       CSSBLACKHOLE_MAXIMUM_COORDINATE_QUANTIZATION_ERROR_PIXELS,
     blockCount: blocksPerBank,
-    visibleSampleCount: decodedView.getUint32(40, true),
+    ...(useRailTransport ? {
+      schema: CSSBLACKHOLE_REPAIR_BANK_SCHEMA,
+      requiredSourceConfigurationIndices: requiredSourceConfigurationIndices(
+        bankIndex * bankFrameCount, bankFrameCount, sourceState.configurationSequence),
+      preparedCollisionRepairCount: decodedView.getUint32(28, true),
+      coordinateEncoding:
+        "prepared-source-rail-lookup-plus-sparse-prepared-collision-repair",
+      opacityEncoding: "prepared-source-rail-rgb8-to-nearest-decile-materialization",
+    } : {
+      visibleSampleCount: decodedView.getUint32(40, true),
+      coordinateEncoding:
+        "leaf-major-axis-split-signed-zigzag-varint-second-difference-decimal1",
+      opacityAssignmentCount: decodedView.getUint32(44, true),
+      sourceLuminanceSampleCount: bankFrameCount * starCount,
+      opacityEncoding: CSSBLACKHOLE_OPACITY_ENCODING,
+    }),
     sourceSampleCount: bankFrameCount * starCount,
-    coordinateEncoding:
-      "leaf-major-axis-split-signed-zigzag-varint-second-difference-decimal1",
-    opacityAssignmentCount: decodedView.getUint32(44, true),
-    sourceLuminanceSampleCount: bankFrameCount * starCount,
-    opacityEncoding: CSSBLACKHOLE_OPACITY_ENCODING,
   }));
 }
 
@@ -358,15 +458,20 @@ const catalog = Object.freeze({
   preparedOpacityPalette,
   transport: Object.freeze({
     schema: "cssblackhole-prepared-bank-transport@1",
-    encoding: CSSBLACKHOLE_BANK_ENCODING,
+    encoding: useRailTransport ? CSSBLACKHOLE_RAIL_ENCODING : CSSBLACKHOLE_BANK_ENCODING,
     contentEncoding: "br",
     bankSeconds: bankFrameCount / framesPerSecond,
     coordinateScale: 10,
     maximumCoordinateQuantizationErrorPixels:
       CSSBLACKHOLE_MAXIMUM_COORDINATE_QUANTIZATION_ERROR_PIXELS,
-    predictor:
+    predictor: useRailTransport ?
+      "shared-source-phase-rails-plus-five-second-prepared-sparse-collision-repair-banks" :
       "independent-five-second-bank-one-second-block-coordinate-second-difference-plus-prepared-sparse-opacity-ranges",
+    runtimeSourcePhysics: false,
+    runtimeCollisionSearch: false,
+    workerRailLookupMaterialization: useRailTransport,
   }),
+  ...(sourceRails.length === 0 ? {} : { sourceRails }),
   configurationLoop,
   luminetPreparedState: sourceState,
   snapshot: Object.freeze({
@@ -433,7 +538,8 @@ await writeFile(resolve(stagingRoot, "prepared.json"), JSON.stringify(prepared))
 await rm(outputRoot, { recursive: true, force: true });
 await rename(stagingRoot, outputRoot);
 
-const compressedBytes = banks.reduce((total, bank) => total + bank.byteLength, 0);
+const compressedBytes = banks.reduce((total, bank) => total + bank.byteLength, 0) +
+  sourceRails.reduce((total, descriptor) => total + descriptor.byteLength, 0);
 process.stdout.write(`${JSON.stringify({
   status: "ready",
   outputRoot,
@@ -448,6 +554,10 @@ process.stdout.write(`${JSON.stringify({
   transitionCadenceSecondsBySlot:
     sourceState.configurationSequence.transitionCadenceSecondsBySlot,
   bankCount,
+  transportEncoding: catalog.transport.encoding,
+  sourceRailCompressedBytes:
+    sourceRails.reduce((total, descriptor) => total + descriptor.byteLength, 0),
+  repairBankCompressedBytes: banks.reduce((total, bank) => total + bank.byteLength, 0),
   compressedBytes,
 }, null, 2)}\n`);
 
@@ -669,12 +779,88 @@ async function runPythonPreparation() {
   });
 }
 
+async function readPreparedRailCache() {
+  try {
+    const [metadataSource, coordinateBytes, luminanceBytes] = await Promise.all([
+      readFile(railMetadataPath, "utf8"), readFile(railCoordinatePath), readFile(railLuminancePath),
+    ]);
+    const metadata = JSON.parse(metadataSource);
+    if (metadata?.schema !== "cssblackhole-luminet-source-rail-cache@1" ||
+        metadata.sourceCommit !== sourceLock.commit || metadata.configurationCount !== 3 ||
+        metadata.imageOrderCount !== 2 || metadata.radiusCount !== 16 ||
+        metadata.sourceFrameCount !== 5_400 || metadata.particleCount !== sourcePointCount ||
+        metadata.coordinateEncoding !==
+          "configuration-order-radius-phase-xy-u16le-decimal1" ||
+        metadata.coordinateByteLength !== coordinateBytes.byteLength ||
+        metadata.coordinateSha256 !== sha256(coordinateBytes) ||
+        metadata.luminanceEncoding !== "configuration-order-radius-phase-u8-rgb8" ||
+        metadata.luminanceByteLength !== luminanceBytes.byteLength ||
+        metadata.luminanceSha256 !== sha256(luminanceBytes) ||
+        metadata.recoveredPreparedSampleCount !== 495_339 ||
+        metadata.sourceSolvedMissingSampleCount !== 23_061 ||
+        ![metadata.particleOrders, metadata.particleRadiusIndices,
+          metadata.particlePhaseFrameIndices, metadata.particlePeriodicOrbitCounts]
+          .every((values) => Array.isArray(values) && values.length === sourcePointCount) ||
+        coordinateBytes.byteLength !== 3 * 2 * 16 * 5_400 * 2 * 2 ||
+        luminanceBytes.byteLength !== 3 * 2 * 16 * 5_400) return null;
+    return Object.freeze({
+      metadata,
+      coordinates: new Uint16Array(
+        coordinateBytes.buffer, coordinateBytes.byteOffset, coordinateBytes.byteLength / 2),
+      luminances: new Uint8Array(
+        luminanceBytes.buffer, luminanceBytes.byteOffset, luminanceBytes.byteLength),
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function runRailPreparation() {
+  const fullCoordinatePath = resolve(
+    repositoryRoot, ".local/cache/cssblackhole-luminet-coordinates.bin");
+  const fullLuminancePath = resolve(
+    repositoryRoot, ".local/cache/cssblackhole-luminet-luminance.bin");
+  const fullStatePath = resolve(
+    repositoryRoot, ".local/cache/cssblackhole-luminet-state.json");
+  if (!await exists(fullCoordinatePath) || !await exists(fullLuminancePath) ||
+      !await exists(fullStatePath)) {
+    throw new Error("Full prepared Luminet cache is required to factor source rails");
+  }
+  await new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn(pythonPath, [
+      resolve(import.meta.dirname, "prepare-luminet-rail-cache.py"),
+      "--preparation", resolve(import.meta.dirname, "prepare-luminet-state.py"),
+      "--source-root", sourceRoot,
+      "--source-commit", sourceLock.commit,
+      "--state", fullStatePath,
+      "--coordinates", fullCoordinatePath,
+      "--luminances", fullLuminancePath,
+      "--coordinate-output", railCoordinatePath,
+      "--luminance-output", railLuminancePath,
+      "--metadata-output", railMetadataPath,
+    ], { stdio: "inherit" });
+    child.once("error", rejectPromise);
+    child.once("exit", (code, signal) => code === 0 ? resolvePromise() :
+      rejectPromise(new Error(`Luminet rail preparation failed: code=${code} signal=${signal}`)));
+  });
+}
+
 async function exists(path) {
   try { await access(path); return true; } catch { return false; }
 }
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function compressPreparedBytes(decoded) {
+  return brotliCompressSync(decoded, {
+    params: {
+      [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
+      [zlibConstants.BROTLI_PARAM_MODE]: zlibConstants.BROTLI_MODE_GENERIC,
+      [zlibConstants.BROTLI_PARAM_SIZE_HINT]: decoded.byteLength,
+    },
+  });
 }
 
 function selectSourceFrames(
@@ -705,4 +891,41 @@ function selectSourcePoints(source, frameCount, sourceCount, valuesPerPoint, poi
     }
   }
   return selected;
+}
+
+function selectSourcePointFrames(
+  source, startFrame, frameCount, sourcePointCount, pointIndices, sourceFrameCount,
+) {
+  const selected = new Int32Array(frameCount * pointIndices.length * 2);
+  for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+    const sourceFrameIndex = (startFrame + frameIndex) % sourceFrameCount;
+    for (let selectedIndex = 0; selectedIndex < pointIndices.length; selectedIndex += 1) {
+      const sourcePointIndex = pointIndices[selectedIndex];
+      const sourceOffset = (sourceFrameIndex * sourcePointCount + sourcePointIndex) * 2;
+      const selectedOffset = (frameIndex * pointIndices.length + selectedIndex) * 2;
+      selected[selectedOffset] = source[sourceOffset];
+      selected[selectedOffset + 1] = source[sourceOffset + 1];
+    }
+  }
+  return selected;
+}
+
+function requiredSourceConfigurationIndices(startFrameIndex, frameCount, configurationSequence) {
+  const required = new Set();
+  for (let frameOffset = 0; frameOffset < frameCount; frameOffset += 1) {
+    const sequenceFrameIndex = (startFrameIndex + frameOffset) %
+      configurationSequence.presentationSequenceFrameCount;
+    const presentationIndex = configurationSequence.presentationSlots.findIndex((slot) =>
+      sequenceFrameIndex >= slot.startFrameIndex &&
+      sequenceFrameIndex < slot.startFrameIndex + slot.frameCount);
+    const slot = configurationSequence.presentationSlots[presentationIndex];
+    if (!slot) throw new Error("Luminet transport bank presentation slot drifted");
+    required.add(slot.stateIndex);
+    if (sequenceFrameIndex - slot.startFrameIndex >= slot.transitionStartFrameIndex) {
+      const nextSlot = configurationSequence.presentationSlots[
+        (presentationIndex + 1) % configurationSequence.presentationSlots.length];
+      required.add(nextSlot.stateIndex);
+    }
+  }
+  return Object.freeze([...required].sort((left, right) => left - right));
 }

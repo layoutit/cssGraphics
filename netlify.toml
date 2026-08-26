@@ -131,6 +131,13 @@
     Content-Encoding = "br"
 
 [[headers]]
+  for = "/cssblackhole/rails/*.bin.br"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Content-Type = "application/octet-stream"
+    Content-Encoding = "br"
+
+[[headers]]
   for = "/cssblackhole/*.json"
   [headers.values]
     Cache-Control = "no-cache"

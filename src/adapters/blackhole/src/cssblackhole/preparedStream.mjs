@@ -7,6 +7,11 @@ import {
   CSSBLACKHOLE_OPACITY_PALETTE,
 } from "../shared/cssblackhole/preparedBlockTransport.mjs";
 import {
+  CSSBLACKHOLE_RAIL_ASSET_SCHEMA,
+  CSSBLACKHOLE_RAIL_ENCODING,
+  CSSBLACKHOLE_REPAIR_BANK_SCHEMA,
+} from "../shared/cssblackhole/preparedRailTransport.mjs";
+import {
   CSSBLACKHOLE_DIRECT_IMAGE_DOT_COLORS,
   CSSBLACKHOLE_GALACTIC_DOT_COLORS,
   CSSBLACKHOLE_GHOST_IMAGE_DOT_COLORS,
@@ -53,6 +58,8 @@ export function createBlackHolePreparedBlockWindow(catalog, activeBlockIndex) {
 export function createBlackHolePreparedStreamLoader(catalog) {
   const worker = new Worker(new URL("./preparedBlockWorker.mjs", import.meta.url), { type: "module" });
   const bankPending = new Map();
+  const railPending = new Map();
+  const registeredRails = new Uint8Array(catalog.configurationCount);
   const registerPending = new Map();
   const registeredBanks = new Set();
   const materializedBlocks = new Map();
@@ -64,6 +71,8 @@ export function createBlackHolePreparedStreamLoader(catalog) {
   let destroyed = false;
   let transportBankFetchCount = 0;
   let transportBankFetchBytes = 0;
+  let sourceRailFetchCount = 0;
+  let sourceRailFetchBytes = 0;
   let registeredBankCount = 0;
   let materializedBlockCount = 0;
   let workerBankRegistrationMilliseconds = 0;
@@ -197,6 +206,25 @@ export function createBlackHolePreparedStreamLoader(catalog) {
       trim();
       return;
     }
+    if (data.type === "registered-rails") {
+      const descriptor = catalog.sourceRails?.[request.index];
+      if (request.kind !== "rails" || registeredRails[request.index] !== 0 ||
+          data.configurationIndex !== request.index ||
+          data.decodedByteLength !== descriptor?.decodedByteLength ||
+          !Number.isFinite(data.workerDurationMilliseconds) ||
+          !Number.isFinite(data.workerMaximumSliceMilliseconds)) {
+        rejectAll(new Error("BlackHole worker source rail registration response drifted"));
+        return;
+      }
+      registeredRails[request.index] = 1;
+      workerBankRegistrationMilliseconds += data.workerDurationMilliseconds;
+      workerMaximumSliceMilliseconds = Math.max(
+        workerMaximumSliceMilliseconds, data.workerMaximumSliceMilliseconds);
+      requests.delete(data.requestId);
+      railPending.delete(request.index);
+      request.resolve(true);
+      return;
+    }
     if (data.type === "materialized-start") {
       if (request.kind !== "block" || request.response !== undefined ||
           data.descriptor?.index !== request.index ||
@@ -299,6 +327,44 @@ export function createBlackHolePreparedStreamLoader(catalog) {
     return pending;
   }
 
+  async function ensureRail(configurationIndex) {
+    if (!catalog.sourceRails) return true;
+    if (!Number.isSafeInteger(configurationIndex) || configurationIndex < 0 ||
+        configurationIndex >= catalog.configurationCount) {
+      throw new RangeError("BlackHole source rail configuration index drifted");
+    }
+    if (registeredRails[configurationIndex] === 1) return true;
+    if (railPending.has(configurationIndex)) return railPending.get(configurationIndex);
+    const pending = (async () => {
+      await initialized;
+      if (registeredRails[configurationIndex] === 1) return true;
+      const descriptor = catalog.sourceRails[configurationIndex];
+      const bytes = await fetchHttpExpandedAsset(
+        descriptor, `source rails ${configurationIndex}`);
+      sourceRailFetchCount += 1;
+      sourceRailFetchBytes += descriptor.byteLength;
+      const id = ++requestId;
+      const response = new Promise((resolve, reject) => {
+        requests.set(id, { kind: "rails", index: configurationIndex, resolve, reject });
+      });
+      let workerBytes = bytes;
+      if (bytes.byteOffset !== 0 || bytes.byteLength !== bytes.buffer.byteLength) {
+        workerBytes = bytes.slice();
+        decodedBankTransferCopyCount += 1;
+      }
+      decodedBankTransferCount += 1;
+      worker.postMessage({
+        type: "register-rails", requestId: id, descriptor, bytes: workerBytes,
+      }, [workerBytes.buffer]);
+      return response;
+    })();
+    railPending.set(configurationIndex, pending);
+    return pending.catch((error) => {
+      railPending.delete(configurationIndex);
+      throw error;
+    });
+  }
+
   async function prefetchBank(index) {
     if (destroyed) throw new Error("BlackHole loader is destroyed");
     const descriptor = bankDescriptorAt(index);
@@ -306,6 +372,9 @@ export function createBlackHolePreparedStreamLoader(catalog) {
     if (registerPending.has(descriptor.index)) return registerPending.get(descriptor.index);
     const pending = (async () => {
       await initialized;
+      if (catalog.sourceRails) {
+        await Promise.all(descriptor.requiredSourceConfigurationIndices.map(ensureRail));
+      }
       if (registeredBanks.has(descriptor.index)) return descriptor.index;
       const bytes = await fetchExpandedBank(descriptor.index);
       const id = ++requestId;
@@ -438,6 +507,9 @@ export function createBlackHolePreparedStreamLoader(catalog) {
         pendingMaterializedBlockCount: materializePending.size,
         transportBankFetchCount,
         transportBankFetchBytes,
+        sourceRailFetchCount,
+        sourceRailFetchBytes,
+        registeredSourceRailCount: registeredRails.reduce((sum, value) => sum + value, 0),
         registeredBankCount,
         materializedBlockCount,
         workerBankRegistrationMilliseconds:
@@ -475,6 +547,7 @@ function validateCatalog(catalog) {
   const profileId = catalog?.presentationProfile ?? "full";
   const profile = blackHolePresentationProfile(profileId);
   const assetRoot = catalog?.assetRoot ?? "/cssblackhole";
+  const railTransport = catalog?.transport?.encoding === CSSBLACKHOLE_RAIL_ENCODING;
   if (catalog?.schema !== "cssblackhole-prepared-stream-catalog@1" ||
       assetRoot !== profile.assetRoot ||
       catalog.starCount !== 1979 || catalog.configurationCount !== 3 ||
@@ -525,14 +598,21 @@ function validateCatalog(catalog) {
       catalog.publication.runtimeIntermediateFrameGeneration !== false ||
       catalog.publication.runtimeCatchupPublication !== false ||
       catalog.transport?.schema !== "cssblackhole-prepared-bank-transport@1" ||
-      catalog.transport.encoding !== CSSBLACKHOLE_BANK_ENCODING ||
+      ![CSSBLACKHOLE_BANK_ENCODING, CSSBLACKHOLE_RAIL_ENCODING]
+        .includes(catalog.transport.encoding) ||
       catalog.transport.contentEncoding !== "br" ||
       catalog.transport.bankSeconds !== 5 ||
       catalog.transport.coordinateScale !== CSSBLACKHOLE_COORDINATE_SCALE ||
       catalog.transport.maximumCoordinateQuantizationErrorPixels !==
         CSSBLACKHOLE_MAXIMUM_COORDINATE_QUANTIZATION_ERROR_PIXELS ||
-      catalog.transport.predictor !==
-        "independent-five-second-bank-one-second-block-coordinate-second-difference-plus-prepared-sparse-opacity-ranges" ||
+      catalog.transport.predictor !== (railTransport ?
+        "shared-source-phase-rails-plus-five-second-prepared-sparse-collision-repair-banks" :
+        "independent-five-second-bank-one-second-block-coordinate-second-difference-plus-prepared-sparse-opacity-ranges") ||
+      catalog.transport.runtimeSourcePhysics !== false ||
+      catalog.transport.runtimeCollisionSearch !== false ||
+      catalog.transport.workerRailLookupMaterialization !== railTransport ||
+      (railTransport ? !validSourceRails(catalog.sourceRails, catalog) :
+        catalog.sourceRails !== undefined) ||
       catalog.configurationLoop?.schema !==
         "cssblackhole-luminet-moving-configuration-loop@4" ||
       (catalog.configurationLoop.profile ?? "full") !== profile.id ||
@@ -657,6 +737,7 @@ function validateCatalog(catalog) {
 }
 
 function validateTransport(catalog) {
+  const railTransport = catalog.transport.encoding === CSSBLACKHOLE_RAIL_ENCODING;
   for (let bankIndex = 0; bankIndex < catalog.banks.length; bankIndex += 1) {
     const bank = catalog.banks[bankIndex];
     if (!bank || bank.index !== bankIndex || bank.startFrameIndex !== bankIndex * catalog.bankFrameCount ||
@@ -668,22 +749,39 @@ function validateTransport(catalog) {
         !Number.isSafeInteger(bank.byteLength) || bank.byteLength < 1 ||
         !Number.isSafeInteger(bank.decodedByteLength) || bank.decodedByteLength < bank.byteLength ||
         bank.blockCount !== catalog.blocksPerBank ||
-        !Number.isSafeInteger(bank.visibleSampleCount) || bank.visibleSampleCount < 1 ||
-        bank.visibleSampleCount > bank.sourceSampleCount ||
         bank.sourceSampleCount !== catalog.bankFrameCount * catalog.starCount ||
-        !Number.isSafeInteger(bank.opacityAssignmentCount) ||
-        bank.opacityAssignmentCount < catalog.blocksPerBank * catalog.starCount ||
-        bank.opacityAssignmentCount > 0xffff ||
-        bank.opacityAssignmentCount > bank.sourceSampleCount ||
-        bank.sourceLuminanceSampleCount !== bank.sourceSampleCount ||
         bank.contentEncoding !== "br" ||
         !Number.isFinite(bank.maximumCoordinateQuantizationErrorPixels) ||
         bank.maximumCoordinateQuantizationErrorPixels < 0 ||
         bank.maximumCoordinateQuantizationErrorPixels >
           CSSBLACKHOLE_MAXIMUM_COORDINATE_QUANTIZATION_ERROR_PIXELS ||
-        bank.coordinateEncoding !==
-          "leaf-major-axis-split-signed-zigzag-varint-second-difference-decimal1" ||
-        bank.opacityEncoding !== CSSBLACKHOLE_OPACITY_ENCODING ||
+        (railTransport ?
+          (bank.schema !== CSSBLACKHOLE_REPAIR_BANK_SCHEMA ||
+            !Array.isArray(bank.requiredSourceConfigurationIndices) ||
+            bank.requiredSourceConfigurationIndices.length < 1 ||
+            bank.requiredSourceConfigurationIndices.some((configurationIndex, index, values) =>
+              !Number.isSafeInteger(configurationIndex) || configurationIndex < 0 ||
+              configurationIndex >= catalog.configurationCount ||
+              (index > 0 && configurationIndex <= values[index - 1])) ||
+            !Number.isSafeInteger(bank.preparedCollisionRepairCount) ||
+            bank.preparedCollisionRepairCount < 1 ||
+            bank.preparedCollisionRepairCount > bank.sourceSampleCount ||
+            bank.coordinateEncoding !==
+              "prepared-source-rail-lookup-plus-sparse-prepared-collision-repair" ||
+            bank.opacityEncoding !==
+              "prepared-source-rail-rgb8-to-nearest-decile-materialization" ||
+            bank.visibleSampleCount !== undefined || bank.opacityAssignmentCount !== undefined ||
+            bank.sourceLuminanceSampleCount !== undefined) :
+          (!Number.isSafeInteger(bank.visibleSampleCount) || bank.visibleSampleCount < 1 ||
+            bank.visibleSampleCount > bank.sourceSampleCount ||
+            !Number.isSafeInteger(bank.opacityAssignmentCount) ||
+            bank.opacityAssignmentCount < catalog.blocksPerBank * catalog.starCount ||
+            bank.opacityAssignmentCount > 0xffff ||
+            bank.opacityAssignmentCount > bank.sourceSampleCount ||
+            bank.sourceLuminanceSampleCount !== bank.sourceSampleCount ||
+            bank.coordinateEncoding !==
+              "leaf-major-axis-split-signed-zigzag-varint-second-difference-decimal1" ||
+            bank.opacityEncoding !== CSSBLACKHOLE_OPACITY_ENCODING)) ||
         !/^[a-f0-9]{64}$/u.test(bank.sha256 ?? "") ||
         !/^[a-f0-9]{64}$/u.test(bank.decodedSha256 ?? "") ||
         typeof bank.assetUrl !== "string" ||
@@ -692,6 +790,34 @@ function validateTransport(catalog) {
       throw new Error(`BlackHole transport bank ${bankIndex} drifted`);
     }
   }
+}
+
+function validSourceRails(descriptors, catalog) {
+  return Array.isArray(descriptors) && descriptors.length === catalog.configurationCount &&
+    descriptors.every((descriptor, configurationIndex) =>
+      validSourceRail(descriptor, catalog, configurationIndex));
+}
+
+function validSourceRail(descriptor, catalog, configurationIndex) {
+  return descriptor?.schema === CSSBLACKHOLE_RAIL_ASSET_SCHEMA &&
+    descriptor.configurationIndex === configurationIndex &&
+    typeof descriptor.assetUrl === "string" &&
+    descriptor.assetUrl.startsWith(`${catalog.assetRoot}/rails/`) &&
+    new RegExp(`^rails-${configurationIndex}-[a-f0-9]{64}\\.bin\\.br$`, "u")
+      .test(descriptor.assetUrl.split("/").at(-1)) &&
+    Number.isSafeInteger(descriptor.byteLength) && descriptor.byteLength > 0 &&
+    Number.isSafeInteger(descriptor.decodedByteLength) &&
+    descriptor.decodedByteLength > descriptor.byteLength &&
+    /^[a-f0-9]{64}$/u.test(descriptor.sha256 ?? "") &&
+    /^[a-f0-9]{64}$/u.test(descriptor.decodedSha256 ?? "") &&
+    descriptor.contentEncoding === "br" && descriptor.imageOrderCount === 2 &&
+    descriptor.radiusCount === 16 && descriptor.sourceFrameCount === 5_400 &&
+    descriptor.coordinateEncoding ===
+      "configuration-order-radius-phase-xy-u16le-decimal1" &&
+    descriptor.luminanceEncoding === "configuration-order-radius-phase-u8-rgb8" &&
+    descriptor.selectedParticleDescriptorEncoding === "u32-phase13-radius4-order1" &&
+    descriptor.transitionEasingEncoding === "prepared-f64le-smoothstep-120-samples" &&
+    descriptor.periodicOrbitCountEncoding === "radius-major-u8";
 }
 
 function validPreparedOpacityPalette(palette) {
@@ -891,14 +1017,18 @@ async function fetchVerifiedBytes(url, expectedLength, expectedSha256, label, ca
 }
 
 async function fetchHttpExpandedBank(descriptor) {
+  return fetchHttpExpandedAsset(descriptor, `bank ${descriptor.index}`);
+}
+
+async function fetchHttpExpandedAsset(descriptor, label) {
   const response = await fetch(descriptor.assetUrl, { cache: "force-cache" });
   if (!response.ok) {
     throw new Error(
-      `BlackHole bank ${descriptor.index} failed: ${response.status} ${descriptor.assetUrl}`);
+      `BlackHole ${label} failed: ${response.status} ${descriptor.assetUrl}`);
   }
   const bytes = new Uint8Array(await response.arrayBuffer());
   await verifyByteIdentity(bytes, descriptor.decodedByteLength, descriptor.decodedSha256,
-    `bank ${descriptor.index} HTTP expansion`);
+    `${label} HTTP expansion`);
   return bytes;
 }
 

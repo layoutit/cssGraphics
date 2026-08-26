@@ -3,10 +3,10 @@
   "projects": [
     {
       "number": 10,
-      "id": "blackhole",
+      "id": "luminet",
       "name": "Black Hole",
-      "route": "/blackhole/",
-      "preview": "/landing/blackhole.webp",
+      "route": "/luminet/",
+      "preview": "/landing/luminet.webp",
       "numberTone": "light",
       "source": "Luminet",
       "credits": [

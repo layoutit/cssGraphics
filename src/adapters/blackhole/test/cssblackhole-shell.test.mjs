@@ -12,11 +12,11 @@ test("Luminet owns the shared css.graphics shell at its canonical route", async 
     readFile(new URL("src/main.mjs", adapterRoot), "utf8"),
   ]);
   assert.match(html, /cssgraphics-examples-sidebar/u);
-  assert.match(html, /https:\/\/css\.graphics\/blackhole\//u);
+  assert.match(html, /https:\/\/css\.graphics\/luminet\//u);
   assert.match(html, /<meta name="robots" content="index, follow">/u);
   assert.match(html, /<main class="example-stage"><\/main>/u);
-  assert.match(config, /createExamplesShellPlugin\("blackhole"\)/u);
-  assert.match(config, /deployBuild \? "\/blackhole\/" : "\/"/u);
+  assert.match(config, /createExamplesShellPlugin\("luminet"\)/u);
+  assert.match(config, /deployBuild \? "\/luminet\/" : "\/"/u);
   assert.match(main, /site\/examples-shell-client\.mjs/u);
 });
 

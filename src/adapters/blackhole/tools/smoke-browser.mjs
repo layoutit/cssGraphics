@@ -13,7 +13,7 @@ const port = Number(process.env.CSSBLACKHOLE_SMOKE_PORT ?? 4210);
 if (!Number.isSafeInteger(port) || port < 1024 || port > 65_535) {
   throw new Error("Luminet browser-smoke port drifted");
 }
-const route = `http://127.0.0.1:${port}${deploy ? "/blackhole/" : "/"}`;
+const route = `http://127.0.0.1:${port}${deploy ? "/luminet/" : "/"}`;
 const server = deploy ? createStaticDeployServer(resolve(repositoryRoot, "dist/site")) :
   await createViteServer({
     configFile: resolve(repositoryRoot, "src/adapters/blackhole/vite.config.mjs"),
@@ -261,7 +261,7 @@ function assertSmoke(report) {
       report.initial.leafCount !== 1979 ||
       report.initial.inlineTransformCount !== 1979 ||
       report.initial.computedTransformCount !== 1979 ||
-      report.initial.canonical !== "https://css.graphics/blackhole/" ||
+      report.initial.canonical !== "https://css.graphics/luminet/" ||
       report.initial.robots !== "index, follow" ||
       report.initial.errors.length !== 0 ||
       report.initial.stats?.runtimePhysicsCount !== 0 ||

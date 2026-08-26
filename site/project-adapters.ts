@@ -1,5 +1,5 @@
 export const PROJECT_ADAPTER_DIRECTORIES: Readonly<Record<string, string>> = Object.freeze({
-  blackhole: "blackhole",
+  luminet: "blackhole",
   cloth: "cloth",
   cyclone: "cyclone",
   electropaint: "electropaint",

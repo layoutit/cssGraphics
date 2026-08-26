@@ -228,10 +228,7 @@ async function materializeBlock(data) {
     maximumSliceMilliseconds = Math.max(maximumSliceMilliseconds,
       performance.now() - postStartedAt);
     sliceCount += 1;
-    if (chunkIndex + 1 < chunkCount) {
-      if (data.eager) await yieldTask();
-      else await new Promise((resolve) => setTimeout(resolve, catalog.frameMilliseconds));
-    }
+    if (chunkIndex + 1 < chunkCount) await yieldTask();
   }
   self.postMessage({
     type: "materialized-end",

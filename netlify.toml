@@ -7,8 +7,8 @@
   NODE_VERSION = "22.17.1"
 
 [[redirects]]
-  from = "/luminet/*"
-  to = "/blackhole/:splat"
+  from = "/blackhole/*"
+  to = "/luminet/:splat"
   status = 301
   force = true
 

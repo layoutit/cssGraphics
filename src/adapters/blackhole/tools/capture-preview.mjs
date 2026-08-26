@@ -8,10 +8,10 @@ import { createServer } from "vite";
 
 const repositoryRoot = resolve(import.meta.dirname, "../../../..");
 const outputPath = resolve(repositoryRoot,
-  process.env.CSSBLACKHOLE_PREVIEW_OUTPUT ?? "site/public/landing/blackhole.webp");
+  process.env.CSSBLACKHOLE_PREVIEW_OUTPUT ?? "site/public/landing/luminet.webp");
 const sidebarOutputPath = resolve(repositoryRoot,
   process.env.CSSBLACKHOLE_SIDEBAR_PREVIEW_OUTPUT ??
-    "site/public/landing/sidebar/blackhole.webp");
+    "site/public/landing/sidebar/luminet.webp");
 const streamFrame = Number(process.env.CSSBLACKHOLE_PREVIEW_STREAM_FRAME ?? 120);
 const previewWidth = Number(process.env.CSSBLACKHOLE_PREVIEW_WIDTH ?? 960);
 const previewHeight = Number(process.env.CSSBLACKHOLE_PREVIEW_HEIGHT ?? 540);
@@ -48,7 +48,7 @@ try {
     viewport: { width: previewWidth, height: previewHeight },
     deviceScaleFactor,
   });
-  await page.route("**/landing/blackhole.webp", (route) =>
+  await page.route("**/landing/luminet.webp", (route) =>
     route.fulfill({ status: 204, body: "" }));
   await page.goto("http://127.0.0.1:4211/", { waitUntil: "domcontentloaded", timeout: 30_000 });
   await page.waitForFunction(() => window.__cssBlackHoleDebug?.ready === true, null, {

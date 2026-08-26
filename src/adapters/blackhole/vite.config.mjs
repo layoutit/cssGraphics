@@ -39,11 +39,11 @@ function createBlackHolePreparedBrotliPlugin() {
 }
 
 export default defineConfig({
-  base: deployBuild ? "/blackhole/" : "/",
+  base: deployBuild ? "/luminet/" : "/",
   root: adapterRoot,
   publicDir: deployBuild ? false : generatedPublicDir,
   plugins: [
-    createExamplesShellPlugin("blackhole"),
+    createExamplesShellPlugin("luminet"),
     ...(deployBuild ? [{
       name: "cssblackhole-deploy-assets",
       async closeBundle() {
@@ -61,7 +61,7 @@ export default defineConfig({
   preview: { host: "127.0.0.1" },
   build: {
     target: "es2022",
-    outDir: resolve(repositoryRoot, deployBuild ? "dist/site/blackhole" : "dist/blackhole"),
+    outDir: resolve(repositoryRoot, deployBuild ? "dist/site/luminet" : "dist/luminet"),
     emptyOutDir: true,
   },
 });

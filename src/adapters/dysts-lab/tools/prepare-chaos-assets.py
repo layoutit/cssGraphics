@@ -140,7 +140,8 @@ def main() -> None:
     pre_motion_removed_system_ids = visual_removed_system_ids | similarity_removed_system_ids
     removed_system_ids = pre_motion_removed_system_ids | (
         motion_removed_system_ids if args.selection_stage == "motion" else frozenset())
-    if curation.get("schema") != "csschaos-audition@2" or \
+    base_curation_invalid = (
+        curation.get("schema") != "csschaos-audition@2" or
             curation.get("reviewedSystemCount") != 135 or \
             len(visual_removed_system_ids) != 33 or \
             similarity_curation.get("schema") != "csschaos-similarity-curation@1" or \
@@ -148,20 +149,24 @@ def main() -> None:
             similarity_curation.get("auditedSystemCount") != 102 or \
             similarity_curation.get("similarityThreshold") != 0.91 or \
             len(similarity_removed_system_ids) != 7 or \
-            visual_removed_system_ids & similarity_removed_system_ids or \
-            motion_curation.get("schema") != "csschaos-motion-curation@1" or \
-            motion_curation.get("auditSchema") != "csschaos-motion-interest-audit@1" or \
-            motion_curation.get("auditedSystemCount") != 95 or \
+            visual_removed_system_ids & similarity_removed_system_ids or
+            len(pre_motion_removed_system_ids) != 40)
+    motion_curation_invalid = (
+            motion_curation.get("schema") != "csschaos-motion-curation@2" or
+            motion_curation.get("auditSchema") != "csschaos-motion-interest-audit@2" or \
+            motion_curation.get("auditedSystemCount") != 94 or \
             motion_curation.get("keptSystemCount") != 50 or \
             len(motion_removed_system_ids) != 45 or \
             (visual_removed_system_ids | similarity_removed_system_ids) & \
             motion_removed_system_ids or \
             motion_audit.get("schema") != motion_curation.get("auditSchema") or \
-            motion_audit.get("auditedSystemCount") != 95 or \
+            motion_audit.get("auditedSystemCount") != 94 or \
+            motion_audit.get("consideredSystemCount") != 95 or \
             motion_audit.get("keptSystemCount") != 50 or \
             frozenset(motion_audit.get("removedSystemIds", ())) != \
-            motion_removed_system_ids or \
-            len(pre_motion_removed_system_ids) != 40 or \
+            motion_removed_system_ids)
+    if base_curation_invalid or \
+            (args.selection_stage == "motion" and motion_curation_invalid) or \
             len(removed_system_ids) != (85 if args.selection_stage == "motion" else 40):
         raise RuntimeError("Chaos visual-audition curation drifted")
     all_candidates = {item["name"]: item for item in ranking["ranked"]
@@ -185,8 +190,15 @@ def main() -> None:
                         selected_systems)
     coordinates_by_name = {name: quantize(geometries[name]) for name in selected_systems}
     presentation = prepare_presentation(
-        geometries, coordinates_by_name, selected_systems)
+        geometries, coordinates_by_name, selected_systems,
+        allow_fidelity_rejections=args.selection_stage == "similarity")
     route = presentation["route"]
+    fidelity_rejected_systems = presentation["fidelityRejectedSystems"]
+    if args.selection_stage == "motion" and fidelity_rejected_systems:
+        raise RuntimeError("Final Chaos selection contains a dot-fidelity rejection")
+    if len(route) < 50:
+        raise RuntimeError(
+            f"Chaos {args.selection_stage} preparation retained only {len(route)} systems")
     phase_indices = presentation["phaseIndices"]
     phase_distribution = presentation["phaseDistribution"]
     phase_offsets = {name: 0 for name in route}
@@ -274,15 +286,16 @@ def main() -> None:
             "implementedContinuousSystemCount": 135,
             "qualifiedSystemCount": ranking["qualification"]["readyCount"],
             "selection": ("50 distinct systems kept after a complete 135-system visual "
-                          "audition, a measured 102-system similarity audit, and a measured "
-                          "95-system prepared motion-interest audit") if
+                          "audition, a measured 102-system similarity audit, one prepared "
+                          "dot-fidelity rejection, and a measured 94-system motion audit") if
                          args.selection_stage == "motion" else
                          ("95 distinct systems kept after a complete 135-system visual "
                           "audition and a measured 102-system similarity audit for the "
                           "prepared motion-interest audit"),
             "ranking": ("complete pinned continuous-system audition; 33 user-marked "
-                        "systems, 7 measured lookalikes, and 45 lower-motion-interest "
-                        "systems removed") if args.selection_stage == "motion" else
+                        "systems, 7 measured lookalikes, 1 dot-fidelity rejection, and "
+                        "44 lower-motion-quality systems removed") if
+                       args.selection_stage == "motion" else
                        ("pre-motion audit bank; 33 user-marked systems and 7 measured "
                         "lookalikes removed"),
             "taxonomyAuthority": "PolyCSS editorial chapters derived from pinned upstream descriptions and citations; source badges are copied from upstream metadata",
@@ -321,6 +334,9 @@ def main() -> None:
         "identityMatchingFrames": [HANDOFF_TRANSITION_FRAME, HANDOFF_FRAME],
         "audition": {
             "candidateCount": len(route),
+            "preMotionCandidateCount": len(selected_systems),
+            "fidelityRejectedSystemIds": sorted(
+                candidates[name]["slug"] for name in fidelity_rejected_systems),
             "reviewedCandidateCount": curation["reviewedSystemCount"],
             "removedSystemIds": sorted(removed_system_ids),
             "visualRemovedSystemIds": sorted(visual_removed_system_ids),
@@ -611,20 +627,26 @@ def load_audit_font(size: int):
 
 def prepare_presentation(geometries: dict[str, np.ndarray],
                          coordinates_by_name: dict[str, np.ndarray],
-                         selected_systems: tuple[str, ...]) -> dict:
-    cached = load_morph_cache(selected_systems)
+                         selected_systems: tuple[str, ...],
+                         allow_fidelity_rejections: bool = False) -> dict:
+    cached = None if allow_fidelity_rejections else load_morph_cache(selected_systems)
     if cached is None:
         route = list(selected_systems)
-        phase_indices, phase_distribution = prepare_spatial_identities(
-            route, coordinates_by_name)
-        save_morph_cache(selected_systems, route, phase_indices, phase_distribution)
+        route, phase_indices, phase_distribution, fidelity_rejected_systems = \
+            prepare_spatial_identities(
+                route, coordinates_by_name,
+                allow_fidelity_rejections=allow_fidelity_rejections)
+        if not allow_fidelity_rejections:
+            save_morph_cache(selected_systems, route, phase_indices, phase_distribution)
     else:
         route, phase_indices, phase_distribution = cached
+        fidelity_rejected_systems = []
     edges = measure_edges(route, geometries, phase_indices)
     return {
         "route": route,
         "phaseIndices": phase_indices,
         "phaseDistribution": phase_distribution,
+        "fidelityRejectedSystems": fidelity_rejected_systems,
         "edges": edges,
     }
 
@@ -722,13 +744,24 @@ def save_morph_cache(selected_systems: tuple[str, ...], route: list[str],
 
 def prepare_spatial_identities(
         route: list[str], coordinates_by_name: dict[str, np.ndarray],
-) -> tuple[dict[str, np.ndarray], dict[str, dict]]:
+        allow_fidelity_rejections: bool = False,
+) -> tuple[list[str], dict[str, np.ndarray], dict[str, dict], list[str]]:
     reference = prepare_reference_positions()
     identities = {}
     distributions = {}
+    qualified_route = []
+    fidelity_rejected_systems = []
     for index, name in enumerate(route):
         positions = decode_final_camera_coordinates(coordinates_by_name[name])
-        base_phases, distribution = prepare_distributed_phase_indices(positions)
+        try:
+            base_phases, distribution = prepare_distributed_phase_indices(positions)
+        except RuntimeError as error:
+            if not allow_fidelity_rejections or str(error) != (
+                    "Chaos phase allocation could not satisfy the retained-dot fidelity gates"):
+                raise
+            fidelity_rejected_systems.append(name)
+            print(f"reject {index + 1:02d}/{len(route)} {name}: dot fidelity")
+            continue
         incoming_positions = positions[
             (base_phases + HANDOFF_TRANSITION_FRAME) % SAMPLE_COUNT]
         outgoing_positions = positions[(base_phases + HANDOFF_FRAME) % SAMPLE_COUNT]
@@ -739,11 +772,12 @@ def prepare_spatial_identities(
         phases[rows] = base_phases[columns]
         identities[name] = phases
         distributions[name] = distribution
+        qualified_route.append(name)
         print(f"match {index + 1:02d}/{len(route)} {name}: "
               f"{distribution['baselinePairOverlapPercent']:.2f}% -> "
               f"{distribution['selectedPairOverlapPercent']:.2f}% "
               f"({distribution['selectedPattern']})")
-    return identities, distributions
+    return qualified_route, identities, distributions, fidelity_rejected_systems
 
 
 def prepare_distributed_phase_indices(positions: np.ndarray) -> tuple[np.ndarray, dict]:

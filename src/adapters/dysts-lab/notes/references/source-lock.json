@@ -19,16 +19,16 @@
       "gitBlobSha": "9d67b1843e8600932fd9a28f9dc56ae37cb088e5",
       "sha256": "14fd8d0897308b1b55d3194201c1a81903367e51943aad9d95604d6fa01c45d7",
       "adaptedClasses": [
-        "Coullet", "SprottI", "RikitakeDynamo", "PiecewiseCircuit", "SprottN",
-        "LorenzBounded", "SprottG", "Bouali2", "Hadley", "FluidTrampoline",
-        "PanXuZhou", "CircadianRhythm", "BlinkingVortex", "GenesioTesi", "SprottK",
-        "SanUmSrisuchinwong", "Qi", "Arneodo", "Colpitts", "Rossler", "SprottJerk",
-        "SprottC", "Aizawa", "Laser", "SprottQ", "MacArthur", "LorenzStenflo",
-        "JerkCircuit", "SprottDelay", "Finance", "QiChen", "Halvorsen",
-        "CaTwoPlusQuasiperiodic", "Lorenz", "CaTwoPlus", "Sakarya",
-        "RabinovichFabrikant", "RayleighBenard", "DoubleGyre", "SprottO", "SprottL",
-        "SprottM", "SaltonSea", "SprottP", "CellularNeuralNetwork", "Blasius",
-        "SprottR", "ForcedBrusselator", "Torus", "BeerRNN"
+        "NoseHoover", "Coullet", "SprottI", "RikitakeDynamo", "PiecewiseCircuit",
+        "SprottN", "AnishchenkoAstakhov", "YuWang2", "LorenzBounded", "SprottG",
+        "Bouali2", "Hadley", "FluidTrampoline", "PanXuZhou", "CircadianRhythm",
+        "BlinkingVortex", "GenesioTesi", "SprottK", "SanUmSrisuchinwong", "Qi",
+        "HyperYangChen", "Arneodo", "Colpitts", "Rossler", "SprottJerk", "SprottC",
+        "Aizawa", "Laser", "SprottQ", "MacArthur", "HyperYan", "LorenzStenflo",
+        "SprottDelay", "Finance", "QiChen", "CaTwoPlusQuasiperiodic", "Lorenz",
+        "CaTwoPlus", "SprottD", "RabinovichFabrikant", "RayleighBenard", "DoubleGyre",
+        "SprottM", "Duffing", "SaltonSea", "SprottP", "CellularNeuralNetwork",
+        "Blasius", "SprottR", "HyperJha"
       ]
     },
     {

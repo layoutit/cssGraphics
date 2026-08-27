@@ -36,6 +36,7 @@ creates the ignored Python environment when needed, runs the complete source-bac
 emits the deploy product at `build/generated/public/csschaos/`.
 
 The exact 33-system visual-audition removal decision, seven measured lookalikes removed at a 0.91
-similarity threshold, and 45 lower-motion-interest systems removed from the 95-system motion audit
+similarity threshold, one dot-fidelity rejection, and 44 lower-motion-quality systems removed after
+the exact 94-system prepared motion audit
 are recorded under `notes/curation/`. Ranking previews and generated audit evidence remain under
 the ignored `output/dysts-ranking/` tree.

@@ -44,25 +44,34 @@ test("ranking qualifies every continuous system and packages the visual shortlis
   assert.equal(curation.similarityBias.similarityThreshold, 0.91);
   assert.equal(curation.similarityBias.markedForRemoval.length, 7);
   assert.equal(new Set(curation.similarityBias.markedForRemoval).size, 7);
-  assert.equal(curation.motionBias.schema, "csschaos-motion-curation@1");
-  assert.equal(curation.motionBias.auditSchema, "csschaos-motion-interest-audit@1");
-  assert.equal(curation.motionBias.auditedSystemCount, 95);
+  assert.equal(curation.motionBias.schema, "csschaos-motion-curation@2");
+  assert.equal(curation.motionBias.auditSchema, "csschaos-motion-interest-audit@2");
+  assert.equal(curation.motionBias.auditedSystemCount, 94);
   assert.equal(curation.motionBias.keptSystemCount, 50);
   assert.equal(curation.motionBias.markedForRemoval.length, 45);
   assert.equal(new Set(curation.motionBias.markedForRemoval).size, 45);
-  assert.equal(motionAudit.schema, "csschaos-motion-interest-audit@1");
-  assert.equal(motionAudit.auditedSystemCount, 95);
+  assert.equal(motionAudit.schema, "csschaos-motion-interest-audit@2");
+  assert.equal(motionAudit.auditedSystemCount, 94);
+  assert.equal(motionAudit.consideredSystemCount, 95);
   assert.equal(motionAudit.keptSystemCount, 50);
   assert.equal(motionAudit.removedSystemCount, 45);
+  assert.equal(motionAudit.score.maximumMedianTravelPxPerSourceFrame, 6);
   assert.deepEqual(new Set(motionAudit.removedSystemIds),
     new Set(curation.motionBias.markedForRemoval));
   assert.equal(new Set(motionAudit.selectedSystemIds).size, 50);
   assert.deepEqual(motionAudit.systems.map(({ motionInterestRank }) => motionInterestRank),
-    Array.from({ length: 95 }, (_, index) => index + 1));
+    Array.from({ length: 94 }, (_, index) => index + 1));
   assert.ok(motionAudit.systems.every(({ decision }, index) =>
     decision === (index < 50 ? "keep" : "remove")));
-  assert.ok(motionAudit.systems.every(({ motionInterestScore }, index, systems) =>
-    index === 0 || systems[index - 1].motionInterestScore >= motionInterestScore));
+  assert.ok(motionAudit.systems.every((system, index, systems) => index === 0 ||
+    (systems[index - 1].motionQualityQualified === system.motionQualityQualified
+      ? systems[index - 1].motionInterestScore >= system.motionInterestScore
+      : systems[index - 1].motionQualityQualified && !system.motionQualityQualified)));
+  assert.ok(motionAudit.systems.slice(0, 50).every(
+    ({ motionQualityQualified }) => motionQualityQualified));
+  assert.ok(motionAudit.systems.slice(0, 50).every(({ metrics }) =>
+    metrics.preparedMedianTravelPxPer100ms / 6 <=
+      motionAudit.score.maximumMedianTravelPxPerSourceFrame));
   assert.match(rankingSource, /get_attractor_list\("continuous"\)/u);
   assert.match(rankingSource, /heuristic-visual-coolness-not-source-authority/u);
   assert.match(packagingSource, /selected_systems = tuple\(candidates\)/u);

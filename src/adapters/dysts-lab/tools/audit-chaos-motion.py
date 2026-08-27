@@ -28,6 +28,7 @@ POINT_COUNT = 2000
 VIEWPORT_WIDTH = 800
 VIEWPORT_HEIGHT = 600
 MOTION_OFFSET = 6
+MAX_MEDIAN_TRAVEL_PX_PER_SOURCE_FRAME = 6.0
 SAMPLE_STEP = 120
 REVIEW_FRAME_COUNT = 16
 REVIEW_FRAME_STEP = 6
@@ -117,6 +118,8 @@ def read_bank(bank: Path) -> tuple[dict, np.ndarray, np.ndarray, list[dict]]:
             "revealOrder": reveal_order,
             "encodedSha256": hashlib.sha256(encoded).hexdigest(),
             "decodedSha256": hashlib.sha256(decoded).hexdigest(),
+            "motionPayloadSha256": hashlib.sha256(
+                decoded[coordinate_offset:]).hexdigest(),
         })
     return metadata, leaf_colors, leaf_opacities, decoded_systems
 
@@ -293,10 +296,21 @@ def score_systems(rows: list[dict], keep_count: int) -> None:
         )
         row["scoreComponents"] = components
         row["motionInterestScore"] = round(score, 6)
-    rows.sort(key=lambda row: (-row["motionInterestScore"], row["id"]))
+        row["motionQualityQualified"] = (
+            row["metrics"]["preparedMedianTravelPxPer100ms"] / MOTION_OFFSET <=
+            MAX_MEDIAN_TRAVEL_PX_PER_SOURCE_FRAME
+        )
+    qualified_count = sum(row["motionQualityQualified"] for row in rows)
+    if qualified_count < keep_count:
+        raise RuntimeError(
+            f"Only {qualified_count} systems satisfy the source-frame motion gate; "
+            f"cannot keep {keep_count}")
+    rows.sort(key=lambda row: (
+        not row["motionQualityQualified"], -row["motionInterestScore"], row["id"]))
     for rank, row in enumerate(rows, start=1):
         row["motionInterestRank"] = rank
-        row["decision"] = "keep" if rank <= keep_count else "remove"
+        row["decision"] = (
+            "keep" if rank <= keep_count and row["motionQualityQualified"] else "remove")
 
 
 def render_evidence(rows: list[dict], frames_by_id: dict[str, list[np.ndarray]],
@@ -355,18 +369,28 @@ def main() -> None:
             "asset": descriptor["asset"],
             "encodedSha256": system["encodedSha256"],
             "decodedSha256": system["decodedSha256"],
+            "motionPayloadSha256": system["motionPayloadSha256"],
             "metrics": metrics,
         })
         frames_by_id[descriptor["id"]] = frames
         print(f"measured {index:02d}/{len(decoded_systems)} {descriptor['name']}")
     score_systems(rows, args.keep)
     selected = [row["id"] for row in rows if row["decision"] == "keep"]
-    removed = [row["id"] for row in rows if row["decision"] == "remove"]
+    measured_removed = [row["id"] for row in rows if row["decision"] == "remove"]
+    fidelity_rejected = list(metadata.get("audition", {}).get(
+        "fidelityRejectedSystemIds", ()))
+    considered_count = metadata.get("audition", {}).get(
+        "preMotionCandidateCount", len(rows))
+    if considered_count != len(rows) + len(fidelity_rejected):
+        raise RuntimeError("Chaos pre-motion qualification counts drifted")
+    removed = measured_removed + fidelity_rejected
     report = {
-        "schema": "csschaos-motion-interest-audit@1",
+        "schema": "csschaos-motion-interest-audit@2",
         "sourcePreparedSchema": metadata["schema"],
         "sourceCommit": metadata["source"]["commit"],
         "auditedSystemCount": len(rows),
+        "consideredSystemCount": considered_count,
+        "fidelityRejectedSystemIds": fidelity_rejected,
         "keptSystemCount": len(selected),
         "removedSystemCount": len(removed),
         "basis": (
@@ -382,6 +406,8 @@ def main() -> None:
             "motionCoveragePercentile": 0.10,
             "curvaturePercentile": 0.10,
             "temporalVariationBroadTarget": 0.05,
+            "maximumMedianTravelPxPerSourceFrame":
+                MAX_MEDIAN_TRAVEL_PX_PER_SOURCE_FRAME,
         },
         "sampling": {
             "measurementFrameStep": SAMPLE_STEP,
@@ -391,6 +417,7 @@ def main() -> None:
             "reviewViewport": [REVIEW_WIDTH, REVIEW_HEIGHT],
         },
         "selectedSystemIds": selected,
+        "measuredRemovedSystemIds": measured_removed,
         "removedSystemIds": removed,
         "systems": rows,
     }

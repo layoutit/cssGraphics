@@ -282,7 +282,7 @@ function validateMetadata(metadata) {
       metadata.audition?.visualRemovedSystemIds?.length !== 33 ||
       metadata.audition?.similarityRemovedSystemIds?.length !== 7 ||
       metadata.audition?.motionRemovedSystemIds?.length !== 45 ||
-      metadata.audition?.motionAuditSchema !== "csschaos-motion-interest-audit@1" ||
+      metadata.audition?.motionAuditSchema !== "csschaos-motion-interest-audit@2" ||
       metadata.audition?.similarityThreshold !== 0.91 ||
       metadata.audition?.advance !== "automatic-shuffled-handoff" ||
       metadata.audition?.selectionTransition !== "instant" ||

@@ -1,0 +1,46 @@
+{
+  "schema": "cssgraphics-source-lock@1",
+  "upstream": {
+    "repository": "https://github.com/GilpinLab/dysts",
+    "commit": "2a03f1ae7b0680b0470458783dcb4664660e131a",
+    "committedAt": "2026-04-15T14:32:06Z",
+    "license": "Apache-2.0"
+  },
+  "pythonDependencies": {
+    "numpy": "2.5.2",
+    "scipy": "1.18.1",
+    "tqdm": "4.70.0",
+    "Pillow": "12.3.0",
+    "Brotli": "1.2.0"
+  },
+  "sources": [
+    {
+      "path": "dysts/flows.py",
+      "gitBlobSha": "9d67b1843e8600932fd9a28f9dc56ae37cb088e5",
+      "sha256": "14fd8d0897308b1b55d3194201c1a81903367e51943aad9d95604d6fa01c45d7",
+      "adaptedClasses": [
+        "Coullet", "SprottI", "RikitakeDynamo", "PiecewiseCircuit", "SprottN",
+        "LorenzBounded", "SprottG", "Bouali2", "Hadley", "FluidTrampoline",
+        "PanXuZhou", "CircadianRhythm", "BlinkingVortex", "GenesioTesi", "SprottK",
+        "SanUmSrisuchinwong", "Qi", "Arneodo", "Colpitts", "Rossler", "SprottJerk",
+        "SprottC", "Aizawa", "Laser", "SprottQ", "MacArthur", "LorenzStenflo",
+        "JerkCircuit", "SprottDelay", "Finance", "QiChen", "Halvorsen",
+        "CaTwoPlusQuasiperiodic", "Lorenz", "CaTwoPlus", "Sakarya",
+        "RabinovichFabrikant", "RayleighBenard", "DoubleGyre", "SprottO", "SprottL",
+        "SprottM", "SaltonSea", "SprottP", "CellularNeuralNetwork", "Blasius",
+        "SprottR", "ForcedBrusselator", "Torus", "BeerRNN"
+      ]
+    },
+    {
+      "path": "dysts/data/chaotic_attractors.json",
+      "gitBlobSha": "e765aad6c4baaf3673912bf528fae1d151098fee",
+      "sha256": "d0777a4bbd67408b16f26fdb1b88c94232cc52dd9caa9cd696a5ebd6690c5f1f",
+      "adaptedFields": ["initial_conditions", "parameters", "dt", "period", "description", "citation", "doi"]
+    },
+    {
+      "path": "LICENSE.md",
+      "gitBlobSha": "f49a4e16e68b128803cc2dcea614603632b04eac",
+      "sha256": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(siteRoot, "..");
 const expectedProjects = [
+  ["chaos", 11, "dysts", "2026-08-27", "50 motion-curated chaotic attractors"],
   ["luminet", 10, "Luminet", "2026-08-24", "A Luminet Schwarzschild black hole"],
   ["galaxy", 9, "XScreenSaver", "2026-08-23", "XScreenSaver Galaxy"],
   ["cyclone", 8, "Really Slick", "2026-08-22", "Really Slick Cyclone rendered"],
@@ -21,6 +22,7 @@ const expectedProjects = [
 ];
 const projectsExcludedFromLanding = ["flowerbox", "gravitywell"];
 const expectedNumberTones = new Map([
+  ["chaos", "light"],
   ["luminet", "light"],
   ["galaxy", "light"],
   ["cyclone", "light"],
@@ -33,6 +35,7 @@ const expectedNumberTones = new Map([
   ["pipes", "light"],
 ]);
 const projectAdapterDirectories = new Map([
+  ["chaos", "dysts-lab"],
   ["luminet", "blackhole"],
   ["cloth", "cloth"],
   ["electropaint", "electropaint"],
@@ -112,6 +115,7 @@ test("landing presents the current deployed collection", async () => {
   assert.match(sceneRouter, /mountClothClient\(host\)/u);
   assert.doesNotMatch(sceneRouter, /mountFlocksClient|cssflocks/u);
   assert.match(sceneRouter, /mountBlackHoleClient\(host\)/u);
+  assert.match(sceneRouter, /mountChaosClient\(host\)/u);
   assert.match(sceneRouter, /mountCycloneClient\(host\)/u);
   assert.match(sceneRouter, /mountGalaxyClient\(host\)/u);
   assert.match(sceneRouter, /addEventListener\("visibilitychange", syncSceneVisibility\)/u);
@@ -250,10 +254,11 @@ test("every deployed project owns the examples shell and direct scene host", asy
   for (const [id, adapterDirectory] of projectAdapterDirectories) {
     if (projectsExcludedFromLanding.includes(id)) continue;
     const adapterRoot = resolve(repositoryRoot, "src/adapters", adapterDirectory);
-    const [html, main, viteConfig] = await Promise.all([
+    const [html, main, viteConfig, routePage] = await Promise.all([
       readFile(resolve(adapterRoot, "index.html"), "utf8"),
       readFile(resolve(adapterRoot, "src/main.mjs"), "utf8"),
       readFile(resolve(adapterRoot, "vite.config.mjs"), "utf8"),
+      readFile(resolve(siteRoot, "pages", `${id}.astro`), "utf8"),
     ]);
     assert.match(html, /cssgraphics-examples-sidebar/u);
     assert.match(html, /class="example-stage"/u);
@@ -262,6 +267,7 @@ test("every deployed project owns the examples shell and direct scene host", asy
     assert.doesNotMatch(main, /site\/site\.css/u);
     assert.match(main, /site\/examples-shell-client\.mjs/u);
     assert.match(viteConfig, new RegExp(`createExamplesShellPlugin\\("${id}"\\)`, "u"));
+    assert.match(routePage, new RegExp(`projectId="${id}"`, "u"));
   }
 });
 
@@ -300,6 +306,7 @@ test("deployment serves only the current public products through the Astro shell
   assert.doesNotMatch(deployCommand, /CSS(?:PIPES|FLOWER|CLOTH|GEARS|GRAVITYWELL|CYCLONE|GALAXY|MENGER|MAZE|SELECTROPAINT|SOLITAIRE)_DEPLOY_BUILD/u);
   assert.doesNotMatch(deployCommand, /playwright install/u);
   assert.match(deployCommand, /pnpm prepare:luminet/u);
+  assert.match(deployCommand, /pnpm prepare:chaos/u);
   assert.match(deployCommand, /node scripts\/copy-deploy-products\.mjs && CSSGRAPHICS_DEPLOY_BUILD=1 pnpm build:site$/u);
   for (const [projectId] of expectedProjects) {
     const productDirectory = projectId === "pipes" ? "csspipes" :

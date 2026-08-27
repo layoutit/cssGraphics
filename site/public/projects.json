@@ -2,6 +2,28 @@
   "schema": "cssgraphics.projects@2",
   "projects": [
     {
+      "number": 11,
+      "id": "chaos",
+      "name": "Chaos",
+      "route": "/chaos/",
+      "preview": "/landing/chaos.webp",
+      "numberTone": "light",
+      "source": "dysts",
+      "credits": [
+        {
+          "relation": "Models from",
+          "name": "dysts",
+          "url": "https://github.com/GilpinLab/dysts/tree/2a03f1ae7b0680b0470458783dcb4664660e131a"
+        },
+        {
+          "relation": "By",
+          "name": "Agustin Capeletto"
+        }
+      ],
+      "description": "50 motion-curated chaotic attractors from dysts rendered with 2,000 retained HTML and CSS points using PolyCSS.",
+      "date": "2026-08-27"
+    },
+    {
       "number": 10,
       "id": "luminet",
       "name": "Black Hole",

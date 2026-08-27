@@ -42,6 +42,10 @@ function requireSceneLifecycle(mount) {
 
 async function mountForProject(projectId, host) {
   switch (projectId) {
+    case "chaos": {
+      const { mountChaosClient } = await import("../src/adapters/dysts-lab/src/cssdysts/client.mjs");
+      return mountChaosClient(host);
+    }
     case "luminet": {
       const { mountBlackHoleClient } = await import("../src/adapters/blackhole/src/cssblackhole/client.mjs");
       return mountBlackHoleClient(host);

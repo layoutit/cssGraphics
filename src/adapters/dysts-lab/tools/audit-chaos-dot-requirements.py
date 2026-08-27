@@ -10,7 +10,6 @@ import hashlib
 import json
 import math
 from pathlib import Path
-import struct
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -27,6 +26,7 @@ from chaos_dot_fidelity import (
     prepare_audit_frames,
     prepare_reference,
 )
+from chaos_prepared_transport import decode_asset
 
 
 BANK_ROOT = Path("build/generated/public/csschaos")
@@ -137,7 +137,7 @@ def main() -> None:
 
 
 def validate_inputs(metadata: dict, phase_audit: dict) -> None:
-    if metadata.get("schema") != "csschaos-prepared-sequence@11" or \
+    if metadata.get("schema") != "csschaos-prepared-sequence@12" or \
             metadata.get("starCount") != CURRENT_DOT_COUNT or \
             metadata.get("sampleCount") != REFERENCE_DOT_COUNT or \
             len(metadata.get("sequence", ())) != 50 or \
@@ -150,15 +150,10 @@ def decode_system(descriptor: dict) -> tuple[np.ndarray, np.ndarray]:
     decoded = brotli.decompress((BANK_ROOT / descriptor["asset"]).read_bytes())
     if hashlib.sha256(decoded).hexdigest() != descriptor["sha256"]:
         raise RuntimeError(f"{descriptor['name']} prepared asset digest drifted")
-    coordinate_offset = struct.unpack_from("<I", decoded, 24)[0]
-    coordinate_byte_length = struct.unpack_from("<I", decoded, 28)[0]
-    coordinates = np.frombuffer(
-        decoded, dtype="<u2", count=coordinate_byte_length // 2,
-        offset=coordinate_offset).reshape(REFERENCE_DOT_COUNT, 3).astype(np.float64)
+    asset = decode_asset(decoded, descriptor)
+    coordinates = asset["coordinates"].astype(np.float64)
     positions = coordinates[:, :2] / 10 - 120
-    phases = np.frombuffer(
-        decoded, dtype="<u2", count=CURRENT_DOT_COUNT,
-        offset=coordinate_offset + coordinate_byte_length).astype(np.int32)
+    phases = asset["phaseIndices"].astype(np.int32)
     return positions, np.sort(phases)
 
 

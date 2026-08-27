@@ -7,20 +7,35 @@ import { decodeChaosTrajectoryAsset, encodeChaosTrajectoryAsset, formatChaosTran
   "../src/shared/cssdysts/preparedRailTransport.mjs";
 
 test("compact Chaos transport preserves trajectories and prepared handoff controls", () => {
-  const descriptor = { name: "Test", systemIndex: 1, sampleCount: 3, starCount: 4,
+  const descriptor = { name: "Test", systemIndex: 1, sampleCount: 5, starCount: 4,
     handoffControlPointCount: 4 };
-  const coordinates = Uint16Array.from({ length: 9 }, (_, index) => index * 7);
-  const leafPhaseIndices = Uint16Array.from([2, 0, 1, 2]);
-  const leafRevealOrder = Uint16Array.from([1, 2, 0, 3]);
-  const handoffControlCoordinates = Uint16Array.from({ length: 12 }, (_, index) => index * 9);
+  const coordinates = Uint16Array.from([
+    500, 300, 450,
+    493, 312, 455,
+    501, 307, 449,
+    480, 329, 460,
+    482, 328, 441,
+  ]);
+  const leafPhaseIndices = Uint16Array.from([2, 0, 3, 1]);
+  const leafRevealOrder = Uint16Array.from([1, 3, 0, 2]);
+  const handoffControlCoordinates = Uint16Array.from([
+    210, 400, 505,
+    205, 387, 499,
+    219, 391, 512,
+    198, 380, 493,
+  ]);
   const bytes = encodeChaosTrajectoryAsset({ descriptor, coordinates, leafPhaseIndices,
     leafRevealOrder, handoffControlCoordinates });
   const decoded = decodeChaosTrajectoryAsset(bytes,
-    { ...descriptor, decodedByteLength: bytes.byteLength });
+    { ...descriptor, decodedByteLength: bytes.byteLength, materializedByteLength: 70,
+      contentEncoding: "br",
+      transportEncoding:
+        "axis-split-zigzag-varint-second-difference-u16-plus-sorted-phase-ranks-packed-reveal@1" });
   assert.deepEqual(decoded.coordinates, coordinates);
   assert.deepEqual(decoded.leafPhaseIndices, leafPhaseIndices);
   assert.deepEqual(decoded.leafRevealOrder, leafRevealOrder);
   assert.deepEqual(decoded.handoffControlCoordinates, handoffControlCoordinates);
+  assert.equal(decoded.coordinates.buffer, decoded.handoffControlCoordinates.buffer);
   assert.equal(formatChaosTransform(1323, 1656, 5234),
     "translate(12.3px,45.6px) scale(1.0267)");
   assert.equal(formatChaosTransform(1323, 1656, 5000), "translate(12.3px,45.6px)");

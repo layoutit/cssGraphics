@@ -14,11 +14,12 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 from scipy.spatial.distance import pdist
 
+from chaos_prepared_transport import decode_asset
+
 
 ASSET_ROOT = Path("build/generated/public/csschaos")
 OUTPUT_ROOT = Path("output/dysts-similarity-audit")
 METADATA_PATH = ASSET_ROOT / "prepared.json"
-HEADER_BYTE_LENGTH = 32
 COORDINATE_SCALE = 10
 VIEWPORT_WIDTH = 800
 VIEWPORT_HEIGHT = 600
@@ -46,7 +47,7 @@ LAVENDER_ACCENT_STRIDE = 13
 def main() -> None:
     metadata = json.loads(METADATA_PATH.read_text())
     sequence = metadata.get("sequence", ())
-    if metadata.get("schema") != "csschaos-prepared-sequence@11" or \
+    if metadata.get("schema") != "csschaos-prepared-sequence@12" or \
             metadata.get("starCount") != POINT_COUNT or len(sequence) < 2 or \
             len(sequence) != metadata.get("audition", {}).get("candidateCount"):
         raise RuntimeError("Chaos similarity audit requires the complete prepared shortlist")
@@ -135,9 +136,7 @@ def decode_geometry(descriptor: dict) -> np.ndarray:
     decoded = brotli.decompress(encoded)
     if hashlib.sha256(decoded).hexdigest() != descriptor["sha256"]:
         raise RuntimeError(f"{descriptor['name']} prepared asset digest drifted")
-    coordinate_count = descriptor["sampleCount"] * 3
-    coordinates = np.frombuffer(decoded, dtype="<u2", count=coordinate_count,
-                                offset=HEADER_BYTE_LENGTH).reshape((-1, 3)).astype(np.float64)
+    coordinates = decode_asset(decoded, descriptor)["coordinates"].astype(np.float64)
     coordinates /= COORDINATE_SCALE
     coordinates[:, :2] -= PREPARED_POSITION_BIAS
     coordinates[:, 2] -= PREPARED_DEPTH_BIAS

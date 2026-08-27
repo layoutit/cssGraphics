@@ -17,7 +17,7 @@ test("Chaos prepared bank is complete, compact, and source-locked", async () => 
     readFile(resolve(generatedRoot, "snapshot.html"), "utf8"),
     readJson(resolve(import.meta.dirname, "../notes/references/source-lock.json")),
   ]);
-  assert.equal(prepared.schema, "csschaos-prepared-sequence@11");
+  assert.equal(prepared.schema, "csschaos-prepared-sequence@12");
   assert.equal(prepared.status, "ready");
   assert.equal(prepared.adapterId, "chaos");
   assert.equal(prepared.source.commit, sourceLock.upstream.commit);
@@ -35,7 +35,7 @@ test("Chaos prepared bank is complete, compact, and source-locked", async () => 
   assert.deepEqual(sourceLock.sources.find(({ path }) => path === "dysts/flows.py")
     .adaptedClasses, prepared.sequence.map(({ name }) => name));
   assert.equal(prepared.sequence.reduce((sum, item) => sum + item.encodedByteLength, 0) <
-    1_500_000, true);
+    750_000, true);
   assert.equal((snapshot.match(/<b\b/gu) ?? []).length, 2000);
   assert.equal((snapshot.match(/<i\b/gu) ?? []).length, 3);
   assert.doesNotMatch(snapshot, /<script|<canvas|<svg|clip-path/iu);
@@ -46,11 +46,20 @@ test("Chaos prepared bank is complete, compact, and source-locked", async () => 
     const decoded = brotliDecompressSync(encoded);
     assert.equal(decoded.byteLength, descriptor.decodedByteLength, descriptor.name);
     assert.equal(sha256(decoded), descriptor.sha256, descriptor.name);
+    assert.equal(descriptor.contentEncoding, "br", descriptor.name);
+    assert.equal(descriptor.transportEncoding,
+      "axis-split-zigzag-varint-second-difference-u16-plus-sorted-phase-ranks-packed-reveal@1",
+      descriptor.name);
+    assert.equal(descriptor.materializedByteLength, 37_280, descriptor.name);
     const asset = decodeChaosTrajectoryAsset(decoded, descriptor);
     assert.equal(asset.coordinates.length, descriptor.sampleCount * 3, descriptor.name);
     assert.equal(asset.leafPhaseIndices.length, 2000, descriptor.name);
     assert.equal(new Set(asset.leafRevealOrder).size, 2000, descriptor.name);
     assert.equal(asset.handoffControlCoordinates.length, 6000, descriptor.name);
+    assert.equal(asset.coordinates.buffer, asset.leafPhaseIndices.buffer, descriptor.name);
+    assert.equal(asset.coordinates.buffer, asset.leafRevealOrder.buffer, descriptor.name);
+    assert.equal(asset.coordinates.buffer, asset.handoffControlCoordinates.buffer,
+      descriptor.name);
   }
 });
 

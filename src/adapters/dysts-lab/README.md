@@ -19,6 +19,12 @@ materializes them in one worker, and publishes prepared samples at 60 Hz. The in
 three seconds; each later handoff is two seconds followed by a three-second hold. Prepared spatial
 identity is matched at incoming frame 120 and outgoing frame 300.
 
+Each content-addressed trajectory uses a lossless axis-split transport: quantized coordinates and
+handoff controls are encoded as ZigZag varint second differences, source phases as sorted delta
+varints, and reveal identity as packed 11-bit indices before Brotli quality 11. The worker restores
+the exact prepared `Uint16` arrays into one transferable buffer; the codec changes transport bytes,
+not any trajectory, phase assignment, handoff path, or rendered value.
+
 The cyclic green-to-white-to-yellow-to-red palette follows prepared source trajectory phase rank.
 It is interpolated in OKLab and gamut-mapped to sRGB during preparation. This palette and the
 editorial chapters are PolyCSS presentation choices, not upstream metadata.

@@ -10,7 +10,6 @@ import json
 import math
 import os
 import shutil
-import struct
 from pathlib import Path
 
 import brotli
@@ -32,6 +31,7 @@ from chaos_dot_fidelity import (
     prepare_coverage_phase_indices,
     prepare_reference as prepare_dot_reference,
 )
+from chaos_prepared_transport import TRANSPORT_ENCODING, encode_asset
 
 
 SOURCE_COMMIT = "2a03f1ae7b0680b0470458783dcb4664660e131a"
@@ -59,9 +59,6 @@ PERSPECTIVE_DISTANCE = 900
 COORDINATE_SCALE = 10
 PREPARED_POSITION_BIAS = 120
 PREPARED_DEPTH_BIAS = 500
-MAGIC = b"CSCHAO11"
-HEADER_BYTE_LENGTH = 32
-VERSION = 11
 REFERENCE_COLUMNS = 20
 REFERENCE_ROWS = 10
 REFERENCE_DEPTHS = 10
@@ -263,6 +260,12 @@ def main() -> None:
             "sha256": digest,
             "encodedByteLength": len(encoded),
             "decodedByteLength": len(decoded),
+            "materializedByteLength": (
+                SAMPLE_COUNT * 3 * np.dtype("<u2").itemsize +
+                STAR_COUNT * 2 * np.dtype("<u2").itemsize +
+                STAR_COUNT * 3 * np.dtype("<u2").itemsize),
+            "contentEncoding": "br",
+            "transportEncoding": TRANSPORT_ENCODING,
             "sampleCount": SAMPLE_COUNT,
             "framesPerSecond": FRAMES_PER_SECOND,
             "revealSeconds": REVEAL_SECONDS,
@@ -276,7 +279,7 @@ def main() -> None:
 
     leaf_opacities = [format_opacity(index) for index in range(STAR_COUNT)]
     metadata = {
-        "schema": "csschaos-prepared-sequence@11",
+        "schema": "csschaos-prepared-sequence@12",
         "status": "ready",
         "adapterId": "chaos",
         "title": "Chaos",
@@ -1035,22 +1038,6 @@ def project_final_camera_positions(positions: np.ndarray) -> np.ndarray:
         VIEWPORT_HEIGHT / 2 + y_after_x * perspective_scale,
         z_after_x,
     ))
-
-
-def encode_asset(system_index: int, coordinates: np.ndarray,
-                 phase_indices: np.ndarray, reveal_order: np.ndarray,
-                 handoff_control_coordinates: np.ndarray) -> bytes:
-    coordinate_bytes = coordinates.astype("<u2", copy=False).tobytes()
-    phase_bytes = phase_indices.astype("<u2", copy=False).tobytes()
-    reveal_bytes = reveal_order.astype("<u2", copy=False).tobytes()
-    handoff_control_bytes = handoff_control_coordinates.astype("<u2", copy=False).tobytes()
-    header = struct.pack(
-        "<8sHHHHHHHHII", MAGIC, HEADER_BYTE_LENGTH, VERSION, system_index,
-        SAMPLE_COUNT, COORDINATE_SCALE, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, STAR_COUNT,
-        HEADER_BYTE_LENGTH, len(coordinate_bytes))
-    if len(header) != HEADER_BYTE_LENGTH:
-        raise RuntimeError(f"Chaos header length drifted: {len(header)}")
-    return header + coordinate_bytes + phase_bytes + reveal_bytes + handoff_control_bytes
 
 
 def prepare_snapshot() -> str:

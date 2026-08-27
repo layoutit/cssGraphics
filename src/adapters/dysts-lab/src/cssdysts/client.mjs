@@ -267,7 +267,7 @@ function createPreparedAssetMaterializer(state) {
 }
 
 function validateMetadata(metadata) {
-  if (metadata?.schema !== "csschaos-prepared-sequence@11" ||
+  if (metadata?.schema !== "csschaos-prepared-sequence@12" ||
       metadata.status !== "ready" || metadata.adapterId !== "chaos" ||
       metadata.starCount !== 2000 || metadata.framesPerSecond !== 60 ||
       metadata.preparedRevealSeconds !== 3 ||
@@ -314,6 +314,13 @@ function validateMetadata(metadata) {
       metadata.sequence.some((descriptor) => descriptor.handoffSeconds !== 2) ||
       metadata.sequence.some((descriptor) => descriptor.holdSeconds !== 3) ||
       metadata.sequence.some((descriptor) => descriptor.handoffControlPointCount !== 2000) ||
+      metadata.sequence.some((descriptor) => descriptor.contentEncoding !== "br" ||
+        descriptor.transportEncoding !==
+          "axis-split-zigzag-varint-second-difference-u16-plus-sorted-phase-ranks-packed-reveal@1" ||
+        !Number.isSafeInteger(descriptor.decodedByteLength) ||
+        !Number.isSafeInteger(descriptor.materializedByteLength) ||
+        descriptor.materializedByteLength !== 37_280 ||
+        descriptor.encodedByteLength >= descriptor.materializedByteLength) ||
       metadata.sequence.some((descriptor) =>
         descriptor.presentationOrientation?.method !==
           "prepared deterministic rigid orientation audition" ||

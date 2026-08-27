@@ -16,12 +16,13 @@ import json
 import math
 import re
 import shutil
-import struct
 from pathlib import Path
 
 import brotli
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+
+from chaos_prepared_transport import decode_asset
 
 
 POINT_COUNT = 2000
@@ -98,19 +99,12 @@ def read_bank(bank: Path) -> tuple[dict, np.ndarray, np.ndarray, list[dict]]:
         asset_path = bank / descriptor["asset"]
         encoded = asset_path.read_bytes()
         decoded = brotli.decompress(encoded)
-        coordinate_offset = struct.unpack_from("<I", decoded, 24)[0]
-        coordinate_byte_length = struct.unpack_from("<I", decoded, 28)[0]
-        coordinates = np.frombuffer(
-            decoded, dtype="<u2", count=coordinate_byte_length // 2,
-            offset=coordinate_offset).reshape(descriptor["sampleCount"], 3).copy()
-        phase_offset = coordinate_offset + coordinate_byte_length
-        phases = np.frombuffer(
-            decoded, dtype="<u2", count=descriptor["starCount"],
-            offset=phase_offset).astype(np.int32).copy()
-        reveal_offset = phase_offset + descriptor["starCount"] * 2
-        reveal_order = np.frombuffer(
-            decoded, dtype="<u2", count=descriptor["starCount"],
-            offset=reveal_offset).astype(np.int32).copy()
+        asset = decode_asset(decoded, descriptor)
+        coordinates = asset["coordinates"]
+        phases = asset["phaseIndices"].astype(np.int32)
+        reveal_order = asset["revealOrder"].astype(np.int32)
+        motion_payload = coordinates.tobytes() + phases.astype("<u2").tobytes() + \
+            reveal_order.astype("<u2").tobytes()
         decoded_systems.append({
             "descriptor": descriptor,
             "coordinates": coordinates,
@@ -118,8 +112,7 @@ def read_bank(bank: Path) -> tuple[dict, np.ndarray, np.ndarray, list[dict]]:
             "revealOrder": reveal_order,
             "encodedSha256": hashlib.sha256(encoded).hexdigest(),
             "decodedSha256": hashlib.sha256(decoded).hexdigest(),
-            "motionPayloadSha256": hashlib.sha256(
-                decoded[coordinate_offset:]).hexdigest(),
+            "motionPayloadSha256": hashlib.sha256(motion_payload).hexdigest(),
         })
     return metadata, leaf_colors, leaf_opacities, decoded_systems
 

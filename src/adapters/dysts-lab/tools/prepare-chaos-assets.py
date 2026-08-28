@@ -312,8 +312,11 @@ def main() -> None:
         print(f"{system_index + 1:02d}/{len(route)} {name}: {len(encoded) / 1024:.1f} KiB")
 
     leaf_colors = [format_leaf_color(index) for index in range(STAR_COUNT)]
+    snapshot_html = prepare_snapshot()
+    snapshot_sha256 = hashlib.sha256(snapshot_html.encode()).hexdigest()
+    snapshot_asset = f"snapshot-{snapshot_sha256}.html"
     metadata = {
-        "schema": "csschaos-prepared-sequence@14",
+        "schema": "csschaos-prepared-sequence@15",
         "status": "ready",
         "adapterId": "chaos",
         "title": "Chaos",
@@ -373,6 +376,11 @@ def main() -> None:
         "viewport": {"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT,
                      "depth": VIEWPORT_DEPTH, "perspective": PERSPECTIVE_DISTANCE},
         "starCount": STAR_COUNT,
+        "snapshot": {
+            "asset": snapshot_asset,
+            "sha256": snapshot_sha256,
+            "byteLength": len(snapshot_html.encode()),
+        },
         "sampleCount": SAMPLE_COUNT,
         "sourceFrameStep": SOURCE_FRAME_STEP,
         "framesPerSecond": FRAMES_PER_SECOND,
@@ -421,7 +429,11 @@ def main() -> None:
     }
     (output_root / "prepared.json").write_text(
         json.dumps(metadata, separators=(",", ":")) + "\n")
-    (output_root / "snapshot.html").write_text(prepare_snapshot())
+    (output_root / "snapshot.html").unlink(missing_ok=True)
+    for stale_snapshot in output_root.glob("snapshot-*.html"):
+        if stale_snapshot.name != snapshot_asset:
+            stale_snapshot.unlink()
+    (output_root / snapshot_asset).write_text(snapshot_html)
     write_phase_distribution_audit(route, phase_distribution)
     print("route=" + " -> ".join(route))
     print(f"sequence={len(route)} advance=automatic-shuffled-handoff")

@@ -105,7 +105,7 @@ def main() -> None:
 
 
 def validate_metadata(metadata: dict) -> None:
-    if metadata.get("schema") != "csschaos-prepared-sequence@14" or \
+    if metadata.get("schema") != "csschaos-prepared-sequence@15" or \
             metadata.get("starCount") != POINT_COUNT or \
             metadata.get("sampleCount") != SAMPLE_COUNT or \
             metadata.get("sourceFrameStep") != SOURCE_FRAME_STEP or \

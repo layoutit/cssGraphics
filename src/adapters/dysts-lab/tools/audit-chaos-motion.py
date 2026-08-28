@@ -86,7 +86,7 @@ def read_bank(bank: Path) -> tuple[dict, np.ndarray, np.ndarray, list[dict]]:
     metadata_bytes = metadata_path.read_bytes()
     metadata = json.loads(metadata_bytes)
     colors = metadata.get("leafColors", ())
-    if metadata.get("schema") != "csschaos-prepared-sequence@14" or \
+    if metadata.get("schema") != "csschaos-prepared-sequence@15" or \
             metadata.get("starCount") != POINT_COUNT or len(colors) != POINT_COUNT:
         raise RuntimeError("Motion audit requires the prepared 2,000-dot bank")
     parsed_colors = [COLOR_PATTERN.fullmatch(color) for color in colors]

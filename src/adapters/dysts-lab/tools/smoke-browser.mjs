@@ -192,7 +192,8 @@ function assertSmoke(report) {
       report.final.paused !== true ||
       report.final.pausedFrame !== report.final.pausedFrameAfterWait ||
       assetRequests.filter((path) => path.endsWith("prepared.json")).length !== 1 ||
-      assetRequests.filter((path) => path.endsWith("snapshot.html")).length !== 1 ||
+      assetRequests.filter((path) =>
+        /\/snapshot-[a-f0-9]{64}\.html$/u.test(path)).length !== 1 ||
       assetRequests.filter((path) => path.endsWith(".bin.br")).length < 2 ||
       report.pageErrors.length || report.consoleErrors.length || report.failedResponses.length) {
     throw new Error(`Chaos ${report.id} browser smoke failed:\n${JSON.stringify(report, null, 2)}`);

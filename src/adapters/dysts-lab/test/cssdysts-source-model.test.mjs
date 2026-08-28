@@ -23,7 +23,7 @@ test("Chaos source-locks the complete upstream model implementation", async () =
 
 test("ranking qualifies every continuous system and packages the visual shortlist", async () => {
   const [rankingSource, packagingSource, curationSource, motionAuditSource, motionToolSource,
-    dotAuditSource, dotFidelitySource] =
+    dotAuditSource, dotFidelitySource, spacingAuditSource] =
     await Promise.all([
     readFile(new URL("../tools/rank-dysts-candidates.py", import.meta.url), "utf8"),
     readFile(new URL("../tools/prepare-chaos-assets.py", import.meta.url), "utf8"),
@@ -33,6 +33,7 @@ test("ranking qualifies every continuous system and packages the visual shortlis
     readFile(new URL("../tools/audit-chaos-motion.py", import.meta.url), "utf8"),
     readFile(new URL("../tools/audit-chaos-dot-requirements.py", import.meta.url), "utf8"),
     readFile(new URL("../tools/chaos_dot_fidelity.py", import.meta.url), "utf8"),
+    readFile(new URL("../tools/audit-chaos-spacing.py", import.meta.url), "utf8"),
   ]);
   const curation = JSON.parse(curationSource);
   const motionAudit = JSON.parse(motionAuditSource);
@@ -74,7 +75,10 @@ test("ranking qualifies every continuous system and packages the visual shortlis
       motionAudit.score.maximumMedianTravelPxPerSourceFrame));
   assert.match(rankingSource, /get_attractor_list\("continuous"\)/u);
   assert.match(rankingSource, /heuristic-visual-coolness-not-source-authority/u);
-  assert.match(packagingSource, /selected_systems = tuple\(candidates\)/u);
+  assert.match(rankingSource, /SAMPLE_COUNT = 2880/u);
+  assert.match(rankingSource, /SAMPLES_PER_PERIOD = 240/u);
+  assert.match(packagingSource,
+    /selected_systems = \(tuple\(flow_source\["adaptedClasses"\]\)/u);
   assert.match(packagingSource, /expected_count = 50 if args\.selection_stage == "motion" else 95/u);
   assert.match(packagingSource, /len\(visual_removed_system_ids\) != 33/u);
   assert.match(packagingSource, /len\(similarity_removed_system_ids\) != 7/u);
@@ -89,7 +93,20 @@ test("ranking qualifies every continuous system and packages the visual shortlis
   assert.match(dotFidelitySource, /SUPPORT_RECALL_GATE = 0\.90/u);
   assert.match(dotFidelitySource, /P95_GAP_GATE_PIXELS = 6\.0/u);
   assert.match(dotFidelitySource, /prepare_coverage_phase_indices/u);
+  assert.match(dotFidelitySource, /prepare_support_phase_indices/u);
+  assert.match(dotFidelitySource, /SUPPORT_SEED_COUNTS = \(1750, 1800, 1850\)/u);
+  assert.match(spacingAuditSource, /csschaos-dot-spacing-audit@1/u);
+  assert.match(spacingAuditSource, /FIRST_FULLY_VISIBLE_FRAME = 120/u);
+  assert.match(spacingAuditSource, /LAST_VISIBLE_FRAME = 300/u);
+  assert.match(spacingAuditSource, /cKDTree\(visible\)\.query\(visible, k=2\)/u);
+  assert.match(spacingAuditSource, /descriptive spacing audit only/u);
   assert.match(packagingSource, /STAR_COUNT = 2000/u);
+  assert.match(packagingSource, /SOURCE_SAMPLE_COUNT = 2880/u);
+  assert.match(packagingSource, /PREPARED_SAMPLE_FACTOR = 2/u);
+  assert.match(packagingSource,
+    /SAMPLE_COUNT = SOURCE_SAMPLE_COUNT \* PREPARED_SAMPLE_FACTOR/u);
+  assert.match(packagingSource, /prepare_dense_source_trajectory/u);
+  assert.match(packagingSource, /dense\[::PREPARED_SAMPLE_FACTOR\] = geometry/u);
   assert.match(packagingSource,
     /identityMatchingFrames": \[HANDOFF_TRANSITION_FRAME, HANDOFF_FRAME\]/u);
   assert.match(packagingSource, /linear_sum_assignment/u);
@@ -103,25 +120,36 @@ test("ranking qualifies every continuous system and packages the visual shortlis
     /prepare_handoff_control_coordinates\([\s\S]*name, coordinates, phase_indices\[name\], reveal_order/u);
   assert.match(packagingSource, /trajectory-wave-to-target-v6:\{target_name\}/u);
   assert.match(packagingSource,
-    /target_phase_indices\[target_reveal_order\] \+ HANDOFF_TRANSITION_FRAME/u);
+    /target_phase_indices\[target_reveal_order\] \+[\s\S]*prepared_source_frame\(HANDOFF_TRANSITION_FRAME\)/u);
   assert.doesNotMatch(packagingSource,
     /scatter-to-target-v3|source_phase_indices\[source_reveal_order\]/u);
   assert.match(packagingSource, /HANDOFF_TRANSITION_FRAME/u);
   assert.match(packagingSource, /decode_final_camera_coordinates/u);
   assert.doesNotMatch(packagingSource, /fit_scatter_cloud_to_camera|project_scatter_positions/u);
   assert.match(packagingSource, /project_final_camera_positions/u);
+  assert.match(packagingSource, /FINAL_CAMERA_SAFE_MARGIN = 48/u);
+  assert.match(packagingSource, /fit_final_camera_positions_to_safe_area/u);
+  assert.match(packagingSource, /prepared uniform screen-space fit with minimal translation/u);
+  assert.match(packagingSource, /minimumPreparedEdgePixels/u);
   assert.match(packagingSource, /preparedFinalCameraProjection/u);
   assert.match(packagingSource, /runtimeThreeDimensionalTransform/u);
   assert.match(packagingSource, /prepare_camera_orientations/u);
   assert.match(packagingSource, /score_camera_geometry/u);
   assert.match(packagingSource, /render_camera_audit/u);
-  assert.match(packagingSource, /ranked-shortlist-final-camera-identity-v10\.npz/u);
-  assert.match(packagingSource, /final-camera-coverage-first-overlap-shared-reference-v10/u);
+  assert.match(packagingSource, /ranked-shortlist-final-camera-identity-v17\.npz/u);
+  assert.match(packagingSource,
+    /source-authority-half-pixel-p95-pareto-spacing-v17/u);
+  assert.match(packagingSource, /SPACING_P95_PARETO_TOLERANCE_PIXELS = 0\.5/u);
+  assert.match(packagingSource, /prepare_source_phase_pattern/u);
   assert.match(packagingSource, /prepare_distributed_phase_indices/u);
   assert.match(packagingSource, /prepare_phase_pattern_candidates/u);
   assert.match(packagingSource, /passes_dot_fidelity_gate/u);
   assert.match(packagingSource, /coverage-greedy/u);
-  assert.match(packagingSource, /PHASE_DISTRIBUTION_MAX_GAP = 3/u);
+  assert.match(packagingSource, /support-greedy/u);
+  assert.match(packagingSource, /PHASE_DISTRIBUTION_MAX_GAP = 4/u);
+  assert.match(packagingSource, /measure_retained_spacing/u);
+  assert.match(packagingSource, /measure_temporal_neighbor_spacing_proxy/u);
+  assert.match(packagingSource, /select_spacing_balanced_candidate/u);
   assert.match(packagingSource, /selectedPairOverlapPercent/u);
   assert.doesNotMatch(packagingSource, /prepare_handoff_phase_offsets/u);
   assert.match(packagingSource, /phase_offsets = \{name: 0 for name in route\}/u);
@@ -131,7 +159,10 @@ test("ranking qualifies every continuous system and packages the visual shortlis
   assert.match(packagingSource, /srgb8_to_oklab/u);
   assert.match(packagingSource, /gamut_map_oklab/u);
   assert.match(packagingSource, /oklab_to_linear_srgb/u);
-  assert.match(packagingSource, /color = format_phase_color\(leaf_index\)/u);
+  assert.match(packagingSource, /leaf_colors = \[format_leaf_color\(index\)/u);
+  assert.match(packagingSource, /return f"rgba\(\{red\},\{green\},\{blue\},\{format_opacity\(index\)\}\)"/u);
+  assert.match(packagingSource, /color:transparent/u);
+  assert.doesNotMatch(packagingSource, /style="color:\{color\};opacity:/u);
   assert.match(packagingSource,
     /cyclic green-to-white-to-yellow-to-red source-phase gradient with perceptual OKLab interpolation, gamut-mapped sRGB output, and matching green endpoints/u);
   assert.doesNotMatch(packagingSource, /LAVENDER_ACCENT_STRIDE/u);
@@ -162,13 +193,14 @@ test("the audition advances through shuffled prepared handoffs and performs no r
     /presentationOrientation\.selectedScore <[\s\S]*presentationOrientation\.baselineScore/u);
   assert.match(clientSource, /onCycleComplete/u);
   assert.match(clientSource, /handoff: true,[\s\S]*initialFrame: 0/u);
-  assert.match(clientSource, /publishOpacity: scene\.publishOpacity/u);
+  assert.match(clientSource, /publishColor: scene\.publishColor/u);
   assert.doesNotMatch(clientSource + sceneSource, /setScatterPhase|scatter-out|scatter-in/u);
   assert.match(clientSource, /leafRevealOrder/u);
   assert.match(clientSource, /prepareRankToPhysical/u);
   assert.doesNotMatch(clientSource, /prepareIdentityToPhysical/u);
   assert.match(clientSource, /createPreparedAssetMaterializer/u);
   assert.match(clientSource, /workerStartCount/u);
+  assert.doesNotMatch(clientSource + workerSource, /TemporalSubdivision|TEMPORAL_SUBDIVISION/u);
   assert.match(clientSource, /pending\.set\(requestId/u);
   assert.doesNotMatch(clientSource, /worker\.terminate\(\);[\s\S]{0,160}resolve/u);
   assert.doesNotMatch(clientSource + playerSource, /rewind/iu);
@@ -179,7 +211,7 @@ test("the audition advances through shuffled prepared handoffs and performs no r
   assert.match(playerSource, /const revealRank = handoff \? rank/u);
   assert.match(playerSource, /const logicalLeaf = leafRevealOrder\[revealRank\]/u);
   assert.match(playerSource,
-    /leafPhaseIndices\[logicalLeaf\] \+ transitionFrameCount/u);
+    /leafPhaseIndices\[logicalLeaf\] \+ transitionFrameCount \* catalog\.sourceFrameStep/u);
   assert.doesNotMatch(playerSource,
     /publishScatterOut|publishScatterIn|scatterFrameCount|setTimeout/u);
   assert.match(playerSource, /findInitialRevealStartRank/u);
@@ -196,16 +228,33 @@ test("the audition advances through shuffled prepared handoffs and performs no r
     /captureTransforms|handoffStartTransforms|readTransformComponents/u);
   assert.doesNotMatch(playerSource,
     /elapsedFrame < handoffFrameCount && elapsedFrame > publishedFrame/u);
+  assert.match(playerSource, /const sourceFrameStep = catalog\.sourceFrameStep;/u);
+  assert.match(playerSource, /streamFrame \* sourceFrameStep % catalog\.sampleCount/u);
+  assert.match(playerSource, /transitionFrameCount \* catalog\.sourceFrameStep/u);
+  assert.doesNotMatch(playerSource, /runtimeSourceInterpolation/u);
   assert.doesNotMatch(stylesSource, /will-change/u);
+  assert.doesNotMatch(stylesSource, /--csschaos-point-size/u);
+  assert.match(stylesSource,
+    /\.polycss-scene > b \{[\s\S]*?width:\s*2px;[\s\S]*?height:\s*2px;/u);
   assert.doesNotMatch(stylesSource, /perspective|preserve-3d/u);
   assert.doesNotMatch(stylesSource, /rotateX\(-40deg\) rotateY\(45deg\)/u);
   assert.match(transportSource, /translate[\s\S]*scale/u);
   assert.doesNotMatch(transportSource, /translate3d|rotateX|rotateY/u);
   assert.doesNotMatch(stylesSource, /\.polycss-scene > b::before/u);
-  assert.equal((stylesSource.match(/width: 420px;/gu) ?? []).length, 3);
+  assert.doesNotMatch(stylesSource, /\.axis(?:-|\s|\{)/u);
   assert.doesNotMatch(stylesSource, /chaos-horizontal-orbit|chaos-horizontal-billboard/u);
-  assert.match(stylesSource, /\.axis-x[\s\S]*\.axis-y[\s\S]*\.axis-z/u);
-  assert.match(stylesSource, /\.axis \{[\s\S]*?display: none;/u);
   assert.doesNotMatch(stylesSource, /repeating-linear-gradient/u);
   assert.doesNotMatch(stylesSource, /data-axis|attr\(data-axis\)/u);
+  assert.match(sceneSource, /retainedDomMode: "prepared-flat-polycss-snapshot"/u);
+  assert.match(sceneSource, /retainedCameraRootCount: 1/u);
+  assert.match(sceneSource, /retainedSceneRootCount: 1/u);
+  assert.match(sceneSource, /retainedPointWrapperCount: 0/u);
+  assert.match(sceneSource, /retainedPointLeafCount: mountedLeaves\.length/u);
+  assert.match(sceneSource, /retainedPointIdCount: 0/u);
+  assert.match(sceneSource, /retainedPointDataAttributeCount: 0/u);
+  assert.match(sceneSource, /attribute\.name\.startsWith\("data-"\)/u);
+  assert.match(sceneSource, /runtimeDomCreationCount/u);
+  assert.match(sceneSource, /runtimeDomRemovalCount/u);
+  assert.match(sceneSource, /assertStableDomIdentity/u);
+  assert.doesNotMatch(sceneSource, /retainedAxisElementCount|mountedAxes|\.axis/u);
 });

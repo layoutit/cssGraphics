@@ -11,7 +11,7 @@ const outputPath = resolve(repositoryRoot,
   process.env.CSSCHAOS_PREVIEW_OUTPUT ?? "site/public/landing/chaos.webp");
 const sidebarOutputPath = resolve(repositoryRoot,
   process.env.CSSCHAOS_SIDEBAR_PREVIEW_OUTPUT ?? "site/public/landing/sidebar/chaos.webp");
-const system = process.env.CSSCHAOS_PREVIEW_SYSTEM ?? "aizawa";
+const system = process.env.CSSCHAOS_PREVIEW_SYSTEM ?? "bouali2";
 const previewWidth = 960;
 const previewHeight = 540;
 const cropWidth = 720;

@@ -40,7 +40,7 @@ CONTACT_ROWS = 4
 CONTACT_CELL_WIDTH = 256
 CONTACT_CELL_HEIGHT = 210
 CONTACT_IMAGE_HEIGHT = 192
-COLOR_PATTERN = re.compile(r"color:(#[0-9a-f]{6});opacity:0")
+COLOR_PATTERN = re.compile(r"rgba\((\d+),(\d+),(\d+),(0\.\d)\)")
 
 
 def parse_args() -> argparse.Namespace:
@@ -83,17 +83,22 @@ def average_percentile_ranks(values: list[float]) -> np.ndarray:
 
 def read_bank(bank: Path) -> tuple[dict, np.ndarray, np.ndarray, list[dict]]:
     metadata_path = bank / "prepared.json"
-    snapshot_path = bank / "snapshot.html"
     metadata_bytes = metadata_path.read_bytes()
     metadata = json.loads(metadata_bytes)
-    colors = COLOR_PATTERN.findall(snapshot_path.read_text())
-    if metadata.get("starCount") != POINT_COUNT or len(colors) != POINT_COUNT:
+    colors = metadata.get("leafColors", ())
+    if metadata.get("schema") != "csschaos-prepared-sequence@14" or \
+            metadata.get("starCount") != POINT_COUNT or len(colors) != POINT_COUNT:
         raise RuntimeError("Motion audit requires the prepared 2,000-dot bank")
+    parsed_colors = [COLOR_PATTERN.fullmatch(color) for color in colors]
+    if any(color is None for color in parsed_colors):
+        raise RuntimeError("Motion audit leaf color encoding drifted")
     leaf_colors = np.asarray([
-        tuple(int(color[channel:channel + 2], 16) for channel in (1, 3, 5))
-        for color in colors
+        tuple(int(channel) for channel in color.groups()[:3])
+        for color in parsed_colors
     ], dtype=np.float64)
-    leaf_opacities = np.asarray(metadata["leafOpacities"], dtype=np.float64)
+    leaf_opacities = np.asarray([
+        float(color.group(4)) for color in parsed_colors
+    ], dtype=np.float64)
     decoded_systems = []
     for descriptor in metadata["sequence"]:
         asset_path = bank / descriptor["asset"]
@@ -183,8 +188,8 @@ def normalized_frame_change(left: np.ndarray, right: np.ndarray) -> float:
     return float(np.abs(left_float - right_float).sum() / max(available, 1e-12))
 
 
-def measure_system(system: dict, colors: np.ndarray,
-                   opacities: np.ndarray) -> tuple[dict, list[np.ndarray]]:
+def measure_system(system: dict, colors: np.ndarray, opacities: np.ndarray,
+                   source_frame_step: int) -> tuple[dict, list[np.ndarray]]:
     descriptor = system["descriptor"]
     sample_count = descriptor["sampleCount"]
     sampled_frames = np.arange(0, sample_count, SAMPLE_STEP, dtype=np.int32)
@@ -197,8 +202,9 @@ def measure_system(system: dict, colors: np.ndarray,
     frame_changes = []
     for source_frame in sampled_frames:
         current = leaf_positions(system, int(source_frame))
-        future = leaf_positions(system, int(source_frame + MOTION_OFFSET))
-        later = leaf_positions(system, int(source_frame + MOTION_OFFSET * 2))
+        future = leaf_positions(system, int(source_frame + MOTION_OFFSET * source_frame_step))
+        later = leaf_positions(
+            system, int(source_frame + MOTION_OFFSET * source_frame_step * 2))
         velocity = future[:, :2] - current[:, :2]
         next_velocity = later[:, :2] - future[:, :2]
         magnitudes = np.linalg.norm(velocity, axis=1)
@@ -241,7 +247,8 @@ def measure_system(system: dict, colors: np.ndarray,
                   max(typical_speed, 1e-12)), 6),
     }
     review_frames = [render_array(
-        leaf_positions(system, frame_index * REVIEW_FRAME_STEP), colors, opacities)
+        leaf_positions(system, frame_index * REVIEW_FRAME_STEP * source_frame_step),
+        colors, opacities)
         for frame_index in range(REVIEW_FRAME_COUNT)]
     return metrics, review_frames
 
@@ -354,7 +361,8 @@ def main() -> None:
     frames_by_id = {}
     for index, system in enumerate(decoded_systems, start=1):
         descriptor = system["descriptor"]
-        metrics, frames = measure_system(system, colors, opacities)
+        metrics, frames = measure_system(
+            system, colors, opacities, metadata["sourceFrameStep"])
         rows.append({
             "id": descriptor["id"],
             "name": descriptor["name"],
@@ -405,6 +413,7 @@ def main() -> None:
         "sampling": {
             "measurementFrameStep": SAMPLE_STEP,
             "motionOffsetFrames": MOTION_OFFSET,
+            "preparedSourceFrameStep": metadata["sourceFrameStep"],
             "reviewFrameCount": REVIEW_FRAME_COUNT,
             "reviewFrameStep": REVIEW_FRAME_STEP,
             "reviewViewport": [REVIEW_WIDTH, REVIEW_HEIGHT],

@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: MIT
 import { mountPreparedChaosSnapshot } from "./polycssScene.mjs";
-import { createChaosPreparedPlayer } from "./preparedPlayback.mjs";
+import { createChaosPreparedPlayer, createChaosSchedulerCalibration } from "./preparedPlayback.mjs";
 
 const ASSET_ROOT = "/csschaos";
 
 export function mountChaosClient(host) {
+  const singleSystem = new URLSearchParams(location.search).get("single") === "1";
   let destroyed = false;
   let player = null;
   let scene = null;
   let resizeObserver = null;
   let playbackEpoch = 0;
   const preparedCache = new Map();
+  const schedulerCalibration = createChaosSchedulerCalibration();
   const state = {
     ready: false,
     errors: [],
@@ -72,7 +74,7 @@ export function mountChaosClient(host) {
     const nextIndex = peekNextPlaybackIndex();
     const snapshotPromise = fetchText(`${ASSET_ROOT}/snapshot.html`);
     const currentPromise = loadPrepared(state.currentIndex);
-    void loadPrepared(nextIndex);
+    if (!singleSystem) void loadPrepared(nextIndex);
     const snapshotHtml = await snapshotPromise;
     if (destroyed) return;
     scene = mountPreparedChaosSnapshot({ host, catalog: metadata, snapshotHtml });
@@ -106,12 +108,14 @@ export function mountChaosClient(host) {
       prepared,
       leafPhaseIndices: prepared.leafPhaseIndices,
       leafRevealOrder: prepared.leafRevealOrder,
-      leafOpacities: state.metadata.leafOpacities,
+      leafColors: state.metadata.leafColors,
       publish: scene.publishTransform,
-      publishOpacity: scene.publishOpacity,
+      publishColor: scene.publishColor,
       handoff: playbackOptions.handoff,
+      single: singleSystem,
       handoffStartCoordinates,
       rankToPhysical,
+      schedulerCalibration,
       onCycleComplete: () => {
         if (destroyed || state.currentIndex !== index) return;
         void selectModel(advancePlaybackIndex(), {
@@ -125,8 +129,8 @@ export function mountChaosClient(host) {
     player.resume();
     setPhase("holding");
     const nextIndex = peekNextPlaybackIndex();
-    void loadPrepared(nextIndex);
-    trimPreparedCache([index, nextIndex]);
+    if (!singleSystem) void loadPrepared(nextIndex);
+    trimPreparedCache(singleSystem ? [index] : [index, nextIndex]);
   }
 
   async function selectModel(index, playbackOptions) {
@@ -267,7 +271,7 @@ function createPreparedAssetMaterializer(state) {
 }
 
 function validateMetadata(metadata) {
-  if (metadata?.schema !== "csschaos-prepared-sequence@12" ||
+  if (metadata?.schema !== "csschaos-prepared-sequence@14" ||
       metadata.status !== "ready" || metadata.adapterId !== "chaos" ||
       metadata.starCount !== 2000 || metadata.framesPerSecond !== 60 ||
       metadata.preparedRevealSeconds !== 3 ||
@@ -297,6 +301,8 @@ function validateMetadata(metadata) {
       metadata.renderer?.preparedThreeDimensionalGeometry !== true ||
       metadata.renderer?.preparedFinalCameraProjection !== true ||
       metadata.renderer?.preparedDepthScale !== true ||
+      metadata.renderer?.preparedDenseSourceInterpolation !== true ||
+      metadata.renderer?.runtimeSourceInterpolation !== false ||
       metadata.renderer?.runtimeThreeDimensionalTransform !== false ||
       metadata.renderer?.sourceAxisIndependentScaling !== false ||
       metadata.renderer?.runtimeRevealSorting !== false ||
@@ -306,10 +312,19 @@ function validateMetadata(metadata) {
       metadata.renderer?.preparedForwardHandoff !== true ||
       metadata.renderer?.preparedSinglePassScatterHandoff !== true ||
       metadata.renderer?.preparedPerSystemCamera !== true ||
-      metadata.renderer?.retainedAxisElementCount !== 3 ||
+      metadata.renderer?.retainedCameraRootCount !== 1 ||
+      metadata.renderer?.retainedSceneRootCount !== 1 ||
+      metadata.renderer?.retainedPointWrapperCount !== 0 ||
+      metadata.renderer?.retainedPointLeafCount !== 2000 ||
+      metadata.renderer?.retainedPointIdCount !== 0 ||
+      metadata.renderer?.retainedPointDataAttributeCount !== 0 ||
       metadata.viewport?.depth !== 600 || metadata.viewport?.perspective !== 900 ||
-      metadata.leafOpacities?.length !== 2000 ||
+      metadata.leafColors?.length !== 2000 || metadata.sampleCount !== 5760 ||
+      metadata.sourceFrameStep !== 2 ||
       metadata.sequence.some((descriptor) => descriptor.starCount !== 2000) ||
+      metadata.sequence.some((descriptor) => descriptor.sampleCount !== metadata.sampleCount) ||
+      metadata.sequence.some((descriptor) =>
+        descriptor.sourceFrameStep !== metadata.sourceFrameStep) ||
       metadata.sequence.some((descriptor) => descriptor.revealSeconds !== 3) ||
       metadata.sequence.some((descriptor) => descriptor.handoffSeconds !== 2) ||
       metadata.sequence.some((descriptor) => descriptor.holdSeconds !== 3) ||
@@ -319,7 +334,7 @@ function validateMetadata(metadata) {
           "axis-split-zigzag-varint-second-difference-u16-plus-sorted-phase-ranks-packed-reveal@1" ||
         !Number.isSafeInteger(descriptor.decodedByteLength) ||
         !Number.isSafeInteger(descriptor.materializedByteLength) ||
-        descriptor.materializedByteLength !== 37_280 ||
+        descriptor.materializedByteLength !== 54_560 ||
         descriptor.encodedByteLength >= descriptor.materializedByteLength) ||
       metadata.sequence.some((descriptor) =>
         descriptor.presentationOrientation?.method !==

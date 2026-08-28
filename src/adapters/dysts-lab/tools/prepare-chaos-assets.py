@@ -25,11 +25,15 @@ from chaos_dot_fidelity import (
     DENSITY_COSINE_GATE,
     P95_GAP_GATE_PIXELS,
     SUPPORT_RECALL_GATE,
+    SUPPORT_SEED_COUNTS,
     measure_candidate as measure_dot_fidelity,
+    measure_retained_spacing,
+    measure_temporal_neighbor_spacing_proxy,
     passes_gate as passes_dot_fidelity_gate,
     prepare_audit_frames as prepare_dot_audit_frames,
     prepare_coverage_phase_indices,
     prepare_reference as prepare_dot_reference,
+    prepare_support_phase_indices,
 )
 from chaos_prepared_transport import TRANSPORT_ENCODING, encode_asset
 
@@ -37,15 +41,20 @@ from chaos_prepared_transport import TRANSPORT_ENCODING, encode_asset
 SOURCE_COMMIT = "2a03f1ae7b0680b0470458783dcb4664660e131a"
 RANKING_ROOT = Path("output/dysts-ranking")
 OUTPUT_ROOT = Path("build/generated/public/csschaos")
-MORPH_CACHE_PATH = RANKING_ROOT / "ranked-shortlist-final-camera-identity-v10.npz"
+MORPH_CACHE_PATH = RANKING_ROOT / "ranked-shortlist-final-camera-identity-v17.npz"
 CAMERA_AUDIT_ROOT = RANKING_ROOT / "camera-audit"
 PHASE_DISTRIBUTION_AUDIT_PATH = RANKING_ROOT / "phase-distribution-audit.json"
 CURATION_PATH = Path("src/adapters/dysts-lab/notes/curation/audition-2026-08-27.json")
+SOURCE_LOCK_PATH = Path("src/adapters/dysts-lab/notes/references/source-lock.json")
 UPSTREAM_METADATA_PATH = Path(os.environ.get(
     "CSSCHAOS_SOURCE_ROOT", ".local/upstreams/dysts")) / \
     "dysts/data/chaotic_attractors.json"
 STAR_COUNT = 2000
-SAMPLE_COUNT = 2880
+SOURCE_SAMPLE_COUNT = 2880
+PREPARED_SAMPLE_FACTOR = 2
+SAMPLE_COUNT = SOURCE_SAMPLE_COUNT * PREPARED_SAMPLE_FACTOR
+SOURCE_FRAME_STEP = PREPARED_SAMPLE_FACTOR
+SAMPLES_PER_CHARACTERISTIC_PERIOD = 240
 FRAMES_PER_SECOND = 60
 REVEAL_SECONDS = 3
 HANDOFF_SECONDS = 2
@@ -56,6 +65,7 @@ VIEWPORT_WIDTH = 800
 VIEWPORT_HEIGHT = 600
 VIEWPORT_DEPTH = 600
 PERSPECTIVE_DISTANCE = 900
+FINAL_CAMERA_SAFE_MARGIN = 48
 COORDINATE_SCALE = 10
 PREPARED_POSITION_BIAS = 120
 PREPARED_DEPTH_BIAS = 500
@@ -71,7 +81,10 @@ CAMERA_COARSE_ROLLS = (0, 45, 90, 135)
 CAMERA_REFINEMENT_OFFSETS = (-15, 0, 15)
 PHASE_DISTRIBUTION_BASE_STRIDE = 223
 PHASE_DISTRIBUTION_FRAME_STEP = 6
-PHASE_DISTRIBUTION_MAX_GAP = 3
+PHASE_DISTRIBUTION_MAX_GAP = 4
+SPACING_PATTERN_SHORTLIST_COUNT = 24
+SPACING_AUDIT_FIRST_FRAME = HANDOFF_TRANSITION_FRAME
+SPACING_P95_PARETO_TOLERANCE_PIXELS = 0.5
 
 # Editorial presentation chapters derived from upstream descriptions and citations.
 # Playback order is computed independently from prepared geometric similarity.
@@ -122,11 +135,20 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def prepared_source_frame(display_frame: int) -> int:
+    return display_frame * SOURCE_FRAME_STEP
+
+
 def main() -> None:
     args = parse_args()
     ranking = json.loads((RANKING_ROOT / "ranking.json").read_text())
+    if ranking.get("qualification", {}).get("sampleCount") != SOURCE_SAMPLE_COUNT or \
+            ranking["qualification"].get("samplesPerCharacteristicPeriod") != \
+            SAMPLES_PER_CHARACTERISTIC_PERIOD:
+        raise RuntimeError("Chaos source trajectory density drifted")
     upstream_metadata = json.loads(UPSTREAM_METADATA_PATH.read_text())
     curation = json.loads(CURATION_PATH.read_text())
+    source_lock = json.loads(SOURCE_LOCK_PATH.read_text())
     visual_removed_system_ids = frozenset(curation["markedForRemoval"])
     similarity_curation = curation.get("similarityBias", {})
     similarity_removed_system_ids = frozenset(similarity_curation.get("markedForRemoval", ()))
@@ -170,10 +192,13 @@ def main() -> None:
                       if item["status"] == "ready"}
     candidates = {name: item for name, item in all_candidates.items()
                   if item["slug"] not in removed_system_ids}
-    selected_systems = tuple(candidates)
+    flow_source = next(
+        source for source in source_lock["sources"] if source["path"] == "dysts/flows.py")
+    selected_systems = (tuple(flow_source["adaptedClasses"])
+                        if args.selection_stage == "motion" else tuple(candidates))
     expected_count = 50 if args.selection_stage == "motion" else 95
     selected_ids = {candidates[name]["slug"] for name in selected_systems}
-    if len(selected_systems) != expected_count or (
+    if len(selected_systems) != expected_count or set(selected_systems) != set(candidates) or (
             args.selection_stage == "motion" and
             selected_ids != set(motion_audit.get("selectedSystemIds", ()))):
         raise RuntimeError(
@@ -181,11 +206,19 @@ def main() -> None:
             f"got {len(selected_systems)}")
 
     baseline_geometries = load_geometries(candidates, selected_systems)
-    geometries, camera_orientations = prepare_camera_orientations(
+    source_geometries, camera_orientations = prepare_camera_orientations(
         baseline_geometries, selected_systems)
-    render_camera_audit(baseline_geometries, geometries, camera_orientations,
+    render_camera_audit(baseline_geometries, source_geometries, camera_orientations,
                         selected_systems)
-    coordinates_by_name = {name: quantize(geometries[name]) for name in selected_systems}
+    geometries = {
+        name: prepare_dense_source_trajectory(source_geometries[name])
+        for name in selected_systems
+    }
+    coordinates_by_name = {}
+    for name in selected_systems:
+        coordinates, safe_area = quantize(geometries[name])
+        coordinates_by_name[name] = coordinates
+        camera_orientations[name]["screenSafeArea"] = safe_area
     presentation = prepare_presentation(
         geometries, coordinates_by_name, selected_systems,
         allow_fidelity_rejections=args.selection_stage == "similarity")
@@ -267,6 +300,7 @@ def main() -> None:
             "contentEncoding": "br",
             "transportEncoding": TRANSPORT_ENCODING,
             "sampleCount": SAMPLE_COUNT,
+            "sourceFrameStep": SOURCE_FRAME_STEP,
             "framesPerSecond": FRAMES_PER_SECOND,
             "revealSeconds": REVEAL_SECONDS,
             "handoffSeconds": HANDOFF_SECONDS,
@@ -277,15 +311,19 @@ def main() -> None:
         })
         print(f"{system_index + 1:02d}/{len(route)} {name}: {len(encoded) / 1024:.1f} KiB")
 
-    leaf_opacities = [format_opacity(index) for index in range(STAR_COUNT)]
+    leaf_colors = [format_leaf_color(index) for index in range(STAR_COUNT)]
     metadata = {
-        "schema": "csschaos-prepared-sequence@12",
+        "schema": "csschaos-prepared-sequence@14",
         "status": "ready",
         "adapterId": "chaos",
         "title": "Chaos",
         "source": {
             "repository": "https://github.com/GilpinLab/dysts",
             "commit": SOURCE_COMMIT,
+            "integrationSampleCount": SOURCE_SAMPLE_COUNT,
+            "samplesPerCharacteristicPeriod": SAMPLES_PER_CHARACTERISTIC_PERIOD,
+            "preparedSampleCount": SAMPLE_COUNT,
+            "preparedInterpolationFactor": PREPARED_SAMPLE_FACTOR,
             "implementedContinuousSystemCount": 135,
             "qualifiedSystemCount": ranking["qualification"]["readyCount"],
             "selection": ("50 distinct systems kept after a complete 135-system visual "
@@ -321,15 +359,22 @@ def main() -> None:
             "preparedPerSystemCamera": True,
             "preparedFinalCameraProjection": True,
             "preparedDepthScale": True,
+            "preparedDenseSourceInterpolation": True,
+            "runtimeSourceInterpolation": False,
             "runtimeThreeDimensionalTransform": False,
             "sourceAxisIndependentScaling": False,
+            "retainedCameraRootCount": 1,
+            "retainedSceneRootCount": 1,
+            "retainedPointWrapperCount": 0,
             "retainedPointLeafCount": STAR_COUNT,
-            "retainedAxisElementCount": 3,
+            "retainedPointIdCount": 0,
+            "retainedPointDataAttributeCount": 0,
         },
         "viewport": {"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT,
                      "depth": VIEWPORT_DEPTH, "perspective": PERSPECTIVE_DISTANCE},
         "starCount": STAR_COUNT,
         "sampleCount": SAMPLE_COUNT,
+        "sourceFrameStep": SOURCE_FRAME_STEP,
         "framesPerSecond": FRAMES_PER_SECOND,
         "preparedRevealSeconds": REVEAL_SECONDS,
         "preparedHandoffSeconds": HANDOFF_SECONDS,
@@ -363,15 +408,15 @@ def main() -> None:
             "authority": "PolyCSS prepared presentation",
             "routeMethod": "descending pinned visual coolness ranking",
             "geometryMethod": "source dimensions without independent axis scaling",
-            "cameraMethod": "deterministic per-system rigid orientation audition followed by a prepared fixed-camera perspective projection and billboard depth scale; unscaled PCA to 3D only above three dimensions",
+            "cameraMethod": "deterministic per-system rigid orientation audition followed by a prepared fixed-camera perspective projection, uniform 48px screen-safe fit with minimal translation, and billboard depth scale; unscaled PCA to 3D only above three dimensions",
             "colorMethod": "cyclic green-to-white-to-yellow-to-red source-phase gradient with perceptual OKLab interpolation, gamut-mapped sRGB output, and matching green endpoints",
-            "identityMethod": "coverage-qualified bounded-gap phase selection followed by minimum-cost assignment to one shared 20-by-10-by-10 spatial reference",
-            "distributionMethod": "prepare-time per-attractor allocation with hard full-trajectory density, support, and nearest-gap gates followed by projected-billboard overlap minimization; a deterministic nonuniform coverage fallback handles shapes that no uniform phase pattern can represent with 2000 dots",
+            "identityMethod": "fidelity-and-spacing-qualified phase selection followed by minimum-cost assignment to one shared 20-by-10-by-10 spatial reference",
+            "distributionMethod": "prepare-time two-times source-derived trajectory densification followed by a per-attractor 2000-dot allocation that preserves full-trajectory density and support, bounds overlap, and minimizes retained-dot neighbor gaps across the visible hold; deterministic spatial and exact support-raster fallbacks remain available",
             "handoffMethod": "the same 2000 retained dots follow one continuous target-biased curved path directly into the next source trajectory",
             "matchingFrames": [HANDOFF_TRANSITION_FRAME, HANDOFF_FRAME],
             "edges": presentation["edges"],
         },
-        "leafOpacities": leaf_opacities,
+        "leafColors": leaf_colors,
         "sequence": sequence,
     }
     (output_root / "prepared.json").write_text(
@@ -387,10 +432,22 @@ def load_geometries(candidates: dict, selected_systems: tuple[str, ...]) -> dict
     for name in selected_systems:
         with np.load(RANKING_ROOT / candidates[name]["cache"]) as cache:
             geometry = np.asarray(cache["geometry"], dtype=np.float64)
-        if geometry.shape != (SAMPLE_COUNT, 3) or not np.isfinite(geometry).all():
+        if geometry.shape != (SOURCE_SAMPLE_COUNT, 3) or not np.isfinite(geometry).all():
             raise RuntimeError(f"{name} prepared 3D geometry drifted: {geometry.shape}")
         geometries[name] = geometry
     return geometries
+
+
+def prepare_dense_source_trajectory(geometry: np.ndarray) -> np.ndarray:
+    """Insert source-derived midpoints without changing the 60 Hz source cadence."""
+    if geometry.shape != (SOURCE_SAMPLE_COUNT, 3) or \
+            PREPARED_SAMPLE_FACTOR != 2:
+        raise RuntimeError("Chaos dense source trajectory contract drifted")
+    dense = np.empty((SAMPLE_COUNT, 3), dtype=np.float64)
+    dense[::PREPARED_SAMPLE_FACTOR] = geometry
+    dense[1::PREPARED_SAMPLE_FACTOR] = (
+        geometry + np.roll(geometry, -1, axis=0)) / 2
+    return dense
 
 
 def prepare_camera_orientations(
@@ -492,7 +549,8 @@ def camera_rotation(yaw_degrees: int, pitch_degrees: int,
 
 
 def score_camera_geometry(geometry: np.ndarray) -> float:
-    phase_indices = (np.arange(CAMERA_SAMPLE_COUNT, dtype=np.int32) * 223) % SAMPLE_COUNT
+    phase_indices = (np.arange(CAMERA_SAMPLE_COUNT, dtype=np.int32) * 223) % \
+        SOURCE_SAMPLE_COUNT
     projected = project_geometry_positions(geometry)
     normalized = projected / np.asarray((VIEWPORT_WIDTH, VIEWPORT_HEIGHT))
     preview = normalized[phase_indices]
@@ -528,7 +586,7 @@ def score_camera_geometry(geometry: np.ndarray) -> float:
         np.log([16, 32, 64]), np.log(np.maximum(boxes, 1)), 1)[0])
     point_span = np.quantile(preview, 0.98, axis=0) - np.quantile(preview, 0.02, axis=0)
     aspect_ratio = float(point_span[0] / max(point_span[1], 1e-12))
-    future = normalized[(phase_indices + 60) % SAMPLE_COUNT]
+    future = normalized[(phase_indices + 60) % SOURCE_SAMPLE_COUNT]
     median_motion = float(np.median(np.linalg.norm(future - preview, axis=1)))
     edge_fraction = float(np.mean(np.any((preview < 0.03) | (preview > 0.97), axis=1)))
     entropy_score = smooth_target(entropy, 0.78, 0.18)
@@ -612,7 +670,8 @@ def render_camera_audit(baseline_geometries: dict[str, np.ndarray],
 def render_camera_thumbnail(draw: ImageDraw.ImageDraw, geometry: np.ndarray,
                             left: int, top: int, width: int, height: int) -> None:
     projected = project_geometry_positions(geometry)
-    phases = np.sort((np.arange(CAMERA_SAMPLE_COUNT, dtype=np.int32) * 223) % SAMPLE_COUNT)
+    phases = np.sort((np.arange(CAMERA_SAMPLE_COUNT, dtype=np.int32) * 223) %
+                     SOURCE_SAMPLE_COUNT)
     points = projected[phases]
     for phase_rank, (x, y) in enumerate(points):
         px = left + int(np.clip(x / VIEWPORT_WIDTH, 0, 1) * (width - 1))
@@ -659,6 +718,9 @@ def write_phase_distribution_audit(route: list[str],
     baseline = [phase_distribution[name]["baselinePairOverlapPercent"] for name in route]
     selected = [phase_distribution[name]["selectedPairOverlapPercent"] for name in route]
     reductions = [phase_distribution[name]["relativeOverlapReductionPercent"] for name in route]
+    spacing_p95 = [
+        phase_distribution[name]["selectedSpacing"]
+        ["maximumFrameP95NearestNeighborPixels"] for name in route]
     report = {
         "schema": "csschaos-phase-distribution-audit@2",
         "sourceCommit": SOURCE_COMMIT,
@@ -670,10 +732,17 @@ def write_phase_distribution_audit(route: list[str],
         "meanRelativeOverlapReductionPercent": round(float(np.mean(reductions)), 3),
         "minimumRelativeOverlapReductionPercent": round(float(np.min(reductions)), 3),
         "maximumRelativeOverlapReductionPercent": round(float(np.max(reductions)), 3),
+        "maximumSelectedFrameP95NearestNeighborPixels": round(
+            float(np.max(spacing_p95)), 4),
+        "medianSelectedFrameP95NearestNeighborPixels": round(
+            float(np.median(spacing_p95)), 4),
         "fidelityQualifiedSystemCount": sum(
             phase_distribution[name]["selectedFidelityPass"] for name in route),
         "coverageFallbackSystemCount": sum(
             phase_distribution[name]["distributionClass"] == "coverage-greedy"
+            for name in route),
+        "supportFallbackSystemCount": sum(
+            phase_distribution[name]["distributionClass"] == "support-greedy"
             for name in route),
         "fidelityGates": {
             "minimumDensityCosine": DENSITY_COSINE_GATE,
@@ -694,7 +763,7 @@ def morph_cache_fingerprint(selected_systems: tuple[str, ...]) -> str:
         "sampleCount": SAMPLE_COUNT,
         "identityFrames": [HANDOFF_TRANSITION_FRAME, HANDOFF_FRAME],
         "reference": [REFERENCE_COLUMNS, REFERENCE_ROWS, REFERENCE_DEPTHS],
-        "algorithm": "final-camera-coverage-first-overlap-shared-reference-v10",
+        "algorithm": "source-authority-half-pixel-p95-pareto-spacing-v17",
         "phaseDistribution": {
             "baseStride": PHASE_DISTRIBUTION_BASE_STRIDE,
             "frameStep": PHASE_DISTRIBUTION_FRAME_STEP,
@@ -703,6 +772,12 @@ def morph_cache_fingerprint(selected_systems: tuple[str, ...]) -> str:
             "supportRecallGate": SUPPORT_RECALL_GATE,
             "p95GapPixelsGate": P95_GAP_GATE_PIXELS,
             "coverageRadii": COVERAGE_RADIUS_PIXELS,
+            "preparedSampleFactor": PREPARED_SAMPLE_FACTOR,
+            "sourceFrameStep": SOURCE_FRAME_STEP,
+            "spacingPatternShortlistCount": SPACING_PATTERN_SHORTLIST_COUNT,
+            "spacingAuditFirstFrame": SPACING_AUDIT_FIRST_FRAME,
+            "spacingP95ParetoTolerancePixels":
+                SPACING_P95_PARETO_TOLERANCE_PIXELS,
         },
     }, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(contract.encode()).hexdigest()
@@ -766,8 +841,9 @@ def prepare_spatial_identities(
             print(f"reject {index + 1:02d}/{len(route)} {name}: dot fidelity")
             continue
         incoming_positions = positions[
-            (base_phases + HANDOFF_TRANSITION_FRAME) % SAMPLE_COUNT]
-        outgoing_positions = positions[(base_phases + HANDOFF_FRAME) % SAMPLE_COUNT]
+            (base_phases + prepared_source_frame(HANDOFF_TRANSITION_FRAME)) % SAMPLE_COUNT]
+        outgoing_positions = positions[
+            (base_phases + prepared_source_frame(HANDOFF_FRAME)) % SAMPLE_COUNT]
         assignment_cost = cdist(reference, incoming_positions, "sqeuclidean")
         assignment_cost += cdist(reference, outgoing_positions, "sqeuclidean")
         rows, columns = linear_sum_assignment(assignment_cost)
@@ -779,6 +855,7 @@ def prepare_spatial_identities(
         print(f"match {index + 1:02d}/{len(route)} {name}: "
               f"{distribution['baselinePairOverlapPercent']:.2f}% -> "
               f"{distribution['selectedPairOverlapPercent']:.2f}% "
+              f"p95={distribution['selectedSpacing']['maximumFrameP95NearestNeighborPixels']:.2f}px "
               f"({distribution['selectedPattern']})")
     return qualified_route, identities, distributions, fidelity_rejected_systems
 
@@ -786,8 +863,9 @@ def prepare_spatial_identities(
 def prepare_distributed_phase_indices(positions: np.ndarray) -> tuple[np.ndarray, dict]:
     if positions.shape != (SAMPLE_COUNT, 3) or not np.isfinite(positions).all():
         raise RuntimeError("Chaos phase distribution requires the complete prepared trajectory")
-    frames = np.arange(0, HANDOFF_FRAME + 1, PHASE_DISTRIBUTION_FRAME_STEP,
-                       dtype=np.int32)
+    frames = np.arange(
+        0, prepared_source_frame(HANDOFF_FRAME) + 1,
+        PHASE_DISTRIBUTION_FRAME_STEP * SOURCE_FRAME_STEP, dtype=np.int32)
     depth_scales = PERSPECTIVE_DISTANCE / (PERSPECTIVE_DISTANCE - positions[:, 2])
     widths = depth_scales * 2
     maximum_width = float(np.max(widths))
@@ -826,8 +904,12 @@ def prepare_distributed_phase_indices(positions: np.ndarray) -> tuple[np.ndarray
     edge_left = unique_keys // SAMPLE_COUNT
     edge_right = unique_keys % SAMPLE_COUNT
     candidates = prepare_phase_pattern_candidates()
-    audit_frames = prepare_dot_audit_frames(HANDOFF_FRAME)
-    fidelity_reference = prepare_dot_reference(positions)
+    audit_frames = prepare_dot_audit_frames(HANDOFF_FRAME, SOURCE_FRAME_STEP)
+    # Fidelity remains anchored to the exact integrated source samples. The odd
+    # prepared samples are source-derived candidates for the same curve, not a
+    # new denser target that would invalidate an already faithful 2,000-dot set.
+    fidelity_reference = prepare_dot_reference(
+        positions[::PREPARED_SAMPLE_FACTOR])
 
     def score(phases: np.ndarray) -> float:
         selected = np.zeros(SAMPLE_COUNT, dtype=bool)
@@ -836,22 +918,53 @@ def prepare_distributed_phase_indices(positions: np.ndarray) -> tuple[np.ndarray
         dot_area = float(np.sum(phase_area_cost[phases]))
         return overlap / max(dot_area, 1e-12)
 
-    baseline = np.sort((np.arange(STAR_COUNT, dtype=np.int32) *
-                        PHASE_DISTRIBUTION_BASE_STRIDE) % SAMPLE_COUNT)
+    baseline = prepare_source_phase_pattern(PHASE_DISTRIBUTION_BASE_STRIDE)
     baseline_score = score(baseline)
     baseline_fidelity = measure_dot_fidelity(
         positions, fidelity_reference, baseline, audit_frames)
-    scored_candidates = sorted(
-        (score(phases), label, phases) for label, phases in candidates)
-    selected = None
+    spacing_frames = np.arange(
+        prepared_source_frame(SPACING_AUDIT_FIRST_FRAME),
+        prepared_source_frame(HANDOFF_FRAME) + 1,
+        PHASE_DISTRIBUTION_FRAME_STEP * SOURCE_FRAME_STEP, dtype=np.int32)
+    baseline_spacing = measure_retained_spacing(
+        positions, baseline, spacing_frames)
+    scored_candidates = [
+        (score(phases), label, phases,
+         measure_temporal_neighbor_spacing_proxy(positions, phases, spacing_frames))
+        for label, phases in candidates
+    ]
+    overlap_shortlist = sorted(
+        scored_candidates, key=lambda item: (item[0], item[1]))[
+            :SPACING_PATTERN_SHORTLIST_COUNT]
+    spacing_shortlist = sorted(
+        scored_candidates,
+        key=lambda item: (*item[3], item[0], item[1]))[
+            :SPACING_PATTERN_SHORTLIST_COUNT]
+    shortlisted = []
+    shortlisted_keys = set()
+    for candidate in overlap_shortlist + spacing_shortlist:
+        key = candidate[2].tobytes()
+        if key not in shortlisted_keys:
+            shortlisted_keys.add(key)
+            shortlisted.append(candidate)
+
+    pattern_winners = []
+    if passes_dot_fidelity_gate(baseline_fidelity):
+        pattern_winners.append((
+            baseline_score, f"source-baseline-{PHASE_DISTRIBUTION_BASE_STRIDE}",
+            baseline, baseline_fidelity, "phase-pattern", baseline_spacing))
     evaluated_pattern_count = 0
-    for candidate_score, label, phases in scored_candidates:
+    for candidate_score, label, phases, _ in shortlisted:
         fidelity = measure_dot_fidelity(
             positions, fidelity_reference, phases, audit_frames)
         evaluated_pattern_count += 1
         if passes_dot_fidelity_gate(fidelity):
-            selected = (candidate_score, label, phases, fidelity, "phase-pattern")
-            break
+            spacing = measure_retained_spacing(positions, phases, spacing_frames)
+            pattern_winners.append(
+                (candidate_score, label, phases, fidelity, "phase-pattern", spacing))
+
+    selected = select_spacing_balanced_candidate(
+        pattern_winners, baseline_score, baseline_spacing)
 
     coverage_candidate_count = 0
     if selected is None:
@@ -865,24 +978,49 @@ def prepare_distributed_phase_indices(positions: np.ndarray) -> tuple[np.ndarray
                     positions, fidelity_reference, phases, audit_frames)
                 if passes_dot_fidelity_gate(fidelity):
                     label = f"coverage-r{radius:g}-offset{seed_offset}"
+                    spacing = measure_retained_spacing(
+                        positions, phases, spacing_frames)
                     coverage_winners.append(
-                        (score(phases), label, phases, fidelity, "coverage-greedy"))
+                        (score(phases), label, phases, fidelity, "coverage-greedy",
+                         spacing))
         if coverage_winners:
-            selected = min(coverage_winners, key=lambda item: (item[0], item[1]))
+            selected = select_spacing_balanced_candidate(
+                coverage_winners, baseline_score, baseline_spacing)
+    support_candidate_count = 0
+    if selected is None:
+        support_winners = []
+        for seed_count in SUPPORT_SEED_COUNTS:
+            phases = prepare_support_phase_indices(
+                positions, STAR_COUNT, audit_frames, fidelity_reference, seed_count)
+            support_candidate_count += 1
+            fidelity = measure_dot_fidelity(
+                positions, fidelity_reference, phases, audit_frames)
+            if passes_dot_fidelity_gate(fidelity):
+                label = f"support-seed{seed_count}"
+                spacing = measure_retained_spacing(
+                    positions, phases, spacing_frames)
+                support_winners.append(
+                    (score(phases), label, phases, fidelity, "support-greedy",
+                     spacing))
+        if support_winners:
+            selected = select_spacing_balanced_candidate(
+                support_winners, baseline_score, baseline_spacing)
     if selected is None:
         raise RuntimeError(
             "Chaos phase allocation could not satisfy the retained-dot fidelity gates")
 
     selected_score, selected_label, selected_phases, selected_fidelity, \
-        distribution_class = selected
+        distribution_class, selected_spacing = selected
     gaps = np.diff(np.r_[selected_phases, selected_phases[0] + SAMPLE_COUNT])
     return selected_phases, {
-        "method": "coverage-qualified bounded-gap projected-billboard overlap search",
+        "method": "coverage-qualified bounded-gap spacing-balanced projected-billboard search",
         "distributionClass": distribution_class,
         "selectedPattern": selected_label,
         "candidatePatternCount": len(candidates),
+        "spacingPatternShortlistCount": len(shortlisted),
         "evaluatedPatternCount": evaluated_pattern_count,
         "coverageFallbackCandidateCount": coverage_candidate_count,
+        "supportFallbackCandidateCount": support_candidate_count,
         "auditFrameCount": len(frames),
         "auditFrameStep": PHASE_DISTRIBUTION_FRAME_STEP,
         "fidelityAuditFrameCount": len(audit_frames),
@@ -890,11 +1028,41 @@ def prepare_distributed_phase_indices(positions: np.ndarray) -> tuple[np.ndarray
         "baselineFidelity": baseline_fidelity,
         "selectedFidelity": selected_fidelity,
         "selectedFidelityPass": passes_dot_fidelity_gate(selected_fidelity),
+        "baselineSpacing": baseline_spacing,
+        "selectedSpacing": selected_spacing,
         "baselinePairOverlapPercent": round(baseline_score * 100, 4),
         "selectedPairOverlapPercent": round(selected_score * 100, 4),
         "relativeOverlapReductionPercent": round(
             (baseline_score - selected_score) / max(baseline_score, 1e-12) * 100, 3),
     }
+
+
+def select_spacing_balanced_candidate(
+        candidates: list[tuple], baseline_overlap: float,
+        baseline_spacing: dict) -> tuple | None:
+    if not candidates:
+        return None
+    overlap_qualified = [
+        item for item in candidates if item[0] <= baseline_overlap + 1e-12]
+    pool = overlap_qualified or candidates
+    maximum_gap = baseline_spacing["maximumNearestNeighborPixels"]
+    maximum_qualified = [
+        item for item in pool
+        if item[5]["maximumNearestNeighborPixels"] <= maximum_gap + 1e-9]
+    pool = maximum_qualified or pool
+    best_p95 = min(
+        item[5]["maximumFrameP95NearestNeighborPixels"] for item in pool)
+    maximum_p95 = best_p95 + SPACING_P95_PARETO_TOLERANCE_PIXELS
+    p95_qualified = [
+        item for item in pool
+        if item[5]["maximumFrameP95NearestNeighborPixels"] <= maximum_p95 + 1e-9]
+    pool = p95_qualified or pool
+    return min(pool, key=lambda item: (
+        item[5]["maximumNearestNeighborPixels"],
+        item[5]["maximumFrameP99NearestNeighborPixels"],
+        item[5]["maximumFrameP95NearestNeighborPixels"],
+        item[5]["maximumFrameFractionOver12Pixels"],
+        item[0], item[1]))
 
 
 def prepare_phase_pattern_candidates() -> tuple[tuple[str, np.ndarray], ...]:
@@ -917,10 +1085,19 @@ def prepare_phase_pattern_candidates() -> tuple[tuple[str, np.ndarray], ...]:
     point_indices = np.arange(STAR_COUNT, dtype=np.int32)
     add("uniform-floor", np.floor(point_indices * SAMPLE_COUNT / STAR_COUNT))
     add("uniform-round", np.rint(point_indices * SAMPLE_COUNT / STAR_COUNT))
+    for stride in range(1, SOURCE_SAMPLE_COUNT):
+        if math.gcd(stride, SOURCE_SAMPLE_COUNT) == 1:
+            add(f"source-stride-{stride}", prepare_source_phase_pattern(stride))
     for stride in range(1, SAMPLE_COUNT):
         if math.gcd(stride, SAMPLE_COUNT) == 1:
             add(f"stride-{stride}", point_indices * stride)
     return tuple(candidates)
+
+
+def prepare_source_phase_pattern(stride: int) -> np.ndarray:
+    """Lift a legal 2,880-sample allocation into the dense prepared pool exactly."""
+    source = (np.arange(STAR_COUNT, dtype=np.int32) * stride) % SOURCE_SAMPLE_COUNT
+    return source * PREPARED_SAMPLE_FACTOR
 
 
 def prepare_reference_positions() -> np.ndarray:
@@ -940,9 +1117,10 @@ def measure_edges(route: list[str], geometries: dict[str, np.ndarray],
     edges = []
     for left, right in zip(route, route[1:] + route[:1]):
         left_positions = geometries[left][
-            (phase_indices[left] + HANDOFF_FRAME) % SAMPLE_COUNT]
+            (phase_indices[left] + prepared_source_frame(HANDOFF_FRAME)) % SAMPLE_COUNT]
         right_positions = geometries[right][
-            (phase_indices[right] + HANDOFF_TRANSITION_FRAME) % SAMPLE_COUNT]
+            (phase_indices[right] + prepared_source_frame(HANDOFF_TRANSITION_FRAME)) %
+            SAMPLE_COUNT]
         distances = np.linalg.norm(left_positions - right_positions, axis=1)
         edges.append({
             "from": left, "to": right,
@@ -953,12 +1131,51 @@ def measure_edges(route: list[str], geometries: dict[str, np.ndarray],
     return edges
 
 
-def quantize(geometry: np.ndarray) -> np.ndarray:
+def quantize(geometry: np.ndarray) -> tuple[np.ndarray, dict]:
     source_positions = geometry + (0, 0, VIEWPORT_DEPTH / 2)
     prepared_source_positions = quantize_source_positions(source_positions).astype(np.float64)
     prepared_source_positions /= COORDINATE_SCALE
-    return quantize_final_camera_positions(
+    camera_positions, safe_area = fit_final_camera_positions_to_safe_area(
         project_final_camera_positions(prepared_source_positions))
+    coordinates = quantize_final_camera_positions(camera_positions)
+    decoded = decode_final_camera_coordinates(coordinates)
+    minimum_edge = min(
+        float(np.min(decoded[:, 0])), VIEWPORT_WIDTH - float(np.max(decoded[:, 0])),
+        float(np.min(decoded[:, 1])), VIEWPORT_HEIGHT - float(np.max(decoded[:, 1])))
+    if minimum_edge < FINAL_CAMERA_SAFE_MARGIN - 0.05:
+        raise RuntimeError(
+            f"Chaos final-camera safe-area fit drifted: {minimum_edge:.3f}px")
+    safe_area["minimumPreparedEdgePixels"] = round(minimum_edge, 3)
+    return coordinates, safe_area
+
+
+def fit_final_camera_positions_to_safe_area(
+        camera_positions: np.ndarray) -> tuple[np.ndarray, dict]:
+    fitted = np.array(camera_positions, dtype=np.float64, copy=True)
+    low = np.min(fitted[:, :2], axis=0)
+    high = np.max(fitted[:, :2], axis=0)
+    span = high - low
+    safe_low = np.full(2, FINAL_CAMERA_SAFE_MARGIN, dtype=np.float64)
+    safe_high = np.asarray((
+        VIEWPORT_WIDTH - FINAL_CAMERA_SAFE_MARGIN,
+        VIEWPORT_HEIGHT - FINAL_CAMERA_SAFE_MARGIN,
+    ), dtype=np.float64)
+    safe_span = safe_high - safe_low
+    if np.any(span <= 1e-12) or np.any(safe_span <= 0):
+        raise RuntimeError("Chaos final-camera safe-area fit collapsed")
+    scale = min(1.0, float(np.min(safe_span / span)))
+    center = (low + high) / 2
+    scaled_span = span * scale
+    target_center = np.clip(
+        center, safe_low + scaled_span / 2, safe_high - scaled_span / 2)
+    fitted[:, :2] = (fitted[:, :2] - center) * scale + target_center
+    translation = target_center - center
+    return fitted, {
+        "method": "prepared uniform screen-space fit with minimal translation",
+        "marginPixels": FINAL_CAMERA_SAFE_MARGIN,
+        "uniformScale": round(scale, 6),
+        "translationPixels": [round(float(value), 3) for value in translation],
+    }
 
 
 def quantize_source_positions(positions: np.ndarray) -> np.ndarray:
@@ -1002,7 +1219,8 @@ def prepare_handoff_control_coordinates(
     seed = int(hashlib.sha256(seed_material.encode()).hexdigest()[:16], 16)
     random = np.random.default_rng(seed)
     target_indices = (
-        target_phase_indices[target_reveal_order] + HANDOFF_TRANSITION_FRAME) % SAMPLE_COUNT
+        target_phase_indices[target_reveal_order] +
+        prepared_source_frame(HANDOFF_TRANSITION_FRAME)) % SAMPLE_COUNT
     incoming = decode_final_camera_coordinates(target_coordinates[target_indices])
     angles = random.uniform(0, 2 * np.pi, STAR_COUNT)
     directions = np.column_stack((np.cos(angles), np.sin(angles)))
@@ -1041,15 +1259,9 @@ def project_final_camera_positions(positions: np.ndarray) -> np.ndarray:
 
 
 def prepare_snapshot() -> str:
-    leaves = []
-    for leaf_index in range(STAR_COUNT):
-        color = format_phase_color(leaf_index)
-        leaves.append(f'<b style="color:{color};opacity:0"></b>')
-    axes = ('<i class="axis axis-x" aria-hidden="true"></i>'
-            '<i class="axis axis-y" aria-hidden="true"></i>'
-            '<i class="axis axis-z" aria-hidden="true"></i>')
+    leaves = ['<b style="color:transparent"></b>'] * STAR_COUNT
     return (f'<main class="polycss-camera"><div class="polycss-scene">'
-            f'{axes}{"".join(leaves)}</div></main>')
+            f'{"".join(leaves)}</div></main>')
 
 
 def format_phase_color(phase_rank: int) -> str:
@@ -1135,6 +1347,12 @@ def linear_to_srgb_channel(channel: float) -> float:
 
 def format_opacity(index: int) -> str:
     return f"{0.4 + ((index * 13 + index // 17) % 5) / 10:.1f}"
+
+
+def format_leaf_color(index: int) -> str:
+    color = format_phase_color(index)
+    red, green, blue = (int(color[offset:offset + 2], 16) for offset in (1, 3, 5))
+    return f"rgba({red},{green},{blue},{format_opacity(index)})"
 
 
 def format_source_badges(source_record: dict) -> str:

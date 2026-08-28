@@ -2,9 +2,24 @@
 import { COORDINATE_SCALE, PERSPECTIVE_DISTANCE, PREPARED_DEPTH_BIAS,
   PREPARED_POSITION_BIAS } from "../shared/cssdysts/preparedRailTransport.mjs";
 
+const EARLY_DEADLINE_TOLERANCE_RATIO = 1 / 8;
+const HIGH_REFRESH_THRESHOLD_RATIO = 0.9;
+const CALIBRATION_INTERVAL_COUNT = 2;
+const COALESCED_CALLBACK_INTERVAL_RATIO = 0.5;
+
+export function createChaosSchedulerCalibration() {
+  return {
+    cadenceMode: "calibrating-display-refresh",
+    intervalCount: 0,
+    intervalTotalMilliseconds: 0,
+    calibratedDisplayFrameMilliseconds: 0,
+    lastFrameAt: 0,
+  };
+}
+
 export function createChaosPreparedPlayer({ catalog, prepared, leafPhaseIndices, leafRevealOrder,
-  leafOpacities, publish, publishOpacity, handoff, handoffStartCoordinates,
-  rankToPhysical,
+    leafColors, publish, publishColor, handoff, handoffStartCoordinates,
+    rankToPhysical, single = false, schedulerCalibration = createChaosSchedulerCalibration(),
   onCycleComplete, readNow = () => performance.now(), requestFrame = requestAnimationFrame,
   cancelFrame = cancelAnimationFrame }) {
   const revealFrameCount = Math.round(catalog.revealSeconds * catalog.framesPerSecond);
@@ -13,42 +28,50 @@ export function createChaosPreparedPlayer({ catalog, prepared, leafPhaseIndices,
   const holdFrameCount = Math.round(catalog.holdSeconds * catalog.framesPerSecond);
   if (catalog.starCount !== 2000 || prepared.transforms.length !== catalog.sampleCount ||
       leafPhaseIndices.length !== catalog.starCount ||
-      leafRevealOrder.length !== catalog.starCount || leafOpacities.length !== catalog.starCount ||
+      leafRevealOrder.length !== catalog.starCount || leafColors.length !== catalog.starCount ||
       catalog.revealSeconds !== 3 || catalog.handoffSeconds !== 2 || catalog.holdSeconds !== 3 ||
       catalog.handoffControlPointCount !== catalog.starCount ||
+      !Number.isSafeInteger(catalog.sourceFrameStep) || catalog.sourceFrameStep < 1 ||
       !(prepared.coordinates instanceof Uint16Array) ||
       prepared.coordinates.length !== catalog.sampleCount * 3 ||
       !(prepared.handoffControlCoordinates instanceof Uint16Array) ||
       prepared.handoffControlCoordinates.length !== catalog.starCount * 3 ||
       !Number.isSafeInteger(catalog.sourcePhaseOffset) || catalog.sourcePhaseOffset < 0 ||
       catalog.sourcePhaseOffset >= catalog.sampleCount ||
-      typeof publish !== "function" || typeof publishOpacity !== "function" ||
+      typeof publish !== "function" || typeof publishColor !== "function" ||
       typeof handoff !== "boolean" ||
+      typeof single !== "boolean" ||
       (handoff && (!(handoffStartCoordinates instanceof Float64Array) ||
         handoffStartCoordinates.length !== catalog.starCount * 3)) ||
       !(rankToPhysical instanceof Uint16Array) || rankToPhysical.length !== catalog.starCount ||
+      !isSchedulerCalibration(schedulerCalibration) ||
       typeof onCycleComplete !== "function") {
     throw new Error("Chaos prepared player binding drifted");
   }
   let paused = true;
   let destroyed = false;
   let frameRequest = null;
-  let startedAt = 0;
-  let hasStarted = false;
-  let pausedAt = 0;
-  let pausedDuration = 0;
+  let nextFrameAt = 0;
   let publishedFrame = 0;
   let appliedFrameCount = 0;
   let sourceFrameDropCount = 0;
   let transformWriteCount = 0;
-  let opacityWriteCount = 0;
+  let colorWriteCount = 0;
   let runtimeCoordinateCalculationCount = 0;
   let runtimeCoordinateFormattingCount = 0;
+  let schedulerFrameCallbackCount = 0;
+  let schedulerEarlyFrameCallbackCount = 0;
+  let schedulerCoalescedFrameCallbackCount = 0;
+  let lastPublishedCallbackAt = 0;
   let revealedLeafCount = 0;
   let visibleLeafCount = handoff ? catalog.starCount : 0;
   let growthComplete = false;
   let cycleComplete = false;
   const frameMilliseconds = 1000 / catalog.framesPerSecond;
+  const sourceFrameStep = catalog.sourceFrameStep;
+  const earlyDeadlineToleranceMilliseconds =
+    frameMilliseconds * EARLY_DEADLINE_TOLERANCE_RATIO;
+  const highRefreshThresholdMilliseconds = frameMilliseconds * HIGH_REFRESH_THRESHOLD_RATIO;
   const cycleFrameCount = transitionFrameCount + holdFrameCount;
   const initialRevealStartRank = handoff ? 0 : findInitialRevealStartRank(
     leafPhaseIndices, leafRevealOrder, catalog.sourcePhaseOffset);
@@ -58,7 +81,7 @@ export function createChaosPreparedPlayer({ catalog, prepared, leafPhaseIndices,
 
   if (!handoff) {
     for (let leafIndex = 0; leafIndex < catalog.starCount; leafIndex += 1) {
-      if (publishOpacity(leafIndex, "0") !== false) opacityWriteCount += 1;
+      if (publishColor(leafIndex, "transparent") !== false) colorWriteCount += 1;
     }
   }
 
@@ -69,7 +92,7 @@ export function createChaosPreparedPlayer({ catalog, prepared, leafPhaseIndices,
     if (streamFrame >= transitionFrameCount) growthComplete = true;
     appliedFrameCount += 1;
     publishedFrame = streamFrame;
-    if (streamFrame >= cycleFrameCount) {
+    if (!single && streamFrame >= cycleFrameCount) {
       cycleComplete = true;
       paused = true;
       onCycleComplete();
@@ -112,14 +135,14 @@ export function createChaosPreparedPlayer({ catalog, prepared, leafPhaseIndices,
     if (!handoff) {
       while (revealedLeafCount < dueLeafCount) {
         const physicalLeaf = rankToPhysical[revealedLeafCount];
-        if (publishOpacity(physicalLeaf, leafOpacities[physicalLeaf]) !== false) {
-          opacityWriteCount += 1;
+        if (publishColor(physicalLeaf, leafColors[physicalLeaf]) !== false) {
+          colorWriteCount += 1;
         }
         revealedLeafCount += 1;
       }
       visibleLeafCount = revealedLeafCount;
     }
-    const sourceFrame = streamFrame % catalog.sampleCount;
+    const sourceFrame = streamFrame * sourceFrameStep % catalog.sampleCount;
     for (let rank = 0; rank < dueLeafCount; rank += 1) {
       const revealRank = handoff ? rank :
         (initialRevealStartRank + rank) % catalog.starCount;
@@ -133,14 +156,50 @@ export function createChaosPreparedPlayer({ catalog, prepared, leafPhaseIndices,
 
   function tick(timestamp) {
     frameRequest = null;
+    schedulerFrameCallbackCount += 1;
     if (destroyed || paused) return;
     const now = Math.max(timestamp, readNow());
-    const elapsedFrame = (now - startedAt - pausedDuration) / frameMilliseconds;
-    const dueFrame = Math.floor(elapsedFrame);
-    if (dueFrame > publishedFrame) {
-      sourceFrameDropCount += Math.max(0, dueFrame - publishedFrame - 1);
-      publishFrame(dueFrame);
+    if (schedulerCalibration.cadenceMode === "calibrating-display-refresh") {
+      if (schedulerCalibration.lastFrameAt === 0) {
+        schedulerCalibration.lastFrameAt = now;
+        frameRequest = requestFrame(tick);
+        return;
+      }
+      schedulerCalibration.intervalTotalMilliseconds += now - schedulerCalibration.lastFrameAt;
+      schedulerCalibration.intervalCount += 1;
+      schedulerCalibration.lastFrameAt = now;
+      if (schedulerCalibration.intervalCount < CALIBRATION_INTERVAL_COUNT) {
+        frameRequest = requestFrame(tick);
+        return;
+      }
+      schedulerCalibration.calibratedDisplayFrameMilliseconds =
+        schedulerCalibration.intervalTotalMilliseconds / schedulerCalibration.intervalCount;
+      schedulerCalibration.cadenceMode =
+        schedulerCalibration.calibratedDisplayFrameMilliseconds < highRefreshThresholdMilliseconds
+          ? "high-refresh-deadline-gated"
+          : "display-refresh-at-or-below-sixty-hertz";
+      nextFrameAt = now;
     }
+    if (schedulerCalibration.cadenceMode === "high-refresh-deadline-gated" &&
+        now + earlyDeadlineToleranceMilliseconds < nextFrameAt) {
+      schedulerEarlyFrameCallbackCount += 1;
+      frameRequest = requestFrame(tick);
+      return;
+    }
+    if (schedulerCalibration.cadenceMode === "display-refresh-at-or-below-sixty-hertz" &&
+        lastPublishedCallbackAt > 0 &&
+        now - lastPublishedCallbackAt < frameMilliseconds * COALESCED_CALLBACK_INTERVAL_RATIO) {
+      schedulerCoalescedFrameCallbackCount += 1;
+      nextFrameAt += frameMilliseconds;
+      frameRequest = requestFrame(tick);
+      return;
+    }
+    const dueFrameCount = Math.max(1, Math.floor(
+      (now + earlyDeadlineToleranceMilliseconds - nextFrameAt) / frameMilliseconds) + 1);
+    sourceFrameDropCount += dueFrameCount - 1;
+    publishFrame(publishedFrame + dueFrameCount);
+    lastPublishedCallbackAt = now;
+    nextFrameAt += dueFrameCount * frameMilliseconds;
     if (cycleComplete) return;
     frameRequest = requestFrame(tick);
   }
@@ -150,10 +209,8 @@ export function createChaosPreparedPlayer({ catalog, prepared, leafPhaseIndices,
     resume() {
       if (destroyed || cycleComplete || !paused) return false;
       const now = readNow();
-      if (!hasStarted) {
-        startedAt = now - publishedFrame * frameMilliseconds;
-        hasStarted = true;
-      } else pausedDuration += now - pausedAt;
+      nextFrameAt = now + frameMilliseconds;
+      lastPublishedCallbackAt = 0;
       paused = false;
       frameRequest = requestFrame(tick);
       return true;
@@ -161,7 +218,6 @@ export function createChaosPreparedPlayer({ catalog, prepared, leafPhaseIndices,
     pause() {
       if (paused || destroyed) return false;
       paused = true;
-      pausedAt = readNow();
       if (frameRequest !== null) cancelFrame(frameRequest);
       frameRequest = null;
       return true;
@@ -176,7 +232,7 @@ export function createChaosPreparedPlayer({ catalog, prepared, leafPhaseIndices,
         throw new Error("Chaos terminal prepared coordinates are not ready");
       }
       const output = new Float64Array(catalog.starCount * 3);
-      const sourceFrame = publishedFrame % catalog.sampleCount;
+      const sourceFrame = publishedFrame * sourceFrameStep % catalog.sampleCount;
       for (let rank = 0; rank < catalog.starCount; rank += 1) {
         const revealRank = handoff ? rank :
           (initialRevealStartRank + rank) % catalog.starCount;
@@ -194,18 +250,36 @@ export function createChaosPreparedPlayer({ catalog, prepared, leafPhaseIndices,
         publishedFrame,
         appliedFrameCount,
         sourceFrameDropCount,
+        sourceFrameStep,
         transformWriteCount,
-        opacityWriteCount,
+        colorWriteCount,
         visibleLeafCount,
         growthComplete,
         handoff,
+        single,
         cycleComplete,
         runtimePhysicsCount: 0,
         runtimeCoordinateCalculationCount,
         runtimeCoordinateFormattingCount,
+        schedulerCadenceMode: schedulerCalibration.cadenceMode,
+        schedulerCalibratedDisplayFrameMilliseconds: Number(
+          schedulerCalibration.calibratedDisplayFrameMilliseconds.toFixed(3)),
+        schedulerFrameCallbackCount,
+        schedulerEarlyFrameCallbackCount,
+        schedulerCoalescedFrameCallbackCount,
       });
     },
   });
+}
+
+function isSchedulerCalibration(value) {
+  return value && typeof value === "object" &&
+    ["calibrating-display-refresh", "high-refresh-deadline-gated",
+      "display-refresh-at-or-below-sixty-hertz"].includes(value.cadenceMode) &&
+    Number.isSafeInteger(value.intervalCount) && value.intervalCount >= 0 &&
+    Number.isFinite(value.intervalTotalMilliseconds) &&
+    Number.isFinite(value.calibratedDisplayFrameMilliseconds) &&
+    Number.isFinite(value.lastFrameAt);
 }
 
 function prepareHandoffComponents({ catalog, prepared, leafPhaseIndices, leafRevealOrder,
@@ -218,7 +292,8 @@ function prepareHandoffComponents({ catalog, prepared, leafPhaseIndices, leafRev
     readPreparedComponents(prepared.handoffControlCoordinates, rank, control, offset);
     const logicalLeaf = leafRevealOrder[rank];
     const sampleIndex = normalizeSampleIndex(
-      leafPhaseIndices[logicalLeaf] + transitionFrameCount, catalog.sampleCount);
+      leafPhaseIndices[logicalLeaf] + transitionFrameCount * catalog.sourceFrameStep,
+      catalog.sampleCount);
     readPreparedComponents(prepared.coordinates, sampleIndex, incoming, offset);
   }
   return Object.freeze({ start, control, incoming });

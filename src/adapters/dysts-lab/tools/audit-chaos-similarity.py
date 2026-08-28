@@ -47,7 +47,7 @@ LAVENDER_ACCENT_STRIDE = 13
 def main() -> None:
     metadata = json.loads(METADATA_PATH.read_text())
     sequence = metadata.get("sequence", ())
-    if metadata.get("schema") != "csschaos-prepared-sequence@12" or \
+    if metadata.get("schema") != "csschaos-prepared-sequence@14" or \
             metadata.get("starCount") != POINT_COUNT or len(sequence) < 2 or \
             len(sequence) != metadata.get("audition", {}).get("candidateCount"):
         raise RuntimeError("Chaos similarity audit requires the complete prepared shortlist")

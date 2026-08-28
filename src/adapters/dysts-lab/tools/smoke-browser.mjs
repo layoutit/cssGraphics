@@ -65,7 +65,17 @@ try {
   }, null, 2));
 } finally {
   await browser?.close();
-  if (deploy) await new Promise((resolvePromise) => server.close(resolvePromise));
+  if (deploy) await new Promise((resolvePromise) => {
+    const cleanupDeadline = setTimeout(() => {
+      server.unref();
+      resolvePromise();
+    }, 1_000);
+    server.close(() => {
+      clearTimeout(cleanupDeadline);
+      resolvePromise();
+    });
+    server.closeAllConnections();
+  });
   else await server.close();
 }
 
@@ -105,7 +115,8 @@ async function smokeProfile(specification) {
       canonical: document.querySelector('link[rel="canonical"]')?.href ?? null,
       robots: document.querySelector('meta[name="robots"]')?.content ?? null,
       leafCount: leaves.length,
-      axisCount: document.querySelectorAll(".polycss-scene > i").length,
+      nonLeafSceneChildCount: document.querySelectorAll(
+        ".polycss-scene > :not(b)").length,
       forbiddenRendererCount: document.querySelectorAll(".example-stage canvas, .example-stage svg").length,
       cameraScale: camera instanceof HTMLElement ?
         getComputedStyle(camera).getPropertyValue("--stage-scale").trim() : null,
@@ -152,20 +163,30 @@ function assertSmoke(report) {
   if (report.initial.bodyClass !== "ready" ||
       report.initial.canonical !== report.expectedCanonical ||
       report.initial.robots !== "index, follow" ||
-      report.initial.leafCount !== 2000 || report.initial.axisCount !== 3 ||
+      report.initial.leafCount !== 2000 || report.initial.nonLeafSceneChildCount !== 0 ||
       report.initial.forbiddenRendererCount !== 0 ||
       !Number.isFinite(Number(report.initial.cameraScale)) ||
       report.initial.stats?.adapterId !== "chaos" ||
       report.initial.stats?.currentSystem !== "Coullet" ||
       report.initial.stats?.sequenceSystemCount !== 50 ||
       report.initial.stats?.starCount !== 2000 ||
+      report.initial.stats?.retainedDomMode !== "prepared-flat-polycss-snapshot" ||
+      report.initial.stats?.retainedCameraRootCount !== 1 ||
+      report.initial.stats?.retainedSceneRootCount !== 1 ||
+      report.initial.stats?.retainedPointWrapperCount !== 0 ||
+      report.initial.stats?.retainedPointLeafCount !== 2000 ||
+      report.initial.stats?.retainedPointIdCount !== 0 ||
+      report.initial.stats?.retainedPointDataAttributeCount !== 0 ||
       report.initial.stats?.framesPerSecond !== 60 ||
+      report.initial.stats?.sourceFrameStep !== 2 ||
       report.initial.stats?.runtimePhysicsCount !== 0 ||
       report.initial.stats?.runtimeRasterizationCount !== 0 ||
       report.initial.stats?.runtimeDomMutationCount !== 0 ||
       report.initial.errors.length !== 0 ||
       !report.final.stableIdentity || report.final.changedTransformCount < 1900 ||
       report.final.stats?.transitionCount < 1 ||
+      report.final.stats?.sourceFrameStep !== 2 ||
+      report.final.stats?.sourceFrameDropCount !== 0 ||
       report.final.stats?.workerStartCount !== 1 ||
       report.final.stats?.retainedPreparedSystemCount > 2 ||
       report.final.paused !== true ||

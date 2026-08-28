@@ -140,7 +140,7 @@ def main() -> None:
 
 
 def validate_inputs(metadata: dict, phase_audit: dict) -> None:
-    if metadata.get("schema") != "csschaos-prepared-sequence@14" or \
+    if metadata.get("schema") != "csschaos-prepared-sequence@15" or \
             metadata.get("starCount") != CURRENT_DOT_COUNT or \
             metadata.get("sampleCount") != PREPARED_SAMPLE_COUNT or \
             metadata.get("sourceFrameStep") != 2 or \

@@ -72,7 +72,7 @@ export function mountChaosClient(host) {
     state.currentIndex = state.playbackOrder[0];
     const currentDescriptor = metadata.sequence[state.currentIndex];
     const nextIndex = peekNextPlaybackIndex();
-    const snapshotPromise = fetchText(`${ASSET_ROOT}/snapshot.html`);
+    const snapshotPromise = fetchText(`${ASSET_ROOT}/${metadata.snapshot.asset}`);
     const currentPromise = loadPrepared(state.currentIndex);
     if (!singleSystem) void loadPrepared(nextIndex);
     const snapshotHtml = await snapshotPromise;
@@ -271,9 +271,13 @@ function createPreparedAssetMaterializer(state) {
 }
 
 function validateMetadata(metadata) {
-  if (metadata?.schema !== "csschaos-prepared-sequence@14" ||
+  if (metadata?.schema !== "csschaos-prepared-sequence@15" ||
       metadata.status !== "ready" || metadata.adapterId !== "chaos" ||
       metadata.starCount !== 2000 || metadata.framesPerSecond !== 60 ||
+      !/^snapshot-[a-f0-9]{64}\.html$/u.test(metadata.snapshot?.asset) ||
+      metadata.snapshot.sha256 !== metadata.snapshot.asset.slice(9, -5) ||
+      !Number.isSafeInteger(metadata.snapshot.byteLength) ||
+      metadata.snapshot.byteLength < 1 ||
       metadata.preparedRevealSeconds !== 3 ||
       metadata.preparedHandoffSeconds !== 2 ||
       metadata.preparedHoldSeconds !== 3 ||

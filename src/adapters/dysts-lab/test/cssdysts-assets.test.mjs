@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import test from "node:test";
 import { brotliDecompressSync } from "node:zlib";
@@ -12,16 +12,23 @@ const repositoryRoot = resolve(import.meta.dirname, "../../../..");
 const generatedRoot = resolve(repositoryRoot, "build/generated/public/csschaos");
 
 test("Chaos prepared bank is complete, compact, and source-locked", async () => {
-  const [prepared, snapshot, sourceLock] = await Promise.all([
+  const [prepared, sourceLock] = await Promise.all([
     readJson(resolve(generatedRoot, "prepared.json")),
-    readFile(resolve(generatedRoot, "snapshot.html"), "utf8"),
     readJson(resolve(import.meta.dirname, "../notes/references/source-lock.json")),
   ]);
-  assert.equal(prepared.schema, "csschaos-prepared-sequence@14");
+  const snapshot = await readFile(resolve(generatedRoot, prepared.snapshot.asset), "utf8");
+  assert.equal(prepared.schema, "csschaos-prepared-sequence@15");
   assert.equal(prepared.status, "ready");
   assert.equal(prepared.adapterId, "chaos");
   assert.equal(prepared.source.commit, sourceLock.upstream.commit);
   assert.equal(prepared.starCount, 2000);
+  assert.match(prepared.snapshot.asset, /^snapshot-[a-f0-9]{64}\.html$/u);
+  assert.equal(prepared.snapshot.sha256, sha256(snapshot));
+  assert.equal(prepared.snapshot.asset, `snapshot-${prepared.snapshot.sha256}.html`);
+  assert.equal(prepared.snapshot.byteLength, Buffer.byteLength(snapshot));
+  await assert.rejects(readFile(resolve(generatedRoot, "snapshot.html")), { code: "ENOENT" });
+  assert.deepEqual((await readdir(generatedRoot)).filter((name) =>
+    /^snapshot-.*\.html$/u.test(name)).sort(), [prepared.snapshot.asset]);
   assert.equal(prepared.sampleCount, 5760);
   assert.equal(prepared.sourceFrameStep, 2);
   assert.equal(prepared.source.integrationSampleCount, 2880);

@@ -307,6 +307,9 @@ test("deployment serves only the current public products through the Astro shell
   assert.doesNotMatch(deployCommand, /playwright install/u);
   assert.match(deployCommand, /pnpm prepare:luminet/u);
   assert.match(deployCommand, /pnpm prepare:chaos/u);
+  assert.match(netlify,
+    /for = "\/csschaos\/snapshot-\*\.html"[\s\S]*?Cache-Control = "public, max-age=31536000, immutable"/u);
+  assert.doesNotMatch(netlify, /for = "\/csschaos\/snapshot\.html"/u);
   assert.match(deployCommand, /node scripts\/copy-deploy-products\.mjs && CSSGRAPHICS_DEPLOY_BUILD=1 pnpm build:site$/u);
   for (const [projectId] of expectedProjects) {
     const productDirectory = projectId === "pipes" ? "csspipes" :

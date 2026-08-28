@@ -28,39 +28,13 @@ html, body {
   height: 600px;
   transform: translate(-50%, -50%) scale(var(--stage-scale, 1));
   transform-origin: center;
+  contain: strict;
 }
 
 .polycss-scene {
   position: relative;
   width: 800px;
   height: 600px;
-}
-
-.axis {
-  position: absolute;
-  left: 0;
-  top: 0;
-  display: none;
-  height: 1px;
-  color: #d8d1e5;
-  opacity: .4;
-  background: currentColor;
-  transform-origin: 0 0;
-}
-
-.axis-x {
-  width: 420px;
-  transform: translate3d(190px, 300px, 0);
-}
-
-.axis-y {
-  width: 420px;
-  transform: translate3d(400px, 90px, 0) rotateZ(90deg);
-}
-
-.axis-z {
-  width: 420px;
-  transform: translate3d(400px, 300px, -210px) rotateY(-90deg);
 }
 
 .polycss-scene > b {
@@ -70,7 +44,6 @@ html, body {
   display: block;
   width: 2px;
   height: 2px;
-  contain: layout style;
   background: currentColor;
   transform-origin: 0 0;
 }

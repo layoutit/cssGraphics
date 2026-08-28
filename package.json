@@ -123,6 +123,7 @@
     "audit:chaos:similarity": ".local/venvs/dysts/bin/python src/adapters/dysts-lab/tools/audit-chaos-similarity.py",
     "audit:chaos:motion": "pnpm rank:chaos && .local/venvs/dysts/bin/python src/adapters/dysts-lab/tools/prepare-chaos-assets.py --selection-stage similarity --output-root output/dysts-ranking/motion-interest-audit/pre-motion-bank && .local/venvs/dysts/bin/python src/adapters/dysts-lab/tools/audit-chaos-motion.py --bank output/dysts-ranking/motion-interest-audit/pre-motion-bank --pinned-report src/adapters/dysts-lab/notes/curation/motion-interest-audit-2026-08-27.json",
     "audit:chaos:dots": ".local/venvs/dysts/bin/python src/adapters/dysts-lab/tools/audit-chaos-dot-requirements.py",
+    "audit:chaos:spacing": ".local/venvs/dysts/bin/python src/adapters/dysts-lab/tools/audit-chaos-spacing.py",
     "prepare:luminet:source": "CSSBLACKHOLE_FORCE_SOURCE=1 node src/adapters/blackhole/tools/prepare-cssblackhole.mjs",
     "prepare:electropaint:scene": "node src/adapters/electropaint/tools/prepare-scene.mjs",
     "prepare:electropaint:source": "pnpm prepare:electropaint:scene && node src/adapters/electropaint/tools/prepare-snapshot.mjs",

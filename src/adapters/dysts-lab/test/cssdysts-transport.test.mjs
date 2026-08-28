@@ -2,7 +2,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { prepareShuffledPlaybackOrder } from "../src/cssdysts/client.mjs";
-import { createChaosPreparedPlayer } from "../src/cssdysts/preparedPlayback.mjs";
+import { createChaosPreparedPlayer, createChaosSchedulerCalibration } from
+  "../src/cssdysts/preparedPlayback.mjs";
 import { decodeChaosTrajectoryAsset, encodeChaosTrajectoryAsset, formatChaosTransform } from
   "../src/shared/cssdysts/preparedRailTransport.mjs";
 
@@ -57,11 +58,12 @@ test("shuffle visits every shape once, honors a pinned start, and avoids cycle r
 
 test("initial prepared attractor animates along its contiguous source line while growing", () => {
   const starCount = 2000;
-  const opacityWrites = [];
+  const colorWrites = [];
   const transformWrites = [];
   let completionCount = 0;
   const player = createChaosPreparedPlayer({
-    catalog: { starCount, sampleCount: 7, framesPerSecond: 60, revealSeconds: 3,
+    catalog: { starCount, sampleCount: 7, sourceFrameStep: 1,
+      framesPerSecond: 60, revealSeconds: 3,
       handoffSeconds: 2,
       holdSeconds: 3, handoffControlPointCount: starCount, sourcePhaseOffset: 2 },
     prepared: {
@@ -71,9 +73,9 @@ test("initial prepared attractor animates along its contiguous source line while
     },
     leafPhaseIndices: Uint16Array.from({ length: starCount }, (_, index) => (index + 2) % 7),
     leafRevealOrder: Uint16Array.from({ length: starCount }, (_, index) => starCount - index - 1),
-    leafOpacities: Array.from({ length: starCount }, () => "0.6"),
+    leafColors: Array.from({ length: starCount }, () => "rgba(255,255,255,0.6)"),
     publish(leafIndex, transform) { transformWrites.push([leafIndex, transform]); },
-    publishOpacity(leafIndex, opacity) { opacityWrites.push([leafIndex, opacity]); },
+    publishColor(leafIndex, color) { colorWrites.push([leafIndex, color]); },
     handoff: false,
     rankToPhysical: Uint16Array.from({ length: starCount }, (_, rank) => rank),
     onCycleComplete() { completionCount += 1; },
@@ -83,7 +85,7 @@ test("initial prepared attractor animates along its contiguous source line while
   player.publishFrame(0);
   assert.equal(player.stats().visibleLeafCount, 0);
   assert.equal(transformWrites.length, 0);
-  assert.equal(opacityWrites.length, starCount);
+  assert.equal(colorWrites.length, starCount);
   player.publishFrame(90);
   assert.equal(player.stats().visibleLeafCount, 1000);
   assert.equal(transformWrites.length, 1000);
@@ -109,12 +111,13 @@ test("initial prepared attractor animates along its contiguous source line while
 test("automatic handoff follows one curved scatter path into the next attractor", () => {
   const starCount = 2000;
   const writes = [];
-  const opacityWrites = [];
+  const colorWrites = [];
   let completionCount = 0;
   const rankToPhysical = Uint16Array.from({ length: starCount },
     (_, rank) => (rank + 37) % starCount);
   const player = createChaosPreparedPlayer({
-    catalog: { starCount, sampleCount: 3, framesPerSecond: 60, revealSeconds: 3,
+    catalog: { starCount, sampleCount: 3, sourceFrameStep: 1,
+      framesPerSecond: 60, revealSeconds: 3,
       handoffSeconds: 2,
       holdSeconds: 3, handoffControlPointCount: starCount, sourcePhaseOffset: 0 },
     prepared: {
@@ -126,9 +129,9 @@ test("automatic handoff follows one curved scatter path into the next attractor"
     },
     leafPhaseIndices: Uint16Array.from({ length: starCount }, (_, index) => index % 3),
     leafRevealOrder: Uint16Array.from({ length: starCount }, (_, index) => starCount - index - 1),
-    leafOpacities: Array.from({ length: starCount }, () => "0.6"),
+    leafColors: Array.from({ length: starCount }, () => "rgba(255,255,255,0.6)"),
     publish(leafIndex, transform) { writes.push([leafIndex, transform]); },
-    publishOpacity(leafIndex, opacity) { opacityWrites.push([leafIndex, opacity]); },
+    publishColor(leafIndex, color) { colorWrites.push([leafIndex, color]); },
     handoff: true,
     handoffStartCoordinates: prepareFlatHandoffStartCoordinates(starCount),
     rankToPhysical,
@@ -165,7 +168,7 @@ test("automatic handoff follows one curved scatter path into the next attractor"
   player.publishFrame(301);
   assert.equal(player.stats().cycleComplete, true);
   assert.equal(completionCount, 1);
-  assert.equal(opacityWrites.length, 0);
+  assert.equal(colorWrites.length, 0);
   assert.equal(player.captureTerminalPreparedComponents().length, starCount * 3);
 });
 
@@ -174,8 +177,12 @@ test("handoff interpolation is deadline-gated to the prepared source cadence", (
   let now = 0;
   let nextFrame = null;
   let writeCount = 0;
+  const schedulerCalibration = createChaosSchedulerCalibration();
+  schedulerCalibration.cadenceMode = "high-refresh-deadline-gated";
+  schedulerCalibration.calibratedDisplayFrameMilliseconds = 1000 / 120;
   const player = createChaosPreparedPlayer({
-    catalog: { starCount, sampleCount: 3, framesPerSecond: 60, revealSeconds: 3,
+    catalog: { starCount, sampleCount: 3, sourceFrameStep: 1,
+      framesPerSecond: 60, revealSeconds: 3,
       handoffSeconds: 2, holdSeconds: 3, handoffControlPointCount: starCount,
       sourcePhaseOffset: 0 },
     prepared: {
@@ -185,12 +192,13 @@ test("handoff interpolation is deadline-gated to the prepared source cadence", (
     },
     leafPhaseIndices: new Uint16Array(starCount),
     leafRevealOrder: Uint16Array.from({ length: starCount }, (_, index) => index),
-    leafOpacities: Array.from({ length: starCount }, () => "0.6"),
+    leafColors: Array.from({ length: starCount }, () => "rgba(255,255,255,0.6)"),
     publish() { writeCount += 1; },
-    publishOpacity() {},
+    publishColor() {},
     handoff: true,
     handoffStartCoordinates: prepareFlatHandoffStartCoordinates(starCount),
     rankToPhysical: Uint16Array.from({ length: starCount }, (_, rank) => rank),
+    schedulerCalibration,
     onCycleComplete() {},
     readNow() { return now; },
     requestFrame(callback) { nextFrame = callback; return 1; },
@@ -215,6 +223,95 @@ test("handoff interpolation is deadline-gated to the prepared source cadence", (
   assert.equal(player.stats().publishedFrame, 2);
   assert.equal(writeCount, starCount * 2);
   assert.equal(player.stats().sourceFrameDropCount, 0);
+});
+
+test("slightly early 60 Hz callbacks still publish every prepared source frame", () => {
+  const starCount = 2000;
+  let now = 0;
+  let nextFrame = null;
+  let writeCount = 0;
+  const schedulerCalibration = createChaosSchedulerCalibration();
+  schedulerCalibration.cadenceMode = "display-refresh-at-or-below-sixty-hertz";
+  schedulerCalibration.calibratedDisplayFrameMilliseconds = 1000 / 60;
+  const player = createChaosPreparedPlayer({
+    catalog: { starCount, sampleCount: 8, sourceFrameStep: 1,
+      framesPerSecond: 60, revealSeconds: 3,
+      handoffSeconds: 2, holdSeconds: 3, handoffControlPointCount: starCount,
+      sourcePhaseOffset: 0 },
+    prepared: {
+      transforms: Array.from({ length: 8 }, (_, index) => `incoming-${index}`),
+      coordinates: new Uint16Array(8 * 3),
+      handoffControlCoordinates: new Uint16Array(starCount * 3),
+    },
+    leafPhaseIndices: new Uint16Array(starCount),
+    leafRevealOrder: Uint16Array.from({ length: starCount }, (_, index) => index),
+    leafColors: Array.from({ length: starCount }, () => "rgba(255,255,255,0.6)"),
+    publish() { writeCount += 1; },
+    publishColor() {},
+    handoff: true,
+    handoffStartCoordinates: prepareFlatHandoffStartCoordinates(starCount),
+    rankToPhysical: Uint16Array.from({ length: starCount }, (_, rank) => rank),
+    schedulerCalibration,
+    onCycleComplete() {},
+    readNow() { return now; },
+    requestFrame(callback) { nextFrame = callback; return 1; },
+    cancelFrame() {},
+  });
+
+  player.resume();
+  for (const callbackTime of [16.2, 32.9, 49.6]) {
+    now = callbackTime;
+    nextFrame(now);
+  }
+  assert.equal(player.stats().publishedFrame, 3);
+  assert.equal(player.stats().appliedFrameCount, 3);
+  assert.equal(player.stats().sourceFrameDropCount, 0);
+  assert.equal(writeCount, starCount * 3);
+});
+
+test("coalesces a sub-frame callback burst without a later source-frame catch-up", () => {
+  const starCount = 2000;
+  let now = 0;
+  let nextFrame = null;
+  let writeCount = 0;
+  const schedulerCalibration = createChaosSchedulerCalibration();
+  schedulerCalibration.cadenceMode = "display-refresh-at-or-below-sixty-hertz";
+  schedulerCalibration.calibratedDisplayFrameMilliseconds = 1000 / 60;
+  const player = createChaosPreparedPlayer({
+    catalog: { starCount, sampleCount: 8, sourceFrameStep: 1,
+      framesPerSecond: 60, revealSeconds: 3,
+      handoffSeconds: 2, holdSeconds: 3, handoffControlPointCount: starCount,
+      sourcePhaseOffset: 0 },
+    prepared: {
+      transforms: Array.from({ length: 8 }, (_, index) => `incoming-${index}`),
+      coordinates: new Uint16Array(8 * 3),
+      handoffControlCoordinates: new Uint16Array(starCount * 3),
+    },
+    leafPhaseIndices: new Uint16Array(starCount),
+    leafRevealOrder: Uint16Array.from({ length: starCount }, (_, index) => index),
+    leafColors: Array.from({ length: starCount }, () => "rgba(255,255,255,0.6)"),
+    publish() { writeCount += 1; },
+    publishColor() {},
+    handoff: true,
+    handoffStartCoordinates: prepareFlatHandoffStartCoordinates(starCount),
+    rankToPhysical: Uint16Array.from({ length: starCount }, (_, rank) => rank),
+    schedulerCalibration,
+    onCycleComplete() {},
+    readNow() { return now; },
+    requestFrame(callback) { nextFrame = callback; return 1; },
+    cancelFrame() {},
+  });
+
+  player.resume();
+  for (const callbackTime of [16.7, 33.4, 62.5, 67.7, 86]) {
+    now = callbackTime;
+    nextFrame(now);
+  }
+  assert.equal(player.stats().publishedFrame, 4);
+  assert.equal(player.stats().appliedFrameCount, 4);
+  assert.equal(player.stats().sourceFrameDropCount, 0);
+  assert.equal(player.stats().schedulerCoalescedFrameCallbackCount, 1);
+  assert.equal(writeCount, starCount * 4);
 });
 
 function prepareFlatHandoffStartCoordinates(starCount) {

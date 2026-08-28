@@ -33,7 +33,8 @@ BANK_ROOT = Path("build/generated/public/csschaos")
 PHASE_AUDIT_PATH = Path("output/dysts-ranking/phase-distribution-audit.json")
 REPORT_PATH = Path("output/dysts-ranking/dot-requirements-audit.json")
 CHART_PATH = Path("output/dysts-ranking/dot-requirements-audit.png")
-REFERENCE_DOT_COUNT = 2880
+PREPARED_SAMPLE_COUNT = 5760
+DOT_COUNT_CEILING = 2000
 CURRENT_DOT_COUNT = 2000
 MINIMUM_TEST_DOT_COUNT = 256
 DOT_COUNT_STEP = 64
@@ -48,9 +49,10 @@ def main() -> None:
     visible_frame_count = round((metadata["preparedHandoffSeconds"] +
                                  metadata["preparedHoldSeconds"]) *
                                 metadata["framesPerSecond"])
-    audit_frames = prepare_audit_frames(visible_frame_count)
-    counts = sorted(set(range(MINIMUM_TEST_DOT_COUNT, REFERENCE_DOT_COUNT + 1,
-                              DOT_COUNT_STEP)) | {CURRENT_DOT_COUNT})
+    source_frame_step = metadata["sourceFrameStep"]
+    audit_frames = prepare_audit_frames(visible_frame_count, source_frame_step)
+    counts = sorted(set(range(MINIMUM_TEST_DOT_COUNT, DOT_COUNT_CEILING + 1,
+                              DOT_COUNT_STEP)) | {CURRENT_DOT_COUNT, DOT_COUNT_CEILING})
     common_patterns = [label for label, _ in Counter(
         item["selectedPattern"] for item in phase_audit["systems"]
         if supported_pattern_label(item["selectedPattern"])
@@ -99,7 +101,8 @@ def main() -> None:
         "sourcePreparedSchema": metadata["schema"],
         "sourceCommit": metadata["source"]["commit"],
         "systemCount": len(systems),
-        "referenceDotCount": REFERENCE_DOT_COUNT,
+        "preparedSampleCount": PREPARED_SAMPLE_COUNT,
+        "dotCountCeiling": DOT_COUNT_CEILING,
         "currentDotCount": CURRENT_DOT_COUNT,
         "measurement": {
             "authority": "prepared final-camera trajectory positions",
@@ -137,9 +140,10 @@ def main() -> None:
 
 
 def validate_inputs(metadata: dict, phase_audit: dict) -> None:
-    if metadata.get("schema") != "csschaos-prepared-sequence@12" or \
+    if metadata.get("schema") != "csschaos-prepared-sequence@14" or \
             metadata.get("starCount") != CURRENT_DOT_COUNT or \
-            metadata.get("sampleCount") != REFERENCE_DOT_COUNT or \
+            metadata.get("sampleCount") != PREPARED_SAMPLE_COUNT or \
+            metadata.get("sourceFrameStep") != 2 or \
             len(metadata.get("sequence", ())) != 50 or \
             phase_audit.get("schema") != "csschaos-phase-distribution-audit@2" or \
             phase_audit.get("systemCount") != 50:
@@ -197,12 +201,12 @@ def evaluate_candidates(positions: np.ndarray, reference: dict,
 
 def prepare_limited_candidates(count: int, labels: tuple[str, ...]) \
         -> list[tuple[str, np.ndarray]]:
-    maximum_gap = max(3, math.ceil(REFERENCE_DOT_COUNT / count) * 2)
+    maximum_gap = max(3, math.ceil(PREPARED_SAMPLE_COUNT / count) * 2)
     candidates = []
     seen = set()
     for label in labels:
         phases = prepare_pattern(count, label)
-        gaps = np.diff(np.r_[phases, phases[0] + REFERENCE_DOT_COUNT])
+        gaps = np.diff(np.r_[phases, phases[0] + PREPARED_SAMPLE_COUNT])
         key = phases.tobytes()
         if len(np.unique(phases)) == count and int(np.max(gaps)) <= maximum_gap and \
                 key not in seen:
@@ -213,22 +217,22 @@ def prepare_limited_candidates(count: int, labels: tuple[str, ...]) \
 
 def prepare_exhaustive_current_candidates() -> list[tuple[str, np.ndarray]]:
     labels = ["uniform-floor", "uniform-round"]
-    labels.extend(f"stride-{stride}" for stride in range(1, REFERENCE_DOT_COUNT)
-                  if math.gcd(stride, REFERENCE_DOT_COUNT) == 1)
+    labels.extend(f"stride-{stride}" for stride in range(1, PREPARED_SAMPLE_COUNT)
+                  if math.gcd(stride, PREPARED_SAMPLE_COUNT) == 1)
     return prepare_limited_candidates(CURRENT_DOT_COUNT, tuple(labels))
 
 
 def prepare_pattern(count: int, label: str) -> np.ndarray:
     ranks = np.arange(count, dtype=np.int32)
     if label == "uniform-floor":
-        values = np.floor(ranks * REFERENCE_DOT_COUNT / count)
+        values = np.floor(ranks * PREPARED_SAMPLE_COUNT / count)
     elif label == "uniform-round":
-        values = np.rint(ranks * REFERENCE_DOT_COUNT / count)
+        values = np.rint(ranks * PREPARED_SAMPLE_COUNT / count)
     elif label.startswith("stride-"):
         values = ranks * int(label.removeprefix("stride-"))
     else:
         raise RuntimeError(f"Unknown Chaos phase pattern {label}")
-    return np.sort(np.asarray(values, dtype=np.int32) % REFERENCE_DOT_COUNT)
+    return np.sort(np.asarray(values, dtype=np.int32) % PREPARED_SAMPLE_COUNT)
 
 
 def supported_pattern_label(label: str) -> bool:
@@ -254,7 +258,7 @@ def render_chart(report: dict) -> None:
               fill="#aaa3b4", font=small_font)
     draw.text((18, 66), "Gate: density >= .97  |  support >= .90  |  p95 gap <= 6px",
               fill="#777180", font=small_font)
-    current_x = left + round(CURRENT_DOT_COUNT / REFERENCE_DOT_COUNT * plot_width)
+    current_x = left + round(CURRENT_DOT_COUNT / DOT_COUNT_CEILING * plot_width)
     draw.line((current_x, top - 14, current_x, image.height - bottom + 8),
               fill="#ffffff", width=1)
     draw.text((current_x - 18, top - 34), "2000", fill="#ffffff", font=small_font)
@@ -266,7 +270,7 @@ def render_chart(report: dict) -> None:
             color = "#f2bf57"
         else:
             color = "#52dc91"
-        bar_width = round(item["minimumRequiredDots"] / REFERENCE_DOT_COUNT * plot_width)
+        bar_width = round(item["minimumRequiredDots"] / DOT_COUNT_CEILING * plot_width)
         draw.text((18, y + 4), item["name"], fill="#d7d1df", font=small_font)
         draw.rounded_rectangle((left, y + 6, left + bar_width, y + 19),
                                radius=3, fill=color)

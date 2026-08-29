@@ -22,5 +22,3 @@ pnpm dev
 The cssGraphics core and package are [MIT licensed](LICENSE). Scoped adapters
 and third-party models retain their own terms and attribution. In particular,
 the ElectroPaint adapter is not MIT licensed; see its local license and notice.
-Catalog model attribution is listed in
-[`site/public/catalog.json`](site/public/catalog.json).

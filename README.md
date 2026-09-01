@@ -1,7 +1,7 @@
 # cssGraphics
 
 cssGraphics packages animated and interactive 3D models as real HTML and CSS,
-without a WebGL or canvas renderer. Powered by the
+without a WebGL or canvas renderer. It is powered by the
 [PolyCSS](https://github.com/LayoutitStudio/polycss) engine.
 
 <p align="center">
@@ -20,5 +20,4 @@ pnpm dev
 ## License
 
 The cssGraphics core and package are [MIT licensed](LICENSE). Scoped adapters
-and third-party models retain their own terms and attribution. In particular,
-the ElectroPaint adapter is not MIT licensed; see its local license and notice.
+and third-party models retain their own terms and attribution.

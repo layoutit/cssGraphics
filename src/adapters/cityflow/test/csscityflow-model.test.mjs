@@ -200,9 +200,8 @@ test("prepares DOMFORMAT-precedented exact states and C2 reconstructed presentat
   assert.match(css,
     /\.polycss-scene>div>b,\.csscityflow-box>b\{[^}]*width:1px;[^}]*height:1px;/u);
   assert.match(css,
-    /\.polycss-scene>div>b,\.csscityflow-box>b\{[^}]*backface-visibility:hidden;/u);
-  assert.match(css,
-    /\.polycss-scene>div>b:nth-child\(1\),\.csscityflow-box>b:nth-child\(1\)\{backface-visibility:visible;/u);
+    /\.polycss-scene>div>b,\.csscityflow-box>b\{[^}]*backface-visibility:visible;/u);
+  assert.doesNotMatch(css, /backface-visibility:hidden/u);
   assert.equal((css.match(/hypot\(/gu) ?? []).length, 0);
   assert.doesNotMatch(css, /filter|clip-path|mask|linear-gradient|radial-gradient/u);
 

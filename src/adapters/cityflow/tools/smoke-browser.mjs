@@ -197,11 +197,8 @@ async function capture({
       },
       backfaceInlineStyleCount: leaves.filter((leaf) =>
         leaf.style.backfaceVisibility !== "" || leaf.style.webkitBackfaceVisibility !== "").length,
-      topBackfaceVisibleCount: shapes.filter((shape) =>
-        getComputedStyle(shape.children[0]).backfaceVisibility === "visible").length,
-      sideBackfaceHiddenCount: shapes.reduce((count, shape) => count +
-        [...shape.children].slice(1).filter((leaf) =>
-          getComputedStyle(leaf).backfaceVisibility === "hidden").length, 0),
+      doubleSidedFaceCount: leaves.filter((leaf) =>
+        getComputedStyle(leaf).backfaceVisibility === "visible").length,
       hiddenShapeCount: shapes.filter((shape) => getComputedStyle(shape).visibility === "hidden").length,
       hiddenLeafCount: leaves.filter((leaf) => getComputedStyle(leaf).visibility === "hidden").length,
       displayNoneShapeCount: shapes.filter((shape) => getComputedStyle(shape).display === "none").length,
@@ -347,8 +344,7 @@ async function capture({
       before.sceneInlineStyleAttributeCount !== 0 || before.sceneInlineTransformCount !== 0 ||
       !before.projection.matches || before.projection.wide !== (profile === "wide") ||
       before.morphClassCount !== 0 || before.modelRootCount !== 0 ||
-      before.backfaceInlineStyleCount !== 0 || before.topBackfaceVisibleCount !== boxes ||
-      before.sideBackfaceHiddenCount !== boxes * 2 ||
+      before.backfaceInlineStyleCount !== 0 || before.doubleSidedFaceCount !== leaves ||
       before.canvasCount !== 0 || before.svgSceneCount !== 0 ||
       !before.firstLeafColor || before.whiteLeafCount === leaves ||
       !preparedStylesheet?.contentType?.startsWith("text/css") ||

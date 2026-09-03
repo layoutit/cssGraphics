@@ -212,9 +212,7 @@ export function buildCityflowPreparedCss(state) {
     `.polycss-scene>div>b,.csscityflow-box>b{position:absolute;display:block!important;` +
       `width:1px;height:1px;` +
       `margin:0;padding:0;border:0;transform-style:preserve-3d;transform-origin:0 0;` +
-      `backface-visibility:hidden;-webkit-backface-visibility:hidden}`,
-    `.polycss-scene>div>b:nth-child(1),.csscityflow-box>b:nth-child(1){backface-visibility:visible;` +
-      `-webkit-backface-visibility:visible}`,
+      `backface-visibility:visible;-webkit-backface-visibility:visible}`,
   ].join("");
 }
 

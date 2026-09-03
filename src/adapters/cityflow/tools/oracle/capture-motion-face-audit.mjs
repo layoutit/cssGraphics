@@ -122,7 +122,7 @@ async function captureLiveVideo(browserHandle) {
     return {
       durationMilliseconds,
       callbackCount: samples.length,
-      transformAnimationCount: [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div")].reduce(
+      transformAnimationCount: [...document.querySelectorAll(".csscityflow-box")].reduce(
         (sum, root) => sum + root.getAnimations().length,
         0,
       ),
@@ -428,15 +428,15 @@ async function openReadyScene(page) {
 async function installGeometryAuditStyles(page, unculled) {
   await page.addStyleTag({ content: `
     :root, body, .example-stage { background: #000 !important; }
-    .example-stage>.polycss-camera>.polycss-scene>div>b:first-child,
-    .example-stage>.polycss-camera>.polycss-scene>div::before,
-    .example-stage>.polycss-camera>.polycss-scene>div::after,
-    .example-stage>.polycss-camera>.polycss-scene>div.csscityflow-side-1-hidden::before,
-    .example-stage>.polycss-camera>.polycss-scene>div.csscityflow-side-2-hidden::after {
+    .csscityflow-box > b:first-child,
+    .csscityflow-box::before,
+    .csscityflow-box::after,
+    .csscityflow-box.csscityflow-side-1-hidden::before,
+    .csscityflow-box.csscityflow-side-2-hidden::after {
       background: #fff !important;
       ${unculled ? "visibility: visible !important;" : ""}
     }
-    .example-stage>.polycss-camera>.polycss-scene>div>b {
+    .csscityflow-box > b {
       ${unculled ? "visibility: visible !important;" : ""}
     }
   ` });
@@ -448,7 +448,7 @@ async function setAuditTime(page, presentationTimeMilliseconds, publishAllShapes
     const stats = player.seekPresentationTime(nextPresentationTime);
     if (!publishAll) return;
     const playback = globalThis.__csscityflowAuditPlayback;
-    const boxes = [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div")];
+    const boxes = [...document.querySelectorAll(".csscityflow-box")];
     if (playback?.presentationShapeStyles?.length !== stats.frameCount * stats.boxCount ||
         boxes.length !== stats.boxCount) {
       throw new Error("Cityflow unculled audit playback binding drifted");

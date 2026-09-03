@@ -39,7 +39,7 @@ try {
     };
     const transformIndices = decodeUint16(playback.transformIndices.presentationBase64);
     const materialIndices = decodeUint16(playback.colors.presentationMaterialIndicesBase64);
-    const roots = [...document.querySelectorAll(".csscityflow-box")];
+    const roots = [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div")];
     const leaves = roots.flatMap((root) => [...root.children]);
     for (let boxIndex = 0; boxIndex < playback.boxCount; boxIndex += 1) {
       roots[boxIndex].style.transform = player.preparedTransformAt(
@@ -71,7 +71,7 @@ try {
   const ranked = [];
   for (const faceIndex of hiddenFaceIndices) {
     await page.evaluate((nextFaceIndex) => {
-      document.querySelectorAll(".csscityflow-box>b")[nextFaceIndex]
+      document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div>b")[nextFaceIndex]
         .style.visibility = "";
     }, faceIndex);
     const restoredDiff = diff(reference, await rawRgb(await page.screenshot()));
@@ -82,7 +82,7 @@ try {
       maximumChannelDelta: restoredDiff.maximumChannelDelta,
     });
     await page.evaluate((nextFaceIndex) => {
-      document.querySelectorAll(".csscityflow-box>b")[nextFaceIndex]
+      document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div>b")[nextFaceIndex]
         .style.visibility = "hidden";
     }, faceIndex);
   }

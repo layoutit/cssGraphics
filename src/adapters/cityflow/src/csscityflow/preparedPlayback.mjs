@@ -8,11 +8,11 @@ const decodedPackets = new WeakMap();
 
 export function createCityflowPreparedPlayer({
   playback,
-  mounted,
-  shapeElements,
+  dom,
   ...overrides
 }) {
-  const decoded = validatePlayback(playback, mounted, shapeElements);
+  const decoded = validatePlayback(playback, dom);
+  const shapeElements = dom.shapeElements;
   const frameCount = playback.frameCount;
   const boxCount = playback.boxCount;
   const facesPerBox = playback.facesPerBox;
@@ -33,12 +33,8 @@ export function createCityflowPreparedPlayer({
   const materials = playback.colors.materials;
   const target = createPolyMorphPreparedDomTarget({
     model: {
-      element: mounted.modelElement,
-      writeTransform(transform) {
-        if (mounted.modelElement.style.transform === transform) return false;
-        mounted.modelElement.style.transform = transform;
-        return true;
-      },
+      element: dom.sceneElement,
+      writeTransform() { return false; },
     },
     shapes: shapeElements.map((element) => ({ element })),
     leaves: [],
@@ -249,7 +245,8 @@ export function createCityflowPreparedPlayer({
   function snapshot() {
     const schedulerStats = scheduler.stats();
     target.assertStableDomIdentity();
-    mounted.assertStableDomIdentity();
+    dom.assertStableDomIdentity();
+    const domStats = dom.stats();
     return Object.freeze({
       schema: "csscityflow-prepared-player-stats@7",
       ready: true,
@@ -330,6 +327,15 @@ export function createCityflowPreparedPlayer({
       identityStable: true,
       runtimeGeometryCalculationCount: 0,
       runtimeAtlasRasterizationCount: 0,
+      retainedModelRootCount: domStats.retainedModelRootCount,
+      retainedDomClassAttributeCount: domStats.retainedDomClassAttributeCount,
+      retainedDomDataAttributeCount: domStats.retainedDomDataAttributeCount,
+      retainedDomAriaAttributeCount: domStats.retainedDomAriaAttributeCount,
+      retainedCameraInlineStyleAttributeCount: domStats.retainedCameraInlineStyleAttributeCount,
+      retainedSceneInlineStyleAttributeCount: domStats.retainedSceneInlineStyleAttributeCount,
+      retainedSceneInlineTransformCount: domStats.retainedSceneInlineTransformCount,
+      retainedBackfaceInlineStyleCount: domStats.retainedBackfaceInlineStyleCount,
+      runtimeDomMutationCount: domStats.runtimeDomMutationCount,
       runtimeDomGrowth: false,
     });
   }
@@ -381,7 +387,7 @@ export function createCityflowPreparedPlayer({
     },
     assertStableDomIdentity() {
       target.assertStableDomIdentity();
-      mounted.assertStableDomIdentity();
+      dom.assertStableDomIdentity();
       return true;
     },
     stats: snapshot,
@@ -400,11 +406,12 @@ export async function loadCityflowPreparedPlayback(url, fetchImpl = globalThis.f
   return playback;
 }
 
-function validatePlayback(playback, mounted, shapeElements) {
+function validatePlayback(playback, dom) {
   const decoded = validatePacket(playback);
-  if (!mounted?.modelElement || typeof mounted.assertStableDomIdentity !== "function" ||
-      !Array.isArray(shapeElements) || shapeElements.length !== playback.boxCount ||
-      shapeElements.some((element) => !(element instanceof HTMLElement))) {
+  if (!(dom?.sceneElement instanceof HTMLElement) ||
+      typeof dom.assertStableDomIdentity !== "function" ||
+      !Array.isArray(dom.shapeElements) || dom.shapeElements.length !== playback.boxCount ||
+      dom.shapeElements.some((element) => !(element instanceof HTMLElement))) {
     throw new Error("Cityflow retained playback targets drifted");
   }
   return decoded;

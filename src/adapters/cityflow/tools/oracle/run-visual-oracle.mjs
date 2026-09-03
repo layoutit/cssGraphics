@@ -228,8 +228,8 @@ async function captureBrowserRun(browser, url, runRoot) {
       .example-stage { position: fixed !important; inset: 0 !important; }
     ` });
     const initial = await page.evaluate(async () => {
-      const roots = [...document.querySelectorAll(".csscityflow-box")];
-      const leaves = [...document.querySelectorAll(".csscityflow-box>b")];
+      const roots = [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div")];
+      const leaves = [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div>b")];
       globalThis.__csscityflowOracleIdentity = { roots, leaves };
       globalThis.__csscityflow.player.pause();
       globalThis.__csscityflow.player.seekSourceFrame(1);
@@ -257,8 +257,8 @@ async function captureBrowserRun(browser, url, runRoot) {
     }
     const audit = await page.evaluate(() => {
       const expected = globalThis.__csscityflowOracleIdentity;
-      const roots = [...document.querySelectorAll(".csscityflow-box")];
-      const leaves = [...document.querySelectorAll(".csscityflow-box>b")];
+      const roots = [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div")];
+      const leaves = [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div>b")];
       return {
         stableRootIdentity: roots.every((element, index) => element === expected.roots[index]),
         stableLeafIdentity: leaves.every((element, index) => element === expected.leaves[index]),

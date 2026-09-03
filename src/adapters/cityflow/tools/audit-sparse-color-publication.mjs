@@ -70,7 +70,7 @@ async function auditViewport(viewport) {
         reference.evaluate((index) => {
           const state = globalThis.__csscityflowFullColorReference;
           globalThis.__csscityflow.player.seekFrame(index);
-          const roots = document.querySelectorAll(".csscityflow-box");
+          const roots = document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div");
           for (let boxIndex = 0; boxIndex < state.playback.boxCount; boxIndex += 1) {
             const material = state.playback.colors.materials[
               state.materialIndices[index * state.playback.boxCount + boxIndex]

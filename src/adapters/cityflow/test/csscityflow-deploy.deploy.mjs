@@ -57,6 +57,8 @@ test("public Cityflow attribution, previews, preparation, and cache contracts ar
   assert.match(packageJson, /"build:cityflow:deploy": "CSSCITYFLOW_DEPLOY_BUILD=1 pnpm build:cityflow"/u);
   assert.match(packageJson, /pnpm prepare:cityflow[^\n]+node scripts\/copy-deploy-products\.mjs/u);
   assert.match(astroConfig, /"\.css": "text\/css; charset=utf-8"/u);
+  assert.match(netlify,
+    /for = "\/csscityflow\/assets\/\*"[\s\S]*?Cache-Control = "public, max-age=31536000, immutable"/u);
   assert.match(netlify, /for = "\/csscityflow\/\*"[\s\S]*?Cache-Control = "no-cache"/u);
   assert.match(sourceAuthority, /https:\/\/raw\.githubusercontent\.com\/\$\{segments\[0\]\}\/\$\{segments\[1\]\}/u);
   assert.match(notice, /Permission to use, copy, modify, distribute, and sell this software/u);

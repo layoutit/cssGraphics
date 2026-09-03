@@ -53,11 +53,17 @@ export function mountCityflow(host) {
       height: host.clientHeight || innerHeight,
     });
     const modelId = CSSCITYFLOW_PREPARED_BANKS[bankId].modelId;
-    const [metadata, loaded, playback] = await Promise.all([
-      fetchPreparedMetadata("/csscityflow/prepared.json"),
-      loadPolyMorphPackage("/csscityflow/", { modelId }),
-      loadCityflowPreparedPlayback(`/csscityflow/${modelId}.playback.json`),
-      loadPreparedStylesheet(`/csscityflow/${modelId}.css`),
+    const metadataPromise = fetchPreparedMetadata("/csscityflow/prepared.json");
+    const loadedPromise = loadPolyMorphPackage("/csscityflow/", { modelId });
+    const playbackPromise = loadCityflowPreparedPlayback(
+      `/csscityflow/${modelId}.playback.json`,
+    );
+    const metadata = await metadataPromise;
+    const stylesheetAssetUrl = preparedStylesheetAssetUrl(metadata);
+    const [loaded, playback] = await Promise.all([
+      loadedPromise,
+      playbackPromise,
+      loadPreparedStylesheet(stylesheetAssetUrl),
     ]);
     assertPreparedMetadata(metadata, playback, bankId, modelId);
     if (destroyed) return;
@@ -115,7 +121,7 @@ async function fetchPreparedMetadata(url) {
 
 function assertPreparedMetadata(metadata, playback, bankId, modelId) {
   const bank = metadata?.banks?.find((candidate) => candidate.id === bankId);
-  if (metadata?.schema !== "csscityflow-prepared-product@2" || metadata.status !== "ready" ||
+  if (metadata?.schema !== "csscityflow-prepared-product@3" || metadata.status !== "ready" ||
       metadata.defaultBank !== "desktop" ||
       metadata.profileSelection?.mobileBreakpointWidth !== 600 ||
       metadata.profileSelection?.mobileCapabilityQuery !== "(hover: none) and (pointer: coarse)" ||
@@ -188,6 +194,24 @@ function assertPreparedMetadata(metadata, playback, bankId, modelId) {
         "periodic-zero-sum-twelve-frame-direction-run-folded-adaptive-smooth-sine-eased-sample-cycle") {
     throw new Error("Cityflow prepared metadata drifted");
   }
+}
+
+function preparedStylesheetAssetUrl(metadata) {
+  const stylesheet = metadata?.stylesheet;
+  const match = /^\/csscityflow\/assets\/presentation-([a-f0-9]{64})\.css$/u
+    .exec(stylesheet?.assetUrl ?? "");
+  if (metadata?.schema !== "csscityflow-prepared-product@3" ||
+      stylesheet?.schema !== "csscityflow-prepared-stylesheet@1" ||
+      stylesheet?.policy !== "one-content-addressed-rendering-contract-shared-by-all-banks" ||
+      match?.[1] !== stylesheet.sha256 ||
+      !Number.isSafeInteger(stylesheet.byteLength) || stylesheet.byteLength <= 0 ||
+      JSON.stringify(stylesheet.compatibilityAssetUrls) !== JSON.stringify([
+        "/csscityflow/cityflow.css",
+        "/csscityflow/cityflow-mobile.css",
+      ])) {
+    throw new Error("Cityflow prepared stylesheet metadata drifted");
+  }
+  return stylesheet.assetUrl;
 }
 
 function waitForPaint() {

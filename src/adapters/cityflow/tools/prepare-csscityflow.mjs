@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: HPND
+import { createHash } from "node:crypto";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,6 +22,7 @@ await rm(stagingRoot, { recursive: true, force: true });
 await mkdir(stagingRoot, { recursive: true });
 const packages = [];
 const preparedBanks = [];
+let sharedStylesheetBytes = null;
 for (const bankId of Object.keys(CITYFLOW_BANKS)) {
   const { state, model } = buildCityflowMorphModel({ bankId });
   const built = await buildPolyMorphPackage(model);
@@ -34,10 +36,11 @@ for (const bankId of Object.keys(CITYFLOW_BANKS)) {
     manifestSha256: built.manifestSha256,
   });
   const playback = buildCityflowPreparedPlayback(state);
-  await writeFile(
-    join(stagingRoot, `${model.identity.id}.css`),
-    `${buildCityflowPreparedCss(state)}\n`,
-  );
+  const stylesheetBytes = Buffer.from(`${buildCityflowPreparedCss(state)}\n`);
+  if (sharedStylesheetBytes === null) sharedStylesheetBytes = stylesheetBytes;
+  else if (!sharedStylesheetBytes.equals(stylesheetBytes)) {
+    throw new Error(`Cityflow ${bankId} introduced a bank-specific rendering stylesheet`);
+  }
   await writeFile(
     join(stagingRoot, `${model.identity.id}.playback.json`),
     `${JSON.stringify(playback)}\n`,
@@ -74,10 +77,22 @@ for (const bankId of Object.keys(CITYFLOW_BANKS)) {
     }),
   }));
 }
+if (sharedStylesheetBytes === null) throw new Error("Cityflow prepared no stylesheet");
+const stylesheetSha256 = createHash("sha256").update(sharedStylesheetBytes).digest("hex");
+const stylesheetAssetUrl = `/csscityflow/assets/presentation-${stylesheetSha256}.css`;
+await writeBytes(
+  join(stagingRoot, stylesheetAssetUrl.replace(/^\/csscityflow\//u, "")),
+  sharedStylesheetBytes,
+);
+// Compatibility aliases keep already-cached pre-content-addressed clients valid
+// across the migration. New clients never select a stylesheet by bank.
+for (const { manifest } of packages) {
+  await writeBytes(join(stagingRoot, `${manifest.identity.id}.css`), sharedStylesheetBytes);
+}
 const catalog = await buildPolyMorphCatalog("cityflow", packages);
 await writeBytes(join(stagingRoot, "catalog.json"), catalog.bytes);
 await writeFile(join(stagingRoot, "prepared.json"), `${JSON.stringify({
-  schema: "csscityflow-prepared-product@2",
+  schema: "csscityflow-prepared-product@3",
   status: "ready",
   defaultBank: "desktop",
   profileSelection: {
@@ -96,6 +111,17 @@ await writeFile(join(stagingRoot, "prepared.json"), `${JSON.stringify({
     runtimeGeometry: false,
     runtimeRasterization: false,
     runtimeDomGrowth: false,
+  },
+  stylesheet: {
+    schema: "csscityflow-prepared-stylesheet@1",
+    policy: "one-content-addressed-rendering-contract-shared-by-all-banks",
+    assetUrl: stylesheetAssetUrl,
+    sha256: stylesheetSha256,
+    byteLength: sharedStylesheetBytes.byteLength,
+    compatibilityAssetUrls: [
+      "/csscityflow/cityflow.css",
+      "/csscityflow/cityflow-mobile.css",
+    ],
   },
   banks: preparedBanks,
 }, null, 2)}\n`);

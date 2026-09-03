@@ -20,6 +20,7 @@ const generatedAssetRoots = new Map([
     "csscyclone/",
     "csschaos/",
     "cssblackhole/",
+    "csscityflow/",
   ].map((prefix) => [prefix, generatedPublicRoot]),
 ]);
 
@@ -78,6 +79,7 @@ function generatedAssetsPlugin() {
 function mediaTypeForPath(path) {
   return ({
     ".avif": "image/avif",
+    ".css": "text/css; charset=utf-8",
     ".gz": "application/gzip",
     ".json": "application/json",
     ".png": "image/png",

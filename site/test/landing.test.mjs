@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(siteRoot, "..");
 const expectedProjects = [
+  ["cityflow", 12, "XScreenSaver", "2026-08-31", "XScreenSaver Cityflow"],
   ["chaos", 11, "dysts", "2026-08-27", "50 motion-curated chaotic attractors"],
   ["luminet", 10, "Luminet", "2026-08-24", "A Luminet Schwarzschild black hole"],
   ["galaxy", 9, "XScreenSaver", "2026-08-23", "XScreenSaver Galaxy"],
@@ -22,6 +23,7 @@ const expectedProjects = [
 ];
 const projectsExcludedFromLanding = ["flowerbox", "gravitywell"];
 const expectedNumberTones = new Map([
+  ["cityflow", "light"],
   ["chaos", "light"],
   ["luminet", "light"],
   ["galaxy", "light"],
@@ -35,6 +37,7 @@ const expectedNumberTones = new Map([
   ["pipes", "light"],
 ]);
 const projectAdapterDirectories = new Map([
+  ["cityflow", "cityflow"],
   ["chaos", "dysts-lab"],
   ["luminet", "blackhole"],
   ["cloth", "cloth"],
@@ -116,6 +119,7 @@ test("landing presents the current deployed collection", async () => {
   assert.doesNotMatch(sceneRouter, /mountFlocksClient|cssflocks/u);
   assert.match(sceneRouter, /mountBlackHoleClient\(host\)/u);
   assert.match(sceneRouter, /mountChaosClient\(host\)/u);
+  assert.match(sceneRouter, /mountCityflow\(host\)/u);
   assert.match(sceneRouter, /mountCycloneClient\(host\)/u);
   assert.match(sceneRouter, /mountGalaxyClient\(host\)/u);
   assert.match(sceneRouter, /addEventListener\("visibilitychange", syncSceneVisibility\)/u);

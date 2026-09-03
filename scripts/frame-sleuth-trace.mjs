@@ -150,7 +150,13 @@ export function captureOutputPaths(tracePath) {
   });
 }
 
-export async function captureFrameSleuthTrace(options, { browserType = chromium } = {}) {
+export async function captureFrameSleuthTrace(options, {
+  browserType = chromium,
+  activatePage = null,
+} = {}) {
+  if (activatePage !== null && typeof activatePage !== "function") {
+    throw new TypeError("FrameSleuth page activation must be a function");
+  }
   const paths = captureOutputPaths(options.output);
   await assertOutputsAbsent(paths, options.screenshots, options.frameSleuthFilter === true);
   await mkdir(dirname(paths.trace), { recursive: true });
@@ -179,6 +185,7 @@ export async function captureFrameSleuthTrace(options, { browserType = chromium 
     let navigationError = null;
     try {
       await page.goto(options.url, { waitUntil: "commit", timeout: 30_000 });
+      if (activatePage) await activatePage(page);
       await page.waitForTimeout(Math.max(0, recordingEndsAt - Date.now()));
     } catch (error) {
       navigationError = error;
@@ -237,7 +244,8 @@ export async function captureFrameSleuthTrace(options, { browserType = chromium 
       },
       viewport: options.width == null ? "browser-default" : { width: options.width, height: options.height },
       cache: "disabled-fresh-context",
-      untouchedPage: true,
+      untouchedPage: activatePage === null,
+      pageActivation: activatePage === null ? null : "programmatic-after-navigation-commit",
       categories,
       screenshotsRequested: options.screenshots,
       leanCategories: options.lean === true,

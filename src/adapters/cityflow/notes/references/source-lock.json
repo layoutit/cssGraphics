@@ -1,0 +1,34 @@
+{
+  "schema": "csscityflow-source-lock@2",
+  "project": "XScreenSaver Cityflow",
+  "repository": "https://github.com/Zygo/xscreensaver",
+  "revision": "906693799e4fb7581436590cf84ecb2d3c9186ba",
+  "primary": {
+    "path": "hacks/glx/cityflow.c",
+    "sha256": "9113c9f3214ba6c1f350b3863c306e6015e47a856a17bbe24d597f909dfa027b"
+  },
+  "config": {
+    "path": "hacks/config/cityflow.xml",
+    "sha256": "0453c12e39e4b7d32e66a7780d69979aaaa42d0632a3b6757df9c1cee6c7c919"
+  },
+  "license": {
+    "spdx": "HPND",
+    "notice": "src/adapters/cityflow/NOTICE.md"
+  },
+  "sources": [
+    { "path": "hacks/glx/cityflow.c", "sha256": "9113c9f3214ba6c1f350b3863c306e6015e47a856a17bbe24d597f909dfa027b" },
+    { "path": "hacks/config/cityflow.xml", "sha256": "0453c12e39e4b7d32e66a7780d69979aaaa42d0632a3b6757df9c1cee6c7c919" },
+    { "path": "utils/yarandom.c", "sha256": "32967bcf84b46a60968723d6d3d86d1d69d9f30a52b36dddfdedaa3ee3e4c931" },
+    { "path": "utils/yarandom.h", "sha256": "958707f757cd273579290830a0546215b61db5e11110cf46656333c51002269b" },
+    { "path": "utils/colors.c", "sha256": "d10c5334e617a3043f674e6b5849e01887433a9c48b3df081a1b47cb61a48318" },
+    { "path": "utils/colors.h", "sha256": "3ddd76a53f318fdc968ccb254aa125ae750a0054f6dbe5e22d2234a56e9c415e" },
+    { "path": "utils/hsv.c", "sha256": "b0dcc28f6ed1b6709f00aac1e796a8d28c8285a6a3c698d008bce0aed4d0f265" },
+    { "path": "utils/hsv.h", "sha256": "4f263f1cc0b56694281417107b2e51b7b5e4ac032f6020349b6e671cbcaac2b6" },
+    { "path": "hacks/glx/gltrackball.c", "sha256": "c5f1ae69419557dcc83d330d67c9f52ee9e8668bb0d6e90585fca52ce43efc10" },
+    { "path": "hacks/glx/gltrackball.h", "sha256": "6d74d4e6d5eb831de0a7531b87aeaf2e2d052b819ef782b99cd201751514dc4b" },
+    { "path": "hacks/glx/trackball.c", "sha256": "618033a011d1f0f1204c13ff79000f214dd02ad5fe7f0bfeb088c015ef2bc1e0" },
+    { "path": "hacks/glx/trackball.h", "sha256": "cb3c83705d94727f44911d29265630ed8e19653b95c12d82b939c90bddebbdaa" },
+    { "path": "hacks/glx/quaternion.c", "sha256": "94ef86a29833f4af7e30bf278273d935724b0caa4147585a7ce0288fef80dab4" },
+    { "path": "hacks/glx/quaternion.h", "sha256": "bcd01e64dbc58a47bfc3214e55b095a5915fe249a8d71ffde5e09bbf52647522" }
+  ]
+}

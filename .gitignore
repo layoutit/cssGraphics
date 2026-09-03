@@ -17,6 +17,7 @@ sm64config.txt
 
 # Deterministic local prepare/build output
 build/generated/
+build/oracles/
 build/package-inputs/
 build/release/
 build/reports/

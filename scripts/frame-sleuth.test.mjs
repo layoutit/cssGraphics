@@ -113,6 +113,29 @@ test("reports unavailable evidence as unknown instead of zero", () => {
   assert.match(renderMarkdown(analysis), /Long main-thread tasks: not captured/);
 });
 
+test("captures browser-process raster work without attributing it to the selected renderer", () => {
+  const events = syntheticTrace({}).filter((event) => event.name !== "RasterTask");
+  events.push(metadata("process_name", 1, 0, "Browser"));
+  events.push(metadata("thread_name", 1, 2, "CompositorTileWorker1"));
+  events.push(complete("RasterTask", 1, 2, 30_000, 200));
+
+  const analysis = analyzeTrace(loaded(events), { frame: 2, question: "was raster work captured?" });
+
+  assert.equal(analysis.focus, "rendering");
+  assert.equal(analysis.capabilities.signals.raster.available, true);
+  assert.equal(analysis.capabilities.signals.raster.eventCount, 1);
+  assert.equal(analysis.capabilities.signals.raster.rendererEventCount, 0);
+  assert.equal(analysis.capabilities.signals.raster.globalEventCount, 1);
+  assert.equal(analysis.capabilities.signals.raster.scope, "global-nonexclusive");
+  assert.equal(analysis.workload.named.RasterTask.maxMs, 0.2);
+  assert.equal(analysis.requestedFrame.metrics.rasterMaxMs, 0.2);
+  assert.ok(analysis.requestedFrame.namedWork.some(
+    (entry) => entry.name === "RasterTask" && entry.role === "raster-global",
+  ));
+  assert.match(analysis.capabilities.warnings.join("\n"), /outside the selected renderer/u);
+  assert.match(renderMarkdown(analysis), /global\/nonexclusive trace scope/u);
+});
+
 test("rejects ambiguous and nonexistent frame selectors", () => {
   const trace = loaded(syntheticTrace({}));
   assert.throws(() => analyzeTrace(trace, { frame: 999 }), /does not exist/);
@@ -165,11 +188,17 @@ test("prefers renderer presentation timestamps for the frame-time chart", () => 
   [11_000, 27_000, 73_000, 90_000, 107_000].forEach((ts) => {
     events.push(instant("AnimationFrame::Presentation", 10, 11, ts));
   });
+  events.push({
+    ...instant("AnimationFrame::Presentation", 10, 11, 50_000),
+    args: { begin_frame_id: { source_id: 0, sequence_number: 0 } },
+  });
   const analysis = analyzeTrace(loaded(events));
   assert.equal(analysis.timeline.source, "AnimationFrame::Presentation");
+  assert.equal(analysis.timeline.ignoredUnboundEventCount, 1);
   assert.equal(analysis.timeline.baselineMs, 17);
   assert.equal(analysis.timeline.worstFrame.intervalKind, "presented animation frame");
   assert.equal(analysis.timeline.worstFrame.intervalMs, 46);
+  assert.match(analysis.capabilities.warnings.join("\n"), /unbound trace-start/u);
   assert.match(renderFrameChartSvg(analysis), /Presented animation-frame interval \(ms\)/);
   assert.match(renderMarkdown(analysis, null, { frameChart: "frame-times.svg" }), /Worst presented animation-frame interval/u);
 });

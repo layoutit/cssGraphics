@@ -42,6 +42,10 @@ function requireSceneLifecycle(mount) {
 
 async function mountForProject(projectId, host) {
   switch (projectId) {
+    case "cityflow": {
+      const { mountCityflow } = await import("../src/adapters/cityflow/src/csscityflow/client.mjs");
+      return mountCityflow(host);
+    }
     case "chaos": {
       const { mountChaosClient } = await import("../src/adapters/dysts-lab/src/cssdysts/client.mjs");
       return mountChaosClient(host);

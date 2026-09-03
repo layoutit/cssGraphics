@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: HPND
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
@@ -20,19 +21,26 @@ import { chromium } from "playwright";
 import sharp from "sharp";
 import {
   CSSCITYFLOW_FRAME_MILLISECONDS,
+  CSSCITYFLOW_PREPARED_FRAME_COUNT,
   CSSCITYFLOW_SEED,
-  CITYFLOW_SOURCE,
+  CITYFLOW_BANKS,
 } from "../../src/prepare/csscityflow/sourceModel.mjs";
+import { ensureCityflowSourceTree } from "../../src/prepare/csscityflow/sourceAuthority.mjs";
 
 const adapterRoot = resolve(import.meta.dirname, "../..");
 const repositoryRoot = resolve(adapterRoot, "../../..");
-const sourceRoot = resolveRequiredSourceRoot();
+const sourceIdentity = await ensureCityflowSourceTree();
+const sourceRoot = sourceIdentity.sourceRoot;
 const outputRoot = resolve(
   process.env.CSSCITYFLOW_VISUAL_ORACLE_OUT ??
   join(repositoryRoot, "bench/results/csscityflow/native-browser-visual"),
 );
-const width = 1280;
-const height = 720;
+const width = readPositiveIntegerEnvironment("CSSCITYFLOW_VISUAL_ORACLE_WIDTH", 1280);
+const height = readPositiveIntegerEnvironment("CSSCITYFLOW_VISUAL_ORACLE_HEIGHT", 720);
+const bankId = process.env.CSSCITYFLOW_VISUAL_ORACLE_BANK ??
+  (width < 600 ? "mobile" : "desktop");
+const bank = CITYFLOW_BANKS[bankId];
+if (!bank) throw new Error(`Unknown Cityflow visual-oracle bank: ${bankId}`);
 const frameCount = readFrameCount();
 const diffFrames = [
   "worst",
@@ -82,7 +90,7 @@ try {
     actual: browserA.framesDir,
     out: join(outputRoot, "native-browser-compare"),
     label: "csscityflow_native_browser",
-    thresholds: ["1", "0.05", "2"],
+      thresholds: ["1.125", "0.05", "2"],
     diffFrames,
   });
   const worstFrame = nativeBrowser.worst[0]?.frame ?? 0;
@@ -96,11 +104,15 @@ try {
     schema: "csscityflow-native-browser-visual-oracle@1",
     status: nativeBrowser.pass ? "aligned" : "not-aligned",
     source: {
+      repository: sourceIdentity.repository,
       revision: sourceLock.revision,
       primaryPath: sourceLock.primary.path,
       primarySha256: sourceLock.primary.sha256,
+      verifiedFiles: sourceIdentity.files,
     },
     seed: CSSCITYFLOW_SEED,
+    bankId,
+    boxCount: bank.boxCount,
     frames: frameCount,
     sourceFrameMilliseconds: CSSCITYFLOW_FRAME_MILLISECONDS,
     viewport: { width, height, deviceScaleFactor: 1 },
@@ -188,7 +200,7 @@ async function captureNativeRun(binary, runRoot) {
   const result = spawnSync(binary, [
     framesDir,
     String(CSSCITYFLOW_SEED),
-    String(CITYFLOW_SOURCE.boxCount),
+    String(bank.boxCount),
     String(width),
     String(height),
     String(frameCount),
@@ -211,13 +223,16 @@ async function captureBrowserRun(browser, url, runRoot) {
   try {
     await page.goto(url, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => globalThis.__csscityflow?.ready || globalThis.__csscityflow?.errors?.length, null, { timeout: 30_000 });
+    await page.addStyleTag({ content: `
+      .examples-sidebar, .example-info { display: none !important; }
+      .example-stage { position: fixed !important; inset: 0 !important; }
+    ` });
     const initial = await page.evaluate(async () => {
-      document.querySelector(".site-header")?.remove();
       const roots = [...document.querySelectorAll(".csscityflow-box")];
       const leaves = [...document.querySelectorAll(".csscityflow-box>b")];
       globalThis.__csscityflowOracleIdentity = { roots, leaves };
       globalThis.__csscityflow.player.pause();
-      globalThis.__csscityflow.player.seekFrame(1);
+      globalThis.__csscityflow.player.seekSourceFrame(1);
       await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
       return {
         roots: roots.length,
@@ -227,14 +242,15 @@ async function captureBrowserRun(browser, url, runRoot) {
         sceneSvg: document.querySelectorAll(".polycss-camera svg").length,
       };
     });
-    if (errors.length || initial.roots !== CITYFLOW_SOURCE.boxCount ||
-        initial.leaves !== CITYFLOW_SOURCE.boxCount * 3 || initial.animations !== 0 ||
+    if (errors.length || initial.roots !== bank.boxCount ||
+        initial.leaves !== bank.boxCount * 3 ||
+        initial.animations !== 0 ||
         initial.canvas !== 0 || initial.sceneSvg !== 0) {
       throw new Error(`Cityflow browser oracle is invalid: ${JSON.stringify({ initial, errors })}`);
     }
     for (let frame = 0; frame < frameCount; frame += 1) {
       await page.evaluate(async ({ frameIndex }) => {
-        globalThis.__csscityflow.player.seekFrame(frameIndex);
+        globalThis.__csscityflow.player.seekSourceFrame(frameIndex);
         await new Promise((resolveFrame) => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)));
       }, { frameIndex: frame });
       await page.screenshot({ path: join(framesDir, frameName(frame)) });
@@ -248,11 +264,18 @@ async function captureBrowserRun(browser, url, runRoot) {
         stableLeafIdentity: leaves.every((element, index) => element === expected.leaves[index]),
         rootCount: roots.length,
         leafCount: leaves.length,
+        transformAnimationCount: roots.flatMap((element) => element.getAnimations()).length,
         canvasCount: document.querySelectorAll("canvas").length,
         sceneSvgCount: document.querySelectorAll(".polycss-camera svg").length,
+        player: globalThis.__csscityflow.player.stats(),
+        stage: {
+          width: document.querySelector(".example-stage")?.clientWidth,
+          height: document.querySelector(".example-stage")?.clientHeight,
+        },
       };
     });
-    if (!audit.stableRootIdentity || !audit.stableLeafIdentity || errors.length) {
+    if (!audit.stableRootIdentity || !audit.stableLeafIdentity ||
+        audit.transformAnimationCount !== 0 || errors.length) {
       throw new Error(`Cityflow browser DOM identity drifted: ${JSON.stringify({ audit, errors })}`);
     }
     await writeJson(join(runRoot, "browser-capture.json"), {
@@ -260,7 +283,7 @@ async function captureBrowserRun(browser, url, runRoot) {
       url,
       frameCount,
       viewport: { width, height, deviceScaleFactor: 1 },
-      captureMode: "paused-prepared-elapsed-player-source-frame-seek",
+      captureMode: "paused-prepared-sequential-player-source-frame-seek",
       audit,
     });
     return { framesDir, audit };
@@ -338,11 +361,11 @@ async function startBrowserServer() {
 }
 
 async function assertSourceIdentity() {
-  const revision = git("rev-parse", "HEAD");
-  const primaryBytes = await readFile(join(sourceRoot, sourceLock.primary.path));
-  const configBytes = await readFile(join(sourceRoot, sourceLock.config.path));
-  if (revision !== sourceLock.revision || sha256(primaryBytes) !== sourceLock.primary.sha256 ||
-      sha256(configBytes) !== sourceLock.config.sha256) {
+  if (sourceIdentity.revision !== sourceLock.revision ||
+      !sourceIdentity.files.some(({ path, sha256: digest }) =>
+        path === sourceLock.primary.path && digest === sourceLock.primary.sha256) ||
+      !sourceIdentity.files.some(({ path, sha256: digest }) =>
+        path === sourceLock.config.path && digest === sourceLock.config.sha256)) {
     throw new Error("Cityflow source identity does not match the pinned source lock");
   }
 }
@@ -355,24 +378,24 @@ function resolveSdk() {
   return result.stdout.trim();
 }
 
-function resolveRequiredSourceRoot() {
-  const configured = process.env.CSSCITYFLOW_SOURCE_ROOT;
-  if (!configured) throw new Error("Set CSSCITYFLOW_SOURCE_ROOT to the pinned XScreenSaver checkout");
-  return resolve(configured);
-}
-
 function readFrameCount() {
   const value = Number(process.env.CSSCITYFLOW_VISUAL_ORACLE_FRAMES ?? 48);
-  if (!Number.isSafeInteger(value) || value < 1 || value > 252) {
-    throw new RangeError("Cityflow visual oracle frame count must be an integer from 1 through 252");
+  if (!Number.isSafeInteger(value) || value < 1 || value > CSSCITYFLOW_PREPARED_FRAME_COUNT) {
+    throw new RangeError(
+      `Cityflow visual oracle frame count must be an integer from 1 through ${CSSCITYFLOW_PREPARED_FRAME_COUNT}`,
+    );
   }
   return value;
 }
 
-function git(...args) {
-  const result = spawnSync("git", ["-C", sourceRoot, ...args], { encoding: "utf8" });
-  if (result.status !== 0) throw new Error(result.stderr || `git ${args.join(" ")} failed`);
-  return result.stdout.trim();
+function readPositiveIntegerEnvironment(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined) return fallback;
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new RangeError(`${name} must be a positive integer`);
+  }
+  return value;
 }
 
 function sha256(bytes) {

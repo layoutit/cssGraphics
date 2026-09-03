@@ -1,15 +1,18 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: HPND
 import { execFile } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { buildCityflowSourceState, cityflowFrameAt } from "../src/prepare/csscityflow/sourceModel.mjs";
+import { ensureCityflowSourceTree } from "../src/prepare/csscityflow/sourceAuthority.mjs";
 
 const run = promisify(execFile);
 const adapterRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(adapterRoot, "..", "..", "..");
-const sourceRoot = resolveRequiredSourceRoot();
+const sourceIdentity = await ensureCityflowSourceTree();
+const sourceRoot = sourceIdentity.sourceRoot;
 const outputRoot = join(repositoryRoot, "build/oracles/cityflow/native-state");
 const binary = join(outputRoot, "capture-cityflow-state");
 await mkdir(outputRoot, { recursive: true });
@@ -23,8 +26,8 @@ await run("cc", [
 ]);
 
 const checks = [];
-for (const bankId of ["desktop"]) {
-  for (const tick of [0, 73, 251]) {
+for (const bankId of ["desktop", "mobile"]) {
+  for (const tick of [0, 73, 250, 251]) {
     const state = buildCityflowSourceState({ bankId });
     const frame = cityflowFrameAt(state, tick);
     const { stdout } = await run(binary, [String(state.seed), String(state.source.boxCount), String(tick)]);
@@ -34,15 +37,18 @@ for (const bankId of ["desktop"]) {
     await writeFile(join(outputRoot, `${bankId}-tick-${tick}.json`), `${JSON.stringify(native, null, 2)}\n`);
   }
 }
-const report = { schema: "csscityflow-native-state-oracle@1", sourceRoot, checks };
+const report = {
+  schema: "csscityflow-native-state-oracle@2",
+  source: {
+    repository: sourceIdentity.repository,
+    revision: sourceIdentity.revision,
+    files: sourceIdentity.files,
+  },
+  sourceRoot,
+  checks,
+};
 await writeFile(join(outputRoot, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
 console.log(JSON.stringify(report, null, 2));
-
-function resolveRequiredSourceRoot() {
-  const configured = process.env.CSSCITYFLOW_SOURCE_ROOT;
-  if (!configured) throw new Error("Set CSSCITYFLOW_SOURCE_ROOT for the native Cityflow oracle");
-  return resolve(configured);
-}
 
 function compareState(state, frame, native) {
   const indices = [0, 1, 64, 128, 192, 255];

@@ -2,6 +2,24 @@
   "schema": "cssgraphics.projects@2",
   "projects": [
     {
+      "number": 12,
+      "id": "cityflow",
+      "name": "Cityflow",
+      "route": "/cityflow/",
+      "preview": "/landing/cityflow.webp",
+      "numberTone": "light",
+      "source": "XScreenSaver",
+      "credits": [
+        {
+          "relation": "Adapted from",
+          "name": "XScreenSaver",
+          "url": "https://github.com/Zygo/xscreensaver/blob/906693799e4fb7581436590cf84ecb2d3c9186ba/hacks/glx/cityflow.c"
+        }
+      ],
+      "description": "XScreenSaver Cityflow rendered with 200 retained HTML and CSS boxes using PolyCSS.",
+      "date": "2026-08-31"
+    },
+    {
       "number": 11,
       "id": "chaos",
       "name": "Chaos",

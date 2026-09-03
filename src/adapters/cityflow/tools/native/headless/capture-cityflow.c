@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: HPND */
 #include <OpenGL/OpenGL.h>
 #include <errno.h>
 #include <limits.h>

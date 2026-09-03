@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: HPND
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";

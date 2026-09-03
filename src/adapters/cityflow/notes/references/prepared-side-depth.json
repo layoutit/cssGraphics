@@ -1,0 +1,40 @@
+{
+  "schema": "csscityflow-prepared-side-depth@1",
+  "defaultDepthScale": 0.1,
+  "maximumDepthScale": 0.28,
+  "entries": [
+    { "faceIndex": 5, "boxIndex": 1, "face": "right", "depthScale": 0.15, "measuredRequiredScale": 0.113031, "measurementFrame": 122 },
+    { "faceIndex": 55, "boxIndex": 18, "face": "front", "depthScale": 0.15, "measuredRequiredScale": 0.110379, "measurementFrame": 123 },
+    { "faceIndex": 56, "boxIndex": 18, "face": "right", "depthScale": 0.17, "measuredRequiredScale": 0.131416, "measurementFrame": 124 },
+    { "faceIndex": 97, "boxIndex": 32, "face": "front", "depthScale": 0.2, "measuredRequiredScale": 0.15282, "measurementFrame": 126 },
+    { "faceIndex": 98, "boxIndex": 32, "face": "right", "depthScale": 0.17, "measuredRequiredScale": 0.125797, "measurementFrame": 210 },
+    { "faceIndex": 229, "boxIndex": 76, "face": "front", "depthScale": 0.23, "measuredRequiredScale": 0.180619, "measurementFrame": 192 },
+    { "faceIndex": 250, "boxIndex": 83, "face": "front", "depthScale": 0.18, "measuredRequiredScale": 0.133827, "measurementFrame": 192 },
+    { "faceIndex": 251, "boxIndex": 83, "face": "right", "depthScale": 0.2, "measuredRequiredScale": 0.152479, "measurementFrame": 192 },
+    { "faceIndex": 259, "boxIndex": 86, "face": "front", "depthScale": 0.22, "measuredRequiredScale": 0.173792, "measurementFrame": 194 },
+    { "faceIndex": 343, "boxIndex": 114, "face": "front", "depthScale": 0.22, "measuredRequiredScale": 0.179503, "measurementFrame": 204 },
+    { "faceIndex": 404, "boxIndex": 134, "face": "right", "depthScale": 0.18, "measuredRequiredScale": 0.144788, "measurementFrame": 190 },
+    { "faceIndex": 409, "boxIndex": 136, "face": "front", "depthScale": 0.28, "measuredRequiredScale": 0.230142, "measurementFrame": 206 },
+    { "faceIndex": 418, "boxIndex": 139, "face": "front", "depthScale": 0.22, "measuredRequiredScale": 0.179251, "measurementFrame": 9 },
+    { "faceIndex": 493, "boxIndex": 164, "face": "front", "depthScale": 0.2, "measuredRequiredScale": 0.154559, "measurementFrame": 227 },
+    { "faceIndex": 508, "boxIndex": 169, "face": "front", "depthScale": 0.18, "measuredRequiredScale": 0.143433, "measurementFrame": 12 },
+    { "faceIndex": 539, "boxIndex": 179, "face": "right", "depthScale": 0.18, "measuredRequiredScale": 0.141495, "measurementFrame": 116 },
+    { "faceIndex": 541, "boxIndex": 180, "face": "front", "depthScale": 0.22, "measuredRequiredScale": 0.171797, "measurementFrame": 21 },
+    { "faceIndex": 542, "boxIndex": 180, "face": "right", "depthScale": 0.22, "measuredRequiredScale": 0.170417, "measurementFrame": 27 },
+    { "faceIndex": 544, "boxIndex": 181, "face": "front", "depthScale": 0.18, "measuredRequiredScale": 0.135957, "measurementFrame": 27 }
+  ],
+  "measurement": {
+    "sourceFrameCount": 251,
+    "viewport": { "width": 1280, "height": 720, "deviceScaleFactor": 1 },
+    "nativeSequence": "bench/results/csscityflow/native-browser-visual-schema-50/native/run-a/frames",
+    "browserSequence": "bench/results/csscityflow/native-browser-visual-schema-50/browser/run-a/frames",
+    "method": "native-nonblack-browser-black-pixel-census-with-full-side-face-id-ownership-and-inverse-content-quad-homography",
+    "selection": "faces-with-material-black-gap-contribution",
+    "safety": "measured-required-scale-rounded-up-with-at-least-0.03-additional-depth"
+  },
+  "provenance": {
+    "sourceRepository": "https://github.com/Zygo/xscreensaver",
+    "sourceRevision": "906693799e4fb7581436590cf84ecb2d3c9186ba",
+    "sourcePath": "hacks/glx/cityflow.c"
+  }
+}

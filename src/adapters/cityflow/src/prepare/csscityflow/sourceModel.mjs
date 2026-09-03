@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: HPND
 const RANDOM_VECTOR = Object.freeze([
   0o35340171546, 0o10401501101, 0o22364657325, 0o24130436022, 0o02167303062,
   0o37570375137, 0o37210607110, 0o16272055420, 0o23011770546, 0o17143426366,
@@ -29,11 +30,15 @@ const SOURCE_COMMON = Object.freeze({
 
 export const CITYFLOW_BANKS = Object.freeze({
   desktop: createBank("desktop", "cityflow", "Cityflow", 200),
+  mobile: createBank("mobile", "cityflow-mobile", "Cityflow Mobile", 100),
 });
 
 export const CITYFLOW_SOURCE = CITYFLOW_BANKS.desktop;
 export const CSSCITYFLOW_SEED = 26081702;
 export const CSSCITYFLOW_FRAME_MILLISECONDS = SOURCE_COMMON.delayMicroseconds / 1_000;
+export const CSSCITYFLOW_PREPARED_FRAME_COUNT = 251;
+export const CSSCITYFLOW_PRESENTATION_FRAME_COUNT = 301;
+export const CSSCITYFLOW_PRESENTATION_FRAME_MILLISECONDS = 1_000 / 60;
 export const CSSCITYFLOW_PHASE_STEP = SOURCE_COMMON.waveSpeed / 1_000;
 export const CSSCITYFLOW_PHASE_PERIOD = Math.PI * 2;
 export const CSSCITYFLOW_FACE_IDS = Object.freeze(["top", "front", "right"]);

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: HPND */
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>

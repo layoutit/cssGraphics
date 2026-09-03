@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: HPND */
 #ifndef CSSCITYFLOW_HEADLESS_VISUAL_H
 #define CSSCITYFLOW_HEADLESS_VISUAL_H
 

@@ -96,15 +96,20 @@ export function analyzeTrace(loaded, options = {}) {
   const rendererEvents = events.filter((event) => event.pid === selection.pid);
   const mainEvents = rendererEvents.filter((event) => event.tid === selection.mainTid);
   const compositorEvents = rendererEvents.filter((event) => event.tid === selection.compositorTid);
-  const rasterTids = new Set(
-    rendererEvents.filter((event) => event.name === "RasterTask").map((event) => event.tid),
+  const rasterEvents = events.filter((event) => event.name === "RasterTask");
+  const rasterThreadKeys = new Set(
+    rasterEvents.map((event) => threadKey(event.pid, event.tid)),
   );
 
   const rafEvents = sortedEvents(mainEvents, "FireAnimationFrame");
   const updateEvents = sortedEvents(mainEvents, "UpdateLayoutTree");
   const timerEvents = sortedEvents(mainEvents, "TimerFire");
   const drawEvents = uniqueTimestampEvents(sortedEvents(compositorEvents, "DrawFrame"));
-  const presentationEvents = uniqueTimestampEvents(sortedEvents(mainEvents, "AnimationFrame::Presentation"));
+  const rawPresentationEvents = sortedEvents(mainEvents, "AnimationFrame::Presentation");
+  const unboundPresentationEvents = rawPresentationEvents.filter(isUnboundPresentationEvent);
+  const presentationEvents = uniqueTimestampEvents(
+    rawPresentationEvents.filter((event) => !isUnboundPresentationEvent(event)),
+  );
   const layerTreeId = dominantValue(drawEvents.map((event) => event.args?.layerTreeId).filter((value) => value != null));
   const pipelineRecords = collectPipelineRecords(compositorEvents, layerTreeId);
   const capabilities = summarizeCapabilities({
@@ -112,6 +117,7 @@ export function analyzeTrace(loaded, options = {}) {
     mainEvents,
     compositorEvents,
     rendererEvents,
+    rasterEvents,
     drawEvents,
     pipelineRecords,
     selection,
@@ -119,6 +125,11 @@ export function analyzeTrace(loaded, options = {}) {
   });
   if (layerTreeId == null && pipelineRecords.length > 0) {
     capabilities.warnings.push("DrawFrame events did not identify a dominant layer tree; PipelineReporter records are renderer-process scoped.");
+  }
+  if (unboundPresentationEvents.length > 0) {
+    capabilities.warnings.push(
+      `${unboundPresentationEvents.length} unbound trace-start AnimationFrame::Presentation marker(s) were excluded from cadence.`,
+    );
   }
   const cadence = estimateDisplayCadence(compositorEvents, rafEvents, pipelineRecords);
   const rafStats = summarizeTimestamps(rafEvents.map((event) => event.ts));
@@ -135,7 +146,7 @@ export function analyzeTrace(loaded, options = {}) {
       frameEvents: indexedFrameEvents.get(frame.index) ?? [],
       metadata,
       selection,
-      rasterTids,
+      rasterThreadKeys,
       cadence,
       rafEvents,
       updateEvents,
@@ -180,7 +191,7 @@ export function analyzeTrace(loaded, options = {}) {
       frameEvents: indexedTimelineEvents.get(worstTimelineInterval.index) ?? [],
       metadata,
       selection,
-      rasterTids,
+      rasterThreadKeys,
       cadence,
       rafEvents,
       updateEvents,
@@ -248,7 +259,7 @@ export function analyzeTrace(loaded, options = {}) {
         [1.25, 1.5, 2].map((multiple) => [String(multiple), frameIntervals.filter((frame) => frame.intervalMs > drawBaselineMs * multiple).length]),
       ),
     },
-    workload: summarizeWorkload({ events, mainEvents, selection, metadata, rasterTids, window }),
+    workload: summarizeWorkload({ events, mainEvents, selection, metadata, rasterThreadKeys, window }),
     cpuProfile: {
       chunkCount: cpuProfile.chunkCount,
       unresolvedSampleCount: cpuProfile.unresolvedSampleCount,
@@ -276,6 +287,7 @@ export function analyzeTrace(loaded, options = {}) {
       drawBaselineMs,
       baselineMs: timelineBaselineMs,
       source: presentationIntervals.length > 0 ? "AnimationFrame::Presentation" : "DrawFrame fallback",
+      ignoredUnboundEventCount: unboundPresentationEvents.length,
       stats: timelineStats,
       worstFrame: worstTimelineFrame,
       frames: timelineFrames,
@@ -291,6 +303,11 @@ export function analyzeTrace(loaded, options = {}) {
       capabilities,
     }),
   };
+}
+
+function isUnboundPresentationEvent(event) {
+  const beginFrameId = event.args?.begin_frame_id;
+  return beginFrameId?.source_id === 0 && beginFrameId?.sequence_number === 0;
 }
 
 export function compareAnalyses(before, after) {
@@ -356,6 +373,7 @@ export function renderMarkdown(analysis, comparison = null, artifacts = {}) {
     `DrawFrame-baseline outliers: ${analysis.cadence.drawGapsAboveBaselineMultiples["1.25"]} >1.25×; ${analysis.cadence.drawGapsAboveBaselineMultiples["1.5"]} >1.5×; ${analysis.cadence.drawGapsAboveBaselineMultiples["2"]} >2× the trace's DrawFrame p50.`,
     `Long main-thread tasks: ${formatAvailabilityCount(analysis.longTasks.available, analysis.longTasks.count)}. Pipeline drops: ${formatAvailabilityCount(analysis.pipeline.available, analysis.pipeline.droppedCount)}${analysis.pipeline.available ? ` (${analysis.pipeline.severeDrawStallAlignedCount} aligned with a severe DrawFrame stall)` : ""}.`,
     `Renderer-main GC: ${analysis.garbageCollection.eventCount} slices, ${formatMs(analysis.garbageCollection.occupancyMs)} occupancy, ${formatMs(analysis.garbageCollection.totalMs)} inclusive nested time, ${formatMs(analysis.garbageCollection.maxMs)} max slice.`,
+    rasterEvidenceSummary(analysis.capabilities.signals.raster),
   ];
 
   if (artifacts.frameChart) {
@@ -848,8 +866,17 @@ function selectRequestedFrame(frameDetails, slowest, window, options) {
   return null;
 }
 
-function summarizeCapabilities({ loadedEvents, mainEvents, compositorEvents, rendererEvents, drawEvents, pipelineRecords, selection, cpuProfile }) {
+function summarizeCapabilities({ loadedEvents, mainEvents, compositorEvents, rendererEvents, rasterEvents, drawEvents, pipelineRecords, selection, cpuProfile }) {
   const screenshotCount = loadedEvents.filter((event) => event.name === "Screenshot" && screenshotPayload(event)).length;
+  const rendererRasterEventCount = rasterEvents.filter((event) => event.pid === selection.pid).length;
+  const globalRasterEventCount = rasterEvents.length - rendererRasterEventCount;
+  const rasterScope = rendererRasterEventCount > 0 && globalRasterEventCount > 0
+    ? "mixed-global-nonexclusive"
+    : globalRasterEventCount > 0
+      ? "global-nonexclusive"
+      : rendererRasterEventCount > 0
+        ? "selected-renderer"
+        : "not-captured";
   const capabilities = {
     drawFrame: capability(drawEvents.length, "compositor frame-spacing analysis", 2),
     beginFrame: capability(countNamed(compositorEvents, "BeginFrame"), "display-cadence estimation"),
@@ -857,7 +884,12 @@ function summarizeCapabilities({ loadedEvents, mainEvents, compositorEvents, ren
     runTask: capability(mainEvents.filter((event) => isComplete(event) && isTask(event)).length, "main-thread long-task exclusion"),
     pipelineReporter: capability(pipelineRecords.length, "dropped-frame marker analysis"),
     paint: capability(countNamed(rendererEvents, "Paint"), "paint-cost analysis"),
-    raster: capability(countNamed(rendererEvents, "RasterTask"), "raster-cost analysis"),
+    raster: {
+      ...capability(rasterEvents.length, "raster-cost analysis with trace-scope qualification"),
+      scope: rasterScope,
+      rendererEventCount: rendererRasterEventCount,
+      globalEventCount: globalRasterEventCount,
+    },
     functionCall: capability(countNamed(mainEvents, "FunctionCall"), "JavaScript function attribution"),
     cpuProfile: capability(cpuProfile.samples.length, "sampled JavaScript self-time attribution"),
     screenshots: capability(screenshotCount, "visual evidence extraction"),
@@ -868,6 +900,11 @@ function summarizeCapabilities({ loadedEvents, mainEvents, compositorEvents, ren
   if (!capabilities.pipelineReporter.available) warnings.push("PipelineReporter was not captured; dropped-frame marker conclusions are unavailable.");
   if (!capabilities.paint.available) warnings.push("Paint events were not captured; paint cost is unknown, not zero.");
   if (!capabilities.raster.available) warnings.push("RasterTask events were not captured; raster cost is unknown, not zero.");
+  if (capabilities.raster.globalEventCount > 0) {
+    warnings.push(
+      `${capabilities.raster.globalEventCount} RasterTask event(s) were captured outside the selected renderer; their timing is global/nonexclusive and cannot be attributed exclusively to the selected page.`,
+    );
+  }
   if (!capabilities.cpuProfile.available) warnings.push("V8 CPU profile samples were not captured; JavaScript inside task and microtask envelopes may be opaque.");
   if (!capabilities.beginFrame.available) warnings.push("BeginFrame was not captured; display cadence uses a weaker fallback signal.");
   if (!capabilities.screenshots.available) warnings.push("Screenshot events were not captured; FrameSleuth cannot provide visual evidence for this trace.");
@@ -1114,16 +1151,18 @@ export async function extractFrameScreenshots(loaded, analysis, directory) {
 }
 
 function analyzeFrame(context) {
-  const { frame, frameEvents, metadata, selection, rasterTids, cadence, rafEvents, updateEvents, timerToRaf, pipelineRecords, traceStartTs, capabilities, schedulerCoupling, drawBaselineMs, cpuProfile, intervalKind = "DrawFrame" } = context;
+  const { frame, frameEvents, metadata, selection, rasterThreadKeys, cadence, rafEvents, updateEvents, timerToRaf, pipelineRecords, traceStartTs, capabilities, schedulerCoupling, drawBaselineMs, cpuProfile, intervalKind = "DrawFrame" } = context;
   const attributed = frameEvents.filter((event) => {
     if (!isFocusEvent(event.name)) return false;
-    const role = roleFor(event, selection, metadata, rasterTids);
-    return role.startsWith("renderer-") || (role === "gpu-global" && event.name === "GPUTask");
+    const role = roleFor(event, selection, metadata, rasterThreadKeys);
+    return role.startsWith("renderer-") ||
+      (role === "gpu-global" && event.name === "GPUTask") ||
+      (role === "raster-global" && event.name === "RasterTask");
   });
-  const namedWork = aggregateRoleNamedWork(attributed, frame, (event) => roleFor(event, selection, metadata, rasterTids));
+  const namedWork = aggregateRoleNamedWork(attributed, frame, (event) => roleFor(event, selection, metadata, rasterThreadKeys));
   const roleIntervals = new Map();
   for (const event of frameEvents) {
-    const role = roleFor(event, selection, metadata, rasterTids);
+    const role = roleFor(event, selection, metadata, rasterThreadKeys);
     if (role === "other-global") continue;
     const clipped = clipInterval(event, frame.startTs, frame.endTs);
     const intervals = roleIntervals.get(role) ?? [];
@@ -1226,11 +1265,12 @@ function diagnoseFrame({ frame, metrics, cadence, timerPairs, framePipeline, cap
     });
   }
   if (metrics.rasterTotalMs > budget * 0.6 || metrics.rasterMaxMs > budget * 0.3) {
+    const globalRaster = capabilities.signals.raster.scope !== "selected-renderer";
     diagnoses.push({
       id: "raster-heavy",
-      label: "raster pressure",
-      confidence: "high",
-      evidence: `RasterTask consumed ${formatMs(metrics.rasterTotalMs)} inclusive, with a ${formatMs(metrics.rasterMaxMs)} maximum event.`,
+      label: globalRaster ? "global raster pressure" : "raster pressure",
+      confidence: globalRaster ? "low" : "high",
+      evidence: `${globalRaster ? "Global/nonexclusive " : ""}RasterTask consumed ${formatMs(metrics.rasterTotalMs)} inclusive, with a ${formatMs(metrics.rasterMaxMs)} maximum event.${globalRaster ? " Chrome did not bind this work exclusively to the selected page." : ""}`,
     });
   }
   if (metrics.gcOccupancyMs > budget * 0.2 || metrics.gcMaxMs > Math.max(2, budget * 0.15)) {
@@ -1260,18 +1300,20 @@ function diagnoseFrame({ frame, metrics, cadence, timerPairs, framePipeline, cap
       id: "no-dominant-cpu-work",
       label: "no dominant captured CPU work",
       confidence: missing.length === 0 ? "medium" : "low",
-      evidence: `the ${formatMs(frame.intervalMs)} ${intervalKind} interval contains ${formatMs(metrics.mainBusyMs)} of renderer-main work, Paint max ${formatMs(metrics.paintMaxMs)}, and RasterTask max ${formatMs(metrics.rasterMaxMs)}.${missing.length ? ` Missing evidence: ${missing.join(", ")}.` : ""}`,
+      evidence: `the ${formatMs(frame.intervalMs)} ${intervalKind} interval contains ${formatMs(metrics.mainBusyMs)} of renderer-main work, Paint max ${formatMs(metrics.paintMaxMs)}, and RasterTask max ${formatMs(metrics.rasterMaxMs)}${capabilities.signals.raster.scope.includes("global") ? " at global/nonexclusive trace scope" : ""}.${missing.length ? ` Missing evidence: ${missing.join(", ")}.` : ""}`,
     });
   }
   return diagnoses;
 }
 
-function summarizeWorkload({ events, mainEvents, selection, metadata, rasterTids, window }) {
+function summarizeWorkload({ events, mainEvents, selection, metadata, rasterThreadKeys, window }) {
   const named = {};
   const attributable = events.filter((event) => {
     if (!isComplete(event) || !isFocusEvent(event.name)) return false;
-    const role = roleFor(event, selection, metadata, rasterTids);
-    return role.startsWith("renderer-") || (role === "gpu-global" && event.name === "GPUTask");
+    const role = roleFor(event, selection, metadata, rasterThreadKeys);
+    return role.startsWith("renderer-") ||
+      (role === "gpu-global" && event.name === "GPUTask") ||
+      (role === "raster-global" && event.name === "RasterTask");
   });
   for (const entry of aggregateNamedWork(attributable, window)) {
     named[entry.name] = entry;
@@ -1279,7 +1321,7 @@ function summarizeWorkload({ events, mainEvents, selection, metadata, rasterTids
   const roles = {};
   const byRole = new Map();
   for (const event of events.filter(isComplete)) {
-    const role = roleFor(event, selection, metadata, rasterTids);
+    const role = roleFor(event, selection, metadata, rasterThreadKeys);
     if (role === "other-global") continue;
     const intervals = byRole.get(role) ?? [];
     intervals.push(clipInterval(event, window.startTs, window.endTs));
@@ -1384,6 +1426,9 @@ function answerQuestion(analysis, frame, comparison) {
   if (analysis.focus === "rendering") {
     const paint = analysis.capabilities.signals.paint.available ? formatMs(analysis.workload.named.Paint?.maxMs) : "not captured";
     const raster = analysis.capabilities.signals.raster.available ? formatMs(analysis.workload.named.RasterTask?.maxMs) : "not captured";
+    const rasterScope = analysis.capabilities.signals.raster.scope.includes("global")
+      ? " at global/nonexclusive trace scope"
+      : "";
     const lightingConclusion = frame && /lighting/iu.test(analysis.question ?? "")
       ? frame.metrics.paintMaxMs < analysis.cadence.display.ms * 0.1 && frame.metrics.rasterMaxMs < analysis.cadence.display.ms * 0.1
         ? `Captured paint/raster evidence does not implicate lighting in this performance stall; the interval's primary evidence is ${frame.diagnoses[0].label}. `
@@ -1392,7 +1437,7 @@ function answerQuestion(analysis, frame, comparison) {
     const selected = frame
       ? ` On the selected interval they maxed at ${formatMs(frame.metrics.paintMaxMs)} and ${formatMs(frame.metrics.rasterMaxMs)}.`
       : " No DrawFrame interval was available for frame-local attribution.";
-    return `${lightingConclusion}Style/layout published ${analysis.cadence.styleAndLayout.eventCount} times at p50 ${formatMs(analysis.cadence.styleAndLayout.p50Ms)}. Across the trace, Paint max was ${paint} and RasterTask max was ${raster}.${selected}`;
+    return `${lightingConclusion}Style/layout published ${analysis.cadence.styleAndLayout.eventCount} times at p50 ${formatMs(analysis.cadence.styleAndLayout.p50Ms)}. Across the trace, Paint max was ${paint} and RasterTask max was ${raster}${rasterScope}.${selected}`;
   }
   if (analysis.focus === "scheduler") {
     return `rAF p50/max were ${formatMs(analysis.cadence.requestAnimationFrame.p50Ms)}/${formatMs(analysis.cadence.requestAnimationFrame.maxMs)}. Timer/rAF handoff pattern: ${analysis.cadence.schedulerCoupling.coupled ? "compatible" : "not supported"}; correlated timer → next-rAF delay max ${formatMs(analysis.cadence.timerToRafDelay.maxMs)}.${frame ? ` ${frame.diagnoses[0].evidence}` : " No DrawFrame interval was available for local attribution."}`;
@@ -1457,16 +1502,18 @@ function inferQuestionFocus(question) {
   if (/javascript|function|script|\bjs\b/iu.test(question)) return "javascript";
   if (/\bgpu\b|compositor/iu.test(question)) return "gpu";
   if (/screenshot|visual|image|show.*frame/iu.test(question)) return "screenshots";
-  if (/coverage|captur|missing|trust|evidence/iu.test(question)) return "coverage";
   if (/paint|raster|render|lighting|style|layout/iu.test(question)) return "rendering";
+  if (/coverage|captur|missing|trust|evidence/iu.test(question)) return "coverage";
   if (/timer|scheduler|raf|cadence|jitter|stutter|smooth/iu.test(question)) return "scheduler";
   return "summary";
 }
 
-function roleFor(event, selection, metadata, rasterTids) {
+function roleFor(event, selection, metadata, rasterThreadKeys) {
+  const rasterThread = rasterThreadKeys.has(threadKey(event.pid, event.tid));
   if (event.pid === selection.pid && event.tid === selection.mainTid) return "renderer-main";
   if (event.pid === selection.pid && event.tid === selection.compositorTid) return "renderer-compositor";
-  if (event.pid === selection.pid && (rasterTids.has(event.tid) || event.name === "RasterTask")) return "renderer-raster";
+  if (event.pid === selection.pid && (rasterThread || event.name === "RasterTask")) return "renderer-raster";
+  if (rasterThread || event.name === "RasterTask") return "raster-global";
   const processName = metadata.processNames.get(event.pid) ?? "";
   const threadName = metadata.threadNames.get(threadKey(event.pid, event.tid)) ?? "";
   if (processName === "GPU Process") return "gpu-global";
@@ -1635,6 +1682,14 @@ function formatSigned(value) {
 
 function formatAvailabilityCount(available, value) {
   return available ? String(value) : "not captured";
+}
+
+function rasterEvidenceSummary(signal) {
+  if (!signal.available) return "RasterTask evidence: not captured; raster cost is unknown, not zero.";
+  if (signal.scope === "selected-renderer") {
+    return `RasterTask evidence: ${signal.eventCount} selected-renderer event(s).`;
+  }
+  return `RasterTask evidence: ${signal.eventCount} event(s), including ${signal.globalEventCount} at global/nonexclusive trace scope; cross-process raster is not attributable exclusively to the selected page.`;
 }
 
 function cadenceRow(label, stats) {

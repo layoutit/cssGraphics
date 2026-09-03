@@ -50,7 +50,7 @@ try {
     await page.evaluate((nextFrameIndex) => {
       const { playback, transformIndices, materialIndices } = globalThis.__csscityflowStaticAudit;
       globalThis.__csscityflow.player.seekFrame(nextFrameIndex);
-      const roots = [...document.querySelectorAll(".csscityflow-box")];
+      const roots = [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div")];
       for (const boxIndex of playback.staticVisibility.hiddenBoxIndices) {
         const root = roots[boxIndex];
         root.style.setProperty("display", "block", "important");
@@ -74,12 +74,12 @@ try {
     )).removeAlpha().raw().toBuffer();
     for (const boxIndex of hiddenBoxIndices) {
       await page.evaluate((nextBoxIndex) => {
-        document.querySelectorAll(".csscityflow-box")[nextBoxIndex]
+        document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div")[nextBoxIndex]
           .style.setProperty("display", "none", "important");
       }, boxIndex);
       const candidate = await sharp(await page.screenshot()).removeAlpha().raw().toBuffer();
       await page.evaluate((nextBoxIndex) => {
-        document.querySelectorAll(".csscityflow-box")[nextBoxIndex]
+        document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div")[nextBoxIndex]
           .style.setProperty("display", "block", "important");
       }, boxIndex);
       let changedPixelCount = 0;

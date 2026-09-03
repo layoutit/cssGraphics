@@ -5,8 +5,9 @@ import { resolve } from "node:path";
 import test from "node:test";
 
 test("publishes every prepared box automatically with a fixed source camera", async () => {
-  const [client, player, profileSelection, projection, styles, scheduler, tracePerformance] = await Promise.all([
+  const [client, dom, player, profileSelection, projection, styles, scheduler, tracePerformance] = await Promise.all([
     readFile(new URL("../src/csscityflow/client.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../src/csscityflow/preparedDom.mjs", import.meta.url), "utf8"),
     readFile(new URL("../src/csscityflow/preparedPlayback.mjs", import.meta.url), "utf8"),
     readFile(new URL("../src/csscityflow/profileSelection.mjs", import.meta.url), "utf8"),
     readFile(new URL("../src/csscityflow/sourceProjection.mjs", import.meta.url), "utf8"),
@@ -15,6 +16,25 @@ test("publishes every prepared box automatically with a fixed source camera", as
     readFile(new URL("../tools/trace-performance.mjs", import.meta.url), "utf8"),
   ]);
   assert.match(client, /mountPolyMorphModel/u);
+  assert.match(client, /const stagingHost = host\.ownerDocument\.createElement\("div"\)/u);
+  assert.match(client, /mountPolyMorphModel\(stagingHost,/u);
+  assert.match(client, /host\.append\(cameraElement\)/u);
+  assert.match(client, /cleanCityflowPreparedDom/u);
+  assert.match(client, /createCityflowPreparedPlayer\(\{ playback, dom \}\)/u);
+  assert.doesNotMatch(client, /classList\.add\("csscityflow-box"\)/u);
+  assert.match(dom, /modelElement\.remove\(\)/u);
+  assert.match(dom, /cameraElement\.className = "polycss-camera"/u);
+  assert.match(dom, /sceneElement\.className = "polycss-scene"/u);
+  assert.match(dom, /element\.removeAttribute\("data-poly-morph-shape"\)/u);
+  assert.match(dom, /leaf\.removeAttribute\("data-poly-morph-leaf"\)/u);
+  assert.match(dom, /leaf\.style\.removeProperty\("backface-visibility"\)/u);
+  assert.match(dom, /leaf\.style\.removeProperty\("width"\)/u);
+  assert.match(dom, /retainedModelRootCount:\s*0/u);
+  assert.match(dom, /retainedDomAriaAttributeCount/u);
+  assert.match(dom, /retainedCameraInlineStyleAttributeCount/u);
+  assert.match(dom, /retainedSceneInlineStyleAttributeCount/u);
+  assert.match(dom, /retainedSceneInlineTransformCount/u);
+  assert.match(dom, /runtimeDomMutationCount/u);
   assert.match(client, /selectCityflowPreparedBank/u);
   assert.ok(client.indexOf("selectCityflowPreparedBank({") <
     client.indexOf("await Promise.all(["), "prepared bank selection must precede all bank fetches");
@@ -26,21 +46,30 @@ test("publishes every prepared box automatically with a fixed source camera", as
     /addEventListener\([^\n]*resize[^\n]*selectCityflowPreparedBank/u);
   assert.match(profileSelection, /width < CSSCITYFLOW_MOBILE_BREAKPOINT_WIDTH/u);
   assert.match(profileSelection, /\(hover: none\) and \(pointer: coarse\)/u);
-  assert.match(client, /bindCityflowSourceProjection/u);
+  assert.doesNotMatch(client, /bindCityflowSourceProjection|ResizeObserver|style\.setProperty/u);
   assert.match(client, /resume\(\)\s*\{\s*if \(!destroyed\) return state\.player\?\.resume\(\)/u);
-  assert.match(client, /performance\.mark\("csscityflow-ready"\);\s*player\.resume\(\)/u);
+  assert.match(client,
+    /player\.resume\(\);\s*await waitForPaint\(\);[\s\S]*dom\.finalizePreparedTarget\(\);[\s\S]*performance\.mark\("csscityflow-ready"\)/u);
   assert.doesNotMatch(client, /orbitControls|bindCityflowOrbitControls|state\.orbit|animationFrozen/u);
-  assert.match(client, /mounted\.camera\.update\(\{ distance: -projection\.perspective \}\)/u);
+  assert.doesNotMatch(client, /mounted\.updateCamera\(\)/u);
+  assert.match(dom, /sceneElement\.removeAttribute\("aria-hidden"\)/u);
+  assert.match(dom, /sceneElement\.style\.removeProperty\("transform"\)/u);
+  assert.match(dom, /cameraElement\.removeAttribute\("style"\)/u);
+  assert.match(dom, /sceneElement\.removeAttribute\("style"\)/u);
+  assert.match(client, /dom\.finalizePreparedTarget\(\)/u);
+  assert.match(dom, /stylesheet-owned model transform drifted/u);
+  assert.match(styles, /container-type:\s*size/u);
+  assert.match(styles, /perspective:\s*186\.60254037844388cqh/u);
+  assert.match(styles, /transform: translateZ\(186\.60254037844388cqh\)[\s\S]*matrix3d\(/u);
+  assert.match(styles, /@container \(min-aspect-ratio:\s*2 \/ 1\)/u);
+  assert.match(styles, /top:\s*calc\(100cqh - 50cqw\)/u);
+  assert.match(styles, /perspective:\s*186\.60254037844388cqw/u);
   assert.match(client, /rotX:\s*0,\s*rotY:\s*0,\s*zoom:\s*50,/u);
   assert.match(projection, /width > height \* 2/u);
   assert.match(projection, /height - viewportHeight \/ 2/u);
-  assert.match(projection, /ResizeObserver/u);
-  assert.match(styles, /--csscityflow-camera-top/u);
-  assert.match(styles, /--csscityflow-camera-height/u);
-  assert.match(styles, /--csscityflow-perspective/u);
+  assert.doesNotMatch(`${client}\n${projection}\n${styles}`, /--csscityflow-camera-|ResizeObserver/u);
   assert.doesNotMatch(styles,
     /data-csscityflow-(?:orbit|dragging)|cursor:\s*(?:grab|grabbing)|touch-action|pointer-events:\s*auto|transform-origin:\s*0 0 -30px/u);
-  assert.doesNotMatch(styles, /\.polycss-scene\s*\{[^}]*transform:/su);
   assert.match(player, /domformat@0\/polycss-playback@0@cc8da736/u);
   assert.match(player,
     /shapeElements\[boxIndex\]\.style\.transform\s*=\s*[\s\S]*transforms\[transformOffsets\[boxIndex\] \+ transformIndex\]/u);
@@ -98,6 +127,7 @@ test("publishes every prepared box automatically with a fixed source camera", as
   assert.doesNotMatch(tracePerformance, /color-mix|data-csscityflow-|PERF_EXPERIMENT/u);
   assert.doesNotMatch(tracePerformance, /presentationCadenceP95: draw\.p95Ms/u);
   assert.doesNotMatch(`${client}\n${player}\n${scheduler}`, /setTimeout|setInterval|canvas|getContext/u);
+  assert.doesNotMatch(`${client}\n${dom}\n${player}`, /csscityflow-box/u);
 });
 
 test("owns project 12 and the shared css.graphics route shell", async () => {

@@ -5,10 +5,8 @@ import {
   createCityflowPreparedPlayer,
   loadCityflowPreparedPlayback,
 } from "./preparedPlayback.mjs";
-import {
-  bindCityflowSourceProjection,
-  cityflowSourceProjection,
-} from "./sourceProjection.mjs";
+import { cleanCityflowPreparedDom } from "./preparedDom.mjs";
+import { cityflowSourceProjection } from "./sourceProjection.mjs";
 import {
   CSSCITYFLOW_PREPARED_BANKS,
   selectCityflowPreparedBank,
@@ -16,12 +14,12 @@ import {
 
 export function mountCityflow(host) {
   let destroyed = false;
-  let unbindProjection = () => {};
   const state = {
     ready: false,
     errors: [],
     metadata: null,
     bankId: null,
+    dom: null,
     mounted: null,
     player: null,
   };
@@ -35,8 +33,8 @@ export function mountCityflow(host) {
     destroy() {
       if (destroyed) return;
       destroyed = true;
-      unbindProjection();
       state.player?.destroy();
+      state.dom?.destroy();
       state.mounted?.destroy();
       state.ready = false;
       if (globalThis.__csscityflow === state) delete globalThis.__csscityflow;
@@ -64,7 +62,8 @@ export function mountCityflow(host) {
     assertPreparedMetadata(metadata, playback, bankId, modelId);
     if (destroyed) return;
     const perspective = cityflowSourceProjection(host.clientWidth, host.clientHeight).perspective;
-    const mounted = mountPolyMorphModel(host, loaded.model, {
+    const stagingHost = host.ownerDocument.createElement("div");
+    const mounted = mountPolyMorphModel(stagingHost, loaded.model, {
       resources: loaded.resources,
       camera: createPolyPerspectiveCamera({
         perspective,
@@ -75,34 +74,28 @@ export function mountCityflow(host) {
         distance: -perspective,
       }),
     });
-    const shapeElements = [];
-    for (const box of loaded.model.render.shapes) {
-      const element = mounted.shapeElements.get(box.id);
-      if (!element) throw new Error(`Missing retained Cityflow box ${box.id}`);
-      element.classList.add("csscityflow-box");
-      shapeElements.push(element);
-    }
-    const player = createCityflowPreparedPlayer({ playback, mounted, shapeElements });
-    const cameraElement = host.querySelector(":scope > .polycss-camera");
-    unbindProjection = bindCityflowSourceProjection(host, cameraElement, (projection) => {
-      mounted.camera.update({ distance: -projection.perspective });
-      mounted.updateCamera();
-    });
+    const dom = cleanCityflowPreparedDom(mounted, loaded.model.render.shapes.length);
+    const player = createCityflowPreparedPlayer({ playback, dom });
+    const cameraElement = dom.cameraElement;
+    host.append(cameraElement);
     if (destroyed) {
       player.destroy();
+      dom.destroy();
       mounted.destroy();
       return;
     }
     state.metadata = metadata;
     state.bankId = bankId;
+    state.dom = dom;
     state.mounted = mounted;
     state.player = player;
+    player.resume();
     await waitForPaint();
     if (destroyed) return;
+    dom.finalizePreparedTarget();
     state.ready = true;
     document.body.classList.replace("loading", "ready");
     performance.mark("csscityflow-ready");
-    player.resume();
   }
 
   function fail(error) {

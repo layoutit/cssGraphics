@@ -47,6 +47,14 @@ try {
     maximumShapeWrites: 187, maximumColorWrites: 271,
     sideDepthMaximum: 0.28, sideDepthOverrides: 19, url: route,
   });
+  const wide = await capture({
+    profile: "wide", width: 3200, height: 900, bankId: "desktop", modelId: "cityflow",
+    boxes: 200, leaves: 600, visibleBoxRange: [166, 187], visibleFaceRange: [498, 561],
+    initialVisibleBoxes: 170, initialVisibleFaces: 510, initialVisibilityWrites: 90,
+    staticSuppressedBoxes: 5, staticSuppressedFaces: 15,
+    maximumShapeWrites: 187, maximumColorWrites: 271,
+    sideDepthMaximum: 0.28, sideDepthOverrides: 19, url: route,
+  });
   const mobile = await capture({
     profile: "mobile", width: 390, height: 844, bankId: "mobile", modelId: "cityflow-mobile",
     boxes: 100, leaves: 300, visibleBoxRange: [100, 100], visibleFaceRange: [300, 300],
@@ -56,7 +64,7 @@ try {
     sideDepthDefault: 0.28, sideDepthMaximum: 0.28, sideDepthOverrides: 0, url: route,
   });
   const home = deploy ? await captureHome({ width: 1280, height: 720, url: `${origin}/` }) : null;
-  const report = { schema: "csscityflow-browser-smoke@3", route, deploy, desktop, mobile, home };
+  const report = { schema: "csscityflow-browser-smoke@4", route, deploy, desktop, wide, mobile, home };
   await writeFile(resolve(outputRoot, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
   console.log(JSON.stringify(report, null, 2));
 } finally {
@@ -112,10 +120,25 @@ async function capture({
     globalThis.__csscityflow?.errors?.length, null, { timeout: 30_000 });
   const before = await page.evaluate(() => {
     const state = globalThis.__csscityflow;
-    const shapes = [...document.querySelectorAll(".csscityflow-box")];
-    const leaves = [...document.querySelectorAll(".csscityflow-box > b")];
+    const shapes = [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div")];
+    const leaves = [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div>b")];
+    const camera = document.querySelector(".example-stage>.polycss-camera");
+    const stage = document.querySelector(".example-stage");
+    const renderNodes = camera ? [camera, ...camera.querySelectorAll("*")] : [];
+    const stageBounds = stage?.getBoundingClientRect();
+    const cameraStyle = camera ? getComputedStyle(camera) : null;
+    const wideProjection = stageBounds ? stageBounds.width > stageBounds.height * 2 : false;
+    const expectedCameraHeight = stageBounds ?
+      (wideProjection ? stageBounds.width : stageBounds.height) : null;
+    const expectedCameraTop = stageBounds ?
+      (wideProjection ? stageBounds.height - stageBounds.width / 2 : 0) : null;
+    const expectedPerspective = expectedCameraHeight === null ? null :
+      expectedCameraHeight / (2 * Math.tan(Math.PI / 12));
+    const actualCameraHeight = cameraStyle ? Number.parseFloat(cameraStyle.height) : null;
+    const actualCameraTop = cameraStyle ? Number.parseFloat(cameraStyle.top) : null;
+    const actualPerspective = cameraStyle ? Number.parseFloat(cameraStyle.perspective) : null;
     let stable = true;
-    try { state?.mounted?.assertStableDomIdentity(); } catch { stable = false; }
+    try { state?.dom?.assertStableDomIdentity(); } catch { stable = false; }
     return {
       status: document.body.className,
       canonical: document.querySelector('link[rel="canonical"]')?.href ?? null,
@@ -125,6 +148,43 @@ async function capture({
       stable,
       shapeCount: shapes.length,
       leafCount: leaves.length,
+      renderNodeCount: renderNodes.length,
+      classAttributeCount: renderNodes.filter((element) => element.hasAttribute("class")).length,
+      dataAttributeCount: renderNodes.reduce((count, element) => count +
+        [...element.attributes].filter(({ name }) => name.startsWith("data-")).length, 0),
+      ariaAttributeCount: renderNodes.reduce((count, element) => count +
+        [...element.attributes].filter(({ name }) => name.startsWith("aria-")).length, 0),
+      cameraInlineStyleAttributeCount: camera?.hasAttribute("style") ? 1 : 0,
+      cameraInlineCustomPropertyCount: camera ? [...camera.style]
+        .filter((name) => name.startsWith("--")).length : 0,
+      sceneInlineStyleAttributeCount: camera?.firstElementChild?.hasAttribute("style") ? 1 : 0,
+      sceneInlineTransformCount: camera?.firstElementChild?.style.transform === "" ? 0 : 1,
+      morphClassCount: renderNodes.filter((element) =>
+        [...element.classList].some((name) => name.startsWith("polycss-morph") ||
+          name === "polycss-mesh")).length,
+      modelRootCount: document.querySelectorAll(
+        ".example-stage>.polycss-camera>.polycss-scene>.polycss-morph-model",
+      ).length,
+      projection: {
+        wide: wideProjection,
+        expectedCameraHeight,
+        expectedCameraTop,
+        expectedPerspective,
+        actualCameraHeight,
+        actualCameraTop,
+        actualPerspective,
+        matches: expectedCameraHeight !== null &&
+          Math.abs(actualCameraHeight - expectedCameraHeight) < 0.02 &&
+          Math.abs(actualCameraTop - expectedCameraTop) < 0.02 &&
+          Math.abs(actualPerspective - expectedPerspective) < 0.02,
+      },
+      backfaceInlineStyleCount: leaves.filter((leaf) =>
+        leaf.style.backfaceVisibility !== "" || leaf.style.webkitBackfaceVisibility !== "").length,
+      topBackfaceVisibleCount: shapes.filter((shape) =>
+        getComputedStyle(shape.children[0]).backfaceVisibility === "visible").length,
+      sideBackfaceHiddenCount: shapes.reduce((count, shape) => count +
+        [...shape.children].slice(1).filter((leaf) =>
+          getComputedStyle(leaf).backfaceVisibility === "hidden").length, 0),
       hiddenShapeCount: shapes.filter((shape) => getComputedStyle(shape).visibility === "hidden").length,
       hiddenLeafCount: leaves.filter((leaf) => getComputedStyle(leaf).visibility === "hidden").length,
       displayNoneShapeCount: shapes.filter((shape) => getComputedStyle(shape).display === "none").length,
@@ -152,7 +212,7 @@ async function capture({
   });
   await page.waitForTimeout(250);
   const after = await page.evaluate(() => {
-    const shapes = [...document.querySelectorAll(".csscityflow-box")];
+    const shapes = [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div")];
     return {
       transforms: shapes.slice(0, 40).map((shape) => getComputedStyle(shape).transform),
       player: globalThis.__csscityflow?.player?.stats(),
@@ -217,8 +277,8 @@ async function capture({
     orbitStatePresent: Object.hasOwn(globalThis.__csscityflow ?? {}, "orbit"),
     orbitDataset: document.querySelector(".example-stage")?.dataset.csscityflowOrbit ?? null,
     draggingDataset: document.querySelector(".example-stage")?.dataset.csscityflowDragging ?? null,
-    shapeCount: document.querySelectorAll(".csscityflow-box").length,
-    leafCount: document.querySelectorAll(".csscityflow-box > b").length,
+    shapeCount: document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div").length,
+    leafCount: document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div>b").length,
   }));
   const sourceRoundTrip = await page.evaluate(async () => {
     const player = globalThis.__csscityflow?.player;
@@ -227,30 +287,30 @@ async function capture({
     await new Promise((resolveFrame) => requestAnimationFrame(resolveFrame));
     const source = {
       player: sourcePlayer,
-      hiddenShapeCount: [...document.querySelectorAll(".csscityflow-box")]
+      hiddenShapeCount: [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div")]
         .filter((shape) => getComputedStyle(shape).visibility === "hidden").length,
-      hiddenLeafCount: [...document.querySelectorAll(".csscityflow-box>b")]
+      hiddenLeafCount: [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div>b")]
         .filter((leaf) => getComputedStyle(leaf).visibility === "hidden").length,
-      displayNoneShapeCount: [...document.querySelectorAll(".csscityflow-box")]
+      displayNoneShapeCount: [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div")]
         .filter((shape) => getComputedStyle(shape).display === "none").length,
-      zeroOpacityShapeCount: [...document.querySelectorAll(".csscityflow-box")]
+      zeroOpacityShapeCount: [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div")]
         .filter((shape) => getComputedStyle(shape).opacity === "0").length,
-      zeroOpacityLeafCount: [...document.querySelectorAll(".csscityflow-box>b")]
+      zeroOpacityLeafCount: [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div>b")]
         .filter((leaf) => getComputedStyle(leaf).opacity === "0").length,
     };
     const presentationPlayer = player.seekFrame(0);
     await new Promise((resolveFrame) => requestAnimationFrame(resolveFrame));
     const presentation = {
       player: presentationPlayer,
-      hiddenShapeCount: [...document.querySelectorAll(".csscityflow-box")]
+      hiddenShapeCount: [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div")]
         .filter((shape) => getComputedStyle(shape).visibility === "hidden").length,
-      hiddenLeafCount: [...document.querySelectorAll(".csscityflow-box>b")]
+      hiddenLeafCount: [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div>b")]
         .filter((leaf) => getComputedStyle(leaf).visibility === "hidden").length,
-      displayNoneShapeCount: [...document.querySelectorAll(".csscityflow-box")]
+      displayNoneShapeCount: [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div")]
         .filter((shape) => getComputedStyle(shape).display === "none").length,
-      zeroOpacityShapeCount: [...document.querySelectorAll(".csscityflow-box")]
+      zeroOpacityShapeCount: [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div")]
         .filter((shape) => getComputedStyle(shape).opacity === "0").length,
-      zeroOpacityLeafCount: [...document.querySelectorAll(".csscityflow-box>b")]
+      zeroOpacityLeafCount: [...document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div>b")]
         .filter((leaf) => getComputedStyle(leaf).opacity === "0").length,
     };
     return { source, presentation, resumed: player.resume() };
@@ -263,7 +323,16 @@ async function capture({
   if (errors.length || failedResponses.length || before.errors.length || before.status !== "ready" || !before.ready ||
       before.canonical !== expectedCanonical ||
       before.bankId !== bankId || !before.stable || before.shapeCount !== boxes ||
-      before.leafCount !== leaves || before.canvasCount !== 0 || before.svgSceneCount !== 0 ||
+      before.leafCount !== leaves || before.renderNodeCount !== boxes + leaves + 2 ||
+      before.classAttributeCount !== 2 || before.dataAttributeCount !== 0 ||
+      before.ariaAttributeCount !== 0 || before.cameraInlineStyleAttributeCount !== 0 ||
+      before.cameraInlineCustomPropertyCount !== 0 ||
+      before.sceneInlineStyleAttributeCount !== 0 || before.sceneInlineTransformCount !== 0 ||
+      !before.projection.matches || before.projection.wide !== (profile === "wide") ||
+      before.morphClassCount !== 0 || before.modelRootCount !== 0 ||
+      before.backfaceInlineStyleCount !== 0 || before.topBackfaceVisibleCount !== boxes ||
+      before.sideBackfaceHiddenCount !== boxes * 2 ||
+      before.canvasCount !== 0 || before.svgSceneCount !== 0 ||
       !before.firstLeafColor || before.whiteLeafCount === leaves ||
       !preparedStylesheet?.contentType?.startsWith("text/css") ||
       before.animationName !== "none" ||
@@ -286,6 +355,15 @@ async function capture({
         "prepared-packed-transform-components-expanded-once-plus-sparse-final-face-color-and-whole-box-leaf-visibility-publication" ||
       before.player?.preparedTransformAnimationCount !== 0 ||
       before.player?.preparedTransformStateCount !== 301 ||
+      before.player?.retainedModelRootCount !== 0 ||
+      before.player?.retainedDomClassAttributeCount !== 2 ||
+      before.player?.retainedDomDataAttributeCount !== 0 ||
+      before.player?.retainedDomAriaAttributeCount !== 0 ||
+      before.player?.retainedCameraInlineStyleAttributeCount !== 0 ||
+      before.player?.retainedSceneInlineStyleAttributeCount !== 0 ||
+      before.player?.retainedSceneInlineTransformCount !== 0 ||
+      before.player?.retainedBackfaceInlineStyleCount !== 0 ||
+      before.player?.runtimeDomMutationCount !== 0 ||
       before.player?.runtimeShapeStyleWriteUpperBound !== maximumShapeWrites ||
       before.player?.runtimeLeafColorStyleWriteUpperBound !== maximumColorWrites ||
       !Number.isSafeInteger(before.player?.runtimeLeafColorStyleWrites) ||
@@ -391,7 +469,7 @@ async function captureHome({ width, height, url }) {
       title: card?.querySelector(".project-title")?.textContent?.trim() ?? null,
       number: card?.querySelector(".project-number")?.textContent?.trim() ?? null,
       image: card?.querySelector("img")?.getAttribute("src") ?? null,
-      sceneCount: document.querySelectorAll(".csscityflow-box").length,
+      sceneCount: document.querySelectorAll(".example-stage>.polycss-camera>.polycss-scene>div").length,
     };
   });
   if (errors.length || failedResponses.length || result.canonical !== "https://css.graphics/" ||

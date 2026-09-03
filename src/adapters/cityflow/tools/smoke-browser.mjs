@@ -63,8 +63,25 @@ try {
     maximumShapeWrites: 100, maximumColorWrites: 159,
     sideDepthDefault: 0.28, sideDepthMaximum: 0.28, sideDepthOverrides: 0, url: route,
   });
+  const requestedStylesheets = [desktop, wide, mobile].map(({ preparedRequests }) =>
+    preparedRequests.filter((path) => path.endsWith(".css")));
+  if (requestedStylesheets.some((paths) => paths.length !== 1) ||
+      new Set(requestedStylesheets.flat()).size !== 1) {
+    throw new Error(`Cityflow banks did not share one rendering stylesheet: ${JSON.stringify(
+      requestedStylesheets,
+    )}`);
+  }
   const home = deploy ? await captureHome({ width: 1280, height: 720, url: `${origin}/` }) : null;
-  const report = { schema: "csscityflow-browser-smoke@4", route, deploy, desktop, wide, mobile, home };
+  const report = {
+    schema: "csscityflow-browser-smoke@5",
+    route,
+    deploy,
+    sharedStylesheet: requestedStylesheets[0][0],
+    desktop,
+    wide,
+    mobile,
+    home,
+  };
   await writeFile(resolve(outputRoot, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
   console.log(JSON.stringify(report, null, 2));
 } finally {
@@ -319,7 +336,7 @@ async function capture({
     "https://css.graphics/cityflow/";
   const preparedRequests = requests.filter((path) => path.startsWith("/csscityflow/"));
   const preparedStylesheet = preparedResponses.find(({ path }) =>
-    path === `/csscityflow/${modelId}.css`);
+    path === before.metadata?.stylesheet?.assetUrl);
   if (errors.length || failedResponses.length || before.errors.length || before.status !== "ready" || !before.ready ||
       before.canonical !== expectedCanonical ||
       before.bankId !== bankId || !before.stable || before.shapeCount !== boxes ||
@@ -401,7 +418,10 @@ async function capture({
       before.player?.visibilityCullingPolicy !==
         "prepared-viewport-independent-whole-box-direct-leaf-visibility-no-face-culling" ||
       before.transformAnimationCount !== 0 ||
-      before.metadata?.schema !== "csscityflow-prepared-product@2" ||
+      before.metadata?.schema !== "csscityflow-prepared-product@3" ||
+      !/^\/csscityflow\/assets\/presentation-[a-f0-9]{64}\.css$/u.test(
+        before.metadata?.stylesheet?.assetUrl ?? "") ||
+      preparedRequests.includes(`/csscityflow/${modelId}.css`) ||
       after.player?.timerCallbackCount !== 0 ||
       after.player?.animationFrameCallbackCount <= before.player.animationFrameCallbackCount ||
       after.player?.frameIndex === before.player.frameIndex ||

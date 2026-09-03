@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: HPND
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import test from "node:test";
@@ -9,20 +10,23 @@ const repositoryRoot = resolve(import.meta.dirname, "../../../..");
 const productRoot = resolve(repositoryRoot, "build/generated/public/csscityflow");
 
 test("prepared Cityflow product binds source, topology, playback, and bounded transfer", async () => {
-  const [metadataText, catalogText, manifestText, modelText, playbackText, css,
-    mobileManifestText, mobileModelText, mobilePlaybackText, mobileCss] = await Promise.all([
-    readFile(resolve(productRoot, "prepared.json"), "utf8"),
+  const metadataText = await readFile(resolve(productRoot, "prepared.json"), "utf8");
+  const metadata = JSON.parse(metadataText);
+  const stylesheetPath = metadata.stylesheet.assetUrl.replace(/^\/csscityflow\//u, "");
+  const [catalogText, manifestText, modelText, playbackText, css,
+    mobileManifestText, mobileModelText, mobilePlaybackText, desktopAliasCss,
+    mobileAliasCss] = await Promise.all([
     readFile(resolve(productRoot, "catalog.json"), "utf8"),
     readFile(resolve(productRoot, "cityflow/manifest.json"), "utf8"),
     readFile(resolve(productRoot, "cityflow/model.json"), "utf8"),
     readFile(resolve(productRoot, "cityflow.playback.json"), "utf8"),
-    readFile(resolve(productRoot, "cityflow.css"), "utf8"),
+    readFile(resolve(productRoot, stylesheetPath), "utf8"),
     readFile(resolve(productRoot, "cityflow-mobile/manifest.json"), "utf8"),
     readFile(resolve(productRoot, "cityflow-mobile/model.json"), "utf8"),
     readFile(resolve(productRoot, "cityflow-mobile.playback.json"), "utf8"),
+    readFile(resolve(productRoot, "cityflow.css"), "utf8"),
     readFile(resolve(productRoot, "cityflow-mobile.css"), "utf8"),
   ]);
-  const metadata = JSON.parse(metadataText);
   const catalog = JSON.parse(catalogText);
   const manifest = JSON.parse(manifestText);
   const model = JSON.parse(modelText);
@@ -32,7 +36,7 @@ test("prepared Cityflow product binds source, topology, playback, and bounded tr
   const mobilePlayback = JSON.parse(mobilePlaybackText);
   const bank = metadata.banks.find(({ id }) => id === "desktop");
   const mobileBank = metadata.banks.find(({ id }) => id === "mobile");
-  assert.equal(metadata.schema, "csscityflow-prepared-product@2");
+  assert.equal(metadata.schema, "csscityflow-prepared-product@3");
   assert.equal(metadata.status, "ready");
   assert.equal(metadata.defaultBank, "desktop");
   assert.equal(metadata.profileSelection.mobileBreakpointWidth, 600);
@@ -43,6 +47,22 @@ test("prepared Cityflow product binds source, topology, playback, and bounded tr
   assert.equal(metadata.source.files.length, 14);
   assert.ok(metadata.source.files.every(({ path, sha256 }) =>
     !path.startsWith("/") && /^[a-f0-9]{64}$/u.test(sha256)));
+  assert.equal(metadata.stylesheet.schema, "csscityflow-prepared-stylesheet@1");
+  assert.equal(metadata.stylesheet.policy,
+    "one-content-addressed-rendering-contract-shared-by-all-banks");
+  assert.match(metadata.stylesheet.assetUrl,
+    /^\/csscityflow\/assets\/presentation-[a-f0-9]{64}\.css$/u);
+  assert.equal(createHash("sha256").update(css).digest("hex"), metadata.stylesheet.sha256);
+  assert.equal(metadata.stylesheet.assetUrl,
+    `/csscityflow/assets/presentation-${metadata.stylesheet.sha256}.css`);
+  assert.equal(Buffer.byteLength(css), metadata.stylesheet.byteLength);
+  assert.deepEqual(metadata.stylesheet.compatibilityAssetUrls, [
+    "/csscityflow/cityflow.css",
+    "/csscityflow/cityflow-mobile.css",
+  ]);
+  assert.equal(desktopAliasCss, css);
+  assert.equal(mobileAliasCss, css);
+  assert.match(css, /\.polycss-scene>div>b,\.csscityflow-box>b/u);
   assert.equal(bank.boxCount, 200);
   assert.equal(bank.leafCount, 600);
   assert.equal(bank.frameCount, 301);
@@ -176,7 +196,7 @@ test("prepared Cityflow product binds source, topology, playback, and bounded tr
     "mobile prepared wire payload must not send expanded matrix strings");
   assert.ok(Buffer.byteLength(mobilePlaybackText) < 800_000,
     `Mobile prepared playback raw transfer grew to ${Buffer.byteLength(mobilePlaybackText)} bytes`);
-  assert.doesNotMatch(mobileCss, /will-change|attr\(|::before|::after/u);
+  assert.doesNotMatch(css, /will-change|attr\(|::before|::after/u);
   assert.doesNotMatch(
     `${metadataText}\n${catalogText}\n${manifestText}\n${modelText}\n${playbackText}\n${mobileManifestText}\n${mobileModelText}\n${mobilePlaybackText}`,
     /\/Users\/|[A-Z]:\\/u,

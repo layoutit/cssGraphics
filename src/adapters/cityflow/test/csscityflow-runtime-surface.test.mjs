@@ -37,11 +37,13 @@ test("publishes every prepared box automatically with a fixed source camera", as
   assert.match(dom, /runtimeDomMutationCount/u);
   assert.match(client, /selectCityflowPreparedBank/u);
   assert.ok(client.indexOf("selectCityflowPreparedBank({") <
-    client.indexOf("await Promise.all(["), "prepared bank selection must precede all bank fetches");
+    client.indexOf("const metadataPromise"), "prepared bank selection must precede all bank fetches");
   assert.match(client, /loadPolyMorphPackage\("\/csscityflow\/", \{ modelId \}\)/u);
   assert.match(client,
-    /loadCityflowPreparedPlayback\(`\/csscityflow\/\$\{modelId\}\.playback\.json`\)/u);
-  assert.match(client, /loadPreparedStylesheet\(`\/csscityflow\/\$\{modelId\}\.css`\)/u);
+    /loadCityflowPreparedPlayback\([\s\S]*?`\/csscityflow\/\$\{modelId\}\.playback\.json`,?[\s\S]*?\)/u);
+  assert.match(client, /const stylesheetAssetUrl = preparedStylesheetAssetUrl\(metadata\)/u);
+  assert.match(client, /loadPreparedStylesheet\(stylesheetAssetUrl\)/u);
+  assert.doesNotMatch(client, /loadPreparedStylesheet\(`\/csscityflow\/\$\{modelId\}/u);
   assert.doesNotMatch(client,
     /addEventListener\([^\n]*resize[^\n]*selectCityflowPreparedBank/u);
   assert.match(profileSelection, /width < CSSCITYFLOW_MOBILE_BREAKPOINT_WIDTH/u);

@@ -44,17 +44,18 @@ test("mobile is deterministic, compact, 2D, and has a bounded complete loop", ()
       assert.ok(Math.abs(x) < 400 && Math.abs(y) < 400);
       const [top, left, right] = mobileFaceTransforms(heights[frame * count + box], width, depth, product.playback.heightScale)
         .map((value) => value.slice(7, -1).split(",").map(Number));
-      const point = (matrix, u, v) => [matrix[0] * u + matrix[2] * v + matrix[4],
-        matrix[1] * u + matrix[3] * v + matrix[5]];
+      const point = (matrix, u, v, faceWidth, faceHeight) => [
+        matrix[0] * u * faceWidth + matrix[2] * v * faceHeight + matrix[4],
+        matrix[1] * u * faceWidth + matrix[3] * v * faceHeight + matrix[5]];
       const near = (a, b) => a.forEach((value, index) => assert.ok(Math.abs(value - b[index]) < 1e-10));
-      near(point(top, 0, 1), point(left, 0, 0));
-      near(point(top, 0, 0), [0, -height]);
-      near(point(top, 1, 1), point(left, 1, 0));
-      near(point(top, 1, 1), point(right, 0, 0));
-      near(point(top, 1, 0), point(right, 1, 0));
-      near(point(left, 1, 1), point(right, 0, 1));
-      near(point(left, 0, 1), [-depth * 0.36, depth * 0.6]);
-      near(point(right, 1, 1), [width, width * 0.22]);
+      near(point(top, 0, 1, width, depth), point(left, 0, 0, width, 124));
+      near(point(top, 0, 0, width, depth), [0, -height]);
+      near(point(top, 1, 1, width, depth), point(left, 1, 0, width, 124));
+      near(point(top, 1, 1, width, depth), point(right, 0, 0, depth, 124));
+      near(point(top, 1, 0, width, depth), point(right, 1, 0, depth, 124));
+      near(point(left, 1, 1, width, 124), point(right, 0, 1, depth, 124));
+      near(point(left, 0, 1, width, 124), [-depth * 0.36, depth * 0.6]);
+      near(point(right, 1, 1, depth, 124), [width, width * 0.22]);
     }
     assert.ok(motion > 0, `frame ${frame} must not repeat the preceding image`);
   }

@@ -11,7 +11,7 @@ import {
   selectCityflowPreparedBank,
 } from "./profileSelection.mjs";
 
-export function mountCityflow(host) {
+export function mountCityflow(host, selectedBankId) {
   let destroyed = false;
   const state = {
     ready: false,
@@ -45,7 +45,7 @@ export function mountCityflow(host) {
   return controller;
 
   async function main() {
-    const bankId = selectCityflowPreparedBank({
+    const bankId = selectedBankId ?? selectCityflowPreparedBank({
       width: host.clientWidth || innerWidth,
       height: host.clientHeight || innerHeight,
     });

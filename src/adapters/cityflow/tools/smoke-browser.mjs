@@ -6,6 +6,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { extname, resolve, sep } from "node:path";
 import { chromium } from "playwright";
+import { captureMobile } from "./smoke-mobile.mjs";
 
 const adapterRoot = resolve(import.meta.dirname, "..");
 const repositoryRoot = resolve(adapterRoot, "..", "..", "..");
@@ -47,15 +48,8 @@ try {
     maximumShapeWrites: 187, maximumColorWrites: 271,
     sideDepthMaximum: 0.28, sideDepthOverrides: 19, url: route,
   });
-  const mobile = await capture({
-    profile: "mobile", width: 390, height: 844, bankId: "mobile", modelId: "cityflow-mobile",
-    boxes: 100, leaves: 300, visibleBoxRange: [100, 100], visibleFaceRange: [300, 300],
-    initialVisibleBoxes: 100, initialVisibleFaces: 300, initialVisibilityWrites: 0,
-    staticSuppressedBoxes: 0, staticSuppressedFaces: 0,
-    maximumShapeWrites: 100, maximumColorWrites: 159,
-    sideDepthDefault: 0.28, sideDepthMaximum: 0.28, sideDepthOverrides: 0, url: route,
-  });
-  const requestedStylesheets = [desktop, mobile].map(({ preparedRequests }) =>
+  const mobile = await captureMobile({ browser, route, width: 390, height: 844, outputRoot });
+  const requestedStylesheets = [desktop].map(({ preparedRequests }) =>
     preparedRequests.filter((path) => path.endsWith(".css")));
   if (requestedStylesheets.some((paths) => paths.length !== 1) ||
       new Set(requestedStylesheets.flat()).size !== 1) {
@@ -68,7 +62,7 @@ try {
     schema: "csscityflow-browser-smoke@5",
     route,
     deploy,
-    sharedStylesheet: requestedStylesheets[0][0],
+    desktopStylesheet: requestedStylesheets[0][0],
     desktop,
     mobile,
     home,

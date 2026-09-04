@@ -25,6 +25,11 @@ not claim that the continuously advancing source has an exact finite loop.
 
 ## Upstream attribution and permission notice
 
+The replacement mobile product is an authored isometric adaptation with 72
+touching towers, static face colors, and a six-second prepared height loop. It
+does not reproduce native depth-buffer rendering or source wave simulation.
+The 100-box mobile bank described above remains only for cached-client compatibility.
+
 The following notice is reproduced from the pinned `hacks/glx/cityflow.c`
 source:
 

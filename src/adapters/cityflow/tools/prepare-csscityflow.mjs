@@ -12,6 +12,7 @@ import {
 } from "../src/prepare/csscityflow/model.mjs";
 import { CITYFLOW_BANKS } from "../src/prepare/csscityflow/sourceModel.mjs";
 import { ensureCityflowSourceTree } from "../src/prepare/csscityflow/sourceAuthority.mjs";
+import { buildCityflowMobileProduct } from "../src/prepare/csscityflow/mobileModel.mjs";
 
 const adapterRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(adapterRoot, "..", "..", "..");
@@ -91,6 +92,25 @@ for (const { manifest } of packages) {
 }
 const catalog = await buildPolyMorphCatalog("cityflow", packages);
 await writeBytes(join(stagingRoot, "catalog.json"), catalog.bytes);
+// Add the authored mobile product without changing the legacy desktop closure.
+// Keep legacy mobile assets for already-open clients; new clients do not fetch them.
+const mobileProduct = buildCityflowMobileProduct();
+const mobile = {
+  schema: "csscityflow-mobile-product@1", id: "mobile", modelId: "cityflow-mobile",
+  boxCount: mobileProduct.boxes.length, leafCount: mobileProduct.boxes.length * 3,
+  frameCount: 360, provenance: "authored-isometric-mobile-composition-not-native-parity",
+};
+for (const [kind, extension, content] of [
+  ["snapshot", "html", mobileProduct.snapshotHtml],
+  ["stylesheet", "css", mobileProduct.css],
+  ["playback", "json", `${JSON.stringify(mobileProduct.playback)}\n`],
+]) {
+  const bytes = Buffer.from(content);
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  const assetUrl = `/csscityflow/assets/mobile-${kind}-${sha256}.${extension}`;
+  await writeBytes(join(stagingRoot, assetUrl.replace(/^\/csscityflow\//u, "")), bytes);
+  mobile[kind] = { assetUrl, sha256, byteLength: bytes.byteLength };
+}
 await writeFile(join(stagingRoot, "prepared.json"), `${JSON.stringify({
   schema: "csscityflow-prepared-product@3",
   status: "ready",
@@ -124,6 +144,7 @@ await writeFile(join(stagingRoot, "prepared.json"), `${JSON.stringify({
     ],
   },
   banks: preparedBanks,
+  mobile,
 }, null, 2)}\n`);
 await rm(outputRoot, { recursive: true, force: true });
 await mkdir(dirname(outputRoot), { recursive: true });

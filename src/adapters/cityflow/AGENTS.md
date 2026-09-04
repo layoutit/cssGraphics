@@ -1,5 +1,23 @@
 # Cityflow adapter contract
 
+## Mobile replacement, 2026-09-04
+
+- Desktop is frozen against `main` at `0f8727544a30d0a742f43d60f3ef969b823abeb1` for this release.
+  Preserve its renderer, source preparation, camera, cadence, and generated assets.
+- The user permits a different authored mobile scene: 72 touching towers, 216
+  ordinary 2D faces, full sides, fixed painter order, and 360 prepared states.
+  Heights span 36–124 scene units. No gaps, CSS 3D, runtime geometry, culling,
+  dynamic colors, or full-matrix playback transport. Expand scalar heights once.
+- Keep the existing selection policy and freeze its result before lazy loading
+  the selected client. Mobile assets and CSS are loaded only by the mobile client.
+- Legacy mobile assets remain for cached clients; new mobile clients never fetch them.
+- Validate mobile face coverage and lifecycle in available browsers; the user's
+  phone is not required. Do not label browser evidence as physical-device proof.
+- The older source/native mobile requirements below describe the legacy bank,
+  not the replacement. Desktop requirements remain unchanged.
+
+## Desktop and legacy bank contract
+
 - Read `notes/provenance-bible.md` before changing source simulation, box geometry, colors, lighting, camera, timing, or parity claims.
 - Preserve the XScreenSaver simulation contract: six waves, 25 wave speed, 256 radius, 12-degree skew, 20 ms cadence, the source-supported `count` control set to 200 for desktop and 100 for mobile, and only the source-emitted top, front, and right faces. The source default remains 800; do not describe either prepared count as that default.
 - Preserve the seeded initialization, wave equation, palette, lighting, camera, and cadence independently in both prepared banks. Select `desktop` or `mobile` once, before fetching or mounting any bank asset, using the established `<600px`, coarse-pointer, and mobile-UA profile policy. Do not fetch both banks, switch banks after mount, or rebuild a bank at runtime. Responsive projection updates are not bank selection.

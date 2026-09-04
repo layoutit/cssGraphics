@@ -33,6 +33,14 @@ export function createCityflowMobilePlayer({ playback, dom, ...overrides }) {
     throw new Error("Cityflow mobile face binding drifted");
   }
   const dictionary = new Map();
+  for (let box = 0; box < playback.boxCount; box += 1) {
+    const [width, depth] = playback.footprints[box];
+    const leaves = dom.leafElements[box];
+    for (const [faceWidth, faceHeight, face] of [[width, depth, 0], [width, 124, 1], [depth, 124, 2]]) {
+      leaves[face].style.width = `${faceWidth}px`;
+      leaves[face].style.height = `${faceHeight}px`;
+    }
+  }
   const states = Array.from(heights, (height, index) => {
     const [width, depth] = playback.footprints[index % playback.boxCount];
     const key = `${width},${depth},${height}`;

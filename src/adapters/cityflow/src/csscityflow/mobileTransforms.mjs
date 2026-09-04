@@ -2,10 +2,11 @@
 // Expanded only during preparation or loading, never in the animation callback.
 export function mobileFaceTransforms(heightUnits, width, depth, heightScale) {
   const height = heightUnits * heightScale / 1000;
+  const sideHeight = 124;
   return [
-    `matrix(${width},${width * 0.22},${-depth * 0.36},${depth * 0.6},0,${-height})`,
-    `matrix(${width},${width * 0.22},0,${height},${-depth * 0.36},${depth * 0.6 - height})`,
-    `matrix(${depth * 0.36},${-depth * 0.6},0,${height},${width - depth * 0.36},${width * 0.22 + depth * 0.6 - height})`,
+    `matrix(1,0.22,-0.36,0.6,0,${-height})`,
+    `matrix(1,0.22,0,${height / sideHeight},${-depth * 0.36},${depth * 0.6 - height})`,
+    `matrix(0.36,-0.6,0,${height / sideHeight},${width - depth * 0.36},${width * 0.22 + depth * 0.6 - height})`,
   ];
 }
 

@@ -1,9 +1,32 @@
 # css.graphics/cityflow
 
-Source-backed XScreenSaver Cityflow rendered as retained PolyCSS Morph boxes.
-The desktop and mobile prepared banks use the source's own `count` control at
-200 and 100 boxes respectively; the XScreenSaver default is 800. Every box
-retains the source-emitted top, front, and right faces.
+Desktop renders 200 source-backed XScreenSaver Cityflow boxes; the source
+default is 800. Its renderer and prepared assets are unchanged by the mobile
+replacement. Mobile uses an authored city of 72 touching towers and 216 ordinary
+2D faces, without CSS 3D depth sorting. It deliberately differs from native.
+
+## Mobile
+
+The 72 irregular footprints tile edge-to-edge, with complete sides down to the
+ground. Heights span 36–124 scene units over 360 prepared states at 60 Hz. The
+packet carries fixed-point scalar heights, a fixed 2x height scale, and footprint
+dimensions—not matrix strings. The loader expands transforms once. Playback
+uses the existing adjacent-state scheduler, cached transforms, and stable DOM,
+without runtime geometry, culling, or color changes.
+
+The existing width/device policy selects one client before loading its assets.
+Rotation keeps the same bank. Legacy mobile assets remain available to cached
+clients but are not fetched by the new client.
+
+`node src/adapters/cityflow/tools/smoke-mobile.mjs --all-frames` checks every
+state across five viewport/DPR combinations for gaps and missing face interiors,
+plus pause and stable DOM after rotation. This is installed Chrome headless
+evidence, not physical Android proof or native parity.
+
+## Desktop and legacy bank details
+
+The details below describe the unchanged desktop and legacy 100-box mobile bank.
+They do not qualify the new mobile composition.
 
 ```bash
 pnpm prepare:cityflow

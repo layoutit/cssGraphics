@@ -125,10 +125,8 @@ test("owns project 12 and the shared css.graphics route shell", async () => {
   assert.match(html, /<!-- cssgraphics-examples-sidebar -->/u);
   assert.match(html, /<main class="example-stage"/u);
   assert.match(html, /<link rel="stylesheet" href="\/site\.css"/u);
-  assert.match(main, /const host = requireExamplesStage\(\)/u);
-  assert.match(main, /mountCityflow\(host, bankId\)/u);
-  assert.match(main, /await import\("\.\/csscityflow\/mobileClient\.mjs"\)/u);
-  assert.match(main, /await import\("\.\/csscityflow\/client\.mjs"\)/u);
+  assert.match(main, /mountCityflow\(requireExamplesStage\(\)\)/u);
+  assert.match(main, /csscityflow\/entry\.mjs/u);
   assert.match(config, /createExamplesShellPlugin\("cityflow"\)/u);
   assert.match(config, /deployBuild \? "\/cityflow\/" : "\/"/u);
   assert.match(sceneRouter, /mountCityflow\(host\)/u);

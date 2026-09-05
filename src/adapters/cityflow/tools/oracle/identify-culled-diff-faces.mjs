@@ -41,7 +41,7 @@ try {
   await page.addStyleTag({ content: `
     .examples-sidebar, .example-info { display: none !important; }
     .example-stage { position: fixed !important; inset: 0 !important; }
-    .csscityflow-box>b { pointer-events: auto !important; }
+    .polycss-scene > div > b { pointer-events: auto !important; }
   ` });
   const hits = await page.evaluate(async ({ frameIndex: nextFrameIndex, samples: points }) => {
     const player = globalThis.__csscityflow.player;
@@ -56,7 +56,7 @@ try {
         view.getUint16(index * 2, true));
     };
     const transformIndices = decodeUint16(playback.transformIndices.presentationBase64);
-    const roots = [...document.querySelectorAll(".csscityflow-box")];
+    const roots = [...document.querySelectorAll(".polycss-scene > div")];
     const leaves = roots.flatMap((root) => [...root.children]);
     for (let boxIndex = 0; boxIndex < playback.boxCount; boxIndex += 1) {
       roots[boxIndex].style.transform = player.preparedTransformAt(
@@ -68,7 +68,7 @@ try {
     return points.map((point) => ({
       ...point,
       hits: document.elementsFromPoint(point.x, point.y)
-        .filter((element) => element.matches?.(".csscityflow-box>b"))
+        .filter((element) => element.matches?.(".polycss-scene > div > b"))
         .map((element) => ({
           faceIndex: leaves.indexOf(element),
           opacity: getComputedStyle(element).opacity,

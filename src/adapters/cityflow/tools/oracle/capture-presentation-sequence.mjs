@@ -54,7 +54,7 @@ try {
         const { playback, transformIndices, materialIndices } =
           globalThis.__csscityflowUnculledCapture;
         const frameIndex = index % playback.frameCount;
-        const roots = [...document.querySelectorAll(".csscityflow-box")];
+        const roots = [...document.querySelectorAll(".polycss-scene > div")];
         for (let boxIndex = 0; boxIndex < playback.boxCount; boxIndex += 1) {
           const root = roots[boxIndex];
           root.style.setProperty("display", "block", "important");
@@ -78,8 +78,8 @@ try {
   }
   const audit = await page.evaluate(() => ({
     player: globalThis.__csscityflow.player.stats(),
-    roots: document.querySelectorAll(".csscityflow-box").length,
-    leaves: document.querySelectorAll(".csscityflow-box>b").length,
+    roots: document.querySelectorAll(".polycss-scene > div").length,
+    leaves: document.querySelectorAll(".polycss-scene > div > b").length,
   }));
   if (errors.length) throw new Error(`Cityflow presentation capture failed: ${JSON.stringify(errors)}`);
   const report = {

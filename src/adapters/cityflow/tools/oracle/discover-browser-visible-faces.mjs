@@ -28,7 +28,7 @@ try {
     const response = await fetch("/csscityflow/cityflow.playback.json", { cache: "no-store" });
     if (!response.ok) throw new Error(`Cityflow face-ID playback failed: ${response.status}`);
     const playback = await response.json();
-    const boxes = [...document.querySelectorAll(".csscityflow-box")];
+    const boxes = [...document.querySelectorAll(".polycss-scene > div")];
     const leaves = boxes.flatMap((box) => [...box.children]);
     if (boxes.length !== playback.boxCount || leaves.length !== playback.boxCount * playback.facesPerBox) {
       throw new Error("Cityflow face-ID retained binding drifted");
@@ -55,7 +55,7 @@ try {
   for (let frameIndex = 0; frameIndex < setup.frameCount; frameIndex += 1) {
     await page.evaluate((nextFrameIndex) => {
       globalThis.__csscityflow.player.seekFrame(nextFrameIndex);
-      const leaves = [...document.querySelectorAll(".csscityflow-box > b")];
+      const leaves = [...document.querySelectorAll(".polycss-scene > div > b")];
       leaves.forEach((leaf, faceIndex) => {
         const [red, green, blue] = globalThis.__csscityflowFaceIdColors[faceIndex];
         leaf.style.setProperty("display", "block", "important");

@@ -122,10 +122,29 @@ async function capture({
     globalThis.__csscityflow?.errors?.length, null, { timeout: 30_000 });
   const before = await page.evaluate(() => {
     const state = globalThis.__csscityflow;
-    const shapes = [...document.querySelectorAll(".csscityflow-box")];
-    const leaves = [...document.querySelectorAll(".csscityflow-box > b")];
+    const camera = document.querySelector(".example-stage > .polycss-camera");
+    const scene = camera?.querySelector(":scope > .polycss-scene");
+    const shapes = [...document.querySelectorAll(".polycss-scene > div")];
+    const leaves = [...document.querySelectorAll(".polycss-scene > div > b")];
+    const renderNodes = [camera, scene, ...shapes, ...leaves].filter(Boolean);
+    const retainedDataAttributeCount = renderNodes.reduce((sum, element) =>
+      sum + [...element.attributes].filter(({ name }) => name.startsWith("data-")).length, 0);
+    const frameworkClassAttributeCount = renderNodes.filter((element) =>
+      [...element.classList].some((name) => name.startsWith("polycss-morph") ||
+        name === "polycss-mesh" || name === "csscityflow-box")).length;
+    const redundantLeafInlineStyleCount = leaves.reduce((sum, leaf) =>
+      sum + [
+        "backface-visibility",
+        "-webkit-backface-visibility",
+        "background-repeat",
+        "color",
+        "height",
+        "opacity",
+        "transform-origin",
+        "width",
+      ].filter((property) => leaf.style.getPropertyValue(property) !== "").length, 0);
     let stable = true;
-    try { state?.mounted?.assertStableDomIdentity(); } catch { stable = false; }
+    try { state?.dom?.assertStableDomIdentity(); } catch { stable = false; }
     return {
       status: document.body.className,
       canonical: document.querySelector('link[rel="canonical"]')?.href ?? null,
@@ -133,6 +152,16 @@ async function capture({
       bankId: state?.bankId,
       errors: state?.errors ?? [],
       stable,
+      retainedRenderNodeCount: renderNodes.length,
+      retainedDataAttributeCount,
+      frameworkClassAttributeCount,
+      redundantLeafInlineStyleCount,
+      cameraClassName: camera?.className ?? null,
+      sceneClassName: scene?.className ?? null,
+      shapeClassAttributeCount: shapes.filter((shape) => shape.hasAttribute("class")).length,
+      leafClassAttributeCount: leaves.filter((leaf) => leaf.hasAttribute("class")).length,
+      cameraInlinePerspective: camera?.style.perspective ?? null,
+      sceneInlineTransform: scene?.style.transform ?? null,
       shapeCount: shapes.length,
       leafCount: leaves.length,
       hiddenShapeCount: shapes.filter((shape) => getComputedStyle(shape).visibility === "hidden").length,
@@ -162,7 +191,7 @@ async function capture({
   });
   await page.waitForTimeout(250);
   const after = await page.evaluate(() => {
-    const shapes = [...document.querySelectorAll(".csscityflow-box")];
+    const shapes = [...document.querySelectorAll(".polycss-scene > div")];
     return {
       transforms: shapes.slice(0, 40).map((shape) => getComputedStyle(shape).transform),
       player: globalThis.__csscityflow?.player?.stats(),
@@ -227,8 +256,8 @@ async function capture({
     orbitStatePresent: Object.hasOwn(globalThis.__csscityflow ?? {}, "orbit"),
     orbitDataset: document.querySelector(".example-stage")?.dataset.csscityflowOrbit ?? null,
     draggingDataset: document.querySelector(".example-stage")?.dataset.csscityflowDragging ?? null,
-    shapeCount: document.querySelectorAll(".csscityflow-box").length,
-    leafCount: document.querySelectorAll(".csscityflow-box > b").length,
+    shapeCount: document.querySelectorAll(".polycss-scene > div").length,
+    leafCount: document.querySelectorAll(".polycss-scene > div > b").length,
   }));
   const sourceRoundTrip = await page.evaluate(async () => {
     const player = globalThis.__csscityflow?.player;
@@ -237,30 +266,30 @@ async function capture({
     await new Promise((resolveFrame) => requestAnimationFrame(resolveFrame));
     const source = {
       player: sourcePlayer,
-      hiddenShapeCount: [...document.querySelectorAll(".csscityflow-box")]
+      hiddenShapeCount: [...document.querySelectorAll(".polycss-scene > div")]
         .filter((shape) => getComputedStyle(shape).visibility === "hidden").length,
-      hiddenLeafCount: [...document.querySelectorAll(".csscityflow-box>b")]
+      hiddenLeafCount: [...document.querySelectorAll(".polycss-scene > div > b")]
         .filter((leaf) => getComputedStyle(leaf).visibility === "hidden").length,
-      displayNoneShapeCount: [...document.querySelectorAll(".csscityflow-box")]
+      displayNoneShapeCount: [...document.querySelectorAll(".polycss-scene > div")]
         .filter((shape) => getComputedStyle(shape).display === "none").length,
-      zeroOpacityShapeCount: [...document.querySelectorAll(".csscityflow-box")]
+      zeroOpacityShapeCount: [...document.querySelectorAll(".polycss-scene > div")]
         .filter((shape) => getComputedStyle(shape).opacity === "0").length,
-      zeroOpacityLeafCount: [...document.querySelectorAll(".csscityflow-box>b")]
+      zeroOpacityLeafCount: [...document.querySelectorAll(".polycss-scene > div > b")]
         .filter((leaf) => getComputedStyle(leaf).opacity === "0").length,
     };
     const presentationPlayer = player.seekFrame(0);
     await new Promise((resolveFrame) => requestAnimationFrame(resolveFrame));
     const presentation = {
       player: presentationPlayer,
-      hiddenShapeCount: [...document.querySelectorAll(".csscityflow-box")]
+      hiddenShapeCount: [...document.querySelectorAll(".polycss-scene > div")]
         .filter((shape) => getComputedStyle(shape).visibility === "hidden").length,
-      hiddenLeafCount: [...document.querySelectorAll(".csscityflow-box>b")]
+      hiddenLeafCount: [...document.querySelectorAll(".polycss-scene > div > b")]
         .filter((leaf) => getComputedStyle(leaf).visibility === "hidden").length,
-      displayNoneShapeCount: [...document.querySelectorAll(".csscityflow-box")]
+      displayNoneShapeCount: [...document.querySelectorAll(".polycss-scene > div")]
         .filter((shape) => getComputedStyle(shape).display === "none").length,
-      zeroOpacityShapeCount: [...document.querySelectorAll(".csscityflow-box")]
+      zeroOpacityShapeCount: [...document.querySelectorAll(".polycss-scene > div")]
         .filter((shape) => getComputedStyle(shape).opacity === "0").length,
-      zeroOpacityLeafCount: [...document.querySelectorAll(".csscityflow-box>b")]
+      zeroOpacityLeafCount: [...document.querySelectorAll(".polycss-scene > div > b")]
         .filter((leaf) => getComputedStyle(leaf).opacity === "0").length,
     };
     return { source, presentation, resumed: player.resume() };
@@ -274,6 +303,13 @@ async function capture({
       before.canonical !== expectedCanonical ||
       before.bankId !== bankId || !before.stable || before.shapeCount !== boxes ||
       before.leafCount !== leaves || before.canvasCount !== 0 || before.svgSceneCount !== 0 ||
+      before.retainedRenderNodeCount !== boxes + leaves + 2 ||
+      before.retainedDataAttributeCount !== 0 || before.frameworkClassAttributeCount !== 0 ||
+      before.redundantLeafInlineStyleCount !== 0 ||
+      before.cameraClassName !== "polycss-camera" ||
+      before.sceneClassName !== "polycss-scene" ||
+      before.shapeClassAttributeCount !== 0 || before.leafClassAttributeCount !== 0 ||
+      before.cameraInlinePerspective !== "" || before.sceneInlineTransform !== "" ||
       !before.firstLeafColor || before.whiteLeafCount === leaves ||
       !preparedStylesheet?.contentType?.startsWith("text/css") ||
       before.animationName !== "none" ||
@@ -404,7 +440,7 @@ async function captureHome({ width, height, url }) {
       title: card?.querySelector(".project-title")?.textContent?.trim() ?? null,
       number: card?.querySelector(".project-number")?.textContent?.trim() ?? null,
       image: card?.querySelector("img")?.getAttribute("src") ?? null,
-      sceneCount: document.querySelectorAll(".csscityflow-box").length,
+      sceneCount: document.querySelectorAll(".polycss-scene > div").length,
     };
   });
   if (errors.length || failedResponses.length || result.canonical !== "https://css.graphics/" ||

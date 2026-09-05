@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: HPND
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFile, readdir } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import test from "node:test";
 import sharp from "sharp";
@@ -23,13 +23,16 @@ test("atomic site deploy contains the exact Cityflow tree and current shared she
   assert.ok(generated.has("cityflow.playback.json"));
   assert.ok(routeFiles.includes("index.html"));
   assert.equal(routeFiles.filter((path) => path === "index.html").length, 1);
-  const bundles = routeFiles.filter((path) => path !== "index.html");
-  assert.ok(bundles.length >= 2);
-  assert.ok(bundles.every((path) =>
-    /^assets\/[A-Za-z][A-Za-z0-9-]*-[A-Za-z0-9_-]{8,}\.(?:css|js)$/u.test(path)),
-  `unhashed or unexpected Cityflow route file: ${bundles.join(", ")}`);
+  const scriptPaths = [...html.matchAll(/src="(\/_astro\/[^"]+\.js)"/gu)]
+    .map((match) => match[1]);
+  assert.ok(scriptPaths.length >= 2);
+  assert.ok(scriptPaths.every((path) =>
+    /^\/_astro\/[A-Za-z][A-Za-z0-9._-]*\.[A-Za-z0-9_-]{8}\.js$/u.test(path)),
+  `unhashed or unexpected Cityflow script: ${scriptPaths.join(", ")}`);
+  await Promise.all(scriptPaths.map((path) =>
+    access(resolve(repositoryRoot, "dist/site", path.slice(1)))));
   assert.match(html, /data-project-id="cityflow"/u);
-  assert.match(html, /(?:src|href)="\/cityflow\/assets\//u);
+  assert.match(html, /href="\/site\.css"/u);
   assert.doesNotMatch(html, /noindex|nofollow/u);
 });
 

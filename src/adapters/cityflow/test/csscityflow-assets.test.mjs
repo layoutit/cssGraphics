@@ -62,7 +62,7 @@ test("prepared Cityflow product binds source, topology, playback, and bounded tr
   ]);
   assert.equal(desktopAliasCss, css);
   assert.equal(mobileAliasCss, css);
-  assert.match(css, /\.polycss-scene>div>b,\.csscityflow-box>b/u);
+  assert.match(css, /\.polycss-scene>div>b/u);
   assert.equal(bank.boxCount, 200);
   assert.equal(bank.leafCount, 600);
   assert.equal(bank.frameCount, 301);

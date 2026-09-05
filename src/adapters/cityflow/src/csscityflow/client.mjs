@@ -6,6 +6,7 @@ import {
   loadCityflowPreparedPlayback,
 } from "./preparedPlayback.mjs";
 import { cityflowSourceProjection } from "./sourceProjection.mjs";
+import { cleanCityflowMountedDom } from "./preparedDom.mjs";
 import {
   CSSCITYFLOW_PREPARED_BANKS,
   selectCityflowPreparedBank,
@@ -18,6 +19,7 @@ export function mountCityflow(host, selectedBankId) {
     errors: [],
     metadata: null,
     bankId: null,
+    dom: null,
     mounted: null,
     player: null,
   };
@@ -32,6 +34,7 @@ export function mountCityflow(host, selectedBankId) {
       if (destroyed) return;
       destroyed = true;
       state.player?.destroy();
+      state.dom?.destroy();
       state.mounted?.destroy();
       state.ready = false;
       if (globalThis.__csscityflow === state) delete globalThis.__csscityflow;
@@ -80,17 +83,19 @@ export function mountCityflow(host, selectedBankId) {
     for (const box of loaded.model.render.shapes) {
       const element = mounted.shapeElements.get(box.id);
       if (!element) throw new Error(`Missing retained Cityflow box ${box.id}`);
-      element.classList.add("csscityflow-box");
       shapeElements.push(element);
     }
-    const player = createCityflowPreparedPlayer({ playback, mounted, shapeElements });
+    const dom = cleanCityflowMountedDom({ mounted, shapeElements });
+    const player = createCityflowPreparedPlayer({ playback, dom });
     if (destroyed) {
       player.destroy();
+      dom.destroy();
       mounted.destroy();
       return;
     }
     state.metadata = metadata;
     state.bankId = bankId;
+    state.dom = dom;
     state.mounted = mounted;
     state.player = player;
     await waitForPaint();

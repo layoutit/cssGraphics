@@ -7,16 +7,19 @@ import { preparedMobileBank } from "../src/csscityflow/mobilePlayback.mjs";
 import { decodeMobileHeights } from "../src/csscityflow/mobileTransforms.mjs";
 
 const root = new URL("../../../../build/generated/public/csscityflow/", import.meta.url);
-// Main 0f872754: the mobile replacement must not change desktop's bytes.
-test("mobile replacement preserves the main desktop prepared product byte-for-byte", async () => {
+test("DOM cleanup changes only the desktop structural stylesheet", async () => {
   for (const [path, expected] of [
     ["cityflow.playback.json", "aa05e854b3b4241869cf05cc069fcec10da68944c7c77de8c9eeb8ecd15ed231"],
-    ["cityflow.css", "9ab06aa5e1680d5e4f31bfb4097fa4fc6171fa2532b7cbc7720ddd8af234dfd4"],
     ["cityflow/model.json", "2324022d137aabe5cb37e56b2d6c7c4ba1e5ad5996d8007fb71b9774fea63642"],
     ["cityflow/manifest.json", "9bb0740dd8bad387a2d347450d7cbbf591b93e7cab5916ae8b28a132153d1d19"],
   ]) {
     assert.equal(createHash("sha256").update(await readFile(new URL(path, root))).digest("hex"), expected, path);
   }
+  const stylesheet = await readFile(new URL("cityflow.css", root), "utf8");
+  assert.equal(createHash("sha256").update(stylesheet).digest("hex"),
+    "5ab5e01b3bea2e0886a7744e3bedcd1587f33746b9462ef2860f6a46105aeb0b");
+  assert.match(stylesheet, /\.polycss-scene>div>b/u);
+  assert.doesNotMatch(stylesheet, /csscityflow-box/u);
 });
 
 test("new mobile assets are content-addressed and carry scalars rather than matrices", async () => {

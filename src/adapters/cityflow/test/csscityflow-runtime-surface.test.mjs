@@ -5,8 +5,9 @@ import { resolve } from "node:path";
 import test from "node:test";
 
 test("publishes every prepared box automatically with a fixed source camera", async () => {
-  const [client, player, profileSelection, projection, styles, scheduler, tracePerformance] = await Promise.all([
+  const [client, dom, player, profileSelection, projection, styles, scheduler, tracePerformance] = await Promise.all([
     readFile(new URL("../src/csscityflow/client.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../src/csscityflow/preparedDom.mjs", import.meta.url), "utf8"),
     readFile(new URL("../src/csscityflow/preparedPlayback.mjs", import.meta.url), "utf8"),
     readFile(new URL("../src/csscityflow/profileSelection.mjs", import.meta.url), "utf8"),
     readFile(new URL("../src/csscityflow/sourceProjection.mjs", import.meta.url), "utf8"),
@@ -15,6 +16,14 @@ test("publishes every prepared box automatically with a fixed source camera", as
     readFile(new URL("../tools/trace-performance.mjs", import.meta.url), "utf8"),
   ]);
   assert.match(client, /mountPolyMorphModel/u);
+  assert.match(client, /cleanCityflowMountedDom\(\{ mounted, shapeElements \}\)/u);
+  assert.doesNotMatch(client, /csscityflow-box/u);
+  assert.match(dom, /cameraElement\.className = "polycss-camera"/u);
+  assert.match(dom, /sceneElement\.className = "polycss-scene"/u);
+  assert.match(dom, /sceneElement\.append\(shape\)/u);
+  assert.match(dom, /modelElement\.remove\(\)/u);
+  assert.match(dom, /stripDataAttributes/u);
+  assert.match(dom, /leaf\.style\.removeProperty\(property\)/u);
   assert.match(client, /selectCityflowPreparedBank/u);
   assert.ok(client.indexOf("selectCityflowPreparedBank({") <
     client.indexOf("const metadataPromise"), "prepared bank selection must precede all bank fetches");
@@ -38,14 +47,15 @@ test("publishes every prepared box automatically with a fixed source camera", as
   assert.match(projection, /height - viewportHeight \/ 2/u);
   assert.doesNotMatch(projection, /ResizeObserver/u);
   assert.match(styles, /container-type:\s*size/u);
+  assert.doesNotMatch(styles, /\.polycss-scene > div > div/u);
   assert.match(styles, /perspective:\s*186\.60254037844388cqh/u);
-  assert.match(styles, /transform:\s*translateZ\(186\.60254037844388cqh\)\s*!important/u);
+  assert.match(styles,
+    /transform:\s*translateZ\(186\.60254037844388cqh\)\s*matrix3d\(/u);
   assert.match(styles, /@container \(min-aspect-ratio:\s*2 \/ 1\)/u);
   assert.match(styles, /perspective:\s*186\.60254037844388cqw/u);
   assert.doesNotMatch(`${client}\n${projection}\n${styles}`, /--csscityflow-camera-|ResizeObserver/u);
   assert.doesNotMatch(styles,
     /data-csscityflow-(?:orbit|dragging)|cursor:\s*(?:grab|grabbing)|touch-action|pointer-events:\s*auto|transform-origin:\s*0 0 -30px/u);
-  assert.doesNotMatch(styles, /\.polycss-scene\s*\{[^}]*matrix3d\(/su);
   assert.match(player, /domformat@0\/polycss-playback@0@cc8da736/u);
   assert.match(player,
     /shapeElements\[boxIndex\]\.style\.transform\s*=\s*[\s\S]*transforms\[transformOffsets\[boxIndex\] \+ transformIndex\]/u);

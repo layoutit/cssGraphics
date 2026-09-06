@@ -162,6 +162,8 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     /matrix3d\(12\.222222222,/u.test(snapshot) &&
     count(snapshot, /<b><\/b>/gu) === 0 &&
     !/\.polycss-scene>b:nth-child\(\d+\)\{transform:/u.test(snapshot) &&
+    count(snapshot, /:is\(body,\.example-stage\)>\.polycss-camera>\.polycss-scene/gu) === 5 &&
+    !snapshot.includes("body>.polycss-camera>.polycss-scene") &&
     /\.polycss-scene>b\{background-image:url\("\/cssmenger\/assets\/lighting-grid-[a-f0-9]{64}\.webp"\)\}/u.test(snapshot) &&
     /\.polycss-scene\.cssmenger-mobile-atlas.*lighting-grid-mobile-[a-f0-9]{64}\.webp/u.test(snapshot) &&
     snapshot.includes(scene.cssOpacityBaseAtlas.assetUrl) &&
@@ -252,6 +254,8 @@ export async function inspectCssmengerProductBank(root, { verifyDescriptor = tru
     count(reducedSnapshot, /<b style="transform: matrix3d\(/gu) === 30 &&
     /matrix3d\(36\.666666667,/u.test(reducedSnapshot) &&
     /--cssmenger-tile-width:9px;--cssmenger-tile-height:9px/u.test(reducedSnapshot) &&
+    count(reducedSnapshot, /:is\(body,\.example-stage\)>\.polycss-camera>\.polycss-scene/gu) === 5 &&
+    !reducedSnapshot.includes("body>.polycss-camera>.polycss-scene") &&
     reducedSnapshot.includes(reducedScene.cssOpacityBaseAtlas.assetUrl) &&
     reducedSnapshot.includes(reducedScene.cssOpacityShadowAtlas.assetUrl) &&
     count(reducedSnapshot, /%\{transform:rotateX/gu) === 1_537 &&

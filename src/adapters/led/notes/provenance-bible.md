@@ -27,6 +27,6 @@ public project metadata.
 - The source's exact retained `<u><i></i><b></b></u>` hierarchy and separate
   ambient, wall, floor, and cube blend layers are preserved; only their
   selectors are scoped to the css.graphics stage.
-- The one-shot animation is mirrored into a 9,000 millisecond ping-pong loop:
-  4,500 milliseconds forward and the same cue timing in reverse, meeting at
-  matching boundary frames without an idle beat.
+- The one-shot animation is mirrored into a 9,100 millisecond loop: 4,500
+  milliseconds forward, the same cue timing in reverse, and a 100-millisecond
+  fully dark beat before the next draw.

@@ -4,7 +4,9 @@ import {
 } from "./sceneMarkup.mjs";
 
 export const CSSLED_SOURCE_ANIMATION_DURATION_MS = 4_500;
-export const CSSLED_LOOP_DURATION_MS = CSSLED_SOURCE_ANIMATION_DURATION_MS * 2;
+export const CSSLED_DARK_HOLD_MS = 100;
+export const CSSLED_LOOP_DURATION_MS =
+  CSSLED_SOURCE_ANIMATION_DURATION_MS * 2 + CSSLED_DARK_HOLD_MS;
 
 export function mountLedAnimation(host) {
   if (!(host instanceof HTMLElement)) throw new TypeError("LED host must be an element");
@@ -91,6 +93,7 @@ export function mountLedAnimation(host) {
     paused,
     loopCount,
     loopDurationMilliseconds: CSSLED_LOOP_DURATION_MS,
+    darkHoldMilliseconds: CSSLED_DARK_HOLD_MS,
     sourceAnimationDurationMilliseconds: CSSLED_SOURCE_ANIMATION_DURATION_MS,
     retainedLedCount: root.querySelectorAll(".cssled-cell").length,
     retainedFaceCount: root.querySelectorAll(".cssled-grid").length,

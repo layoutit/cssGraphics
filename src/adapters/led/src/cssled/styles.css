@@ -119,20 +119,18 @@
 }
 
 .cssled-stage pixel-grid.front {
-  --intro-offset: 300ms;
-  color: magenta;
   transform: translateZ(31.5vmin);
 }
 
 .cssled-stage pixel-grid.right {
-  --intro-offset: 600ms;
-  color: cyan;
+  --intro-offset: 300ms;
+  color: magenta;
   background: radial-gradient(at right bottom, color-mix(in srgb, #1e1c1e 94%, #efefde), color-mix(in srgb, #131214 96%, #efefde));
   transform: rotateY(90deg) translateZ(31.5vmin);
 }
 
 .cssled-stage pixel-grid.top {
-  --intro-offset: 0ms;
+  --intro-offset: 600ms;
   color: #eef4ff;
   background: radial-gradient(at left top, color-mix(in srgb, #1e1c1e 88%, #efefde), color-mix(in srgb, #131214 91%, #efefde));
   transform: rotateX(90deg) translateZ(31.5vmin);
@@ -344,7 +342,7 @@
 }
 
 .cssled-stage backlight { z-index: 2; }
-.cssled-stage surfacelight { --intro-offset: 300ms; top: 50%; z-index: 1; display: none; transform: translate3d(0, 32vmin, 0); }
+.cssled-stage surfacelight { top: 50%; z-index: 1; display: none; transform: translate3d(0, 32vmin, 0); }
 
 .cssled-stage :is(backlight, surfacelight) > .cssled-light {
   position: absolute;
@@ -375,23 +373,19 @@
 
 .cssled-stage surfacelight > .cssled-light::before,
 .cssled-stage surfacelight > .cssled-light::after {
-  background: conic-gradient(from 0deg at calc(50% + (var(--column) - 5) * 5vmin) 0, transparent 90deg, color-mix(in srgb, color-mix(in srgb, magenta 40%, transparent) 90%, white 10%) 110deg, color-mix(in srgb, color-mix(in srgb, magenta 40%, transparent) 90%, white 10%) 250deg, transparent 270deg);
+  background: conic-gradient(from 0deg at calc(50% + (var(--column) - 5) * 5vmin) 0, transparent 90deg, color-mix(in srgb, color-mix(in srgb, cyan 40%, transparent) 90%, white 10%) 110deg, color-mix(in srgb, color-mix(in srgb, cyan 40%, transparent) 90%, white 10%) 250deg, transparent 270deg);
 }
 
 .cssled-stage spill {
   position: absolute;
   inset: 0;
-  color: magenta;
+  color: cyan;
 }
 
 .cssled-stage spill.right {
-  --intro-offset: 600ms;
-  color: cyan;
-  scale: -1 1;
-}
-
-.cssled-stage spill.front {
   --intro-offset: 300ms;
+  color: magenta;
+  scale: -1 1;
 }
 
 .cssled-stage spill > .cssled-light::before,
@@ -418,44 +412,29 @@
 .l9 { --column: 9; }
 
 .cue-0 { --intro-cue: 0ms; }
-.cue-60 { --intro-cue: 60ms; }
 .cue-90 { --intro-cue: 90ms; }
 .cue-120 { --intro-cue: 120ms; }
 .cue-180 { --intro-cue: 180ms; }
 .cue-240 { --intro-cue: 240ms; }
 .cue-270 { --intro-cue: 270ms; }
-.cue-300 { --intro-cue: 300ms; }
 .cue-360 { --intro-cue: 360ms; }
-.cue-420 { --intro-cue: 420ms; }
 .cue-450 { --intro-cue: 450ms; }
 .cue-480 { --intro-cue: 480ms; }
 .cue-540 { --intro-cue: 540ms; }
 .cue-600 { --intro-cue: 600ms; }
 .cue-630 { --intro-cue: 630ms; }
-.cue-660 { --intro-cue: 660ms; }
 .cue-720 { --intro-cue: 720ms; }
-.cue-780 { --intro-cue: 780ms; }
 .cue-810 { --intro-cue: 810ms; }
 .cue-840 { --intro-cue: 840ms; }
 .cue-900 { --intro-cue: 900ms; }
 .cue-960 { --intro-cue: 960ms; }
 .cue-990 { --intro-cue: 990ms; }
-.cue-1020 { --intro-cue: 1020ms; }
 .cue-1080 { --intro-cue: 1080ms; }
-.cue-1140 { --intro-cue: 1140ms; }
 .cue-1170 { --intro-cue: 1170ms; }
 .cue-1200 { --intro-cue: 1200ms; }
 .cue-1260 { --intro-cue: 1260ms; }
 .cue-1320 { --intro-cue: 1320ms; }
 .cue-1350 { --intro-cue: 1350ms; }
-.cue-1380 { --intro-cue: 1380ms; }
-.cue-1440 { --intro-cue: 1440ms; }
-.cue-1500 { --intro-cue: 1500ms; }
-.cue-1560 { --intro-cue: 1560ms; }
-.cue-1620 { --intro-cue: 1620ms; }
-.cue-1680 { --intro-cue: 1680ms; }
-.cue-1740 { --intro-cue: 1740ms; }
-.cue-1800 { --intro-cue: 1800ms; }
 
 .cssled-stage.is-running .cssled-cell.is-active > b::before {
   animation: cssled-led-intro calc(var(--loop-close) - var(--initial-dark) - var(--intro-start) - var(--intro-start)) calc(var(--initial-dark) + var(--intro-start));
@@ -467,61 +446,6 @@
     cssled-led-intro calc(var(--loop-close) - var(--initial-dark) - var(--intro-start) - var(--intro-start) - 2880ms) calc(var(--initial-dark) + var(--intro-start) + 1440ms),
     cssled-led-intro 180ms calc(var(--loop-close) - var(--intro-start) - 180ms);
 }
-
-.cssled-stage.is-running .cssled-grid.top .is-trailing > b::before {
-  animation-name: cssled-led-intro;
-  animation-duration: 6240ms;
-}
-
-.cssled-stage.is-running .cssled-grid.top .trail-0 > b::before { animation-delay: 1800ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-1 > b::before { animation-delay: 1845ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-2 > b::before { animation-delay: 1890ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-3 > b::before { animation-delay: 1935ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-4 > b::before { animation-delay: 1980ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-5 > b::before { animation-delay: 2025ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-6 > b::before { animation-delay: 2070ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-7 > b::before { animation-delay: 2115ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-8 > b::before { animation-delay: 2160ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-9 > b::before { animation-delay: 2205ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-10 > b::before { animation-delay: 2250ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-11 > b::before { animation-delay: 2295ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-12 > b::before { animation-delay: 2340ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-13 > b::before { animation-delay: 2385ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-14 > b::before { animation-delay: 2430ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-15 > b::before { animation-delay: 2475ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-16 > b::before { animation-delay: 2520ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-17 > b::before { animation-delay: 2565ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-18 > b::before { animation-delay: 2610ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-19 > b::before { animation-delay: 2655ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-20 > b::before { animation-delay: 2700ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-21 > b::before { animation-delay: 2745ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-22 > b::before { animation-delay: 2790ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-23 > b::before { animation-delay: 2835ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-24 > b::before { animation-delay: 2880ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-25 > b::before { animation-delay: 2925ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-26 > b::before { animation-delay: 2970ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-27 > b::before { animation-delay: 3015ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-28 > b::before { animation-delay: 3060ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-29 > b::before { animation-delay: 3105ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-30 > b::before { animation-delay: 3150ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-31 > b::before { animation-delay: 3195ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-32 > b::before { animation-delay: 3240ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-33 > b::before { animation-delay: 3285ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-34 > b::before { animation-delay: 3330ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-35 > b::before { animation-delay: 3375ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-36 > b::before { animation-delay: 3420ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-37 > b::before { animation-delay: 3465ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-38 > b::before { animation-delay: 3510ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-39 > b::before { animation-delay: 3555ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-40 > b::before { animation-delay: 3600ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-41 > b::before { animation-delay: 3645ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-42 > b::before { animation-delay: 3690ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-43 > b::before { animation-delay: 3735ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-44 > b::before { animation-delay: 3780ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-45 > b::before { animation-delay: 3825ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-46 > b::before { animation-delay: 3870ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-47 > b::before { animation-delay: 3915ms; }
-.cssled-stage.is-running .cssled-grid.top .trail-48 > b::before { animation-delay: 3960ms; }
 
 .cssled-stage spill.front > .l2,
 .cssled-stage surfacelight > .l2 { --light-start: 1080ms; }

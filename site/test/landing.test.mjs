@@ -81,12 +81,12 @@ test("landing presents the current deployed collection", async () => {
   assert.equal(ledProject.showPolycssCredit, false);
   assert.deepEqual(ledProject.credits, [
     {
-      relation: "original by",
+      relation: "2D original by",
       name: "Ben Evans",
       url: "https://codepen.io/editor/ivorjetski/pen/01a07dcf-a1e8-7ab6-aea1-aa98135803b3",
     },
     {
-      relation: "fork by",
+      relation: "3D fork by",
       name: "Agustin Capeletto",
       url: "https://bsky.app/profile/lowpoly.gg",
     },

@@ -1,0 +1,29 @@
+{
+  "schema": "cssled-source-lock@1",
+  "sourceCheckout": "/Users/ekrof/fed/cssled",
+  "sourceRevision": "08792e7a96f4d201c4885d5accc31b5467dbfcee",
+  "sourceWorkingTreeDiffSha256": "1ea065835f801e235b4641b412cc3a90fd28d7f2080b2e60884b2b4aa666202c",
+  "sourceFiles": [
+    {
+      "path": "index.html",
+      "sha256": "fc5bc22c8b0f79e71ff143f93fd5e4de2cda57051073392829bd841acdea4732"
+    },
+    {
+      "path": "scene.css",
+      "sha256": "1b78b2f658290c5bc95f1e54dcf8611b0474f9edee82fa78a06018b051eb943d"
+    },
+    {
+      "path": "source/ben-reference/index.html",
+      "sha256": "053b783d5421411a307bbcdd24314a3fd943df96a04904af4e46dbcc3f1d6686"
+    },
+    {
+      "path": "source/ben-reference/style.css",
+      "sha256": "3e6cf5176372df4873b9f71f4665e7ab5c34c0922040c6892ba19398baf701c6"
+    }
+  ],
+  "reference": {
+    "name": "Pure CSS LED Playboard",
+    "author": "Ben Evans",
+    "url": "https://codepen.io/editor/ivorjetski/pen/01a07dcf-a1e8-7ab6-aea1-aa98135803b3"
+  }
+}

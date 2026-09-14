@@ -42,6 +42,10 @@ function requireSceneLifecycle(mount) {
 
 async function mountForProject(projectId, host) {
   switch (projectId) {
+    case "led": {
+      const { mountLedAnimation } = await import("../src/adapters/led/src/cssled/client.mjs");
+      return mountLedAnimation(host);
+    }
     case "cityflow": {
       const { mountCityflow } = await import("../src/adapters/cityflow/src/csscityflow/entry.mjs");
       return mountCityflow(host);

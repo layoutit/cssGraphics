@@ -1,0 +1,552 @@
+.example-stage:has(> .cssled-stage) {
+  background: #131214;
+}
+
+.cssled-stage,
+.cssled-stage *,
+.cssled-stage *::before,
+.cssled-stage *::after {
+  box-sizing: border-box;
+}
+
+.cssled-stage {
+  --intro-close: 4500ms;
+  --loop-close: 9000ms;
+  --light-falloff: 6s linear(0, .3 50%, 1);
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #131214;
+  pointer-events: none;
+}
+
+.cssled-stage::before,
+.cssled-stage::after,
+.cssled-stage *::before,
+.cssled-stage *::after {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.cssled-stage::before,
+.cssled-stage::after {
+  content: "";
+  z-index: 200;
+  width: 100%;
+  height: 100%;
+}
+
+.cssled-stage::before {
+  opacity: 0;
+  background: linear-gradient(transparent, cyan);
+  mix-blend-mode: saturation;
+}
+
+.cssled-stage::after {
+  background: linear-gradient(90deg, #0005, transparent);
+  box-shadow: inset 0 0 3vmin #131214;
+}
+
+.cssled-loop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.cssled-loop::after {
+  content: "";
+  z-index: 200;
+  width: 100%;
+  height: 100%;
+  opacity: .5;
+  background: linear-gradient(magenta, transparent);
+  mix-blend-mode: soft-light;
+}
+
+.cssled-stage background,
+.cssled-stage foreground {
+  display: block;
+  height: 50%;
+}
+
+.cssled-stage background {
+  z-index: 1;
+  background:
+    linear-gradient(color-mix(in srgb, #efefde 40%, #131214), #0001 70%, #0000000d, #0003),
+    color-mix(in srgb, #efefde 40%, #131214);
+}
+
+.cssled-stage foreground {
+  background:
+    linear-gradient(color-mix(in srgb, #efefde 50%, #131214), #fff1),
+    color-mix(in srgb, #efefde 50%, #131214);
+}
+
+.cssled-stage shadow,
+.cssled-stage pixel-grid {
+  position: absolute;
+  width: 63vmin;
+  height: 63vmin;
+  border-radius: 0;
+  background: #131214;
+}
+
+.cssled-cube {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 200;
+  width: 0;
+  height: 0;
+  transform: rotateX(-25deg) rotateY(-45deg) scale3d(.7, .7, .7);
+  transform-style: preserve-3d;
+}
+
+.cssled-stage pixel-grid {
+  top: -31.5vmin;
+  left: -31.5vmin;
+  z-index: 200;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2vmin;
+  padding: 10vmin;
+  color: cyan;
+  background: radial-gradient(at left bottom, #1e1c1e, #131214);
+}
+
+.cssled-stage pixel-grid.front {
+  transform: translateZ(31.5vmin);
+}
+
+.cssled-stage pixel-grid.right {
+  --intro-offset: 300ms;
+  color: magenta;
+  background: radial-gradient(at right bottom, color-mix(in srgb, #1e1c1e 94%, #efefde), color-mix(in srgb, #131214 96%, #efefde));
+  transform: rotateY(90deg) translateZ(31.5vmin);
+}
+
+.cssled-stage pixel-grid.top {
+  --intro-offset: 600ms;
+  color: #eef4ff;
+  background: radial-gradient(at left top, color-mix(in srgb, #1e1c1e 88%, #efefde), color-mix(in srgb, #131214 91%, #efefde));
+  transform: rotateX(90deg) translateZ(31.5vmin);
+}
+
+.cssled-stage pixel-grid::before,
+.cssled-stage pixel-grid::after {
+  content: "";
+  width: 100%;
+  height: 100%;
+}
+
+.cssled-stage pixel-grid::before {
+  top: 100%;
+  background: linear-gradient(transparent, rgb(from #131214 r g b / 6.67%), transparent);
+}
+
+.cssled-stage pixel-grid.top::before {
+  display: none;
+}
+
+.cssled-stage pixel-grid::after {
+  z-index: 3;
+  background: rgb(255 255 255 / .025);
+}
+
+.cssled-cell {
+  position: relative;
+  width: 3vmin;
+  height: 3vmin;
+}
+
+.cssled-cell > :is(i, b) {
+  display: contents;
+}
+
+.cssled-cell::before,
+.cssled-cell::after,
+.cssled-cell > :is(i, b)::before,
+.cssled-cell > :is(i, b)::after {
+  content: "";
+}
+
+.cssled-cell::before,
+.cssled-cell::after,
+.cssled-cell > i::before,
+.cssled-cell > b::before,
+.cssled-cell > b::after {
+  width: 3vmin;
+  height: 3vmin;
+  border-radius: .25vmin;
+}
+
+.cssled-cell::before {
+  background: linear-gradient(transparent 50%, #1e1e1d 50%) 0 0 / 3vmin 1.2vmin, #242625;
+  box-shadow: inset -.1vmin 0 0 color-mix(in srgb, #efefde 40%, #131214), inset 0 0 0 .5vmin #242625, -.6vmin .1vmin .3vmin #0002;
+  filter: blur(.1vmin);
+}
+
+.cssled-cell::after,
+.cssled-cell > i::before,
+.cssled-cell > :is(i, b)::after {
+  z-index: 1;
+  opacity: 0;
+}
+
+.cssled-cell::after,
+.cssled-cell > b::after {
+  filter: blur(.1vmin) brightness(1.4) blur(.1vmin);
+}
+
+.cssled-cell::after {
+  background: currentColor;
+}
+
+.cssled-cell > i::before {
+  background: linear-gradient(transparent 50%, yellow 50%) 0 0 / 3vmin 1.2vmin;
+  box-shadow: inset 0 0 0 .5vmin #242625;
+  filter: blur(.2vmin) blur(.1vmin);
+}
+
+.cssled-cell > i::after {
+  top: -2.3vmin;
+  left: -2.3vmin;
+  width: 7.6vmin;
+  height: 7.6vmin;
+  opacity: 0;
+  background:
+    linear-gradient(90deg, transparent, color-mix(in srgb, color-mix(in srgb, color-mix(in srgb, currentColor 40%, transparent) 90%, white 10%) 40%, transparent), transparent) 0 50% / .5vmin 3vmin,
+    linear-gradient(90deg, transparent, color-mix(in srgb, color-mix(in srgb, color-mix(in srgb, currentColor 40%, transparent) 90%, white 10%) 40%, transparent), transparent) 100% 50% / .5vmin 3vmin,
+    linear-gradient(transparent, color-mix(in srgb, color-mix(in srgb, color-mix(in srgb, currentColor 40%, transparent) 90%, white 10%) 40%, transparent), transparent) 50% 0 / 3vmin .5vmin,
+    linear-gradient(transparent, color-mix(in srgb, color-mix(in srgb, color-mix(in srgb, currentColor 40%, transparent) 90%, white 10%) 40%, transparent), transparent) 50% 100% / 3vmin .5vmin;
+  background-repeat: no-repeat;
+}
+
+.cssled-cell.c1 > i::after { background-size: 0 0, .5vmin 3vmin, 3vmin .5vmin, 3vmin .5vmin; }
+.cssled-cell.c9 > i::after { background-size: .5vmin 3vmin, 0 0, 3vmin .5vmin, 3vmin .5vmin; }
+.cssled-cell.r1 > i::after { background-size: .5vmin 3vmin, .5vmin 3vmin, 0 0, 3vmin .5vmin; }
+.cssled-cell.r9 > i::after { background-size: .5vmin 3vmin, .5vmin 3vmin, 3vmin .5vmin, 0 0; }
+.cssled-cell.c1.r1 > i::after { background-size: 0 0, .5vmin 3vmin, 0 0, 3vmin .5vmin; }
+.cssled-cell.c9.r1 > i::after { background-size: .5vmin 3vmin, 0 0, 0 0, 3vmin .5vmin; }
+.cssled-cell.c1.r9 > i::after { background-size: 0 0, .5vmin 3vmin, 3vmin .5vmin, 0 0; }
+.cssled-cell.c9.r9 > i::after { background-size: .5vmin 3vmin, 0 0, 3vmin .5vmin, 0 0; }
+
+.cssled-cell > b::before {
+  --intro-start: calc(var(--intro-cue) + var(--intro-offset, 0ms));
+  z-index: 2;
+  visibility: hidden;
+  background: currentColor;
+  filter: blur(.5vmin);
+  will-change: opacity;
+}
+
+.cssled-stage pixel-grid:not(.top) > .r1::after { box-shadow: 0 0 .5vmin currentColor, 0 103vmin rgb(from currentColor r g b / 0.024339), 0 103vmin .5vmin rgb(from currentColor r g b / 0.024339); }
+.cssled-stage pixel-grid:not(.top) > .r1 > b::after { box-shadow: 0 0 1.5vmin currentColor, 0 0 3vmin #fff8, 0 103vmin 1.5vmin rgb(from currentColor r g b / 0.024339), 0 103vmin 3vmin rgb(255 255 255 / 0.012972); }
+.cssled-stage pixel-grid:not(.top) > .r1 > b::before { box-shadow: 0 103vmin rgb(from currentColor r g b / 0.024339); }
+.cssled-stage pixel-grid:not(.top) > .r2::after { box-shadow: 0 0 .5vmin currentColor, 0 93vmin rgb(from currentColor r g b / 0.034921), 0 93vmin .5vmin rgb(from currentColor r g b / 0.034921); }
+.cssled-stage pixel-grid:not(.top) > .r2 > b::after { box-shadow: 0 0 1.5vmin currentColor, 0 0 3vmin #fff8, 0 93vmin 1.5vmin rgb(from currentColor r g b / 0.034921), 0 93vmin 3vmin rgb(255 255 255 / 0.018613); }
+.cssled-stage pixel-grid:not(.top) > .r2 > b::before { box-shadow: 0 93vmin rgb(from currentColor r g b / 0.034921); }
+.cssled-stage pixel-grid:not(.top) > .r3::after { box-shadow: 0 0 .5vmin currentColor, 0 83vmin rgb(from currentColor r g b / 0.045503), 0 83vmin .5vmin rgb(from currentColor r g b / 0.045503); }
+.cssled-stage pixel-grid:not(.top) > .r3 > b::after { box-shadow: 0 0 1.5vmin currentColor, 0 0 3vmin #fff8, 0 83vmin 1.5vmin rgb(from currentColor r g b / 0.045503), 0 83vmin 3vmin rgb(255 255 255 / 0.024253); }
+.cssled-stage pixel-grid:not(.top) > .r3 > b::before { box-shadow: 0 83vmin rgb(from currentColor r g b / 0.045503); }
+.cssled-stage pixel-grid:not(.top) > .r4::after { box-shadow: 0 0 .5vmin currentColor, 0 73vmin rgb(from currentColor r g b / 0.056085), 0 73vmin .5vmin rgb(from currentColor r g b / 0.056085); }
+.cssled-stage pixel-grid:not(.top) > .r4 > b::after { box-shadow: 0 0 1.5vmin currentColor, 0 0 3vmin #fff8, 0 73vmin 1.5vmin rgb(from currentColor r g b / 0.056085), 0 73vmin 3vmin rgb(255 255 255 / 0.029893); }
+.cssled-stage pixel-grid:not(.top) > .r4 > b::before { box-shadow: 0 73vmin rgb(from currentColor r g b / 0.056085); }
+.cssled-stage pixel-grid:not(.top) > .r5::after { box-shadow: 0 0 .5vmin currentColor, 0 63vmin rgb(from currentColor r g b / 0.066667), 0 63vmin .5vmin rgb(from currentColor r g b / 0.066667); }
+.cssled-stage pixel-grid:not(.top) > .r5 > b::after { box-shadow: 0 0 1.5vmin currentColor, 0 0 3vmin #fff8, 0 63vmin 1.5vmin rgb(from currentColor r g b / 0.066667), 0 63vmin 3vmin rgb(255 255 255 / 0.035533); }
+.cssled-stage pixel-grid:not(.top) > .r5 > b::before { box-shadow: 0 63vmin rgb(from currentColor r g b / 0.066667); }
+.cssled-stage pixel-grid:not(.top) > .r6::after { box-shadow: 0 0 .5vmin currentColor, 0 53vmin rgb(from currentColor r g b / 0.056085), 0 53vmin .5vmin rgb(from currentColor r g b / 0.056085); }
+.cssled-stage pixel-grid:not(.top) > .r6 > b::after { box-shadow: 0 0 1.5vmin currentColor, 0 0 3vmin #fff8, 0 53vmin 1.5vmin rgb(from currentColor r g b / 0.056085), 0 53vmin 3vmin rgb(255 255 255 / 0.029893); }
+.cssled-stage pixel-grid:not(.top) > .r6 > b::before { box-shadow: 0 53vmin rgb(from currentColor r g b / 0.056085); }
+.cssled-stage pixel-grid:not(.top) > .r7::after { box-shadow: 0 0 .5vmin currentColor, 0 43vmin rgb(from currentColor r g b / 0.045503), 0 43vmin .5vmin rgb(from currentColor r g b / 0.045503); }
+.cssled-stage pixel-grid:not(.top) > .r7 > b::after { box-shadow: 0 0 1.5vmin currentColor, 0 0 3vmin #fff8, 0 43vmin 1.5vmin rgb(from currentColor r g b / 0.045503), 0 43vmin 3vmin rgb(255 255 255 / 0.024253); }
+.cssled-stage pixel-grid:not(.top) > .r7 > b::before { box-shadow: 0 43vmin rgb(from currentColor r g b / 0.045503); }
+.cssled-stage pixel-grid:not(.top) > .r8::after { box-shadow: 0 0 .5vmin currentColor, 0 33vmin rgb(from currentColor r g b / 0.034921), 0 33vmin .5vmin rgb(from currentColor r g b / 0.034921); }
+.cssled-stage pixel-grid:not(.top) > .r8 > b::after { box-shadow: 0 0 1.5vmin currentColor, 0 0 3vmin #fff8, 0 33vmin 1.5vmin rgb(from currentColor r g b / 0.034921), 0 33vmin 3vmin rgb(255 255 255 / 0.018613); }
+.cssled-stage pixel-grid:not(.top) > .r8 > b::before { box-shadow: 0 33vmin rgb(from currentColor r g b / 0.034921); }
+.cssled-stage pixel-grid:not(.top) > .r9::after { box-shadow: 0 0 .5vmin currentColor, 0 23vmin rgb(from currentColor r g b / 0.024339), 0 23vmin .5vmin rgb(from currentColor r g b / 0.024339); }
+.cssled-stage pixel-grid:not(.top) > .r9 > b::after { box-shadow: 0 0 1.5vmin currentColor, 0 0 3vmin #fff8, 0 23vmin 1.5vmin rgb(from currentColor r g b / 0.024339), 0 23vmin 3vmin rgb(255 255 255 / 0.012972); }
+.cssled-stage pixel-grid:not(.top) > .r9 > b::before { box-shadow: 0 23vmin rgb(from currentColor r g b / 0.024339); }
+
+.cssled-stage pixel-grid.top > .cssled-cell::after { box-shadow: 0 0 .5vmin currentColor; }
+.cssled-stage pixel-grid.top > .cssled-cell > i::before { background-image: linear-gradient(transparent 50%, currentColor 50%); }
+.cssled-stage pixel-grid.top > .cssled-cell > b::after { box-shadow: 0 0 1.5vmin currentColor, 0 0 3vmin #fff8; }
+
+.cssled-stage shadow {
+  inset: 0;
+  margin: auto;
+  opacity: 0;
+  background-color: transparent;
+}
+
+.cssled-stage shadow::before {
+  content: "";
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(-90deg, hsl(150 25% 2% / .3), transparent 50%);
+  transform: translate3d(-61vmin, 0, 0) skewY(10deg);
+  transform-origin: 100%;
+  filter: blur(.5vmin);
+}
+
+.cssled-stage shadow::after {
+  content: "";
+  width: 100%;
+  height: 80%;
+  border-radius: 50%;
+  background: linear-gradient(hsl(150 25% 2% / .3) 50%, transparent 60%);
+  transform: translate3d(-.1vmin, 39vmin, 0);
+  filter: blur(.5vmin);
+}
+
+.cssled-stage room {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  display: block;
+  overflow: hidden;
+  opacity: 1;
+}
+
+.cssled-stage room::before {
+  content: "";
+  top: -31.5vmin;
+  left: calc(50% - 2.1vmin);
+  width: 4.2vmin;
+  height: 63vmin;
+  transform: rotateX(-25deg) rotateY(-45deg) scale3d(.7, .7, .7) rotateX(90deg) translateZ(-31.5vmin) skewY(atan(5 / 12));
+  box-shadow:
+    -33.6vmin 13.125vmin .56vmin hsl(150 25% 2% / .3),
+    -37.8vmin 13.125vmin 1.68vmin hsl(150 25% 2% / .3),
+    -42vmin 13.125vmin 2.8vmin hsl(150 25% 2% / .3),
+    -46.2vmin 13.125vmin 3.92vmin hsl(150 25% 2% / .3),
+    -50.4vmin 13.125vmin 5.04vmin hsl(150 25% 2% / .3),
+    -54.6vmin 13.125vmin 6.16vmin hsl(150 25% 2% / .3),
+    -58.8vmin 13.125vmin 7.28vmin hsl(150 25% 2% / .3),
+    -63vmin 13.125vmin 8.4vmin hsl(150 25% 2% / .3),
+    -67.2vmin 13.125vmin 9.52vmin hsl(150 25% 2% / .3);
+}
+
+.cssled-stage backlight,
+.cssled-stage surfacelight {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+}
+
+.cssled-stage backlight { z-index: 2; }
+.cssled-stage surfacelight { top: 50%; z-index: 1; display: none; transform: translate3d(0, 32vmin, 0); }
+
+.cssled-stage :is(backlight, surfacelight) > .cssled-light {
+  position: absolute;
+  inset: 0;
+}
+
+.cssled-stage backlight > .cssled-light {
+  left: calc(50% - 200vmin);
+  z-index: 1;
+  width: 400vmin;
+  height: 50%;
+}
+
+.cssled-stage :is(backlight, surfacelight) > .cssled-light::before,
+.cssled-stage :is(backlight, surfacelight) > .cssled-light::after {
+  content: "";
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+}
+
+.cssled-stage backlight > .cssled-light::before,
+.cssled-stage backlight > .cssled-light::after {
+  background:
+    conic-gradient(from 270deg at 85% 100%, transparent, #131214) 0 0 / 50% 100% no-repeat,
+    conic-gradient(from 90deg at 15% 100%, #131214, transparent) 100% 0 / 50% 100% no-repeat;
+}
+
+.cssled-stage surfacelight > .cssled-light::before,
+.cssled-stage surfacelight > .cssled-light::after {
+  background: conic-gradient(from 0deg at calc(50% + (var(--column) - 5) * 5vmin) 0, transparent 90deg, color-mix(in srgb, color-mix(in srgb, cyan 40%, transparent) 90%, white 10%) 110deg, color-mix(in srgb, color-mix(in srgb, cyan 40%, transparent) 90%, white 10%) 250deg, transparent 270deg);
+}
+
+.cssled-stage spill {
+  position: absolute;
+  inset: 0;
+  color: cyan;
+}
+
+.cssled-stage spill.right {
+  --intro-offset: 300ms;
+  color: magenta;
+  scale: -1 1;
+}
+
+.cssled-stage spill > .cssled-light::before,
+.cssled-stage spill > .cssled-light::after {
+  content: "";
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  background: conic-gradient(
+    at calc(50% + .7vmin * cos(45deg) * (5 * var(--column) - 56.5)) calc(.7vmin * (cos(25deg) * 31.5 + sin(25deg) * cos(45deg) * (5 * var(--column) + 6.5))),
+    transparent 112.9deg,
+    color-mix(in srgb, color-mix(in srgb, currentColor 40%, transparent) 90%, white 10%) 132.2deg 281.2deg,
+    transparent 292.9deg);
+}
+
+.l1 { --column: 1; }
+.l2 { --column: 2; }
+.l3 { --column: 3; }
+.l4 { --column: 4; }
+.l5 { --column: 5; }
+.l6 { --column: 6; }
+.l7 { --column: 7; }
+.l8 { --column: 8; }
+.l9 { --column: 9; }
+
+.cue-0 { --intro-cue: 0ms; }
+.cue-90 { --intro-cue: 90ms; }
+.cue-120 { --intro-cue: 120ms; }
+.cue-180 { --intro-cue: 180ms; }
+.cue-240 { --intro-cue: 240ms; }
+.cue-270 { --intro-cue: 270ms; }
+.cue-360 { --intro-cue: 360ms; }
+.cue-450 { --intro-cue: 450ms; }
+.cue-480 { --intro-cue: 480ms; }
+.cue-540 { --intro-cue: 540ms; }
+.cue-600 { --intro-cue: 600ms; }
+.cue-630 { --intro-cue: 630ms; }
+.cue-720 { --intro-cue: 720ms; }
+.cue-810 { --intro-cue: 810ms; }
+.cue-840 { --intro-cue: 840ms; }
+.cue-900 { --intro-cue: 900ms; }
+.cue-960 { --intro-cue: 960ms; }
+.cue-990 { --intro-cue: 990ms; }
+.cue-1080 { --intro-cue: 1080ms; }
+.cue-1170 { --intro-cue: 1170ms; }
+.cue-1200 { --intro-cue: 1200ms; }
+.cue-1260 { --intro-cue: 1260ms; }
+.cue-1320 { --intro-cue: 1320ms; }
+.cue-1350 { --intro-cue: 1350ms; }
+
+.cssled-stage.is-running .cssled-cell.is-active > b::before {
+  animation: cssled-led-intro calc(var(--loop-close) - var(--intro-start) - var(--intro-start)) var(--intro-start);
+}
+
+.cssled-stage.is-running .cssled-cell.is-active.is-repeat > b::before {
+  animation:
+    cssled-led-intro 180ms var(--intro-start),
+    cssled-led-intro calc(var(--loop-close) - var(--intro-start) - var(--intro-start) - 2880ms) calc(var(--intro-start) + 1440ms),
+    cssled-led-intro 180ms calc(var(--loop-close) - var(--intro-start) - 180ms);
+}
+
+.cssled-stage spill.front > .l2,
+.cssled-stage surfacelight > .l2 { --light-start: 1080ms; }
+.cssled-stage spill.front > .l3,
+.cssled-stage surfacelight > .l3 { --light-start: 960ms; }
+.cssled-stage spill.front > .l4,
+.cssled-stage surfacelight > .l4 { --light-start: 840ms; }
+.cssled-stage spill.front > .l5,
+.cssled-stage surfacelight > .l5 { --light-start: 0ms; }
+.cssled-stage spill.front > .l6,
+.cssled-stage surfacelight > .l6 { --light-start: 120ms; }
+.cssled-stage spill.front > .l7,
+.cssled-stage surfacelight > .l7 { --light-start: 240ms; }
+.cssled-stage spill.front > .l8,
+.cssled-stage surfacelight > .l8 { --light-start: 360ms; }
+.cssled-stage spill.right > .l8 { --light-start: 990ms; }
+.cssled-stage spill.right > .l7 { --light-start: 900ms; }
+.cssled-stage spill.right > .l6 { --light-start: 810ms; }
+.cssled-stage spill.right > .l5 { --light-start: 0ms; }
+.cssled-stage spill.right > .l4 { --light-start: 90ms; }
+.cssled-stage spill.right > .l3 { --light-start: 180ms; }
+.cssled-stage spill.right > .l2 { --light-start: 270ms; }
+
+.cssled-stage.is-running :is(surfacelight, spill.front, spill.right) > :is(.l2, .l3, .l4, .l5, .l6, .l7, .l8)::before {
+  --light-cue: calc(var(--light-start) + var(--intro-offset, 0ms));
+  animation: cssled-light-hold calc(var(--loop-close) - var(--light-cue) - var(--light-cue)) var(--light-cue);
+}
+
+.cssled-stage.is-running backlight > .cssled-light:is(:nth-child(1), :nth-child(5))::before {
+  animation:
+    cssled-backlight-rise 900ms steps(12, jump-start),
+    cssled-backlight-hold 600ms 900ms,
+    cssled-backlight-fade 3000ms 1500ms,
+    cssled-backlight-unfade 3000ms 4500ms,
+    cssled-backlight-hold 600ms 7500ms,
+    cssled-backlight-fall 900ms 8100ms steps(12, jump-end);
+}
+
+.cssled-stage.is-running backlight > .cssled-light:nth-child(2)::before {
+  animation:
+    cssled-backlight-hold 600ms 900ms,
+    cssled-backlight-fade 3000ms 1500ms,
+    cssled-backlight-unfade 3000ms 4500ms,
+    cssled-backlight-hold 600ms 7500ms;
+}
+
+.cssled-stage.is-running backlight > .cssled-light:nth-child(3)::before {
+  animation: cssled-backlight-hold 450ms 975ms, cssled-backlight-hold 450ms 7575ms;
+}
+
+.cssled-stage.is-running backlight > .cssled-light:nth-child(4)::before {
+  animation: cssled-backlight-hold 300ms 1050ms, cssled-backlight-hold 300ms 7650ms;
+}
+
+.cssled-stage.is-running::before {
+  animation: cssled-saturation-hold var(--loop-close);
+}
+
+.cssled-stage.is-paused,
+.cssled-stage.is-paused *,
+.cssled-stage.is-paused::before,
+.cssled-stage.is-paused::after,
+.cssled-stage.is-paused *::before,
+.cssled-stage.is-paused *::after {
+  animation-play-state: paused !important;
+}
+
+@keyframes cssled-led-intro {
+  from,
+  to { visibility: visible; }
+}
+
+@keyframes cssled-light-hold {
+  from,
+  to { opacity: .1; }
+}
+
+@keyframes cssled-saturation-hold {
+  from,
+  to { opacity: .85; }
+}
+
+@keyframes cssled-backlight-hold {
+  from,
+  to { opacity: 1; }
+}
+
+@keyframes cssled-backlight-rise {
+  to { opacity: .6; }
+}
+
+@keyframes cssled-backlight-fade {
+  from { opacity: 1; }
+  to { opacity: 0; display: none; }
+}
+
+@keyframes cssled-backlight-unfade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes cssled-backlight-fall {
+  from { opacity: .6; }
+  to { opacity: 0; }
+}

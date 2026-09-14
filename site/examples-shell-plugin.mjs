@@ -19,6 +19,10 @@ if (manifest.projects.some(({ credits }) =>
     (url !== undefined && !/^https:\/\//u.test(url))))) {
   throw new Error("Invalid css.graphics project attribution.");
 }
+if (manifest.projects.some(({ showPolycssCredit }) =>
+  showPolycssCredit !== undefined && typeof showPolycssCredit !== "boolean")) {
+  throw new Error("Invalid css.graphics PolyCSS credit setting.");
+}
 if (typeof polycssVersion !== "string" || !/^\d+\.\d+\.\d+$/u.test(polycssVersion)) {
   throw new Error("Invalid PolyCSS package version.");
 }
@@ -110,7 +114,10 @@ export function renderExamplesInfo(activeProjectId) {
   if (!project) {
     throw new Error(`Unknown css.graphics project: ${activeProjectId}`);
   }
-  return `<div class="example-info example-info-${project.numberTone}">${escapeText(project.name)} · <a href="https://github.com/layoutit/polycss" target="_blank" rel="noopener">PolyCSS ${polycssVersion}</a> · ${renderCredits(project.credits)}</div>`;
+  const polycssCredit = project.showPolycssCredit === false
+    ? ""
+    : ` · <a href="https://github.com/layoutit/polycss" target="_blank" rel="noopener">PolyCSS ${polycssVersion}</a>`;
+  return `<div class="example-info example-info-${project.numberTone}">${escapeText(project.name)}${polycssCredit} · ${renderCredits(project.credits)}</div>`;
 }
 
 function renderCredits(credits) {

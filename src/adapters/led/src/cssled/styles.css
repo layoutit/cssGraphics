@@ -11,8 +11,8 @@
 
 .cssled-stage {
   --intro-close: 4500ms;
-  --initial-dark: 400ms;
-  --loop-close: 9400ms;
+  --initial-dark: 1500ms;
+  --loop-close: 10500ms;
   --light-falloff: 6s linear(0, .3 50%, 1);
   position: absolute;
   inset: 0;
@@ -476,28 +476,28 @@
 
 .cssled-stage.is-running backlight > .cssled-light:is(:nth-child(1), :nth-child(5))::before {
   animation:
-    cssled-backlight-rise 900ms 400ms steps(12, jump-start),
-    cssled-backlight-hold 600ms 1300ms,
-    cssled-backlight-fade 3000ms 1900ms,
-    cssled-backlight-unfade 3000ms 4900ms,
-    cssled-backlight-hold 600ms 7900ms,
-    cssled-backlight-fall 900ms 8500ms steps(12, jump-end);
+    cssled-backlight-rise 900ms 1500ms steps(12, jump-start),
+    cssled-backlight-hold 600ms 2400ms,
+    cssled-backlight-fade 3000ms 3000ms,
+    cssled-backlight-unfade 3000ms 6000ms,
+    cssled-backlight-hold 600ms 9000ms,
+    cssled-backlight-fall 900ms 9600ms steps(12, jump-end);
 }
 
 .cssled-stage.is-running backlight > .cssled-light:nth-child(2)::before {
   animation:
-    cssled-backlight-hold 600ms 1300ms,
-    cssled-backlight-fade 3000ms 1900ms,
-    cssled-backlight-unfade 3000ms 4900ms,
-    cssled-backlight-hold 600ms 7900ms;
+    cssled-backlight-hold 600ms 2400ms,
+    cssled-backlight-fade 3000ms 3000ms,
+    cssled-backlight-unfade 3000ms 6000ms,
+    cssled-backlight-hold 600ms 9000ms;
 }
 
 .cssled-stage.is-running backlight > .cssled-light:nth-child(3)::before {
-  animation: cssled-backlight-hold 450ms 1375ms, cssled-backlight-hold 450ms 7975ms;
+  animation: cssled-backlight-hold 450ms 2475ms, cssled-backlight-hold 450ms 9075ms;
 }
 
 .cssled-stage.is-running backlight > .cssled-light:nth-child(4)::before {
-  animation: cssled-backlight-hold 300ms 1450ms, cssled-backlight-hold 300ms 8050ms;
+  animation: cssled-backlight-hold 300ms 2550ms, cssled-backlight-hold 300ms 9150ms;
 }
 
 .cssled-stage.is-running::before {

@@ -4,7 +4,7 @@ import {
 } from "./sceneMarkup.mjs";
 
 export const CSSLED_SOURCE_ANIMATION_DURATION_MS = 4_500;
-export const CSSLED_INITIAL_DARK_MS = 400;
+export const CSSLED_INITIAL_DARK_MS = 1_500;
 export const CSSLED_LOOP_DURATION_MS =
   CSSLED_SOURCE_ANIMATION_DURATION_MS * 2 + CSSLED_INITIAL_DARK_MS;
 

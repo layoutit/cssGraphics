@@ -2,6 +2,29 @@
   "schema": "cssgraphics.projects@2",
   "projects": [
     {
+      "number": 13,
+      "id": "led",
+      "name": "LED",
+      "route": "/led/",
+      "preview": "/landing/led.webp",
+      "numberTone": "light",
+      "showPolycssCredit": false,
+      "source": "Ben Evans",
+      "credits": [
+        {
+          "relation": "Challenge by",
+          "name": "Ben Evans",
+          "url": "https://codepen.io/editor/ivorjetski/pen/01a07dcf-a1e8-7ab6-aea1-aa98135803b3"
+        },
+        {
+          "relation": "By",
+          "name": "Agustin Capeletto"
+        }
+      ],
+      "description": "A looping CSS LED sculpture created for Ben Evans's LED challenge.",
+      "date": "2026-09-14"
+    },
+    {
       "number": 12,
       "id": "cityflow",
       "name": "Cityflow",

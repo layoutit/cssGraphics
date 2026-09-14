@@ -19,6 +19,7 @@ const products = [
   [resolve(generatedPublicRoot, "cssselectropaint"), "cssselectropaint"],
   [resolve(generatedPublicRoot, "csssolitaire"), "csssolitaire"],
   [resolve(generatedPublicRoot, "csscityflow"), "csscityflow"],
+  [resolve(generatedPublicRoot, "cssled"), "cssled"],
 ];
 
 await rm(deployRoot, { recursive: true, force: true });

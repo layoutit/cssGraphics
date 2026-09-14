@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(siteRoot, "..");
 const expectedProjects = [
+  ["led", 13, "Ben Evans", "2026-09-14", "A looping CSS LED sculpture"],
   ["cityflow", 12, "XScreenSaver", "2026-08-31", "XScreenSaver Cityflow"],
   ["chaos", 11, "dysts", "2026-08-27", "50 motion-curated chaotic attractors"],
   ["luminet", 10, "Luminet", "2026-08-24", "A Luminet Schwarzschild black hole"],
@@ -23,6 +24,7 @@ const expectedProjects = [
 ];
 const projectsExcludedFromLanding = ["flowerbox", "gravitywell"];
 const expectedNumberTones = new Map([
+  ["led", "light"],
   ["cityflow", "light"],
   ["chaos", "light"],
   ["luminet", "light"],
@@ -37,6 +39,7 @@ const expectedNumberTones = new Map([
   ["pipes", "light"],
 ]);
 const projectAdapterDirectories = new Map([
+  ["led", "led"],
   ["cityflow", "cityflow"],
   ["chaos", "dysts-lab"],
   ["luminet", "blackhole"],
@@ -74,6 +77,7 @@ test("landing presents the current deployed collection", async () => {
     { relation: "By", name: "Agustin Capeletto" },
   ]);
   assert.equal(projectManifest.projects.find(({ id }) => id === "cyclone").credits[0].name, "Really Slick");
+  assert.equal(projectManifest.projects.find(({ id }) => id === "led").showPolycssCredit, false);
   assert.doesNotMatch(projectManifestText, /David Tristram/u);
   assert.doesNotMatch(projectManifestText, /three\.js examples/u);
   assert.match(projectManifestText, /David A\. Tristram/u);
@@ -120,6 +124,7 @@ test("landing presents the current deployed collection", async () => {
   assert.match(sceneRouter, /mountBlackHoleClient\(host\)/u);
   assert.match(sceneRouter, /mountChaosClient\(host\)/u);
   assert.match(sceneRouter, /mountCityflow\(host\)/u);
+  assert.match(sceneRouter, /mountLedAnimation\(host\)/u);
   assert.match(sceneRouter, /mountCycloneClient\(host\)/u);
   assert.match(sceneRouter, /mountGalaxyClient\(host\)/u);
   assert.match(sceneRouter, /addEventListener\("visibilitychange", syncSceneVisibility\)/u);
@@ -194,7 +199,8 @@ test("landing uses the compact examples shell and mounts the latest scene direct
   assert.match(layout, /const socialImageHeight = home \? 630 : 540/u);
   assert.match(layout, /name="twitter:card" content="summary_large_image"/u);
   assert.match(shellRenderer, /id="asset-list"/u);
-  assert.match(shellRenderer, /\$\{escapeText\(project\.name\)\} · <a[^>]+>PolyCSS \$\{polycssVersion\}<\/a> · \$\{renderCredits\(project\.credits\)\}/u);
+  assert.match(shellRenderer, /project\.showPolycssCredit === false/u);
+  assert.match(shellRenderer, /\$\{escapeText\(project\.name\)\}\$\{polycssCredit\} · \$\{renderCredits\(project\.credits\)\}/u);
   assert.doesNotMatch(shellRenderer, /<br>/u);
   assert.doesNotMatch(shellRenderer, /Source:/u);
   assert.doesNotMatch(`${layout}\n${shellRenderer}`, /code-panel|controls-panel|asset-stage|landing-mark/u);

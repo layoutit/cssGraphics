@@ -168,9 +168,16 @@ write_renderer(const char *directory, int width, int height)
 static int
 write_ppm(const char *path, int width, int height)
 {
-  unsigned char *rgba = malloc((size_t)width * (size_t)height * 4);
-  unsigned char *row = malloc((size_t)width * 3);
+  unsigned char *rgba;
+  unsigned char *row;
   FILE *stream;
+  if (width <= 0 || height <= 0 ||
+      (size_t)width > SIZE_MAX / 4 / (size_t)height) {
+    fprintf(stderr, "capture dimensions too large\n");
+    abort();
+  }
+  rgba = malloc((size_t)width * (size_t)height * 4);
+  row = malloc((size_t)width * 3);
   if (!rgba || !row) abort();
   glFinish();
   glPixelStorei(GL_PACK_ALIGNMENT, 1);

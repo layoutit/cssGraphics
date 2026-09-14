@@ -8,7 +8,7 @@ import {
   CSSLED_SCENE_HTML,
 } from "../src/cssled/sceneMarkup.mjs";
 import {
-  CSSLED_DARK_HOLD_MS,
+  CSSLED_HANDOFF_DARK_MS,
   CSSLED_LOOP_DURATION_MS,
   CSSLED_SOURCE_ANIMATION_DURATION_MS,
 } from "../src/cssled/client.mjs";
@@ -36,8 +36,8 @@ test("adapter extracts only the looped animation surface", async () => {
   const sourceLock = JSON.parse(sourceLockText);
 
   assert.equal(CSSLED_SOURCE_ANIMATION_DURATION_MS, 4_500);
-  assert.equal(CSSLED_DARK_HOLD_MS, 100);
-  assert.equal(CSSLED_LOOP_DURATION_MS, 9_100);
+  assert.equal(CSSLED_HANDOFF_DARK_MS, 400);
+  assert.equal(CSSLED_LOOP_DURATION_MS, 9_400);
   assert.doesNotMatch(`${html}\n${CSSLED_SCENE_HTML}`, /view-2d|view-3d|<header|<nav|<label/iu);
   assert.doesNotMatch(css, /:hover|pointer-events:\s*auto/iu);
   assert.doesNotMatch(css, /contain:\s*(?:layout|paint)/iu);

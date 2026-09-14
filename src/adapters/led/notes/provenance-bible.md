@@ -27,6 +27,6 @@ public project metadata.
 - The source's exact retained `<u><i></i><b></b></u>` hierarchy and separate
   ambient, wall, floor, and cube blend layers are preserved; only their
   selectors are scoped to the css.graphics stage.
-- The one-shot animation is mirrored into a 9,100 millisecond loop: 4,500
-  milliseconds forward, the same cue timing in reverse, and a 100-millisecond
-  fully dark beat before the next draw.
+- The one-shot animation is mirrored into a 9,400 millisecond loop: 4,500
+  milliseconds forward, a 400-millisecond fully dark handoff, and the same cue
+  timing in reverse.

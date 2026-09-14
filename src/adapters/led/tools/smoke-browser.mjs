@@ -34,14 +34,14 @@ try {
     const before = await page.evaluate(() => globalThis.__cssLedDebug.stats());
     await page.waitForTimeout(9_450);
     const after = await page.evaluate(() => globalThis.__cssLedDebug.stats());
-    await page.evaluate(() => globalThis.__cssLedDebug.seek(4_700));
+    await page.evaluate(() => globalThis.__cssLedDebug.seek(200));
     const darkLedCount = await page.locator(".cssled-cell.is-active > b").evaluateAll(
       (leds) => leds.filter((led) =>
         getComputedStyle(led, "::before").visibility === "visible").length,
     );
     if (errors.length > 0 || before.retainedLedCount !== 243 ||
         before.retainedFaceCount !== 3 || before.retainedRoomLightCount !== 36 ||
-        before.handoffDarkMilliseconds !== 400 || darkLedCount !== 0 ||
+        before.initialDarkMilliseconds !== 400 || darkLedCount !== 0 ||
         after.loopCount < 1 || after.runtimeDomGrowth || after.runtimeFrameConstruction) {
       throw new Error(`LED ${viewport.name} smoke failed: ${errors.join("\n")}`);
     }
@@ -58,7 +58,7 @@ try {
     viewports: ["1280x800", "390x844"],
     retainedLedCount: 243,
     loopObserved: true,
-    handoffDarkMilliseconds: 400,
+    initialDarkMilliseconds: 400,
   }, null, 2)}\n`);
 } finally {
   await browser.close();

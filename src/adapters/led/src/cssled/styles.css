@@ -11,7 +11,7 @@
 
 .cssled-stage {
   --intro-close: 4500ms;
-  --handoff-close: 4900ms;
+  --initial-dark: 400ms;
   --loop-close: 9400ms;
   --light-falloff: 6s linear(0, .3 50%, 1);
   position: absolute;
@@ -437,16 +437,13 @@
 .cue-1350 { --intro-cue: 1350ms; }
 
 .cssled-stage.is-running .cssled-cell.is-active > b::before {
-  animation:
-    cssled-led-intro calc(var(--intro-close) - var(--intro-start)) var(--intro-start),
-    cssled-led-intro calc(var(--intro-close) - var(--intro-start)) var(--handoff-close);
+  animation: cssled-led-intro calc(var(--loop-close) - var(--initial-dark) - var(--intro-start) - var(--intro-start)) calc(var(--initial-dark) + var(--intro-start));
 }
 
 .cssled-stage.is-running .cssled-cell.is-active.is-repeat > b::before {
   animation:
-    cssled-led-intro 180ms var(--intro-start),
-    cssled-led-intro calc(var(--intro-close) - var(--intro-start) - 1440ms) calc(var(--intro-start) + 1440ms),
-    cssled-led-intro calc(var(--intro-close) - var(--intro-start) - 1440ms) var(--handoff-close),
+    cssled-led-intro 180ms calc(var(--initial-dark) + var(--intro-start)),
+    cssled-led-intro calc(var(--loop-close) - var(--initial-dark) - var(--intro-start) - var(--intro-start) - 2880ms) calc(var(--initial-dark) + var(--intro-start) + 1440ms),
     cssled-led-intro 180ms calc(var(--loop-close) - var(--intro-start) - 180ms);
 }
 
@@ -474,16 +471,14 @@
 
 .cssled-stage.is-running :is(surfacelight, spill.front, spill.right) > :is(.l2, .l3, .l4, .l5, .l6, .l7, .l8)::before {
   --light-cue: calc(var(--light-start) + var(--intro-offset, 0ms));
-  animation:
-    cssled-light-hold calc(var(--intro-close) - var(--light-cue)) var(--light-cue),
-    cssled-light-hold calc(var(--intro-close) - var(--light-cue)) var(--handoff-close);
+  animation: cssled-light-hold calc(var(--loop-close) - var(--initial-dark) - var(--light-cue) - var(--light-cue)) calc(var(--initial-dark) + var(--light-cue));
 }
 
 .cssled-stage.is-running backlight > .cssled-light:is(:nth-child(1), :nth-child(5))::before {
   animation:
-    cssled-backlight-rise 900ms steps(12, jump-start),
-    cssled-backlight-hold 600ms 900ms,
-    cssled-backlight-fade 3000ms 1500ms,
+    cssled-backlight-rise 900ms 400ms steps(12, jump-start),
+    cssled-backlight-hold 600ms 1300ms,
+    cssled-backlight-fade 3000ms 1900ms,
     cssled-backlight-unfade 3000ms 4900ms,
     cssled-backlight-hold 600ms 7900ms,
     cssled-backlight-fall 900ms 8500ms steps(12, jump-end);
@@ -491,24 +486,22 @@
 
 .cssled-stage.is-running backlight > .cssled-light:nth-child(2)::before {
   animation:
-    cssled-backlight-hold 600ms 900ms,
-    cssled-backlight-fade 3000ms 1500ms,
+    cssled-backlight-hold 600ms 1300ms,
+    cssled-backlight-fade 3000ms 1900ms,
     cssled-backlight-unfade 3000ms 4900ms,
     cssled-backlight-hold 600ms 7900ms;
 }
 
 .cssled-stage.is-running backlight > .cssled-light:nth-child(3)::before {
-  animation: cssled-backlight-hold 450ms 975ms, cssled-backlight-hold 450ms 7975ms;
+  animation: cssled-backlight-hold 450ms 1375ms, cssled-backlight-hold 450ms 7975ms;
 }
 
 .cssled-stage.is-running backlight > .cssled-light:nth-child(4)::before {
-  animation: cssled-backlight-hold 300ms 1050ms, cssled-backlight-hold 300ms 8050ms;
+  animation: cssled-backlight-hold 300ms 1450ms, cssled-backlight-hold 300ms 8050ms;
 }
 
 .cssled-stage.is-running::before {
-  animation:
-    cssled-saturation-hold var(--intro-close),
-    cssled-saturation-hold var(--intro-close) var(--handoff-close);
+  animation: cssled-saturation-hold calc(var(--loop-close) - var(--initial-dark)) var(--initial-dark);
 }
 
 .cssled-stage.is-paused,

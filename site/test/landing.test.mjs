@@ -77,7 +77,20 @@ test("landing presents the current deployed collection", async () => {
     { relation: "By", name: "Agustin Capeletto" },
   ]);
   assert.equal(projectManifest.projects.find(({ id }) => id === "cyclone").credits[0].name, "Really Slick");
-  assert.equal(projectManifest.projects.find(({ id }) => id === "led").showPolycssCredit, false);
+  const ledProject = projectManifest.projects.find(({ id }) => id === "led");
+  assert.equal(ledProject.showPolycssCredit, false);
+  assert.deepEqual(ledProject.credits, [
+    {
+      relation: "original by",
+      name: "Ben Evans",
+      url: "https://codepen.io/editor/ivorjetski/pen/01a07dcf-a1e8-7ab6-aea1-aa98135803b3",
+    },
+    {
+      relation: "fork by",
+      name: "Agustin Capeletto",
+      url: "https://bsky.app/profile/lowpoly.gg",
+    },
+  ]);
   assert.doesNotMatch(projectManifestText, /David Tristram/u);
   assert.doesNotMatch(projectManifestText, /three\.js examples/u);
   assert.match(projectManifestText, /David A\. Tristram/u);

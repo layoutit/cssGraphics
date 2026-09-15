@@ -70,7 +70,9 @@ try {
       const importantRules = [];
       for (const sheet of [...document.styleSheets]) {
         for (const rule of [...(sheet.cssRules ?? [])]) {
-          if (rule.cssText?.includes("!important")) importantRules.push(rule.cssText);
+          if (rule.cssText?.includes("!important") && rule.cssText.includes("polycss-")) {
+            importantRules.push(rule.cssText);
+          }
         }
       }
       const firstStyle = getComputedStyle(leaves[0]);

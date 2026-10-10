@@ -40,3 +40,7 @@ the page and the eight pictures.
 - The scroll surface is placed at its opening by the mount script, in place of
   the pen's `autofocus`; its `scroll-initial-target` stays.
 - The animations pause through an `is-paused` class while the page is hidden.
+- Two forms the site build's CSS minifier breaks are written another way: the
+  rings' `scale` is inside their `transform` (beside a `transform` it was
+  dropped), and the zoom's `animation-timeline` has a rule of its own (beside
+  `animation` it was folded into a shorthand no browser reads).

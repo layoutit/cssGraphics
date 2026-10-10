@@ -1,0 +1,420 @@
+.csssaturn-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  container-type: size;
+  background: #000 url("https://earth-assets.lowpoly.cc/codepen/saturn/13/saturn-sky.webp") center / cover;
+  user-select: none;
+
+  /* Camera */
+  main {
+    --lens: min(200cqw, 338.8889cqh, 3840px);
+    --motion: running;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    perspective: var(--lens);
+
+    div,
+    s {
+      position: absolute;
+      transform-style: preserve-3d;
+    }
+
+    s {
+      backface-visibility: hidden;
+    }
+  }
+
+  &.is-paused main {
+    --motion: paused;
+  }
+
+  /* Layers */
+  .layer {
+    --to-eye: rotateY(26.73deg) rotateZ(-60deg) rotateX(-40deg);
+    translate: 0 0 -991px;
+    transform: translateZ(calc(var(--lens) - 2822.47px)) rotateX(40deg) rotateZ(60deg) rotateY(-26.73deg);
+  }
+
+  /* Rings */
+  .rings {
+    left: -1024px;
+    width: 2048px;
+    overflow: hidden;
+    scale: 0.576456;
+    transform: rotateZ(-69.102deg);
+    transform-style: flat;
+
+    s {
+      left: 0;
+      width: 2048px;
+      height: 2048px;
+      border-radius: 50%;
+      background-size: 100%;
+      transform: rotate(-58.898deg);
+
+      &:nth-child(1) {
+        background-image: url("https://earth-assets.lowpoly.cc/codepen/saturn/13/saturn-rings-dots.avif");
+        animation: csssaturn-turn 68.7s linear infinite var(--motion);
+      }
+
+      &:nth-child(2) {
+        background-image: url("https://earth-assets.lowpoly.cc/codepen/saturn/13/saturn-planet-shadow.avif");
+      }
+    }
+
+    &.far {
+      top: -1024px;
+      height: 1024.5px;
+      transform-origin: 1024px 1024px;
+
+      s {
+        top: 0;
+      }
+    }
+
+    &.near {
+      top: -0.5px;
+      height: 1024.5px;
+      transform-origin: 1024px 0.5px;
+
+      s {
+        top: -1023.5px;
+      }
+    }
+  }
+
+  /* Globe */
+  .caps,
+  .globe {
+    transform: rotateZ(-128deg);
+    animation: csssaturn-turn 72s linear infinite var(--motion);
+  }
+
+  .globe s {
+    width: 32px;
+    height: 32px;
+    background-image: url("https://earth-assets.lowpoly.cc/codepen/saturn/13/saturn-surface-mix.avif");
+    background-size: 1040px 768px;
+    transform-origin: 0 0;
+
+    &:nth-child(-n+32) { background-position-y: -680px; transform: matrix3d(0.304044,-0.029946,0,0,0.000201,0.002043,3.676179,-0.015492,0.000572,0.005805,-0.021213,0,-0.09,48.956,-223.904,1); }
+    &:nth-child(n+33):nth-child(-n+64) { background-position-y: -632px; transform: matrix3d(0.598152,-0.058913,0,0,0.000128,0.001298,2.537294,-0.009852,0.00094,0.009547,-0.019798,0,-0.165,96.441,-210.986,1); }
+    &:nth-child(n+65):nth-child(-n+96) { background-position-y: -584px; transform: matrix3d(0.869305,-0.085619,0,0,0.000088,0.000894,1.995736,-0.006792,0.001287,0.013069,-0.017651,0,-0.233,140.219,-189.961,1); }
+    &:nth-child(n+97):nth-child(-n+128) { background-position-y: -536px; transform: matrix3d(1.107084,-0.109038,0,0,0.000061,0.000624,1.698477,-0.004744,0.001599,0.016231,-0.014765,0,-0.294,178.609,-161.636,1); }
+    &:nth-child(n+129):nth-child(-n+160) { background-position-y: -488px; transform: matrix3d(1.30235,-0.12827,0,0,0.000041,0.000417,1.529419,-0.003176,0.001858,0.01886,-0.011174,0,-0.343,210.135,-127.099,1); }
+    &:nth-child(n+161):nth-child(-n+192) { background-position-y: -440px; transform: matrix3d(1.447599,-0.142576,0,0,0.000024,0.000242,1.441301,-0.001842,0.002045,0.020762,-0.006981,0,-0.38,233.586,-87.678,1); }
+    &:nth-child(n+193):nth-child(-n+224) { background-position-y: -392px; transform: matrix3d(1.537251,-0.151406,0,0,0.000008,0.00008,1.414114,-0.00061,0.002144,0.021766,-0.002376,0,-0.403,248.06,-44.887,1); }
+    &:nth-child(n+225):nth-child(-n+256) { background-position-y: -344px; transform: matrix3d(1.567859,-0.154421,0,0,-0.000008,-0.000082,1.44227,0.000622,0.002144,0.021766,0.002376,0,-0.411,253.002,-0.372,1); }
+    &:nth-child(n+257):nth-child(-n+288) { background-position-y: -296px; transform: matrix3d(1.538246,-0.151504,0,0,-0.000025,-0.000257,1.531554,0.001954,0.002045,0.020762,0.006981,0,-0.403,248.221,44.158,1); }
+    &:nth-child(n+289):nth-child(-n+320) { background-position-y: -248px; transform: matrix3d(1.449551,-0.142768,0,0,-0.000046,-0.000464,1.702286,0.003532,0.001858,0.01886,0.011174,0,-0.381,233.901,86.992,1); }
+    &:nth-child(n+321):nth-child(-n+352) { background-position-y: -200px; transform: matrix3d(1.305182,-0.128549,0,0,-0.000072,-0.000736,2.002398,0.005592,0.001599,0.016231,0.014765,0,-0.344,210.592,126.482,1); }
+    &:nth-child(n+353):nth-child(-n+384) { background-position-y: -152px; transform: matrix3d(1.110687,-0.109393,0,0,-0.000113,-0.001143,2.549894,0.00868,0.001287,0.013069,0.017651,0,-0.295,179.191,161.111,1); }
+    &:nth-child(n+385):nth-child(-n+416) { background-position-y: -104px; transform: matrix3d(0.873539,-0.086036,0,0,-0.000187,-0.001896,3.705456,0.014388,0.00094,0.009547,0.019798,0,-0.235,140.903,189.549,1); }
+    &:nth-child(n+417) { background-position-y: -56px; transform: matrix3d(0.602854,-0.059376,0,0,-0.000399,-0.00405,7.289086,0.030712,0.000572,0.005805,0.021213,0,-0.166,97.2,210.703,1); }
+
+    &:nth-child(32n+1) { background-position-x: -8px; }
+    &:nth-child(32n+2) { background-position-x: -40px; rotate: z -11.25deg; }
+    &:nth-child(32n+3) { background-position-x: -72px; rotate: z -22.5deg; }
+    &:nth-child(32n+4) { background-position-x: -104px; rotate: z -33.75deg; }
+    &:nth-child(32n+5) { background-position-x: -136px; rotate: z -45deg; }
+    &:nth-child(32n+6) { background-position-x: -168px; rotate: z -56.25deg; }
+    &:nth-child(32n+7) { background-position-x: -200px; rotate: z -67.5deg; }
+    &:nth-child(32n+8) { background-position-x: -232px; rotate: z -78.75deg; }
+    &:nth-child(32n+9) { background-position-x: -264px; rotate: z -90deg; }
+    &:nth-child(32n+10) { background-position-x: -296px; rotate: z -101.25deg; }
+    &:nth-child(32n+11) { background-position-x: -328px; rotate: z -112.5deg; }
+    &:nth-child(32n+12) { background-position-x: -360px; rotate: z -123.75deg; }
+    &:nth-child(32n+13) { background-position-x: -392px; rotate: z -135deg; }
+    &:nth-child(32n+14) { background-position-x: -424px; rotate: z -146.25deg; }
+    &:nth-child(32n+15) { background-position-x: -456px; rotate: z -157.5deg; }
+    &:nth-child(32n+16) { background-position-x: -488px; rotate: z -168.75deg; }
+    &:nth-child(32n+17) { background-position-x: -520px; rotate: z -180deg; }
+    &:nth-child(32n+18) { background-position-x: -552px; rotate: z -191.25deg; }
+    &:nth-child(32n+19) { background-position-x: -584px; rotate: z -202.5deg; }
+    &:nth-child(32n+20) { background-position-x: -616px; rotate: z -213.75deg; }
+    &:nth-child(32n+21) { background-position-x: -648px; rotate: z -225deg; }
+    &:nth-child(32n+22) { background-position-x: -680px; rotate: z -236.25deg; }
+    &:nth-child(32n+23) { background-position-x: -712px; rotate: z -247.5deg; }
+    &:nth-child(32n+24) { background-position-x: -744px; rotate: z -258.75deg; }
+    &:nth-child(32n+25) { background-position-x: -776px; rotate: z -270deg; }
+    &:nth-child(32n+26) { background-position-x: -808px; rotate: z -281.25deg; }
+    &:nth-child(32n+27) { background-position-x: -840px; rotate: z -292.5deg; }
+    &:nth-child(32n+28) { background-position-x: -872px; rotate: z -303.75deg; }
+    &:nth-child(32n+29) { background-position-x: -904px; rotate: z -315deg; }
+    &:nth-child(32n+30) { background-position-x: -936px; rotate: z -326.25deg; }
+    &:nth-child(32n+31) { background-position-x: -968px; rotate: z -337.5deg; }
+    &:nth-child(32n+32) { background-position-x: -1000px; rotate: z -348.75deg; }
+  }
+
+  /* Polar caps */
+  .caps s {
+    inset: -128px;
+    border-radius: 50%;
+    background-image: url("https://earth-assets.lowpoly.cc/codepen/saturn/13/saturn-caps.avif");
+    background-size: 512px 256px;
+
+    &:nth-child(-n+2) {
+      background-position-x: -256px;
+    }
+
+    &:nth-child(1) { transform: translateZ(-221.3004px) rotateY(180deg) scale(0.404992); }
+    &:nth-child(2) { transform: translateZ(-223.9404px) rotateY(180deg) scale(0.399208); }
+    &:nth-child(3) { transform: translateZ(221.3004px) scale(0.404992); }
+    &:nth-child(4) { transform: translateZ(223.9404px) scale(0.399208); }
+  }
+
+  /* Limb */
+  .limb {
+    --limb: url("https://earth-assets.lowpoly.cc/codepen/saturn/13/saturn-limb.avif");
+    --night: url("https://earth-assets.lowpoly.cc/codepen/saturn/13/saturn-night.avif");
+    --rings-shadow: url("https://earth-assets.lowpoly.cc/codepen/saturn/13/saturn-rings-shadow.avif");
+    inset: -502px;
+    border-radius: 50%;
+    background-image: var(--rings-shadow), var(--night), var(--limb);
+    background-position: center;
+    background-size: 1040px;
+    scale: 1.02089 1.02089 1.02089;
+    transform: var(--to-eye) translate3d(0.38px, 1.475px, 249.076px) rotate(-14.454deg) scale(0.46227, 0.42588) rotate(14.454deg);
+  }
+
+  /* Inner fill */
+  .fill {
+    inset: -502px;
+    border-radius: 50%;
+    background-color: rgb(177 148 120);
+    transform: var(--to-eye) translate3d(0.415px, 1.612px, 11.357px) rotate(-14.454deg) scale(0.50156, 0.462) rotate(14.454deg);
+  }
+
+  /* Moons */
+  .orbit {
+    inset: -500px;
+
+    i {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      box-shadow: 0 0 0 var(--line) color-mix(in srgb, currentColor 50%, transparent);
+    }
+
+    div {
+      left: 500px;
+      top: 500px;
+      animation: csssaturn-turn var(--period) linear infinite reverse var(--motion);
+    }
+
+    span {
+      position: absolute;
+      left: 12px;
+      top: -9px;
+      font: 14px/18px system-ui, sans-serif;
+      color: color-mix(in srgb, var(--mark) 50%, transparent);
+      transform-origin: -12px 9px;
+      translate: var(--at);
+      transform: var(--face);
+      animation:
+        csssaturn-turn var(--period) linear infinite normal var(--motion),
+        csssaturn-moon-size calc(var(--period) / 2) cubic-bezier(0.3642, 0, 0.6358, 1) var(--size-delay) infinite alternate var(--motion);
+
+      &::before {
+        content: "";
+        position: absolute;
+        left: -13.2px;
+        top: 7.8px;
+        width: 2.4px;
+        height: 2.4px;
+        border-radius: 50%;
+        background: var(--mark);
+        opacity: 0.7;
+      }
+
+      &::after {
+        content: "";
+        position: absolute;
+        left: -20px;
+        top: 1px;
+        width: 14px;
+        height: 14px;
+        border: 1px solid var(--mark);
+        border-radius: 50%;
+        opacity: 0.5;
+      }
+    }
+
+    &:nth-of-type(1) {
+      --period: 154.2s;
+      --size-delay: -29.494s;
+      --near: 0.82323;
+      --far: 1.37816;
+      --line: 1.059px;
+      --mark: #aeaba5;
+      --at: -499.88px -11.14px;
+      --face: matrix3d(-0.5994,-0.1812,9.505,0,0.0374,0.2953,40.2463,0,-0.2221,0.5386,-18.8682,0,0,0,0,1);
+      color: #b5b2ac;
+      transform: matrix3d(-1.081184,1.126837,0.014123,0,1.126586,1.080431,0.040836,0,0.000277,0.000542,-0.021992,0,9.35,-9.745,-0.122,1);
+    }
+
+    &:nth-of-type(2) {
+      --period: 224.2s;
+      --size-delay: -35.178s;
+      --near: 0.75004;
+      --far: 1.45894;
+      --line: 0.8211px;
+      --mark: #d3d7d8;
+      --at: 353.76px 353.35px;
+      --face: matrix3d(0.1487,0.4603,10.2299,0,0.1796,-0.1632,39.6571,0,0.4383,-0.0893,-19.7175,0,0,0,0,1);
+      color: var(--mark);
+      transform: matrix3d(1.98723,0.328059,0.000097,0,0.328054,-1.987199,0.000328,0,0.000002,-0.000003,-0.022,0,-5.612,-0.927,0,1);
+    }
+
+    &:nth-of-type(3) {
+      --period: 308.9s;
+      --size-delay: -295.07s;
+      --near: 0.66504;
+      --far: 1.54352;
+      --line: 0.665px;
+      --mark: #bcbbae;
+      --at: 487.69px 110.25px;
+      --face: matrix3d(-0.1541,0.3618,9.4909,0,0.1911,-0.0007,39.9967,0,0.3185,0.1755,-19.3986,0,0,0,0,1);
+      color: var(--mark);
+      transform: matrix3d(1.590773,1.910991,0.037968,0,1.911346,-1.590503,-0.028411,0,0.000022,0.000419,-0.021996,0,-3.622,-4.352,-0.087,1);
+    }
+
+    &:nth-of-type(4) {
+      --period: 447.8s;
+      --size-delay: -442.301s;
+      --near: 0.54551;
+      --far: 1.66452;
+      --line: 0.5203px;
+      --mark: #bab9b1;
+      --at: 484.09px -125.14px;
+      --face: matrix3d(0.0868,0.294,10.2267,0,0.1162,-0.1004,39.6695,0,0.2792,-0.0496,-19.6942,0,0,0,0,1);
+      color: var(--mark);
+      transform: matrix3d(3.121954,0.596855,0.001847,0,0.596849,-3.121922,-0.000222,0,0.000012,0.000004,-0.022,0,-7.053,-1.348,-0.003,1);
+    }
+
+    &:nth-of-type(5) {
+      --period: 739.3s;
+      --size-delay: -542.31s;
+      --near: 0.32346;
+      --far: 1.88192;
+      --line: 0.3732px;
+      --mark: #bebbb0;
+      --at: 490.19px -98.54px;
+      --face: matrix3d(-0.2155,0.0446,9.9931,0,0.0639,0.0896,39.6795,0,0.0193,0.2022,-19.7936,0,0,0,0,1);
+      color: var(--mark);
+      transform: matrix3d(-1.191295,4.268771,0.021304,0,4.268783,1.191349,-0.010216,0,-0.000077,0.000088,-0.022,0,1.321,-4.736,-0.023,1);
+    }
+  }
+
+  /* Zoom */
+  .zoom {
+    display: none;
+  }
+
+  @media not (pointer: coarse) {
+    @supports (animation-timeline: scroll()) and (timeline-scope: --csssaturn-zoom) {
+      & {
+        timeline-scope: --csssaturn-zoom;
+      }
+
+      .zoom {
+        position: absolute;
+        inset: 0;
+        display: block;
+        overflow: hidden scroll;
+        overscroll-behavior: contain;
+        scrollbar-width: none;
+        scroll-timeline: --csssaturn-zoom y;
+        pointer-events: auto;
+
+        span {
+          display: block;
+          height: 100%;
+          margin: 1200px 0 440px;
+          scroll-initial-target: nearest;
+        }
+      }
+
+      main {
+        animation: csssaturn-zoom-in linear both;
+        animation-timeline: --csssaturn-zoom;
+      }
+
+      .layer {
+        animation: csssaturn-zoom-out linear both;
+        animation-timeline: --csssaturn-zoom;
+      }
+
+      .limb {
+        animation: csssaturn-zoom-limb linear both;
+        animation-timeline: --csssaturn-zoom;
+      }
+    }
+  }
+
+  /* Small screens */
+  @media (pointer: coarse), (max-width: 700px), (max-height: 500px) {
+    .rings {
+      left: -256px;
+      width: 512px;
+      scale: 2.305822;
+
+      s {
+        width: 512px;
+        height: 512px;
+      }
+
+      &.far {
+        top: -256px;
+        height: 256.5px;
+        transform-origin: 256px 256px;
+      }
+
+      &.near {
+        height: 256.5px;
+        transform-origin: 256px 0.5px;
+
+        s {
+          top: -255.5px;
+        }
+      }
+    }
+
+    .orbit i {
+      inset: 375px;
+      scale: 4;
+      box-shadow: 0 0 0 calc(var(--line) * 0.25) color-mix(in srgb, currentColor 50%, transparent);
+    }
+  }
+}
+
+/* Motion */
+@keyframes csssaturn-turn {
+  to { rotate: z -360deg; }
+}
+
+@keyframes csssaturn-moon-size {
+  from { scale: var(--near) var(--near) var(--near); }
+  to { scale: var(--far) var(--far) var(--far); }
+}
+
+@keyframes csssaturn-zoom-in {
+  0% { scale: 2.2506; }
+  24.681% { scale: 1.546; }
+  50.638% { scale: 1.046; }
+  53.193%, 100% { scale: 1; }
+}
+
+@keyframes csssaturn-zoom-out {
+  0%, 53.193% { translate: 0 0 0; }
+  76.596% { translate: 0 0 -1161px; }
+  100% { translate: 0 0 -2798px; }
+}
+
+@keyframes csssaturn-zoom-limb {
+  0%, 53.193% { scale: 1 1 1; }
+  76.596% { scale: 1.02447 1.02447 1.02447; }
+  100% { scale: 1.04294 1.04294 1.04294; }
+}

@@ -20,6 +20,7 @@ const products = [
   [resolve(generatedPublicRoot, "csssolitaire"), "csssolitaire"],
   [resolve(generatedPublicRoot, "csscityflow"), "csscityflow"],
   [resolve(generatedPublicRoot, "cssled"), "cssled"],
+  [resolve(generatedPublicRoot, "csssaturn"), "csssaturn"],
 ];
 
 await rm(deployRoot, { recursive: true, force: true });

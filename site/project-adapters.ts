@@ -1,4 +1,5 @@
 export const PROJECT_ADAPTER_DIRECTORIES: Readonly<Record<string, string>> = Object.freeze({
+  saturn: "saturn",
   led: "led",
   cityflow: "cityflow",
   chaos: "dysts-lab",

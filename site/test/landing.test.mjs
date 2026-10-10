@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(siteRoot, "..");
 const expectedProjects = [
+  ["saturn", 14, "css.earth", "2026-10-10", "Saturn from css.earth"],
   ["led", 13, "Ben Evans", "2026-09-14", "A looping CSS LED sculpture"],
   ["cityflow", 12, "XScreenSaver", "2026-08-31", "XScreenSaver Cityflow"],
   ["chaos", 11, "dysts", "2026-08-27", "50 motion-curated chaotic attractors"],
@@ -24,6 +25,7 @@ const expectedProjects = [
 ];
 const projectsExcludedFromLanding = ["flowerbox", "gravitywell"];
 const expectedNumberTones = new Map([
+  ["saturn", "light"],
   ["led", "light"],
   ["cityflow", "light"],
   ["chaos", "light"],
@@ -39,6 +41,7 @@ const expectedNumberTones = new Map([
   ["pipes", "light"],
 ]);
 const projectAdapterDirectories = new Map([
+  ["saturn", "saturn"],
   ["led", "led"],
   ["cityflow", "cityflow"],
   ["chaos", "dysts-lab"],
@@ -137,6 +140,7 @@ test("landing presents the current deployed collection", async () => {
   assert.match(sceneRouter, /mountBlackHoleClient\(host\)/u);
   assert.match(sceneRouter, /mountChaosClient\(host\)/u);
   assert.match(sceneRouter, /mountCityflow\(host\)/u);
+  assert.match(sceneRouter, /mountSaturn\(host\)/u);
   assert.match(sceneRouter, /mountLedAnimation\(host\)/u);
   assert.match(sceneRouter, /mountCycloneClient\(host\)/u);
   assert.match(sceneRouter, /mountGalaxyClient\(host\)/u);

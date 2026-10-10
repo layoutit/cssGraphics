@@ -1,0 +1,27 @@
+{
+  "schema": "csssaturn-source-lock@1",
+  "pen": {
+    "name": "3D CSS Saturn",
+    "url": "https://codepen.io/alowpoly/pen/XJMVyXW",
+    "builtOn": "2026-10-09",
+    "builder": "output/codepen/saturn/build/build-nojs.mts",
+    "files": [
+      { "path": "pen.html", "bytes": 5235 },
+      { "path": "pen.css", "bytes": 17117 }
+    ]
+  },
+  "page": {
+    "url": "https://css.earth/saturn/",
+    "repository": "https://github.com/layoutit/css.earth"
+  },
+  "images": [
+    { "bytes": 15174, "url": "https://earth-assets.lowpoly.cc/codepen/saturn/13/saturn-sky.webp" },
+    { "bytes": 105281, "url": "https://earth-assets.lowpoly.cc/codepen/saturn/13/saturn-rings-dots.avif" },
+    { "bytes": 4094, "url": "https://earth-assets.lowpoly.cc/codepen/saturn/13/saturn-planet-shadow.avif" },
+    { "bytes": 137360, "url": "https://earth-assets.lowpoly.cc/codepen/saturn/13/saturn-surface-mix.avif" },
+    { "bytes": 9925, "url": "https://earth-assets.lowpoly.cc/codepen/saturn/13/saturn-caps.avif" },
+    { "bytes": 1892, "url": "https://earth-assets.lowpoly.cc/codepen/saturn/13/saturn-limb.avif" },
+    { "bytes": 2933, "url": "https://earth-assets.lowpoly.cc/codepen/saturn/13/saturn-night.avif" },
+    { "bytes": 8866, "url": "https://earth-assets.lowpoly.cc/codepen/saturn/13/saturn-rings-shadow.avif" }
+  ]
+}

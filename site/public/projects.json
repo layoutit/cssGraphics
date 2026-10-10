@@ -2,6 +2,29 @@
   "schema": "cssgraphics.projects@2",
   "projects": [
     {
+      "number": 14,
+      "id": "saturn",
+      "name": "Saturn",
+      "route": "/saturn/",
+      "preview": "/landing/saturn.webp",
+      "numberTone": "light",
+      "showPolycssCredit": false,
+      "source": "css.earth",
+      "credits": [
+        {
+          "relation": "From",
+          "name": "css.earth",
+          "url": "https://css.earth/saturn/"
+        },
+        {
+          "relation": "By",
+          "name": "Agustin Capeletto"
+        }
+      ],
+      "description": "Saturn from css.earth as a CSS 3D scene: a globe of 448 faces, its rings and shadows, and five moons turning in their orbits.",
+      "date": "2026-10-10"
+    },
+    {
       "number": 13,
       "id": "led",
       "name": "LED",

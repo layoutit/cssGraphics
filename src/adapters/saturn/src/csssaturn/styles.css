@@ -42,8 +42,7 @@
     left: -1024px;
     width: 2048px;
     overflow: hidden;
-    scale: 0.576456;
-    transform: rotateZ(-69.102deg);
+    transform: scale(0.576456) rotateZ(-69.102deg);
     transform-style: flat;
 
     s {
@@ -339,16 +338,20 @@
 
       main {
         animation: csssaturn-zoom-in linear both;
-        animation-timeline: --csssaturn-zoom;
       }
 
       .layer {
         animation: csssaturn-zoom-out linear both;
-        animation-timeline: --csssaturn-zoom;
       }
 
       .limb {
         animation: csssaturn-zoom-limb linear both;
+      }
+
+      /* A rule of its own: the site build's minifier folds a timeline beside `animation` into the shorthand, which no browser reads. */
+      main,
+      .layer,
+      .limb {
         animation-timeline: --csssaturn-zoom;
       }
     }
@@ -359,7 +362,7 @@
     .rings {
       left: -256px;
       width: 512px;
-      scale: 2.305822;
+      transform: scale(2.305822) rotateZ(-69.102deg);
 
       s {
         width: 512px;

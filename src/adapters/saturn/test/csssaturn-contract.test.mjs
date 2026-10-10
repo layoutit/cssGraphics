@@ -39,6 +39,14 @@ test("adapter carries the scene without the pen's header and switches", async ()
   for (const [, name] of css.matchAll(/@keyframes ([\w-]+)/gu)) {
     assert.match(name, /^csssaturn-/u, name);
   }
+  // The site build's CSS minifier folds an `animation-timeline` into the `animation` declared beside it, which no
+  // browser reads, and drops `scale`, `rotate` or `translate` declared beside a `transform` it can parse.
+  for (const declarations of css.split(/[{}]/u)) {
+    if (/animation-timeline:/u.test(declarations)) assert.doesNotMatch(declarations, /animation:/u, declarations);
+    if (/(?:^|[\s;])transform:(?![^;]*var\()/u.test(declarations)) {
+      assert.doesNotMatch(declarations, /(?:^|[\s;])(?:scale|rotate|translate):/u, declarations);
+    }
+  }
   assert.match(client, /runtimeFrameConstruction:\s*false/u);
   assert.equal(sourceLock.schema, "csssaturn-source-lock@1");
   assert.match(sourceLock.pen.url, /^https:\/\/codepen\.io\//u);

@@ -1,6 +1,6 @@
-# cssGraphics
+# css.graphics
 
-cssGraphics packages animated and interactive 3D models as real HTML and CSS,
+css.graphics packages animated and interactive 3D models as real HTML and CSS,
 without a WebGL or canvas renderer. It is powered by the
 [PolyCSS](https://github.com/LayoutitStudio/polycss) engine.
 
